@@ -29,6 +29,7 @@ dalam representasi **7 desimal**.
 | Network | Stellar **testnet** (`Test SDF Network ; September 2015`) |
 | Issuer (`G...`) | `GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW` |
 | Distributor (`G...`) | `GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO` |
+| SAC contract address (`C...`) | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` |
 | Supply awal | **1.000.000 sUSD** (`10000000000000` unit mentah / stroop) |
 | Decimals | **7** (inheren untuk classic asset Stellar) |
 | Auth flags issuer | **tidak ada** — `auth_required=false`, `auth_revocable=false`, `auth_immutable=false`, `auth_clawback_enabled=false` |
@@ -53,6 +54,7 @@ yang autoritatif adalah address `G...`-nya.
 - Issuer: <https://stellar.expert/explorer/testnet/account/GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW>
 - Distributor: <https://stellar.expert/explorer/testnet/account/GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO>
 - Asset `sUSD`: <https://stellar.expert/explorer/testnet/asset/sUSD-GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW>
+- **SAC contract**: <https://stellar.expert/explorer/testnet/contract/CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU>
 - Akun uji `sterun-test-a`: <https://stellar.expert/explorer/testnet/account/GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF>
 - Akun uji `sterun-test-b`: <https://stellar.expert/explorer/testnet/account/GD22GHP4CCK2JWXQMPA7GLOMCYIYTL52UUND5NJGHKNSBRPDIRYZ23LS>
 
@@ -94,6 +96,41 @@ stellar tx new payment \
 
 > ⚠️ `--amount` di `stellar tx new payment` selalu dalam **stroop** (1 stroop = 0,0000001 asset).
 > Jadi 1.000.000 sUSD = `10000000000000`. Salah di sini bikin supply meleset 10 juta kali.
+
+---
+
+## Stellar Asset Contract (SAC) sUSD
+
+Supaya asset klasik `sUSD` bisa dipakai dari dalam kontrak Soroban, dia harus diekspos lewat
+**Stellar Asset Contract**-nya. SAC ini yang mengimplementasikan interface token **SEP-41**
+(CAP-46-6), dan alamat inilah yang akan dipegang RaceRecord untuk memanggil
+`transfer(runner, organiser, price)` secara cross-contract.
+
+| Item | Nilai |
+| --- | --- |
+| SAC contract address | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` |
+| Asset yang di-wrap | `sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW` |
+| Network | testnet |
+| Deploy tx | [`92ffd8e2…`](https://stellar.expert/explorer/testnet/tx/92ffd8e2fb1b4562834011e5bc97ad73153750d38409e3671ebad5f3574e1f72) (ledger 4431623) |
+| Explorer | <https://stellar.expert/explorer/testnet/contract/CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU> |
+
+SAC **tidak punya wasm hash sendiri** — implementasinya built-in di host Soroban, bukan wasm yang
+kita upload. Jadi kolom "wasm hash" memang tidak berlaku untuk baris ini.
+
+Perintah deploy:
+
+```bash
+stellar contract asset deploy \
+  --asset sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW \
+  --source-account sterun-susd-issuer \
+  --network testnet
+# => CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
+```
+
+Alamat SAC ini **deterministik** dari `(asset, network passphrase)`: siapa pun yang menjalankan
+`stellar contract id asset --asset sUSD:<ISSUER> --network testnet` akan mendapat alamat yang sama.
+Deploy hanya perlu sekali; kalau nanti ada yang menjalankan ulang perintah di atas, hasilnya alamat
+yang sama (atau error "sudah ter-deploy"), bukan kontrak baru.
 
 ---
 
