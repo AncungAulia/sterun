@@ -1,0 +1,143 @@
+{
+  "spec": "sterun/totp",
+  "version": "1.0.0",
+  "frozen": "2026-08-31",
+  "ticket": "STE-10",
+  "normative_document": "docs/specs/HASH_AND_TOTP.md",
+  "algorithm": "HMAC-SHA-256",
+  "secret_bytes": 32,
+  "digits": 6,
+  "time_step_seconds": 30,
+  "tolerance_steps": 1,
+  "truncation": "RFC 4226 section 5.3 dynamic truncation applied to the 32-byte MAC",
+  "qr_payload": "{\"t\":<token_id u32>,\"s\":<time_step u64>,\"c\":\"<6-char zero-padded string>\"}",
+  "hex_encoding": "lowercase, no 0x prefix",
+  "vectors": [
+    {
+      "id": "tp-01-baseline",
+      "note": "Baseline: one secret, one instant, one code, one QR payload.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "token_id": 1,
+      "unix_seconds": 1772100000,
+      "time_step": 59070000,
+      "counter_bytes_hex": "0000000003855630",
+      "expected_code": "911070",
+      "qr_payload": "{\"t\":1,\"s\":59070000,\"c\":\"911070\"}"
+    },
+    {
+      "id": "tp-02-leading-zero",
+      "note": "THE vector that catches the classic bug. The code starts with 0, so an implementation that stores or transmits it as an integer produces a 5-digit code and every scan fails. The code is a STRING in the QR payload for exactly this reason.",
+      "secret_hex": "4d7b1e93a05c26f8d3407e91b6c258aa0f31d74e69b2085c1a3f6d904e7c2b15",
+      "token_id": 7,
+      "unix_seconds": 1772103330,
+      "time_step": 59070111,
+      "counter_bytes_hex": "000000000385569f",
+      "expected_code": "079663",
+      "qr_payload": "{\"t\":7,\"s\":59070111,\"c\":\"079663\"}"
+    },
+    {
+      "id": "tp-03-large-token-id",
+      "note": "A different secret and a four-digit token id, so the QR payload is exercised beyond single digits.",
+      "secret_hex": "b820f4d16a9e3c07524db8f10c6a397e2f5140d8b93c6ea70158d24fc6b7093a",
+      "token_id": 4242,
+      "unix_seconds": 1772186399,
+      "time_step": 59072879,
+      "counter_bytes_hex": "000000000385616f",
+      "expected_code": "844761",
+      "qr_payload": "{\"t\":4242,\"s\":59072879,\"c\":\"844761\"}"
+    },
+    {
+      "id": "tp-04-same-step-as-tp-01",
+      "note": "29 seconds after tp-01: floor(unix/30) lands on the same time step, so the code and the whole payload are byte-identical. This is what \"the code is valid for the rest of its 30s window\" means mechanically.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "token_id": 1,
+      "unix_seconds": 1772100029,
+      "time_step": 59070000,
+      "counter_bytes_hex": "0000000003855630",
+      "expected_code": "911070",
+      "qr_payload": "{\"t\":1,\"s\":59070000,\"c\":\"911070\"}"
+    }
+  ],
+  "verification": [
+    {
+      "id": "vf-01-same-step",
+      "note": "The ordinary case: runner phone and scanner agree on the clock.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "presented_code": "911070",
+      "presented_code_time_step": 59070000,
+      "verify_at_unix_seconds": 1772100000,
+      "verify_at_time_step": 59070000,
+      "expected_valid": true
+    },
+    {
+      "id": "vf-02-previous-step",
+      "note": "The runner opened their pass just before the step rolled over, or their phone is ~30s slow. Accepted: -1 step is inside tolerance.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "presented_code": "299421",
+      "presented_code_time_step": 59069999,
+      "verify_at_unix_seconds": 1772100000,
+      "verify_at_time_step": 59070000,
+      "expected_valid": true
+    },
+    {
+      "id": "vf-03-next-step",
+      "note": "The runner phone is ~30s fast (or the scanner is slow). Accepted: +1 step is inside tolerance. Together with vf-02 this is the 90-second window.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "presented_code": "466140",
+      "presented_code_time_step": 59070001,
+      "verify_at_unix_seconds": 1772100000,
+      "verify_at_time_step": 59070000,
+      "expected_valid": true
+    },
+    {
+      "id": "vf-04-two-steps-old-rejected",
+      "note": "A 60-second-old code: REJECTED. This is the forwarded-screenshot case \u2014 by the time the picture reaches someone else the step has moved past tolerance.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "presented_code": "943926",
+      "presented_code_time_step": 59069998,
+      "verify_at_unix_seconds": 1772100000,
+      "verify_at_time_step": 59070000,
+      "expected_valid": false
+    },
+    {
+      "id": "vf-05-two-steps-ahead-rejected",
+      "note": "Mirror of vf-04 on the other side: a code minted 60s in the future is rejected too, so tolerance is symmetric and bounded.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "presented_code": "065891",
+      "presented_code_time_step": 59070002,
+      "verify_at_unix_seconds": 1772100000,
+      "verify_at_time_step": 59070000,
+      "expected_valid": false
+    },
+    {
+      "id": "vf-06-leading-zero-roundtrip",
+      "note": "The leading-zero code from tp-02 verifies against its own secret and step. An implementation that parsed it as an integer would present 5 digits and fail here.",
+      "secret_hex": "4d7b1e93a05c26f8d3407e91b6c258aa0f31d74e69b2085c1a3f6d904e7c2b15",
+      "presented_code": "079663",
+      "presented_code_time_step": 59070111,
+      "verify_at_unix_seconds": 1772103330,
+      "verify_at_time_step": 59070111,
+      "expected_valid": true
+    },
+    {
+      "id": "vf-07-wrong-code-rejected",
+      "note": "A well-formed 6-digit code that is simply not this secret\u2019s output at any step in the window.",
+      "secret_hex": "9c1f0a7d4e2b63859f0d17c4a6e28b30d5f74196ac30e5b82f6d1904c7ba3e58",
+      "presented_code": "000000",
+      "presented_code_time_step": null,
+      "verify_at_unix_seconds": 1772100000,
+      "verify_at_time_step": 59070000,
+      "expected_valid": false
+    },
+    {
+      "id": "vf-08-five-digit-code-rejected",
+      "note": "A 5-character code is malformed, not merely wrong: the presented code must be exactly 6 ASCII digits. This is what an integer-typed implementation would send for a leading-zero code.",
+      "secret_hex": "4d7b1e93a05c26f8d3407e91b6c258aa0f31d74e69b2085c1a3f6d904e7c2b15",
+      "presented_code": "79663",
+      "presented_code_time_step": null,
+      "verify_at_unix_seconds": 1772103330,
+      "verify_at_time_step": 59070111,
+      "expected_valid": false
+    }
+  ]
+}
