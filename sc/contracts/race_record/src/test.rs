@@ -1223,6 +1223,177 @@ fn a_lifecycle_write_re_extends_a_decayed_ttl() {
 
     assert_eq!(persistent_ttl(&w.env, &w.contract, key), BUMP_TO);
 }
+// ---------------------------------------------------------------------------
+// The Soroban host vs. the frozen spec (STE-10, C4)
+//
+// `docs/specs/` freezes `participant_hash` and proves two off-chain reference
+// implementations (Node + Rust) agree on it. That is only worth something if
+// the value they compute is also the value the CHAIN accepts, so this module
+// closes the loop from the third side: it reads the SAME
+// `docs/specs/vectors/participant_hash.json`, runs each preimage through
+// `env.crypto().sha256()` — the host function, not a Rust crate — and feeds the
+// result into `enter` + `verify`.
+//
+// Nothing here restates an expected hash. Every value comes out of the JSON, so
+// this can only pass by genuinely agreeing with the frozen artifact.
+// ---------------------------------------------------------------------------
+mod spec_vectors {
+    use super::*;
+
+    use soroban_sdk::Bytes;
+    use std::{path::PathBuf, string::String as StdString, vec::Vec as StdVec};
+
+    struct Vector {
+        id: StdString,
+        preimage_hex: StdString,
+        expected_hash_hex: StdString,
+    }
+
+    fn vectors_path() -> PathBuf {
+        // CARGO_MANIFEST_DIR = sc/contracts/race_record
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../docs/specs/vectors/participant_hash.json")
+    }
+
+    /// Pulls `"key": "value"` out of the JSON starting at `from`.
+    ///
+    /// A hand-rolled scan rather than a JSON crate on purpose: the contract
+    /// workspace must not grow a dependency just to read a fixture, and the
+    /// file is machine-generated with a stable shape. It fails loudly (`None`
+    /// -> assertion) rather than silently skipping, so drift breaks the test
+    /// run instead of quietly reducing coverage.
+    fn string_field(src: &str, key: &str, from: usize) -> Option<(StdString, usize)> {
+        let needle = std::format!("\"{key}\": \"");
+        let start = src[from..].find(&needle)? + from + needle.len();
+        let end = start + src[start..].find('"')?;
+        Some((StdString::from(&src[start..end]), end))
+    }
+
+    fn load_vectors() -> StdVec<Vector> {
+        let path = vectors_path();
+        let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!(
+                "cannot read {}: {e}.\n\
+                 This test reads the FROZEN spec vectors (STE-10). If the file moved, the \
+                 freeze moved with it — fix the path, do not delete the test.",
+                path.display()
+            )
+        });
+        // The `rejects` array reuses the `id` key but has no preimage, so stop
+        // the scan before it.
+        let src = match raw.find("\"rejects\"") {
+            Some(i) => &raw[..i],
+            None => panic!("participant_hash.json has no `rejects` array — file shape changed"),
+        };
+
+        let mut out = StdVec::new();
+        let mut cursor = 0usize;
+        while let Some((id, next)) = string_field(src, "id", cursor) {
+            let (preimage_hex, next) = string_field(src, "preimage_hex", next)
+                .unwrap_or_else(|| panic!("vector {id} has no preimage_hex"));
+            let (expected_hash_hex, next) = string_field(src, "expected_hash_hex", next)
+                .unwrap_or_else(|| panic!("vector {id} has no expected_hash_hex"));
+            out.push(Vector {
+                id,
+                preimage_hex,
+                expected_hash_hex,
+            });
+            cursor = next;
+        }
+        out
+    }
+
+    fn hex_bytes(hex: &str) -> StdVec<u8> {
+        assert!(hex.len().is_multiple_of(2), "odd-length hex: {hex}");
+        hex.as_bytes()
+            .chunks(2)
+            .map(|pair| {
+                let nibble = |b: u8| match b {
+                    b'0'..=b'9' => b - b'0',
+                    // Lowercase only: the spec renders hex lowercase.
+                    b'a'..=b'f' => b - b'a' + 10,
+                    other => panic!("not lowercase hex: {:?}", other as char),
+                };
+                nibble(pair[0]) << 4 | nibble(pair[1])
+            })
+            .collect()
+    }
+
+    fn hex_string(bytes: &[u8]) -> StdString {
+        let mut out = StdString::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            out.push(char::from_digit((b >> 4) as u32, 16).unwrap());
+            out.push(char::from_digit((b & 0x0f) as u32, 16).unwrap());
+        }
+        out
+    }
+
+    /// The host's SHA-256 must produce exactly the hash the frozen vectors
+    /// declare. If this ever fails, the backend and the chain disagree about
+    /// what a runner's identity commitment is.
+    #[test]
+    fn host_sha256_matches_every_participant_hash_vector() {
+        let env = Env::default();
+        let vectors = load_vectors();
+        assert!(
+            vectors.len() >= 4,
+            "STE-10 froze at least 4 participant_hash vectors, found {}",
+            vectors.len()
+        );
+
+        for v in &vectors {
+            let preimage = Bytes::from_slice(&env, &hex_bytes(&v.preimage_hex));
+            let digest = env.crypto().sha256(&preimage);
+            assert_eq!(
+                hex_string(&digest.to_bytes().to_array()),
+                v.expected_hash_hex,
+                "{}: env.crypto().sha256 disagrees with docs/specs/vectors",
+                v.id
+            );
+        }
+    }
+
+    /// ...and the contract accepts it. Each vector's hash is minted into a real
+    /// record through `enter`, then `verify` must say `true` for that exact
+    /// value and `false` for the same value with one bit flipped.
+    #[test]
+    fn every_participant_hash_vector_is_accepted_by_enter_and_verify() {
+        let w = World::new();
+        let vectors = load_vectors();
+        let (event_id, category_id) = w.open_event(vectors.len() as u32, PRICE);
+
+        for v in &vectors {
+            let runner = w.runner();
+            let preimage = Bytes::from_slice(&w.env, &hex_bytes(&v.preimage_hex));
+            let hash = w.env.crypto().sha256(&preimage).to_bytes();
+            assert_eq!(
+                hex_string(&hash.to_array()),
+                v.expected_hash_hex,
+                "{}",
+                v.id
+            );
+
+            w.env.mock_all_auths();
+            let token_id = w.records().enter(&runner, &event_id, &category_id, &hash);
+
+            assert!(
+                w.records().verify(&token_id, &hash),
+                "{}: the chain rejected a hash the frozen spec says is correct",
+                v.id
+            );
+            assert_eq!(w.records().record_of(&token_id).participant_hash, hash);
+
+            let mut flipped = hash.to_array();
+            flipped[0] ^= 0x01;
+            assert!(
+                !w.records()
+                    .verify(&token_id, &BytesN::from_array(&w.env, &flipped)),
+                "{}: verify accepted a hash one bit off",
+                v.id
+            );
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Non-transferable, asserted mechanically
