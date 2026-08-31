@@ -30,7 +30,7 @@ use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
     Address, BytesN, Env, MuxedAddress, String, Vec,
 };
-use stellar_tokens::non_fungible::{enumerable::Enumerable, Base};
+use stellar_tokens::non_fungible::{enumerable::Enumerable, Base, NFTStorageKey};
 
 use crate::registry::EventRegistryClient;
 
@@ -106,34 +106,40 @@ pub enum DataKey {
 // ---------------------------------------------------------------------------
 // Errors — codes are public ABI, never renumber.
 //
-// NOTE (cross-contract code collision): a revert inside `EventRegistry`
-// propagates to this contract's caller as the *same* `ScError` integer, and
-// Soroban error codes carry no contract identity. `EventRegistry::EventNotOpen`
-// is 4 and `QuotaFull` is 5, which a client decoding against *this* enum reads
-// as `InvalidState` / `NotAuthorized`. Both numberings are frozen by their
-// tickets, so the SDK (D2) must decode an `enter` failure against
-// `EventRegistry`'s enum for the codes that can only originate there. The tests
-// `enter_on_a_non_open_event_propagates_event_not_open` and
-// `enter_when_the_category_is_full_propagates_quota_full` pin the wire codes
-// down so this stays visible.
+// PROJECT CONVENTION: disjoint code bands, one per contract.
+//
+//   1..=99    EventRegistry (C1)
+//   100..=199 RaceRecord (C2, this contract)
+//   200+      reserved by OpenZeppelin `NonFungibleTokenError`
+//   next free hundred for each future contract
+//
+// The bands exist because a Soroban `ScError` carries a bare `u32` and **no
+// contract identity**. `enter` calls into EventRegistry and into a SEP-41
+// token, and their reverts propagate to our caller unchanged — so without
+// disjoint bands an `Error(Contract, #4)` out of `enter` could be either
+// EventRegistry's `EventNotOpen` or RaceRecord's own `InvalidState`, and the
+// D2 SDK would have to guess. With them, the number alone names its origin.
+//
+// `error_codes_of_the_two_contracts_are_disjoint_bands` fails the build if the
+// bands ever overlap again.
 // ---------------------------------------------------------------------------
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    NotInitialized = 1,
-    RecordNotFound = 2,
+    NotInitialized = 100,
+    RecordNotFound = 101,
     /// `claim_racepack` when the state is not [`RecordState::Entered`] — the
     /// anti-double-racepack guard.
-    AlreadyClaimed = 3,
+    AlreadyClaimed = 102,
     /// `record_finish` when the state is not [`RecordState::RacepackClaimed`],
     /// or any attempt to move out of a terminal state.
-    InvalidState = 4,
+    InvalidState = 103,
     /// The operator is neither the event organiser nor an allowlisted scanner.
-    NotAuthorized = 5,
+    NotAuthorized = 104,
     /// `finish_time_s == 0`.
-    InvalidFinishTime = 6,
+    InvalidFinishTime = 105,
 }
 
 // ---------------------------------------------------------------------------
@@ -415,13 +421,25 @@ impl RaceRecord {
     /// off-chain PII plus the salt, anyone — insurer, medical desk, another
     /// organiser — can prove the record belongs to that person.
     ///
+    /// "Hash **and owner** match", per `docs/SYSTEM_DESIGN.md` 3.2: `true` needs
+    /// the record to exist, its stored hash to equal the argument, *and* the
+    /// token to still be owned by somebody. The two halves cannot come apart
+    /// through the exported surface — `enter` mints and writes the record in one
+    /// invocation, and nothing burns — but the check is spelled out so the
+    /// shipped behaviour is literally the documented claim rather than a
+    /// consequence of it.
+    ///
     /// Never panics: an unknown `token_id` is simply `false`, because this is a
     /// public, wallet-less read that verifiers call speculatively.
     pub fn verify(env: Env, token_id: u32, participant_hash: BytesN<32>) -> bool {
-        env.storage()
+        let Some(record) = env
+            .storage()
             .persistent()
             .get::<_, RecordData>(&DataKey::Record(token_id))
-            .is_some_and(|record| record.participant_hash == participant_hash)
+        else {
+            return false;
+        };
+        record.participant_hash == participant_hash && has_owner(&env, token_id)
     }
 
     /// The runner this record is bound to. There is no exported path that ever
@@ -501,6 +519,19 @@ fn read_record(env: &Env, token_id: u32) -> Result<RecordData, Error> {
         .persistent()
         .get(&DataKey::Record(token_id))
         .ok_or(Error::RecordNotFound)
+}
+
+/// Non-panicking existence probe on the OpenZeppelin owner mapping.
+///
+/// `Base::owner_of` panics with `NonExistentToken` and stellar-tokens 0.7.2
+/// ships no `try_owner_of`, so a plain `has` on OZ's own public
+/// [`NFTStorageKey`] is the only way to keep [`RaceRecord::verify`] panic-free.
+/// This only ever READS that key — the owner mapping still has no exported
+/// write path, which is what makes a record non-transferable.
+fn has_owner(env: &Env, token_id: u32) -> bool {
+    env.storage()
+        .persistent()
+        .has(&NFTStorageKey::Owner(token_id))
 }
 
 fn write_record(env: &Env, token_id: u32, record: &RecordData) {

@@ -11,7 +11,7 @@ use soroban_sdk::{
     token::{StellarAssetClient, TokenClient},
     vec, Address, BytesN, Env, Event as _, IntoVal, InvokeError, String, Symbol, TryFromVal, Val,
 };
-use stellar_tokens::non_fungible::Mint;
+use stellar_tokens::non_fungible::{Mint, NonFungibleTokenError};
 
 use crate::{
     DataKey, Error, RaceRecord, RaceRecordClient, RacepackClaimed, RecordData, RecordDnf,
@@ -595,21 +595,86 @@ fn enter_requires_the_runners_authorization() {
     assert_eq!(w.records().total_supply(), 0);
 }
 
-/// A `Draft` or `Closed` event reverts inside `reserve_slot` and that revert
-/// travels all the way out of `enter`.
+/// The error bands are load-bearing, so they get their own test.
 ///
-/// NOTE the error-code collision documented in `lib.rs`: the wire value is
-/// `EventRegistry::EventNotOpen` (4). Soroban error codes carry no contract
-/// identity, so a client decoding against RaceRecord's enum reads the same
-/// integer as `InvalidState`.
+/// A Soroban `ScError` is a bare `u32` with **no contract identity**, and
+/// `enter` propagates reverts from EventRegistry and from a SEP-41 token
+/// untouched. Disjoint bands per contract are the only thing that lets a
+/// client read `Error(Contract, #N)` and know which contract raised it:
+///
+///   1..=99    EventRegistry (C1)
+///   100..=199 RaceRecord (C2)
+///   200+      OpenZeppelin `NonFungibleTokenError`
+///
+/// This fails the moment anyone reintroduces an overlap.
+#[test]
+fn error_codes_of_the_two_contracts_are_disjoint_bands() {
+    // Every variant of both enums, listed exhaustively on purpose: adding a
+    // variant without adding it here is caught by the count assertions below.
+    let registry: std::vec::Vec<u32> = std::vec![
+        event_registry::Error::NotInitialized as u32,
+        event_registry::Error::EventNotFound as u32,
+        event_registry::Error::CategoryNotFound as u32,
+        event_registry::Error::EventNotOpen as u32,
+        event_registry::Error::QuotaFull as u32,
+        event_registry::Error::RaceRecordNotSet as u32,
+        event_registry::Error::RaceRecordAlreadySet as u32,
+        event_registry::Error::InvalidQuota as u32,
+        event_registry::Error::InvalidPrice as u32,
+        event_registry::Error::InvalidDistance as u32,
+        event_registry::Error::InvalidStatus as u32,
+        event_registry::Error::ScannerAlreadyAdded as u32,
+        event_registry::Error::ScannerNotFound as u32,
+    ];
+    let record: std::vec::Vec<u32> = std::vec![
+        Error::NotInitialized as u32,
+        Error::RecordNotFound as u32,
+        Error::AlreadyClaimed as u32,
+        Error::InvalidState as u32,
+        Error::NotAuthorized as u32,
+        Error::InvalidFinishTime as u32,
+    ];
+
+    for code in &registry {
+        assert!(
+            (1..100).contains(code),
+            "EventRegistry code {code} is outside the 1..=99 band"
+        );
+    }
+    for code in &record {
+        assert!(
+            (100..200).contains(code),
+            "RaceRecord code {code} is outside the 100..=199 band"
+        );
+    }
+    for r in &registry {
+        for c in &record {
+            assert_ne!(
+                r, c,
+                "code {r} is claimed by both contracts — a propagated revert \
+                 out of `enter` would be ambiguous again"
+            );
+        }
+    }
+
+    // OpenZeppelin owns 200+; nothing of ours may stray into it.
+    assert!(NonFungibleTokenError::NonExistentToken as u32 >= 200);
+    assert!(NonFungibleTokenError::SymbolMaxLenExceeded as u32 >= 200);
+    assert!(record.iter().all(|c| *c < 200));
+
+    // The lists above must stay exhaustive for the checks to mean anything.
+    assert_eq!(registry.len(), 13, "EventRegistry gained an error variant");
+    assert_eq!(record.len(), 6, "RaceRecord gained an error variant");
+}
+
+/// A `Draft` or `Closed` event reverts inside `reserve_slot` and that revert
+/// travels all the way out of `enter` — unambiguously, thanks to the error
+/// bands: the wire value is `EventRegistry::EventNotOpen`, which sits in C1's
+/// 1..=99 band and therefore does not decode into RaceRecord's enum at all.
+/// A client sees `InvokeError::Contract(4)` and knows exactly where it came
+/// from.
 #[test]
 fn enter_on_a_non_open_event_propagates_event_not_open() {
-    assert_eq!(
-        event_registry::Error::EventNotOpen as u32,
-        Error::InvalidState as u32,
-        "the propagated wire code is EventRegistry's, not RaceRecord's"
-    );
-
     for status in [
         EventStatus::Draft,
         EventStatus::Closed,
@@ -623,7 +688,9 @@ fn enter_on_a_non_open_event_propagates_event_not_open() {
         assert_eq!(
             w.records()
                 .try_enter(&runner, &event_id, &category_id, &phash(&w.env, 1)),
-            Err(Ok(Error::InvalidState))
+            Err(Err(InvokeError::Contract(
+                event_registry::Error::EventNotOpen as u32
+            )))
         );
         assert_eq!(
             w.registry()
@@ -636,17 +703,10 @@ fn enter_on_a_non_open_event_propagates_event_not_open() {
     }
 }
 
-/// Same propagation story for a full category — the wire code is
-/// `EventRegistry::QuotaFull` (5), which RaceRecord's enum spells
-/// `NotAuthorized`.
+/// Same propagation story for a full category: the wire code is
+/// `EventRegistry::QuotaFull`, again from C1's band, again unmistakable.
 #[test]
 fn enter_when_the_category_is_full_propagates_quota_full() {
-    assert_eq!(
-        event_registry::Error::QuotaFull as u32,
-        Error::NotAuthorized as u32,
-        "the propagated wire code is EventRegistry's, not RaceRecord's"
-    );
-
     let w = World::new();
     let (event_id, category_id) = w.open_event(1, PRICE);
     w.enter(&w.runner(), event_id, category_id, 1);
@@ -656,7 +716,9 @@ fn enter_when_the_category_is_full_propagates_quota_full() {
     assert_eq!(
         w.records()
             .try_enter(&latecomer, &event_id, &category_id, &phash(&w.env, 2)),
-        Err(Ok(Error::NotAuthorized))
+        Err(Err(InvokeError::Contract(
+            event_registry::Error::QuotaFull as u32
+        )))
     );
 
     assert_eq!(
@@ -964,6 +1026,48 @@ fn verify_is_false_for_a_wrong_hash_or_unknown_token() {
     assert!(!records.verify(&token_id, &phash(&w.env, 43)));
     assert!(!records.verify(&404, &phash(&w.env, 42)));
     assert!(!records.verify(&404, &phash(&w.env, 43)));
+}
+
+/// `verify` is documented as "hash **and owner** match", so it checks both.
+///
+/// The two halves cannot come apart through the exported surface — `enter`
+/// mints and writes the record in one invocation, and nothing burns — so the
+/// only way to exercise the owner half is to fabricate the impossible state
+/// with a direct storage write. `record_of` still returns the fabricated
+/// record; `verify` refuses it.
+#[test]
+fn verify_requires_the_token_to_still_have_an_owner() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let real = w.enter(&w.runner(), event_id, category_id, 42);
+
+    const ORPHAN: u32 = 777;
+    let orphan_record = RecordData {
+        event_id,
+        category_id,
+        bib_no: 0,
+        participant_hash: phash(&w.env, 42),
+        state: RecordState::Entered,
+        entered_at: NOW,
+        claimed_at: None,
+        finish_time_s: None,
+        result_at: None,
+    };
+    w.env.as_contract(&w.contract, || {
+        w.env
+            .storage()
+            .persistent()
+            .set(&DataKey::Record(ORPHAN), &orphan_record);
+    });
+
+    let records = w.records();
+    // Same hash, and the record really is readable...
+    assert_eq!(records.record_of(&ORPHAN), orphan_record);
+    assert_eq!(records.record_of(&real).participant_hash, phash(&w.env, 42));
+    // ...but nobody owns it, so it verifies as false rather than panicking.
+    assert!(!records.verify(&ORPHAN, &phash(&w.env, 42)));
+    // The genuinely minted record, with both halves present, still verifies.
+    assert!(records.verify(&real, &phash(&w.env, 42)));
 }
 
 // ---------------------------------------------------------------------------

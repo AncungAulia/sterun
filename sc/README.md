@@ -33,6 +33,26 @@ cargo llvm-cov --summary-only     # coverage (target >80%)
 > section-nya. Kalau wasm-nya belum ada, test gagal dengan pesan yang menyuruh
 > jalankan `stellar contract build` dulu — sengaja gagal, bukan skip diam-diam.
 
+## Konvensi kode error: band per kontrak
+
+`ScError` di Soroban cuma `u32` **tanpa identitas kontrak**, dan revert dari
+sub-invocation (EventRegistry, SAC) merambat ke pemanggil apa adanya. Jadi kode
+error dibagi per band supaya `Error(Contract, #N)` mentah langsung ketahuan
+asalnya:
+
+| Band | Pemilik |
+|---|---|
+| `1..=99` | `event_registry` (C1) |
+| `100..=199` | `race_record` (C2) |
+| `200+` | OpenZeppelin `NonFungibleTokenError` (200–214 di stellar-tokens 0.7.2) |
+| kelipatan 100 berikutnya | kontrak baru |
+
+Contoh konkret: `enter` yang gagal karena event belum `Open` keluar sebagai
+`Error(Contract, #4)` — itu `EventRegistry::EventNotOpen`, dan karena 4 di luar
+band RaceRecord, client tahu pasti itu bukan error RaceRecord. Test
+`error_codes_of_the_two_contracts_are_disjoint_bands` gagal kalau band-nya
+pernah tumpang tindih lagi.
+
 ## Non-transferable = fungsinya TIDAK ADA (STE-9)
 
 Klaim produk Sterun bertumpu pada satu hal: record lari tidak bisa pindah tangan.
