@@ -38,6 +38,23 @@ Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari d
   kompatibel mundur).
 - **Layout kontrak**: cargo workspace di `sc/`, member `sc/contracts/<nama_kontrak>/`
   (`event_registry`, lalu `race_record`). Bukan `contracts/` di root (draft tiket) — ikuti `sc/`.
+- **Band kode error `#[contracterror]` (WAJIB, disjoint per kontrak)**:
+  `1..=99` EventRegistry (C1) · `100..=199` RaceRecord (C2) · `200+` dipakai OZ
+  `NonFungibleTokenError` · kontrak baru ambil ratusan berikutnya.
+  Alasan: `ScError` Soroban cuma membawa `u32` **tanpa identitas kontrak**. `enter` cross-call
+  ke EventRegistry + SAC, dan revert mereka merambat apa adanya ke pemanggil — tanpa band
+  disjoint, `Error(Contract, #4)` dari `enter` bisa `EventNotOpen` (C1) ATAU `InvalidState` (C2),
+  dan SDK D2 harus menebak. Kode error = ABI publik: **jangan pernah di-renumber** setelah
+  STE-10 (freeze) merged. Test `error_codes_of_the_two_contracts_are_disjoint_bands` menjaga ini.
+- **Caveat test auth (soroban-sdk 26.1.1)**: `mock_all_auths()` memakai *recording* auth mode di
+  mana `require_auth` pada root frame dipenuhi untuk address apa pun — **termasuk contract
+  address**. Jadi `mock_all_auths()` TIDAK bisa membuktikan gate auth di root frame (mis. gate
+  invoker-contract `reserve_slot`). Pakai `env.mock_auths(&[...])` (enforcing) untuk setiap
+  assertion gate auth.
+- **Kontrak tidak boleh dipakai sebagai dependency biasa antar-member**: menautkan rlib kontrak
+  lain ke cdylib bikin simbol `#[export_name]`-nya bentrok (`__constructor` multiply defined) /
+  bocor ke wasm. Untuk cross-call pakai `#[contractclient]` lokal (atau `contractimport!`);
+  crate kontrak lain hanya boleh jadi `[dev-dependencies]` untuk test.
 
 ## Testing (WAJIB, no bug)
 - **e2e** + **edge case** + **positive case** + **negative case** untuk tiap tiket.
