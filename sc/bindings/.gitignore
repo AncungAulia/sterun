@@ -1,0 +1,10 @@
+# Build output and installed deps of the generated packages.
+#
+# The generator writes its own .gitignore inside each package (node_modules/,
+# out/), but its tsconfig actually emits to dist/ — so that one misses the build
+# output. Those per-package files are generated artifacts and must not be
+# hand-edited (see README.md), so the correction lives here instead.
+node_modules/
+dist/
+out/
+*.tsbuildinfo
