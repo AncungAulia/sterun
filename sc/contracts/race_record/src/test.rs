@@ -4,15 +4,18 @@ extern crate std;
 use event_registry::{EventRegistry, EventRegistryClient as RegistryClient, EventStatus};
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke},
+    testutils::{
+        storage::{Instance as _, Persistent as _},
+        Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke,
+    },
     token::{StellarAssetClient, TokenClient},
-    vec, Address, BytesN, Env, Event as _, IntoVal, String, Symbol, TryFromVal, Val,
+    vec, Address, BytesN, Env, Event as _, IntoVal, InvokeError, String, Symbol, TryFromVal, Val,
 };
 use stellar_tokens::non_fungible::Mint;
 
 use crate::{
-    RaceRecord, RaceRecordClient, RacepackClaimed, RecordData, RecordDnf, RecordEntered,
-    RecordFinished, RecordState,
+    DataKey, Error, RaceRecord, RaceRecordClient, RacepackClaimed, RecordData, RecordDnf,
+    RecordEntered, RecordFinished, RecordState, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
 };
 
 // ---------------------------------------------------------------------------
@@ -124,6 +127,23 @@ impl World {
         (event_id, category_id)
     }
 
+    /// Walks the registry's legal transitions to land the event on `status`.
+    fn event_with_status(&self, quota: u32, price: i128, status: EventStatus) -> (u32, u32) {
+        let (event_id, category_id) = self.draft_event(quota, price);
+        self.env.mock_all_auths();
+        let registry = self.registry();
+        match status {
+            EventStatus::Draft => {}
+            EventStatus::Open => registry.set_event_status(&event_id, &EventStatus::Open),
+            // `Closed` and `Completed` are only reachable through `Open`.
+            other => {
+                registry.set_event_status(&event_id, &EventStatus::Open);
+                registry.set_event_status(&event_id, &other);
+            }
+        }
+        (event_id, category_id)
+    }
+
     fn fund(&self, who: &Address, amount: i128) {
         self.env.mock_all_auths();
         StellarAssetClient::new(&self.env, &self.token).mint(who, &amount);
@@ -143,6 +163,10 @@ impl World {
         self.records()
             .enter(runner, &event_id, &category_id, &phash(&self.env, seed))
     }
+}
+
+fn persistent_ttl(env: &Env, contract: &Address, key: DataKey) -> u32 {
+    env.as_contract(contract, || env.storage().persistent().get_ttl(&key))
 }
 
 // ---------------------------------------------------------------------------
@@ -543,4 +567,555 @@ fn emits_record_dnf() {
         w.env.events().all().filter_by_contract(&w.contract),
         std::vec![RecordDnf { token_id, event_id }.to_xdr(&w.env, &w.contract)]
     );
+}
+
+// ---------------------------------------------------------------------------
+// Negative / revert paths
+// ---------------------------------------------------------------------------
+
+/// Enforcing auth mode, no entries: nobody can enter on a runner's behalf.
+#[test]
+fn enter_requires_the_runners_authorization() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let runner = w.runner();
+
+    w.env.mock_auths(&[]);
+    assert_eq!(
+        w.records()
+            .try_enter(&runner, &event_id, &category_id, &phash(&w.env, 1)),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(
+        w.registry()
+            .get_category(&event_id, &category_id)
+            .entered_count,
+        0
+    );
+    assert_eq!(w.records().total_supply(), 0);
+}
+
+/// A `Draft` or `Closed` event reverts inside `reserve_slot` and that revert
+/// travels all the way out of `enter`.
+///
+/// NOTE the error-code collision documented in `lib.rs`: the wire value is
+/// `EventRegistry::EventNotOpen` (4). Soroban error codes carry no contract
+/// identity, so a client decoding against RaceRecord's enum reads the same
+/// integer as `InvalidState`.
+#[test]
+fn enter_on_a_non_open_event_propagates_event_not_open() {
+    assert_eq!(
+        event_registry::Error::EventNotOpen as u32,
+        Error::InvalidState as u32,
+        "the propagated wire code is EventRegistry's, not RaceRecord's"
+    );
+
+    for status in [
+        EventStatus::Draft,
+        EventStatus::Closed,
+        EventStatus::Completed,
+    ] {
+        let w = World::new();
+        let (event_id, category_id) = w.event_with_status(5, PRICE, status);
+        let runner = w.runner();
+
+        w.env.mock_all_auths();
+        assert_eq!(
+            w.records()
+                .try_enter(&runner, &event_id, &category_id, &phash(&w.env, 1)),
+            Err(Ok(Error::InvalidState))
+        );
+        assert_eq!(
+            w.registry()
+                .get_category(&event_id, &category_id)
+                .entered_count,
+            0
+        );
+        assert_eq!(w.records().total_supply(), 0);
+        assert_eq!(w.token().balance(&w.organiser), 0);
+    }
+}
+
+/// Same propagation story for a full category — the wire code is
+/// `EventRegistry::QuotaFull` (5), which RaceRecord's enum spells
+/// `NotAuthorized`.
+#[test]
+fn enter_when_the_category_is_full_propagates_quota_full() {
+    assert_eq!(
+        event_registry::Error::QuotaFull as u32,
+        Error::NotAuthorized as u32,
+        "the propagated wire code is EventRegistry's, not RaceRecord's"
+    );
+
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(1, PRICE);
+    w.enter(&w.runner(), event_id, category_id, 1);
+
+    let latecomer = w.runner();
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records()
+            .try_enter(&latecomer, &event_id, &category_id, &phash(&w.env, 2)),
+        Err(Ok(Error::NotAuthorized))
+    );
+
+    assert_eq!(
+        w.registry()
+            .get_category(&event_id, &category_id)
+            .entered_count,
+        1
+    );
+    assert_eq!(w.records().total_supply(), 1);
+    assert_eq!(w.token().balance(&latecomer), FUNDING);
+    assert_eq!(w.records().balance(&latecomer), 0);
+}
+
+/// **The atomicity proof.** A runner who cannot pay must leave *no* trace: the
+/// quota reservation and the mint that ran before the transfer are rolled back
+/// with it, because the whole thing is one invocation.
+#[test]
+fn a_failed_payment_rolls_back_quota_and_mint() {
+    for funding in [0i128, PRICE - 1] {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(5, PRICE);
+
+        // No mint at all for `funding == 0`: the address has no balance entry
+        // for this asset whatsoever, the contract-storage equivalent of a
+        // runner with no trustline.
+        let broke = Address::generate(&w.env);
+        if funding > 0 {
+            w.fund(&broke, funding);
+        }
+
+        w.env.mock_all_auths();
+        let result = w
+            .records()
+            .try_enter(&broke, &event_id, &category_id, &phash(&w.env, 1));
+        // The Stellar Asset Contract's own `BalanceError` (built-in contract
+        // error 10), propagated out of the nested `transfer`. A classic `G...`
+        // account with no trustline would raise `TrustlineMissingError` (13) at
+        // exactly the same point, with the same rollback.
+        assert_eq!(
+            result,
+            Err(Err(InvokeError::Contract(10))),
+            "an unpayable entry must revert inside the SAC transfer"
+        );
+
+        // Nothing survived the revert.
+        assert_eq!(
+            w.registry()
+                .get_category(&event_id, &category_id)
+                .entered_count,
+            0,
+            "quota must be released"
+        );
+        assert_eq!(w.records().total_supply(), 0, "no token may exist");
+        assert_eq!(w.records().balance(&broke), 0);
+        assert!(w.records().records_of(&broke).is_empty());
+        assert_eq!(
+            w.records().try_record_of(&0),
+            Err(Ok(Error::RecordNotFound))
+        );
+        assert_eq!(w.token().balance(&broke), funding, "the fee was not taken");
+        assert_eq!(w.token().balance(&w.organiser), 0);
+
+        // And the slot is still there for someone who can pay.
+        let solvent = w.runner();
+        assert_eq!(w.enter(&solvent, event_id, category_id, 2), 0);
+        assert_eq!(w.records().record_of(&0).bib_no, 0);
+    }
+}
+
+#[test]
+fn claim_racepack_twice_reverts_already_claimed() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.claim_racepack(&token_id, &w.organiser);
+    let claimed_at = records.record_of(&token_id).claimed_at;
+
+    w.env.ledger().set_timestamp(NOW + 900);
+    assert_eq!(
+        records.try_claim_racepack(&token_id, &w.organiser),
+        Err(Ok(Error::AlreadyClaimed))
+    );
+    // The second desk changed nothing at all.
+    assert_eq!(
+        records.record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+    assert_eq!(records.record_of(&token_id).claimed_at, claimed_at);
+}
+
+#[test]
+fn claim_racepack_rejects_a_stranger() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+    let stranger = Address::generate(&w.env);
+
+    // The stranger signs for themselves — a valid signature, no authority.
+    w.env.mock_auths(&[MockAuth {
+        address: &stranger,
+        invoke: &MockAuthInvoke {
+            contract: &w.contract,
+            fn_name: "claim_racepack",
+            args: (token_id, stranger.clone()).into_val(&w.env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert_eq!(
+        w.records().try_claim_racepack(&token_id, &stranger),
+        Err(Ok(Error::NotAuthorized))
+    );
+    assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+}
+
+#[test]
+fn claim_racepack_rejects_a_removed_scanner() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+    let scanner = Address::generate(&w.env);
+
+    w.env.mock_all_auths();
+    w.registry().add_scanner(&event_id, &scanner);
+    w.registry().remove_scanner(&event_id, &scanner);
+
+    w.env.mock_auths(&[MockAuth {
+        address: &scanner,
+        invoke: &MockAuthInvoke {
+            contract: &w.contract,
+            fn_name: "claim_racepack",
+            args: (token_id, scanner.clone()).into_val(&w.env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert_eq!(
+        w.records().try_claim_racepack(&token_id, &scanner),
+        Err(Ok(Error::NotAuthorized))
+    );
+    assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+}
+
+/// A runner who never collected a race pack cannot receive a finish time.
+#[test]
+fn record_finish_before_claim_reverts_invalid_state() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_record_finish(&token_id, &3_600),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+    assert_eq!(w.records().record_of(&token_id).finish_time_s, None);
+}
+
+#[test]
+fn record_finish_rejects_a_non_organiser() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+    let impostor = Address::generate(&w.env);
+
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+
+    // The impostor signs; the contract requires the organiser stored on the
+    // registry, so no entry matches.
+    w.env.mock_auths(&[MockAuth {
+        address: &impostor,
+        invoke: &MockAuthInvoke {
+            contract: &w.contract,
+            fn_name: "record_finish",
+            args: (token_id, 3_600u32).into_val(&w.env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert_eq!(
+        w.records().try_record_finish(&token_id, &3_600),
+        Err(Err(InvokeError::Abort))
+    );
+
+    w.env.mock_auths(&[MockAuth {
+        address: &impostor,
+        invoke: &MockAuthInvoke {
+            contract: &w.contract,
+            fn_name: "record_dnf",
+            args: (token_id,).into_val(&w.env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert_eq!(
+        w.records().try_record_dnf(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+
+    assert_eq!(
+        w.records().record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+}
+
+#[test]
+fn record_finish_twice_reverts_invalid_state() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.claim_racepack(&token_id, &w.organiser);
+    records.record_finish(&token_id, &3_600);
+
+    assert_eq!(
+        records.try_record_finish(&token_id, &1_800),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(records.record_of(&token_id).finish_time_s, Some(3_600));
+}
+
+#[test]
+fn record_finish_rejects_a_zero_finish_time() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.claim_racepack(&token_id, &w.organiser);
+
+    assert_eq!(
+        records.try_record_finish(&token_id, &0),
+        Err(Ok(Error::InvalidFinishTime))
+    );
+    assert_eq!(
+        records.record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+}
+
+#[test]
+fn record_dnf_rejects_terminal_states() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let finished = w.enter(&w.runner(), event_id, category_id, 1);
+    let dnf = w.enter(&w.runner(), event_id, category_id, 2);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.claim_racepack(&finished, &w.organiser);
+    records.record_finish(&finished, &3_600);
+    records.record_dnf(&dnf);
+
+    assert_eq!(
+        records.try_record_dnf(&finished),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(records.try_record_dnf(&dnf), Err(Ok(Error::InvalidState)));
+    // A DNF'd record can never be resurrected into a finish either.
+    assert_eq!(
+        records.try_record_finish(&dnf, &3_600),
+        Err(Ok(Error::InvalidState))
+    );
+
+    assert_eq!(records.record_of(&finished).state, RecordState::Finished);
+    assert_eq!(records.record_of(&dnf).state, RecordState::Dnf);
+}
+
+#[test]
+fn unknown_token_ids_revert_record_not_found() {
+    let w = World::new();
+    let (_event_id, _category_id) = w.open_event(5, PRICE);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    assert_eq!(records.try_record_of(&404), Err(Ok(Error::RecordNotFound)));
+    assert_eq!(
+        records.try_extend_record_ttl(&404),
+        Err(Ok(Error::RecordNotFound))
+    );
+    assert_eq!(
+        records.try_claim_racepack(&404, &w.organiser),
+        Err(Ok(Error::RecordNotFound))
+    );
+    assert_eq!(
+        records.try_record_finish(&404, &3_600),
+        Err(Ok(Error::RecordNotFound))
+    );
+    assert_eq!(records.try_record_dnf(&404), Err(Ok(Error::RecordNotFound)));
+}
+
+/// `verify` is a public, wallet-less read that third parties call
+/// speculatively, so a miss is `false` — never a panic.
+#[test]
+fn verify_is_false_for_a_wrong_hash_or_unknown_token() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 42);
+
+    let records = w.records();
+    assert!(!records.verify(&token_id, &phash(&w.env, 43)));
+    assert!(!records.verify(&404, &phash(&w.env, 42)));
+    assert!(!records.verify(&404, &phash(&w.env, 43)));
+}
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+/// `price_usdc == 0` skips the SEP-41 call entirely, so a free entry works for
+/// a runner holding no sUSD — and, on a classic `G...` account, with no
+/// trustline for it at all.
+#[test]
+fn a_free_category_skips_the_transfer_entirely() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, 0);
+    let penniless = Address::generate(&w.env);
+
+    let token_id = w.enter(&penniless, event_id, category_id, 1);
+
+    assert_eq!(w.records().owner_of(&token_id), penniless);
+    assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+    assert_eq!(w.token().balance(&penniless), 0);
+    assert_eq!(
+        w.token().balance(&w.organiser),
+        0,
+        "a free entry must not move any token"
+    );
+    // No SAC event was emitted at all — the whole invocation only touched the
+    // registry and this contract.
+    assert!(w
+        .env
+        .events()
+        .all()
+        .filter_by_contract(&w.token)
+        .events()
+        .is_empty());
+}
+
+#[test]
+fn two_runners_in_one_category_get_distinct_tokens_and_bibs() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let alice = w.runner();
+    let bob = w.runner();
+
+    let alice_token = w.enter(&alice, event_id, category_id, 1);
+    let bob_token = w.enter(&bob, event_id, category_id, 2);
+
+    assert_ne!(alice_token, bob_token);
+    let records = w.records();
+    assert_ne!(
+        records.record_of(&alice_token).bib_no,
+        records.record_of(&bob_token).bib_no
+    );
+    assert_eq!(records.records_of(&alice), vec![&w.env, alice_token]);
+    assert_eq!(records.records_of(&bob), vec![&w.env, bob_token]);
+}
+
+#[test]
+fn one_runner_two_events_owns_two_records() {
+    let w = World::new();
+    let (first_event, first_cat) = w.open_event(5, PRICE);
+    let (second_event, second_cat) = w.open_event(5, 0);
+    let runner = w.runner();
+
+    w.enter(&runner, first_event, first_cat, 1);
+    w.enter(&runner, second_event, second_cat, 2);
+
+    assert_eq!(w.records().balance(&runner), 2);
+    assert_eq!(w.records().records_of(&runner).len(), 2);
+    // Only the paid event took money.
+    assert_eq!(w.token().balance(&runner), FUNDING - PRICE);
+}
+
+/// `extend_record_ttl` is deliberately ungated: a runner's history has to
+/// outlive the event, so anyone may pay its rent. Enforcing auth mode with no
+/// entries at all proves there is no gate to satisfy.
+#[test]
+fn extend_record_ttl_is_permissionless() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_auths(&[]);
+    w.records().extend_record_ttl(&token_id);
+
+    assert!(w.env.auths().is_empty(), "no authorization was consumed");
+}
+
+#[test]
+fn writes_extend_record_and_instance_ttl() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    assert_eq!(
+        persistent_ttl(&w.env, &w.contract, DataKey::Record(token_id)),
+        BUMP_TO
+    );
+    assert_eq!(
+        w.env
+            .as_contract(&w.contract, || w.env.storage().instance().get_ttl()),
+        BUMP_TO
+    );
+}
+
+/// The keeper story, end to end: let a record's rent decay past the bump
+/// threshold, then have anyone top it back up.
+#[test]
+fn extend_record_ttl_restores_a_decayed_ttl() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+    let key = DataKey::Record(token_id);
+
+    // `extend_ttl` is a no-op above the threshold, so the decay has to cross it
+    // for the test to mean anything.
+    let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+    w.env
+        .ledger()
+        .set_sequence_number(w.env.ledger().sequence() + aged_by);
+
+    let decayed = persistent_ttl(&w.env, &w.contract, key.clone());
+    assert_eq!(decayed, BUMP_TO - aged_by);
+    assert!(decayed < BUMP_THRESHOLD);
+
+    w.env.mock_auths(&[]);
+    w.records().extend_record_ttl(&token_id);
+
+    assert_eq!(persistent_ttl(&w.env, &w.contract, key), BUMP_TO);
+    assert_eq!(
+        w.env
+            .as_contract(&w.contract, || w.env.storage().instance().get_ttl()),
+        BUMP_TO
+    );
+}
+
+/// A lifecycle write re-extends a decayed record too, not just the dedicated
+/// top-up.
+#[test]
+fn a_lifecycle_write_re_extends_a_decayed_ttl() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+    let key = DataKey::Record(token_id);
+
+    let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+    w.env
+        .ledger()
+        .set_sequence_number(w.env.ledger().sequence() + aged_by);
+    assert!(persistent_ttl(&w.env, &w.contract, key.clone()) < BUMP_THRESHOLD);
+
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+
+    assert_eq!(persistent_ttl(&w.env, &w.contract, key), BUMP_TO);
 }
