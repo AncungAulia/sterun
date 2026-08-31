@@ -28,7 +28,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
-    Address, BytesN, Env, MuxedAddress, String,
+    Address, BytesN, Env, MuxedAddress, String, Vec,
 };
 use stellar_tokens::non_fungible::{enumerable::Enumerable, Base};
 
@@ -377,6 +377,92 @@ impl RaceRecord {
 
         RecordDnf { token_id, event_id }.publish(&env);
         Ok(())
+    }
+
+    /// **Permissionless** rent top-up for one record — no `require_auth` at
+    /// all. A runner's history has to outlive the event by years, so anyone
+    /// (the runner, the organiser, a Sterun keeper cron, a stranger) may pay to
+    /// keep it out of archival. The caller pays the fee; the entry's contents
+    /// cannot be changed this way.
+    pub fn extend_record_ttl(env: Env, token_id: u32) -> Result<(), Error> {
+        let key = DataKey::Record(token_id);
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::RecordNotFound);
+        }
+        bump_instance(&env);
+        bump_persistent(&env, &key);
+        Ok(())
+    }
+
+    // -- views ---------------------------------------------------------------
+
+    pub fn record_of(env: Env, token_id: u32) -> Result<RecordData, Error> {
+        read_record(&env, token_id)
+    }
+
+    /// Every record `runner` owns, via the OpenZeppelin `Enumerable` per-owner
+    /// index. Bounded by the runner's balance, which only `enter` can grow.
+    pub fn records_of(env: Env, runner: Address) -> Vec<u32> {
+        let balance = Base::balance(&env, &runner);
+        let mut tokens = Vec::new(&env);
+        for index in 0..balance {
+            tokens.push_back(Enumerable::get_owner_token_id(&env, &runner, index));
+        }
+        tokens
+    }
+
+    /// Checks a record against a recomputed `participant_hash`. Given the
+    /// off-chain PII plus the salt, anyone — insurer, medical desk, another
+    /// organiser — can prove the record belongs to that person.
+    ///
+    /// Never panics: an unknown `token_id` is simply `false`, because this is a
+    /// public, wallet-less read that verifiers call speculatively.
+    pub fn verify(env: Env, token_id: u32, participant_hash: BytesN<32>) -> bool {
+        env.storage()
+            .persistent()
+            .get::<_, RecordData>(&DataKey::Record(token_id))
+            .is_some_and(|record| record.participant_hash == participant_hash)
+    }
+
+    /// The runner this record is bound to. There is no exported path that ever
+    /// changes it.
+    pub fn owner_of(env: Env, token_id: u32) -> Address {
+        Base::owner_of(&env, token_id)
+    }
+
+    pub fn balance(env: Env, owner: Address) -> u32 {
+        Base::balance(&env, &owner)
+    }
+
+    pub fn token_uri(env: Env, token_id: u32) -> String {
+        Base::token_uri(&env, token_id)
+    }
+
+    pub fn total_supply(env: Env) -> u32 {
+        Enumerable::total_supply(&env)
+    }
+
+    /// Collection name, from the OpenZeppelin metadata written by the
+    /// constructor.
+    pub fn name(env: Env) -> String {
+        Base::name(&env)
+    }
+
+    /// Collection symbol.
+    pub fn symbol(env: Env) -> String {
+        Base::symbol(&env)
+    }
+
+    pub fn get_admin(env: Env) -> Result<Address, Error> {
+        read_instance_addr(&env, DataKey::Admin)
+    }
+
+    pub fn get_registry(env: Env) -> Result<Address, Error> {
+        read_instance_addr(&env, DataKey::RegistryAddr)
+    }
+
+    pub fn get_token(env: Env) -> Result<Address, Error> {
+        read_instance_addr(&env, DataKey::TokenAddr)
     }
 }
 
