@@ -27,10 +27,12 @@
 //! same assertion from `cargo test`.
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
-    String,
+    contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
+    Address, BytesN, Env, MuxedAddress, String,
 };
-use stellar_tokens::non_fungible::Base;
+use stellar_tokens::non_fungible::{enumerable::Enumerable, Base};
+
+use crate::registry::EventRegistryClient;
 
 pub mod registry;
 
@@ -209,6 +211,75 @@ impl RaceRecord {
         Base::set_metadata(&env, base_uri, name, symbol);
         bump_instance(&env);
     }
+
+    // -- entry ---------------------------------------------------------------
+
+    /// Registers `runner` for a category and mints their record. **One
+    /// invocation, one atomicity boundary**: the quota reservation, the entry
+    /// fee and the mint either all land or all roll back, so a failed payment
+    /// can never leave a slot consumed or a record without a fee.
+    ///
+    /// Steps, in order:
+    /// 1. `runner.require_auth()` — the runner signs one auth tree that also
+    ///    covers the nested SEP-41 `transfer` sub-invocation.
+    /// 2. `reserve_slot` on the registry. RaceRecord is the direct caller, so
+    ///    the registry's stored `RaceRecordAddr` authorizes implicitly. Its
+    ///    reverts (`QuotaFull`, `EventNotOpen`, `CategoryNotFound`, …)
+    ///    propagate out of this call untouched — see the error-code note above.
+    /// 3. Pay `price_usdc` straight from the runner to the organiser. **A free
+    ///    category (`price_usdc == 0`) skips the transfer entirely**, so a free
+    ///    entry never needs the runner to hold the token — or, for a classic
+    ///    `G...` account, to carry a trustline for it at all.
+    /// 4. Mint the non-transferable record and store its [`RecordData`].
+    pub fn enter(
+        env: Env,
+        runner: Address,
+        event_id: u32,
+        category_id: u32,
+        participant_hash: BytesN<32>,
+    ) -> Result<u32, Error> {
+        runner.require_auth();
+        bump_instance(&env);
+
+        let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
+        // Quota before money: a closed event or a full category costs the
+        // runner nothing but the failed transaction's fee.
+        let bib_no = registry.reserve_slot(&event_id, &category_id);
+        let price = registry.get_category(&event_id, &category_id).price_usdc;
+        let organiser = registry.get_organiser(&event_id);
+
+        if price > 0 {
+            let token = read_instance_addr(&env, DataKey::TokenAddr)?;
+            let to: MuxedAddress = organiser.into();
+            TokenClient::new(&env, &token).transfer(&runner, &to, &price);
+        }
+
+        let token_id = Enumerable::sequential_mint(&env, &runner);
+        write_record(
+            &env,
+            token_id,
+            &RecordData {
+                event_id,
+                category_id,
+                bib_no,
+                participant_hash,
+                state: RecordState::Entered,
+                entered_at: env.ledger().timestamp(),
+                claimed_at: None,
+                finish_time_s: None,
+                result_at: None,
+            },
+        );
+
+        RecordEntered {
+            runner,
+            event_id,
+            token_id,
+            bib_no,
+        }
+        .publish(&env);
+        Ok(token_id)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -220,4 +291,29 @@ impl RaceRecord {
 /// every mutating entry point — active users pay rent for the state they touch.
 fn bump_instance(env: &Env) {
     env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+/// `extend_ttl` is floor-only and idempotent: a no-op while the remaining TTL
+/// is still above `BUMP_THRESHOLD`, and it never shortens an entry.
+fn bump_persistent(env: &Env, key: &DataKey) {
+    env.storage()
+        .persistent()
+        .extend_ttl(key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+fn read_instance_addr(env: &Env, key: DataKey) -> Result<Address, Error> {
+    env.storage()
+        .instance()
+        .get(&key)
+        .ok_or(Error::NotInitialized)
+}
+
+fn read_registry(env: &Env) -> Result<Address, Error> {
+    read_instance_addr(env, DataKey::RegistryAddr)
+}
+
+fn write_record(env: &Env, token_id: u32, record: &RecordData) {
+    let key = DataKey::Record(token_id);
+    env.storage().persistent().set(&key, record);
+    bump_persistent(env, &key);
 }
