@@ -32,6 +32,8 @@ use soroban_sdk::{
 };
 use stellar_tokens::non_fungible::Base;
 
+pub mod registry;
+
 // ---------------------------------------------------------------------------
 // State archival / TTL (docs/SYSTEM_DESIGN.md 3.4)
 // ---------------------------------------------------------------------------
