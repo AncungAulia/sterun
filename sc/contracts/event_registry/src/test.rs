@@ -3,14 +3,17 @@ extern crate std;
 
 use soroban_sdk::{
     contract, contractimpl, symbol_short,
-    testutils::{Address as _, Events as _, MockAuth, MockAuthInvoke},
+    testutils::{
+        storage::{Instance as _, Persistent as _},
+        Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke,
+    },
     Address, BytesN, Env, Event as _, IntoVal, InvokeError, String, Symbol,
 };
 
 use crate::{
-    CategoryAdded, CategoryData, Error, EventCreated, EventData, EventRegistry,
+    CategoryAdded, CategoryData, DataKey, Error, EventCreated, EventData, EventRegistry,
     EventRegistryClient, EventStatus, EventStatusChanged, ScannerAdded, ScannerRemoved,
-    SlotReserved,
+    SlotReserved, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
 };
 
 // ---------------------------------------------------------------------------
@@ -858,5 +861,261 @@ fn set_event_status_and_add_category_revert_on_unknown_event() {
     assert_eq!(
         client.try_remove_scanner(&7, &addr),
         Err(Ok(Error::EventNotFound))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Edge cases + integration
+// ---------------------------------------------------------------------------
+
+/// The last-slot race, proved inside a single invocation of the caller
+/// contract: two entries attempt the same `quota == 1` category back to back
+/// and exactly one wins. Because `reserve_slot` checks and increments in one
+/// invocation, the loser sees the already-incremented `entered_count`.
+#[test]
+fn exactly_one_entry_wins_the_last_slot() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 1);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(
+        caller.race(&registry, &event_id, &category_id),
+        (true, false)
+    );
+
+    let category = client.get_category(&event_id, &category_id);
+    assert_eq!(category.entered_count, 1);
+    assert_eq!(category.entered_count, category.quota);
+
+    // And it stays full for every later attempt.
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::QuotaFull))
+    );
+}
+
+/// A contract that is not the wired RaceRecord is just as rejected as an EOA:
+/// invoker-contract auth only matches the exact stored address.
+#[test]
+fn an_unwired_contract_cannot_reserve() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    wire_race_record(&env, &client);
+
+    let impostor_contract = env.register(MockRaceRecord, ());
+    let impostor = MockRaceRecordClient::new(&env, &impostor_contract);
+
+    env.mock_auths(&[]);
+    assert_eq!(
+        impostor.try_reserve(&registry, &event_id, &category_id),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(
+        client.get_category(&event_id, &category_id).entered_count,
+        0
+    );
+}
+
+#[test]
+fn free_category_and_extreme_values_are_accepted() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    // price 0 — a free category is legal (only negative prices are not).
+    let free = client.add_category(&event_id, &symbol_short!("FUN"), &1, &1, &0);
+    assert_eq!(client.get_category(&event_id, &free).price_usdc, 0);
+
+    // i128::MAX price and u32::MAX quota / distance.
+    let extreme = client.add_category(
+        &event_id,
+        &symbol_short!("ULTRA"),
+        &u32::MAX,
+        &u32::MAX,
+        &i128::MAX,
+    );
+    assert_eq!(
+        client.get_category(&event_id, &extreme),
+        CategoryData {
+            code: symbol_short!("ULTRA"),
+            distance_m: u32::MAX,
+            quota: u32::MAX,
+            price_usdc: i128::MAX,
+            entered_count: 0,
+        }
+    );
+
+    // A u32::MAX quota still hands out bibs from 0.
+    client.set_event_status(&event_id, &EventStatus::Open);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+    assert_eq!(caller.reserve(&registry, &event_id, &extreme), 0);
+    assert_eq!(caller.reserve(&registry, &event_id, &free), 0);
+    // The free category had quota 1.
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &free),
+        Err(Ok(Error::QuotaFull))
+    );
+}
+
+/// Events owned by different organisers are fully isolated: A's signature is
+/// worthless against B's event, and quotas/counters do not leak across events.
+#[test]
+fn events_of_different_organisers_are_isolated() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    env.mock_all_auths();
+    let alice_event = client.create_event(&alice, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let bob_event = client.create_event(&bob, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    assert_eq!(client.get_organiser(&alice_event), alice);
+    assert_eq!(client.get_organiser(&bob_event), bob);
+
+    // Alice signs a call against Bob's event.
+    env.mock_auths(&[MockAuth {
+        address: &alice,
+        invoke: &MockAuthInvoke {
+            contract: &registry,
+            fn_name: "set_event_status",
+            args: (bob_event, EventStatus::Open).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+    assert_eq!(
+        client.try_set_event_status(&bob_event, &EventStatus::Open),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.get_event(&bob_event).status, EventStatus::Draft);
+
+    // Reserving against Alice's open category does not touch Bob's.
+    env.mock_all_auths();
+    let alice_cat = client.add_category(&alice_event, &symbol_short!("10K"), &10_000, &5, &0);
+    let bob_cat = client.add_category(&bob_event, &symbol_short!("10K"), &10_000, &5, &0);
+    client.set_event_status(&alice_event, &EventStatus::Open);
+
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+    caller.reserve(&registry, &alice_event, &alice_cat);
+
+    assert_eq!(
+        client.get_category(&alice_event, &alice_cat).entered_count,
+        1
+    );
+    assert_eq!(client.get_category(&bob_event, &bob_cat).entered_count, 0);
+    assert_eq!(
+        caller.try_reserve(&registry, &bob_event, &bob_cat),
+        Err(Ok(Error::EventNotOpen))
+    );
+}
+
+#[test]
+fn scanner_allowlist_is_per_event() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let scanner = Address::generate(&env);
+    env.mock_all_auths();
+
+    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    client.add_scanner(&first, &scanner);
+    assert!(client.is_scanner(&first, &scanner));
+    assert!(!client.is_scanner(&second, &scanner));
+
+    // Removing from the other event is a miss, not a silent success.
+    assert_eq!(
+        client.try_remove_scanner(&second, &scanner),
+        Err(Ok(Error::ScannerNotFound))
+    );
+    assert!(client.is_scanner(&first, &scanner));
+}
+
+// ---------------------------------------------------------------------------
+// TTL / state archival
+// ---------------------------------------------------------------------------
+
+fn persistent_ttl(env: &Env, registry: &Address, key: DataKey) -> u32 {
+    env.as_contract(registry, || env.storage().persistent().get_ttl(&key))
+}
+
+#[test]
+fn writes_extend_persistent_and_instance_ttl() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let scanner = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    client.add_scanner(&event_id, &scanner);
+
+    for key in [
+        DataKey::Event(event_id),
+        DataKey::Category(event_id, category_id),
+        DataKey::CategoryCount(event_id),
+        DataKey::Scanner(event_id, scanner.clone()),
+    ] {
+        assert_eq!(persistent_ttl(&env, &registry, key), BUMP_TO);
+    }
+    assert_eq!(
+        env.as_contract(&registry, || env.storage().instance().get_ttl()),
+        BUMP_TO
+    );
+}
+
+#[test]
+fn a_later_write_re_extends_a_decayed_ttl() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    // Age the ledger past the bump threshold. `extend_ttl` is a no-op above
+    // the threshold, so the decay has to cross it for the test to mean
+    // anything.
+    let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + aged_by);
+
+    let category_key = DataKey::Category(event_id, category_id);
+    let decayed = persistent_ttl(&env, &registry, category_key.clone());
+    assert_eq!(decayed, BUMP_TO - aged_by);
+    assert!(decayed < BUMP_THRESHOLD);
+
+    // reserve_slot writes the category, so it must top the rent back up — and
+    // it refreshes the event entry it read, too.
+    caller.reserve(&registry, &event_id, &category_id);
+
+    assert_eq!(persistent_ttl(&env, &registry, category_key), BUMP_TO);
+    assert_eq!(
+        persistent_ttl(&env, &registry, DataKey::Event(event_id)),
+        BUMP_TO
+    );
+    assert_eq!(
+        env.as_contract(&registry, || env.storage().instance().get_ttl()),
+        BUMP_TO
     );
 }
