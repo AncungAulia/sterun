@@ -192,6 +192,147 @@ impl EventRegistry {
         Ok(())
     }
 
+    // -- organiser surface ---------------------------------------------------
+
+    /// Creates an event owned by `organiser`. Ids are assigned from a
+    /// monotonic counter and never reused. The event starts in
+    /// [`EventStatus::Draft`] so categories can be added before registration
+    /// opens.
+    pub fn create_event(
+        env: Env,
+        organiser: Address,
+        name: String,
+        metadata_hash: BytesN<32>,
+        uri: String,
+        starts_at: u64,
+    ) -> Result<u32, Error> {
+        organiser.require_auth();
+
+        let event_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::EventCount)
+            .ok_or(Error::NotInitialized)?;
+
+        write_event(
+            &env,
+            event_id,
+            &EventData {
+                organiser: organiser.clone(),
+                name,
+                metadata_hash,
+                uri,
+                starts_at,
+                status: EventStatus::Draft,
+            },
+        );
+        write_category_count(&env, event_id, 0);
+        // `event_id + 1` cannot overflow in practice: it would take u32::MAX
+        // successful `create_event` transactions, and `overflow-checks = true`
+        // in the release profile turns the impossible case into a revert.
+        env.storage()
+            .instance()
+            .set(&DataKey::EventCount, &(event_id + 1));
+
+        EventCreated {
+            event_id,
+            organiser,
+        }
+        .publish(&env);
+        Ok(event_id)
+    }
+
+    /// Adds a distance category to an event. Category ids restart at 0 for
+    /// every event.
+    pub fn add_category(
+        env: Env,
+        event_id: u32,
+        code: Symbol,
+        distance_m: u32,
+        quota: u32,
+        price_usdc: i128,
+    ) -> Result<u32, Error> {
+        auth_organiser(&env, event_id)?;
+        if quota == 0 {
+            return Err(Error::InvalidQuota);
+        }
+        if price_usdc < 0 {
+            return Err(Error::InvalidPrice);
+        }
+        if distance_m == 0 {
+            return Err(Error::InvalidDistance);
+        }
+
+        let category_id = Self::category_count(env.clone(), event_id);
+        write_category(
+            &env,
+            event_id,
+            category_id,
+            &CategoryData {
+                code,
+                distance_m,
+                quota,
+                price_usdc,
+                entered_count: 0,
+            },
+        );
+        write_category_count(&env, event_id, category_id + 1);
+
+        CategoryAdded {
+            event_id,
+            category_id,
+            quota,
+            price: price_usdc,
+        }
+        .publish(&env);
+        Ok(category_id)
+    }
+
+    /// Moves the event through its lifecycle. Only forward moves are legal,
+    /// plus the `Open` <-> `Closed` toggle; `Completed` is terminal and a
+    /// no-op transition is rejected so no misleading event is emitted.
+    pub fn set_event_status(env: Env, event_id: u32, status: EventStatus) -> Result<(), Error> {
+        let mut event = auth_organiser(&env, event_id)?;
+        if !is_valid_transition(event.status, status) {
+            return Err(Error::InvalidStatus);
+        }
+
+        event.status = status;
+        write_event(&env, event_id, &event);
+
+        EventStatusChanged { event_id, status }.publish(&env);
+        Ok(())
+    }
+
+    /// Allowlists a volunteer device for race-day check-in on this event.
+    pub fn add_scanner(env: Env, event_id: u32, scanner: Address) -> Result<(), Error> {
+        auth_organiser(&env, event_id)?;
+        let key = DataKey::Scanner(event_id, scanner.clone());
+        if env.storage().persistent().has(&key) {
+            return Err(Error::ScannerAlreadyAdded);
+        }
+
+        env.storage().persistent().set(&key, &true);
+
+        ScannerAdded { event_id, scanner }.publish(&env);
+        Ok(())
+    }
+
+    /// Revokes a volunteer device. The entry is removed rather than set to
+    /// `false` so the organiser stops paying rent for it.
+    pub fn remove_scanner(env: Env, event_id: u32, scanner: Address) -> Result<(), Error> {
+        auth_organiser(&env, event_id)?;
+        let key = DataKey::Scanner(event_id, scanner.clone());
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::ScannerNotFound);
+        }
+
+        env.storage().persistent().remove(&key);
+
+        ScannerRemoved { event_id, scanner }.publish(&env);
+        Ok(())
+    }
+
     // -- views ---------------------------------------------------------------
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
@@ -211,6 +352,33 @@ impl EventRegistry {
             .get(&DataKey::EventCount)
             .unwrap_or(0)
     }
+
+    pub fn get_event(env: Env, event_id: u32) -> Result<EventData, Error> {
+        read_event(&env, event_id)
+    }
+
+    pub fn get_category(env: Env, event_id: u32, category_id: u32) -> Result<CategoryData, Error> {
+        read_category(&env, event_id, category_id)
+    }
+
+    pub fn get_organiser(env: Env, event_id: u32) -> Result<Address, Error> {
+        Ok(read_event(&env, event_id)?.organiser)
+    }
+
+    /// `false` when the address was never added, or was removed.
+    pub fn is_scanner(env: Env, event_id: u32, addr: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Scanner(event_id, addr))
+            .unwrap_or(false)
+    }
+
+    pub fn category_count(env: Env, event_id: u32) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CategoryCount(event_id))
+            .unwrap_or(0)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +390,61 @@ fn read_admin(env: &Env) -> Result<Address, Error> {
         .instance()
         .get(&DataKey::Admin)
         .ok_or(Error::NotInitialized)
+}
+
+fn read_event(env: &Env, event_id: u32) -> Result<EventData, Error> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Event(event_id))
+        .ok_or(Error::EventNotFound)
+}
+
+fn write_event(env: &Env, event_id: u32, event: &EventData) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Event(event_id), event);
+}
+
+fn read_category(env: &Env, event_id: u32, category_id: u32) -> Result<CategoryData, Error> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Category(event_id, category_id))
+        .ok_or(Error::CategoryNotFound)
+}
+
+fn write_category(env: &Env, event_id: u32, category_id: u32, category: &CategoryData) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Category(event_id, category_id), category);
+}
+
+fn write_category_count(env: &Env, event_id: u32, count: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::CategoryCount(event_id), &count);
+}
+
+/// Loads the event and requires its organiser's authorization. Every mutating
+/// organiser entry point goes through here, so authority always comes from
+/// stored state and never from a caller-supplied address.
+fn auth_organiser(env: &Env, event_id: u32) -> Result<EventData, Error> {
+    let event = read_event(env, event_id)?;
+    event.organiser.require_auth();
+    Ok(event)
+}
+
+/// Forward-only lifecycle with an `Open` <-> `Closed` toggle for re-opening
+/// registration. `Completed` is terminal and self-transitions are rejected.
+fn is_valid_transition(from: EventStatus, to: EventStatus) -> bool {
+    matches!(
+        (from, to),
+        (EventStatus::Draft, EventStatus::Open)
+            | (EventStatus::Draft, EventStatus::Closed)
+            | (EventStatus::Open, EventStatus::Closed)
+            | (EventStatus::Open, EventStatus::Completed)
+            | (EventStatus::Closed, EventStatus::Open)
+            | (EventStatus::Closed, EventStatus::Completed)
+    )
 }
 
 mod test;
