@@ -14,6 +14,20 @@ use soroban_sdk::{
 };
 
 // ---------------------------------------------------------------------------
+// State archival / TTL (docs/SYSTEM_DESIGN.md 3.4)
+// ---------------------------------------------------------------------------
+
+/// ~5s per ledger.
+const DAY_IN_LEDGERS: u32 = 17_280;
+/// Only pay to bump once the remaining TTL drops below ~120 days, which is the
+/// floor a freshly written persistent entry starts at.
+const BUMP_THRESHOLD: u32 = 120 * DAY_IN_LEDGERS;
+/// Bump back up to ~180 days — the network's maximum entry TTL, so this is the
+/// longest extension the host will accept. If a future network lowers
+/// `max_entry_ttl`, lower this to match or `extend_ttl` starts reverting.
+const BUMP_TO: u32 = 180 * DAY_IN_LEDGERS;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -176,6 +190,7 @@ impl EventRegistry {
     pub fn __constructor(env: Env, admin: Address) {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::EventCount, &0u32);
+        bump_instance(&env);
     }
 
     /// One-shot wiring of the RaceRecord contract address, done by the admin
@@ -183,6 +198,7 @@ impl EventRegistry {
     /// trusted caller of [`Self::reserve_slot`] can never be swapped out.
     pub fn set_race_record(env: Env, race_record: Address) -> Result<(), Error> {
         read_admin(&env)?.require_auth();
+        bump_instance(&env);
         if env.storage().instance().has(&DataKey::RaceRecordAddr) {
             return Err(Error::RaceRecordAlreadySet);
         }
@@ -207,6 +223,7 @@ impl EventRegistry {
         starts_at: u64,
     ) -> Result<u32, Error> {
         organiser.require_auth();
+        bump_instance(&env);
 
         let event_id: u32 = env
             .storage()
@@ -252,6 +269,7 @@ impl EventRegistry {
         quota: u32,
         price_usdc: i128,
     ) -> Result<u32, Error> {
+        bump_instance(&env);
         auth_organiser(&env, event_id)?;
         if quota == 0 {
             return Err(Error::InvalidQuota);
@@ -292,6 +310,7 @@ impl EventRegistry {
     /// plus the `Open` <-> `Closed` toggle; `Completed` is terminal and a
     /// no-op transition is rejected so no misleading event is emitted.
     pub fn set_event_status(env: Env, event_id: u32, status: EventStatus) -> Result<(), Error> {
+        bump_instance(&env);
         let mut event = auth_organiser(&env, event_id)?;
         if !is_valid_transition(event.status, status) {
             return Err(Error::InvalidStatus);
@@ -306,6 +325,7 @@ impl EventRegistry {
 
     /// Allowlists a volunteer device for race-day check-in on this event.
     pub fn add_scanner(env: Env, event_id: u32, scanner: Address) -> Result<(), Error> {
+        bump_instance(&env);
         auth_organiser(&env, event_id)?;
         let key = DataKey::Scanner(event_id, scanner.clone());
         if env.storage().persistent().has(&key) {
@@ -313,6 +333,7 @@ impl EventRegistry {
         }
 
         env.storage().persistent().set(&key, &true);
+        bump_persistent(&env, &key);
 
         ScannerAdded { event_id, scanner }.publish(&env);
         Ok(())
@@ -321,6 +342,7 @@ impl EventRegistry {
     /// Revokes a volunteer device. The entry is removed rather than set to
     /// `false` so the organiser stops paying rent for it.
     pub fn remove_scanner(env: Env, event_id: u32, scanner: Address) -> Result<(), Error> {
+        bump_instance(&env);
         auth_organiser(&env, event_id)?;
         let key = DataKey::Scanner(event_id, scanner.clone());
         if !env.storage().persistent().has(&key) {
@@ -356,8 +378,11 @@ impl EventRegistry {
             .get(&DataKey::RaceRecordAddr)
             .ok_or(Error::RaceRecordNotSet)?;
         race_record.require_auth();
+        bump_instance(&env);
 
         let event = read_event(&env, event_id)?;
+        // Categories are worthless if their event archives — refresh both.
+        bump_persistent(&env, &DataKey::Event(event_id));
         if event.status != EventStatus::Open {
             return Err(Error::EventNotOpen);
         }
@@ -433,6 +458,21 @@ impl EventRegistry {
 // Internal helpers (not exported — they live outside the `#[contractimpl]`).
 // ---------------------------------------------------------------------------
 
+/// Keeps the contract instance (admin, race-record wiring, event counter) and
+/// everything stored inside it alive. Called at the top of every mutating
+/// entry point — active users pay rent for the state they touch.
+fn bump_instance(env: &Env) {
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+/// `extend_ttl` is floor-only and idempotent: a no-op while the remaining TTL
+/// is still above `BUMP_THRESHOLD`, and it never shortens an entry.
+fn bump_persistent(env: &Env, key: &DataKey) {
+    env.storage()
+        .persistent()
+        .extend_ttl(key, BUMP_THRESHOLD, BUMP_TO);
+}
+
 fn read_admin(env: &Env) -> Result<Address, Error> {
     env.storage()
         .instance()
@@ -448,9 +488,9 @@ fn read_event(env: &Env, event_id: u32) -> Result<EventData, Error> {
 }
 
 fn write_event(env: &Env, event_id: u32, event: &EventData) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::Event(event_id), event);
+    let key = DataKey::Event(event_id);
+    env.storage().persistent().set(&key, event);
+    bump_persistent(env, &key);
 }
 
 fn read_category(env: &Env, event_id: u32, category_id: u32) -> Result<CategoryData, Error> {
@@ -461,15 +501,15 @@ fn read_category(env: &Env, event_id: u32, category_id: u32) -> Result<CategoryD
 }
 
 fn write_category(env: &Env, event_id: u32, category_id: u32, category: &CategoryData) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::Category(event_id, category_id), category);
+    let key = DataKey::Category(event_id, category_id);
+    env.storage().persistent().set(&key, category);
+    bump_persistent(env, &key);
 }
 
 fn write_category_count(env: &Env, event_id: u32, count: u32) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::CategoryCount(event_id), &count);
+    let key = DataKey::CategoryCount(event_id);
+    env.storage().persistent().set(&key, &count);
+    bump_persistent(env, &key);
 }
 
 /// Loads the event and requires its organiser's authorization. Every mutating
@@ -478,6 +518,9 @@ fn write_category_count(env: &Env, event_id: u32, count: u32) {
 fn auth_organiser(env: &Env, event_id: u32) -> Result<EventData, Error> {
     let event = read_event(env, event_id)?;
     event.organiser.require_auth();
+    // The event entry is touched by every organiser mutation, so refresh it
+    // even when only a category or scanner entry is written.
+    bump_persistent(env, &DataKey::Event(event_id));
     Ok(event)
 }
 
