@@ -30,6 +30,14 @@ Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari d
 - Asset testnet = **sUSD (Sterun USD)** issue sendiri via SAC/SEP-41; mainnet = USDC (Circle).
 - **TOTP 6 digit**.
 - v1 non-upgradeable; PII off-chain (cuma `participant_hash` on-chain).
+- **Versi crate kontrak (pinned EXACT di `sc/Cargo.toml`)**: `soroban-sdk = "=26.1.1"` (protocol 26),
+  OZ `stellar-tokens`/`stellar-access`/`stellar-contract-utils`/`stellar-macros` = `"=0.7.2"`.
+  Alasan: OZ 0.7.2 (rilis terbaru per 2026-08-31) mensyaratkan `soroban-sdk ^26.1.0`, jadi kita
+  TIDAK bisa pakai soroban-sdk 27/28 selama masih memakai OZ non-fungible base. Naikkan hanya
+  setelah OZ merilis versi kompatibel protocol 27. Stellar CLI 27 tetap dipakai (build/deploy
+  kompatibel mundur).
+- **Layout kontrak**: cargo workspace di `sc/`, member `sc/contracts/<nama_kontrak>/`
+  (`event_registry`, lalu `race_record`). Bukan `contracts/` di root (draft tiket) — ikuti `sc/`.
 
 ## Testing (WAJIB, no bug)
 - **e2e** + **edge case** + **positive case** + **negative case** untuk tiap tiket.
