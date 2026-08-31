@@ -13,9 +13,21 @@ sc/            smart contracts (Soroban Rust) — masih kosong (.gitkeep)
 be/            backend (Node/TS) — masih kosong (.gitkeep)
 fe/            web app (Next.js) — scaffolded
 landing-page/  landing (Next.js) — scaffolded
-docs/          SYSTEM_DESIGN.md + deployments.md (bukti deploy)
+docs/          SYSTEM_DESIGN.md + deployments.md (bukti deploy) + specs/ (spec BEKU)
 ```
 Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari draft tiket).
+
+## Spec BEKU — `docs/specs/` (STE-10, C4) — BACA SEBELUM BIKIN BE/FE/SDK
+Handoff contract untuk James (backend/indexer) + Ancung (web/PWA), dibekukan **v1.0.0 (2026-08-31)**:
+- **`docs/specs/INTERFACE.md`** — signature fungsi, layout `#[contractevent]` (topic vs data),
+  kode error + band, wasm hash, alamat SAC sUSD. Diturunkan mekanis dari
+  `stellar contract info interface --wasm`.
+- **`docs/specs/HASH_AND_TOTP.md`** — `participant_hash` + TOTP + payload QR **byte-exact**.
+- **`docs/specs/vectors/`** — test vector; **`docs/specs/reference/`** — 2 implementasi (Node + Rust).
+- **`bash docs/specs/verify.sh`** wajib hijau (kedua implementasi harus sepakat).
+- Ubah signature / layout event / kode error / definisi hash-TOTP = **PR baru + approval Axel +
+  fable + entri `docs/specs/CHANGELOG.md` + regenerate TS bindings (STE-14)**. Kode error **tidak
+  pernah di-renumber**.
 
 ## Tiket (Linear MCP)
 - Workspace "Sterun", team key **STE**, project **"Sterun Instawards MVP"**. Tiket **STE-5 .. STE-33**.

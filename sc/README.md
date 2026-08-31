@@ -7,6 +7,33 @@ Cargo workspace untuk kontrak Sterun (Stellar/Soroban, Rust `#![no_std]`, target
 | `contracts/event_registry` | STE-5 (C1) | Registry event, kategori, kuota, harga sUSD, scanner allowlist, `reserve_slot` |
 | `contracts/race_record` | STE-9 (C2) | Record lari **non-transferable** + lifecycle (`Entered` → `RacepackClaimed` → `Finished`/`Dnf`), `enter` atomik (kuota + bayar sUSD + mint dalam satu invocation), `extend_record_ttl` permissionless |
 
+## Spec BEKU (STE-10) — baca sebelum konsumsi kontrak ini
+
+Interface kedua kontrak, layout event, dan kode error **sudah dibekukan** di
+`docs/specs/` (v1.0.0, 2026-08-31). Kalau kamu bikin backend, indexer, SDK, atau
+frontend, itu sumber kebenarannya — bukan file `lib.rs` ini:
+
+| File | Isi |
+| --- | --- |
+| [`docs/specs/INTERFACE.md`](../docs/specs/INTERFACE.md) | signature fungsi + siapa yang authorize + error yang mungkin, layout `#[contractevent]` (topic vs data), kedua enum error + band, wasm hash, alamat SAC sUSD |
+| [`docs/specs/HASH_AND_TOTP.md`](../docs/specs/HASH_AND_TOTP.md) | `participant_hash` + TOTP + payload QR, **byte-exact** |
+| [`docs/specs/vectors/`](../docs/specs/vectors/) | test vector JSON |
+| [`docs/specs/reference/`](../docs/specs/reference/) | 2 implementasi referensi (Node + Rust) yang wajib sepakat |
+| [`docs/specs/CHANGELOG.md`](../docs/specs/CHANGELOG.md) | riwayat versi + **aturan perubahan** |
+
+```bash
+bash ../docs/specs/verify.sh   # dari sc/ — kedua implementasi referensi harus sepakat
+```
+
+Mengubah signature fungsi, layout event, kode error, atau definisi hash/TOTP
+butuh **PR baru + approval @Axel + @fable + entri di CHANGELOG + regenerate TS
+bindings (STE-14)**. Kode error adalah ABI publik: **jangan pernah di-renumber.**
+
+Test `spec_vectors::host_sha256_matches_every_participant_hash_vector` dan
+`spec_vectors::every_participant_hash_vector_is_accepted_by_enter_and_verify`
+di `contracts/race_record/src/test.rs` membaca file vector yang sama, jadi
+kalau spec dan kontrak pernah berpisah jalan, `cargo test` yang gagal duluan.
+
 ## Versi (pinned EXACT)
 
 - `soroban-sdk = "=26.1.1"` — **protocol 26**, bukan 27/28.

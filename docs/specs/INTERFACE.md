@@ -412,7 +412,10 @@ terbuka di `docs/SYSTEM_DESIGN.md` §11 poin 2.
 | mainnet (nanti) | USDC (Circle) | *(config saat deploy mainnet — belum ada)* |
 
 Detail lengkap sUSD (issuer, distributor, tx issuance, verifikasi SEP-41, cara dapat trustline)
-ada di **`docs/deployments.md`** (STE-30). Explorer:
+ada di **`docs/deployments.md`**, yang datang bersama branch STE-30
+(`ops/26-issue-susd-deploy-sac`) dan **belum ter-merge saat branch STE-10 ini dibuat** — jadi
+kalau file itu belum ada di working tree kamu, itu sebabnya, bukan salah tulis. Alamat SAC di
+tabel atas disalin apa adanya dari sana dan sudah live di testnet. Explorer:
 <https://stellar.expert/explorer/testnet/contract/CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU>
 
 Keduanya classic Stellar asset **7 desimal** yang diekspos ke kontrak lewat SAC, jadi pergantian
