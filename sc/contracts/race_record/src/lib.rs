@@ -517,3 +517,5 @@ fn auth_organiser(env: &Env, event_id: u32) -> Result<Address, Error> {
     organiser.require_auth();
     Ok(organiser)
 }
+
+mod test;
