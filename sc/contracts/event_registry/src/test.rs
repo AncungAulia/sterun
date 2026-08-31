@@ -4,12 +4,13 @@ extern crate std;
 use soroban_sdk::{
     contract, contractimpl, symbol_short,
     testutils::{Address as _, Events as _, MockAuth, MockAuthInvoke},
-    Address, BytesN, Env, Event as _, IntoVal, String, Symbol,
+    Address, BytesN, Env, Event as _, IntoVal, InvokeError, String, Symbol,
 };
 
 use crate::{
-    CategoryAdded, CategoryData, EventCreated, EventData, EventRegistry, EventRegistryClient,
-    EventStatus, EventStatusChanged, ScannerAdded, ScannerRemoved, SlotReserved,
+    CategoryAdded, CategoryData, Error, EventCreated, EventData, EventRegistry,
+    EventRegistryClient, EventStatus, EventStatusChanged, ScannerAdded, ScannerRemoved,
+    SlotReserved,
 };
 
 // ---------------------------------------------------------------------------
@@ -425,5 +426,437 @@ fn emits_slot_reserved() {
             seq: 0,
         }
         .to_xdr(&env, &registry)]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Negative / revert paths
+// ---------------------------------------------------------------------------
+
+#[test]
+fn set_race_record_is_one_shot() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    env.mock_all_auths();
+
+    let first = Address::generate(&env);
+    let second = Address::generate(&env);
+    client.set_race_record(&first);
+
+    assert_eq!(
+        client.try_set_race_record(&second),
+        Err(Ok(Error::RaceRecordAlreadySet))
+    );
+    assert_eq!(client.get_race_record(), first);
+}
+
+#[test]
+fn set_race_record_requires_admin_auth() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let impostor = Address::generate(&env);
+    let race_record = Address::generate(&env);
+
+    // The impostor signs for itself; the contract requires the *stored* admin.
+    env.mock_auths(&[MockAuth {
+        address: &impostor,
+        invoke: &MockAuthInvoke {
+            contract: &registry,
+            fn_name: "set_race_record",
+            args: (race_record.clone(),).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+
+    assert_eq!(
+        client.try_set_race_record(&race_record),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(
+        client.try_get_race_record(),
+        Err(Ok(Error::RaceRecordNotSet))
+    );
+}
+
+/// Every organiser-only entry point must reject a signature from someone who
+/// is not the stored organiser of that event.
+#[test]
+fn organiser_only_calls_reject_a_foreign_signer() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let impostor = Address::generate(&env);
+    let scanner = Address::generate(&env);
+
+    env.mock_all_auths();
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    client.add_scanner(&event_id, &scanner);
+
+    macro_rules! signed_by_impostor {
+        ($fn_name:literal, $args:expr) => {
+            env.mock_auths(&[MockAuth {
+                address: &impostor,
+                invoke: &MockAuthInvoke {
+                    contract: &registry,
+                    fn_name: $fn_name,
+                    args: $args,
+                    sub_invokes: &[],
+                },
+            }]);
+        };
+    }
+
+    signed_by_impostor!(
+        "add_category",
+        (event_id, symbol_short!("5K"), 5_000u32, 100u32, 0i128).into_val(&env)
+    );
+    assert_eq!(
+        client.try_add_category(&event_id, &symbol_short!("5K"), &5_000, &100, &0),
+        Err(Err(InvokeError::Abort))
+    );
+
+    signed_by_impostor!(
+        "set_event_status",
+        (event_id, EventStatus::Open).into_val(&env)
+    );
+    assert_eq!(
+        client.try_set_event_status(&event_id, &EventStatus::Open),
+        Err(Err(InvokeError::Abort))
+    );
+
+    let outsider = Address::generate(&env);
+    signed_by_impostor!("add_scanner", (event_id, outsider.clone()).into_val(&env));
+    assert_eq!(
+        client.try_add_scanner(&event_id, &outsider),
+        Err(Err(InvokeError::Abort))
+    );
+
+    signed_by_impostor!("remove_scanner", (event_id, scanner.clone()).into_val(&env));
+    assert_eq!(
+        client.try_remove_scanner(&event_id, &scanner),
+        Err(Err(InvokeError::Abort))
+    );
+
+    // Nothing changed.
+    assert_eq!(client.category_count(&event_id), 0);
+    assert_eq!(client.get_event(&event_id).status, EventStatus::Draft);
+    assert!(client.is_scanner(&event_id, &scanner));
+    assert!(!client.is_scanner(&event_id, &outsider));
+}
+
+/// The other half of the invoker-contract gate: a plain account calling
+/// `reserve_slot` directly cannot satisfy the RaceRecord *contract* address.
+///
+/// Do NOT "fix" this test with `mock_all_auths()`. That switches the host into
+/// recording auth mode, where a `require_auth` in the root frame is mocked for
+/// *any* address, contract addresses included — it would mask the gate instead
+/// of testing it. Enforcing mode with no auth entries is what the network does.
+#[test]
+fn reserve_slot_rejects_a_direct_eoa_call() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    wire_race_record(&env, &client);
+
+    env.mock_auths(&[]);
+    assert_eq!(
+        client.try_reserve_slot(&event_id, &category_id),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(
+        client.get_category(&event_id, &category_id).entered_count,
+        0
+    );
+}
+
+/// Locks in *why* the test above must not use `mock_all_auths()`.
+///
+/// `mock_all_auths()` switches the host to recording auth mode, where a
+/// `require_auth` in the root frame is satisfied for any address — a contract
+/// address included, even though on a real network that address could only
+/// authorize by being the direct caller or by implementing `__check_auth`.
+/// So under `mock_all_auths()` the EOA call *succeeds*. That is a harness
+/// artifact, not contract behaviour; assert the gate in enforcing mode.
+#[test]
+fn mock_all_auths_masks_the_invoker_gate_harness_caveat() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    wire_race_record(&env, &client);
+
+    env.mock_all_auths();
+    assert_eq!(
+        client.try_reserve_slot(&event_id, &category_id),
+        Ok(Ok(0)),
+        "recording auth mode mocks contract-address auth in the root frame"
+    );
+}
+
+#[test]
+fn reserve_slot_before_wiring_reverts() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+
+    // Registered but never wired via `set_race_record`.
+    let race_record = env.register(MockRaceRecord, ());
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::RaceRecordNotSet))
+    );
+}
+
+#[test]
+fn reserve_slot_requires_status_open() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let category_id = client.add_category(&event_id, &symbol_short!("10K"), &10_000, &10, &0);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    // Draft
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::EventNotOpen))
+    );
+
+    env.mock_all_auths();
+    client.set_event_status(&event_id, &EventStatus::Open);
+    client.set_event_status(&event_id, &EventStatus::Closed);
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::EventNotOpen))
+    );
+
+    env.mock_all_auths();
+    client.set_event_status(&event_id, &EventStatus::Completed);
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::EventNotOpen))
+    );
+
+    assert_eq!(
+        client.get_category(&event_id, &category_id).entered_count,
+        0
+    );
+}
+
+#[test]
+fn reserve_slot_reverts_when_quota_is_full() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 2);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(caller.reserve(&registry, &event_id, &category_id), 0);
+    assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::QuotaFull))
+    );
+    assert_eq!(
+        client.get_category(&event_id, &category_id).entered_count,
+        2
+    );
+}
+
+#[test]
+fn reserve_slot_on_unknown_category_reverts() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &99),
+        Err(Ok(Error::CategoryNotFound))
+    );
+    assert_eq!(
+        caller.try_reserve(&registry, &404, &0),
+        Err(Ok(Error::EventNotFound))
+    );
+}
+
+#[test]
+fn add_category_validates_its_inputs() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    assert_eq!(
+        client.try_add_category(&event_id, &symbol_short!("10K"), &10_000, &0, &0),
+        Err(Ok(Error::InvalidQuota))
+    );
+    assert_eq!(
+        client.try_add_category(&event_id, &symbol_short!("10K"), &10_000, &10, &-1),
+        Err(Ok(Error::InvalidPrice))
+    );
+    assert_eq!(
+        client.try_add_category(&event_id, &symbol_short!("10K"), &0, &10, &0),
+        Err(Ok(Error::InvalidDistance))
+    );
+    assert_eq!(client.category_count(&event_id), 0);
+}
+
+#[test]
+fn views_revert_on_unknown_ids() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    assert_eq!(client.try_get_event(&0), Err(Ok(Error::EventNotFound)));
+    assert_eq!(client.try_get_organiser(&0), Err(Ok(Error::EventNotFound)));
+    assert_eq!(
+        client.try_get_category(&0, &0),
+        Err(Ok(Error::CategoryNotFound))
+    );
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    assert_eq!(
+        client.try_get_category(&event_id, &0),
+        Err(Ok(Error::CategoryNotFound))
+    );
+    assert_eq!(client.try_get_event(&99), Err(Ok(Error::EventNotFound)));
+    // Views never revert for a missing scanner or count.
+    assert!(!client.is_scanner(&99, &organiser));
+    assert_eq!(client.category_count(&99), 0);
+}
+
+#[test]
+fn scanner_allowlist_rejects_duplicate_and_unknown() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let scanner = Address::generate(&env);
+    env.mock_all_auths();
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    assert_eq!(
+        client.try_remove_scanner(&event_id, &scanner),
+        Err(Ok(Error::ScannerNotFound))
+    );
+
+    client.add_scanner(&event_id, &scanner);
+    assert_eq!(
+        client.try_add_scanner(&event_id, &scanner),
+        Err(Ok(Error::ScannerAlreadyAdded))
+    );
+
+    client.remove_scanner(&event_id, &scanner);
+    assert_eq!(
+        client.try_remove_scanner(&event_id, &scanner),
+        Err(Ok(Error::ScannerNotFound))
+    );
+}
+
+#[test]
+fn set_event_status_rejects_illegal_transitions() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    // Draft cannot jump straight to Completed, nor re-enter Draft.
+    assert_eq!(
+        client.try_set_event_status(&event_id, &EventStatus::Completed),
+        Err(Ok(Error::InvalidStatus))
+    );
+    assert_eq!(
+        client.try_set_event_status(&event_id, &EventStatus::Draft),
+        Err(Ok(Error::InvalidStatus))
+    );
+
+    client.set_event_status(&event_id, &EventStatus::Open);
+    // Open -> Open is a no-op and would emit a misleading event.
+    assert_eq!(
+        client.try_set_event_status(&event_id, &EventStatus::Open),
+        Err(Ok(Error::InvalidStatus))
+    );
+    // Closed re-opens.
+    client.set_event_status(&event_id, &EventStatus::Closed);
+    client.set_event_status(&event_id, &EventStatus::Open);
+
+    // Completed is terminal.
+    client.set_event_status(&event_id, &EventStatus::Completed);
+    for status in [
+        EventStatus::Draft,
+        EventStatus::Open,
+        EventStatus::Closed,
+        EventStatus::Completed,
+    ] {
+        assert_eq!(
+            client.try_set_event_status(&event_id, &status),
+            Err(Ok(Error::InvalidStatus))
+        );
+    }
+    assert_eq!(client.get_event(&event_id).status, EventStatus::Completed);
+}
+
+#[test]
+fn set_event_status_and_add_category_revert_on_unknown_event() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    env.mock_all_auths();
+
+    assert_eq!(
+        client.try_set_event_status(&7, &EventStatus::Open),
+        Err(Ok(Error::EventNotFound))
+    );
+    assert_eq!(
+        client.try_add_category(&7, &symbol_short!("5K"), &5_000, &10, &0),
+        Err(Ok(Error::EventNotFound))
+    );
+    let addr = Address::generate(&env);
+    assert_eq!(
+        client.try_add_scanner(&7, &addr),
+        Err(Ok(Error::EventNotFound))
+    );
+    assert_eq!(
+        client.try_remove_scanner(&7, &addr),
+        Err(Ok(Error::EventNotFound))
     );
 }
