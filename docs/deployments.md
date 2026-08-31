@@ -170,3 +170,147 @@ Dari sisi frontend/wallet (Freighter, Stellar Wallets Kit) trustline ini adalah 
 - Karena keduanya sama-sama classic Stellar asset dengan **7 desimal** dan sama-sama diekspos ke
   kontrak lewat SAC (SEP-41), pergantian sUSD → USDC hanya mengganti **alamat SAC** yang dipegang
   RaceRecord. Tidak ada perubahan logika kontrak.
+
+---
+
+## Verifikasi SEP-41 lewat SAC
+
+Semua perintah di bawah ini **benar-benar dijalankan** dan output-nya disalin apa adanya.
+Reviewer bisa menjalankan ulang yang read-only (`decimals`, `name`, `symbol`, `balance`) kapan saja —
+tidak butuh secret key apa pun, cukup `--source-account` berupa akun testnet mana saja.
+
+```bash
+SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
+ISSUER=GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW
+DIST=GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO
+A=GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF
+B=GD22GHP4CCK2JWXQMPA7GLOMCYIYTL52UUND5NJGHKNSBRPDIRYZ23LS
+```
+
+### 1. Metadata token
+
+```bash
+$ stellar contract invoke --id $SAC --source-account sterun-susd-issuer --network testnet -- decimals
+7
+
+$ stellar contract invoke --id $SAC --source-account sterun-susd-issuer --network testnet -- name
+"sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW"
+
+$ stellar contract invoke --id $SAC --source-account sterun-susd-issuer --network testnet -- symbol
+"sUSD"
+```
+
+| Fungsi | Nilai yang dikembalikan | Catatan |
+| --- | --- | --- |
+| `decimals` | `7` | ✅ sesuai `SYSTEM_DESIGN.md` §3.3 — harga `i128` dalam representasi 7 desimal |
+| `name` | `"sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW"` | format bawaan SAC: `CODE:ISSUER`, bukan "Sterun USD" |
+| `symbol` | `"sUSD"` | ✅ persis asset code |
+
+> Catatan buat frontend: `name` dari SAC **bukan** nama yang layak ditampilkan ke user (isinya
+> `CODE:ISSUER`). Untuk UI pakai label "sUSD (Sterun USD)" dari sisi aplikasi, bukan hasil `name`.
+
+### 2. Supply awal terlihat lewat SAC
+
+```bash
+$ stellar contract invoke --id $SAC --source-account sterun-susd-issuer --network testnet -- balance --id $DIST
+"10000000000000"
+```
+
+`10000000000000` = 1.000.000 sUSD × 10^7. ✅ cocok dengan supply awal.
+
+### 3. Positive case — `transfer` benar-benar memindahkan saldo
+
+Pendanaan `sterun-test-a` sengaja dilakukan **lewat SAC** (`transfer`), bukan `payment` klasik,
+supaya jalur kontrak yang persis dipakai RaceRecord ikut teruji.
+
+```bash
+# distributor -> A, 250 sUSD
+$ stellar contract invoke --id $SAC --source-account sterun-susd-distributor --network testnet --send=yes \
+    -- transfer --from $DIST --to $A --amount 2500000000
+✅ Transaction submitted successfully!
+📅 CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU - Success - Event: TransferWithAmountOnly (transfer),
+   from: "GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO",
+   to: "GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF", amount: "2500000000"
+
+# A -> B, 100 sUSD, ditandatangani oleh A sendiri
+$ stellar contract invoke --id $SAC --source-account sterun-test-a --network testnet --send=yes \
+    -- transfer --from $A --to $B --amount 1000000000
+✅ Transaction submitted successfully!
+📅 CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU - Success - Event: TransferWithAmountOnly (transfer),
+   from: "GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF",
+   to: "GD22GHP4CCK2JWXQMPA7GLOMCYIYTL52UUND5NJGHKNSBRPDIRYZ23LS", amount: "1000000000"
+```
+
+Saldo lewat `balance` (unit mentah, 7 desimal) — sebelum dan sesudah `transfer` A → B sebesar
+100 sUSD (`1000000000`):
+
+| Akun | Sebelum | Sesudah | Selisih |
+| --- | ---: | ---: | ---: |
+| `sterun-test-a` | `2500000000` (250 sUSD) | `1500000000` (150 sUSD) | −`1000000000` |
+| `sterun-test-b` | `0` | `1000000000` (100 sUSD) | +`1000000000` |
+| `sterun-susd-distributor` | `10000000000000` | `9997500000000` | −`2500000000` (pendanaan A) |
+
+✅ Saldo benar-benar berpindah, jumlahnya kekal, dan tidak ada sUSD yang tercipta/hilang.
+
+Tx hash:
+
+| Aksi | Tx hash | Ledger |
+| --- | --- | --- |
+| SAC `transfer` distributor → A, 250 sUSD | [`18a4a517…`](https://stellar.expert/explorer/testnet/tx/18a4a5178194ad597218b184ba0687879ce862248dc22049f961867f803b37a7) | 4431631 |
+| SAC `transfer` A → B, 100 sUSD | [`3c94cf52…`](https://stellar.expert/explorer/testnet/tx/3c94cf524d8760f73ab33f71e6fa9222b343dbfe33af6be9dccf7ce551dfb3d0) | 4431635 |
+
+### 4. Negative case — `transfer` yang seharusnya gagal, memang gagal
+
+```bash
+# B (saldo 100 sUSD) coba kirim 999 sUSD
+$ stellar contract invoke --id $SAC --source-account sterun-test-b --network testnet --send=yes \
+    -- transfer --from $B --to $A --amount 9990000000
+❌ error: transaction simulation failed: HostError: Error(Contract, #10)
+   [Diagnostic Event] ... data:["resulting balance is not within the allowed range", 0, -8990000000, 9223372036854775807]
+
+# A coba transfer amount negatif
+$ stellar contract invoke --id $SAC --source-account sterun-test-a --network testnet --send=yes \
+    -- transfer --from $A --to $B --amount -1
+❌ error: transaction simulation failed: HostError: Error(Contract, #8)
+   [Diagnostic Event] ... data:["negative amount is not allowed", -1]
+```
+
+✅ Keduanya ditolak di tahap simulasi, jadi tidak ada tx yang masuk ledger dan saldo tidak berubah.
+Ini penting untuk STE-9: RaceRecord tidak perlu menulis guard saldo sendiri — SAC sudah revert,
+dan karena `enter` bersifat atomik, kegagalan `transfer` otomatis membatalkan reservasi kuota dan mint.
+
+Selain itu, akun **tanpa trustline sUSD** tidak bisa menerima sUSD sama sekali. Ini konsekuensi
+classic asset, bukan bug — karena itu STE-6 (faucet / trustline helper) harus memastikan runner punya
+trustline **sebelum** dia mencoba `enter`.
+
+---
+
+## Handoff — siapa yang memakai alamat ini
+
+Alamat SAC `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` adalah **satu-satunya**
+alamat token yang dipakai di testnet. Yang mengonsumsinya:
+
+- **STE-9 — RaceRecord contract.** `enter` melakukan cross-contract call `transfer(runner, organiser, price)`
+  ke SAC ini. Alamat SAC disimpan sebagai config kontrak (di-set saat init/deploy), **jangan** di-hardcode
+  di dalam kode kontrak, supaya penggantian ke USDC di mainnet cukup ganti nilai config.
+- **STE-6 — faucet / trustline helper (James).** Butuh: issuer `G...` (untuk membangun operasi
+  `changeTrust` di frontend/backend) dan alias distributor sebagai sumber saldo faucet. Perhatikan
+  urutannya: fund akun → trustline → baru kirim sUSD.
+- **STE-33 — deploy testnet + wiring.** Saat men-deploy EventRegistry & RaceRecord, alamat SAC ini
+  yang dipasang sebagai token pembayaran, lalu hasil deploy-nya dicatat di section
+  **Kontrak Soroban** di bawah.
+
+---
+
+## Kontrak Soroban
+
+> **Belum diisi.** Section ini diisi oleh **STE-33** (deploy testnet) setelah EventRegistry (STE-5)
+> dan RaceRecord (STE-9) ter-deploy. Jangan isi dengan nilai karangan — kosongkan sampai deploy
+> benar-benar terjadi.
+
+| Kontrak | Contract address (`C...`) | Wasm hash | Link explorer |
+| --- | --- | --- | --- |
+| EventRegistry | _(TBD — STE-33)_ | _(TBD — STE-33)_ | _(TBD — STE-33)_ |
+| RaceRecord | _(TBD — STE-33)_ | _(TBD — STE-33)_ | _(TBD — STE-33)_ |
+
+Format link explorer yang dipakai: `https://stellar.expert/explorer/testnet/contract/<C...>`
