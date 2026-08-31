@@ -42,6 +42,59 @@ kalau spec dan kontrak pernah berpisah jalan, `cargo test` yang gagal duluan.
   Naikkan ke 27 hanya setelah OZ merilis versi yang kompatibel.
 - OZ crates `= "0.7.2"` di `[workspace.dependencies]`.
 
+## Artefak build (STE-14)
+
+`stellar contract build` di `sc/` menghasilkan dua wasm. Ini yang akan di-deploy
+STE-33, dan yang menjadi sumber TS bindings di [`bindings/`](bindings/):
+
+| Kontrak | Wasm | sha256 | Ukuran |
+| --- | --- | --- | ---: |
+| EventRegistry (C1) | `target/wasm32v1-none/release/event_registry.wasm` | `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` | 14.964 B |
+| RaceRecord (C2) | `target/wasm32v1-none/release/race_record.wasm` | `75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` | 19.435 B |
+
+Toolchain yang menghasilkan angka di atas:
+
+| | Versi |
+| --- | --- |
+| `rustc` | 1.93.0 (254b59607 2026-01-19) |
+| `stellar` CLI | 27.0.0 |
+| `soroban-sdk` | `=26.1.1` (pinned, lihat di atas) |
+| OZ `stellar-tokens` dkk | `=0.7.2` (pinned) |
+| target | `wasm32v1-none`, profil `release` dari `Cargo.toml` |
+
+Cek ulang tanpa Stellar CLI — `stellar contract info hash` mengembalikan sha256
+biasa dari file wasm, jadi `shasum` sudah cukup:
+
+```bash
+shasum -a 256 target/wasm32v1-none/release/*.wasm
+```
+
+### Yang reproducible: interface-nya, bukan byte-nya
+
+**Jangan berasumsi hash di atas akan sama persis di mesin kamu.** Build Rust
+tidak bit-for-bit reproducible lintas mesin, versi toolchain, dan path — dan
+`docs/specs/INTERFACE.md` §0 sudah menyatakan itu terbuka-terbukaan. Hash ada
+supaya ada satu artefak konkret yang bisa ditunjuk dan dibandingkan orang lain,
+bukan sebagai janji determinisme.
+
+Yang **wajib** sama dan dijaga mekanis adalah **isi interface**-nya. Itu tugas:
+
+```bash
+node scripts/check-interface.mjs      # butuh `stellar contract build` dulu
+```
+
+Script itu membaca tiga sisi dan mem-*diff* ketiganya:
+
+1. `stellar contract info interface --output json` dari wasm yang barusan di-build,
+2. tabel beku di `docs/specs/INTERFACE.md` (signature + argumen + tipe return,
+   kode error, layout event, field tipe),
+3. `bindings/*/src/index.ts` hasil generate.
+
+Beda signature, kode error yang di-renumber, field event yang pindah dari topic
+ke data, atau fungsi baru yang belum didokumentasikan = **exit non-zero**.
+Perbedaan hash wasm cuma **WARN**, dengan alasannya dicetak. Itu jaminan yang
+jujur: bentuknya reproducible, byte-nya tidak.
+
 ## Perintah
 
 ```bash
