@@ -333,6 +333,54 @@ impl EventRegistry {
         Ok(())
     }
 
+    // -- entry reservation ---------------------------------------------------
+
+    /// Reserves one slot in a category and returns its bib sequence number.
+    ///
+    /// **Only the wired RaceRecord contract may call this.** The gate is
+    /// invoker-contract authorization: the stored `RaceRecordAddr` must
+    /// authorize, and a contract address authorizes implicitly *only* when it
+    /// is the direct cross-contract caller. RaceRecord does not implement
+    /// `CustomAccountInterface` (`__check_auth`), so there is no signature an
+    /// EOA could present for that address either — no one can mint a slot
+    /// without going through `RaceRecord.enter`.
+    ///
+    /// The quota check and the increment happen in this one invocation, so two
+    /// simultaneous entries can never both take the last slot: the second
+    /// transaction reads the already-incremented `entered_count` and reverts
+    /// with [`Error::QuotaFull`].
+    pub fn reserve_slot(env: Env, event_id: u32, category_id: u32) -> Result<u32, Error> {
+        let race_record: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RaceRecordAddr)
+            .ok_or(Error::RaceRecordNotSet)?;
+        race_record.require_auth();
+
+        let event = read_event(&env, event_id)?;
+        if event.status != EventStatus::Open {
+            return Err(Error::EventNotOpen);
+        }
+
+        let mut category = read_category(&env, event_id, category_id)?;
+        if category.entered_count >= category.quota {
+            return Err(Error::QuotaFull);
+        }
+
+        let seq = category.entered_count;
+        // Bounded by the guard above: `entered_count < quota <= u32::MAX`.
+        category.entered_count = seq + 1;
+        write_category(&env, event_id, category_id, &category);
+
+        SlotReserved {
+            event_id,
+            category_id,
+            seq,
+        }
+        .publish(&env);
+        Ok(seq)
+    }
+
     // -- views ---------------------------------------------------------------
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
