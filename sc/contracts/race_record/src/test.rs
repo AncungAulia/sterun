@@ -1119,3 +1119,127 @@ fn a_lifecycle_write_re_extends_a_decayed_ttl() {
 
     assert_eq!(persistent_ttl(&w.env, &w.contract, key), BUMP_TO);
 }
+
+// ---------------------------------------------------------------------------
+// Non-transferable, asserted mechanically
+// ---------------------------------------------------------------------------
+
+/// Reads the built `race_record.wasm` and walks its export section.
+///
+/// This is the product claim, checked against the artifact that actually ships
+/// rather than against the source: a record can never change hands because the
+/// contract exports no function that could move it, and it carries none of
+/// EventRegistry's surface either.
+///
+/// `sc/scripts/check-exports.sh` runs the same assertion against
+/// `stellar contract info interface` for CI.
+mod exports {
+    extern crate std;
+
+    use std::{path::PathBuf, string::String as StdString, vec::Vec as StdVec};
+
+    /// Anything that could move, destroy, or delegate a record.
+    const BANNED: [&str; 6] = [
+        "transfer",
+        "transfer_from",
+        "approve",
+        "approve_for_all",
+        "burn",
+        "burn_from",
+    ];
+
+    /// EventRegistry's surface. None of it may be re-exported here: RaceRecord
+    /// talks to C1 as a client, it does not embed it.
+    const REGISTRY_ONLY: [&str; 12] = [
+        "create_event",
+        "add_category",
+        "set_event_status",
+        "add_scanner",
+        "remove_scanner",
+        "reserve_slot",
+        "set_race_record",
+        "get_race_record",
+        "get_event",
+        "get_organiser",
+        "is_scanner",
+        "event_count",
+    ];
+
+    fn wasm_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/wasm32v1-none/release/race_record.wasm")
+    }
+
+    fn read_u32(bytes: &[u8], cursor: &mut usize) -> u32 {
+        let mut result = 0u32;
+        let mut shift = 0;
+        loop {
+            let byte = bytes[*cursor];
+            *cursor += 1;
+            result |= u32::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return result;
+            }
+            shift += 7;
+        }
+    }
+
+    /// Names in the wasm export section (section id 7).
+    fn exported_names(wasm: &[u8]) -> StdVec<StdString> {
+        assert_eq!(&wasm[..4], b"\0asm", "not a wasm module");
+        let mut cursor = 8; // magic + version
+        let mut names = StdVec::new();
+        while cursor < wasm.len() {
+            let section_id = wasm[cursor];
+            cursor += 1;
+            let section_len = read_u32(wasm, &mut cursor) as usize;
+            let section_end = cursor + section_len;
+            if section_id == 7 {
+                let count = read_u32(wasm, &mut cursor);
+                for _ in 0..count {
+                    let name_len = read_u32(wasm, &mut cursor) as usize;
+                    names.push(
+                        StdString::from_utf8(wasm[cursor..cursor + name_len].to_vec())
+                            .expect("export name must be utf8"),
+                    );
+                    cursor += name_len;
+                    cursor += 1; // export kind
+                    let _index = read_u32(wasm, &mut cursor);
+                }
+            }
+            cursor = section_end;
+        }
+        names
+    }
+
+    #[test]
+    fn race_record_wasm_exports_nothing_that_could_move_a_record() {
+        let path = wasm_path();
+        let wasm = std::fs::read(&path).unwrap_or_else(|e| {
+            panic!(
+                "cannot read {}: {e}.\n\
+                 Run `stellar contract build` from `sc/` before `cargo test` — this test \
+                 checks the shipped artifact, not the source.",
+                path.display()
+            )
+        });
+        let names = exported_names(&wasm);
+
+        assert!(
+            names.iter().any(|n| n == "enter"),
+            "export section parsed but `enter` is missing — parser or build is wrong: {names:?}"
+        );
+        for banned in BANNED {
+            assert!(
+                !names.iter().any(|n| n == banned),
+                "race_record.wasm exports `{banned}` — records would be transferable"
+            );
+        }
+        for registry_fn in REGISTRY_ONLY {
+            assert!(
+                !names.iter().any(|n| n == registry_fn),
+                "race_record.wasm re-exports EventRegistry's `{registry_fn}`"
+            );
+        }
+    }
+}
