@@ -280,6 +280,104 @@ impl RaceRecord {
         .publish(&env);
         Ok(token_id)
     }
+
+    // -- lifecycle -----------------------------------------------------------
+
+    /// Race-day check-in. `operator` must be the event organiser or one of its
+    /// allowlisted scanner devices.
+    ///
+    /// **The anti-double-racepack guard lives here**: the state must be exactly
+    /// [`RecordState::Entered`]. A second scan — from the same desk or from a
+    /// second offline desk whose queue drains later — finds
+    /// [`RecordState::RacepackClaimed`] and reverts with
+    /// [`Error::AlreadyClaimed`]. The chain, not volunteer discipline, is what
+    /// makes "one pack per entry" true.
+    pub fn claim_racepack(env: Env, token_id: u32, operator: Address) -> Result<(), Error> {
+        operator.require_auth();
+        bump_instance(&env);
+
+        let mut record = read_record(&env, token_id)?;
+        let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
+        if operator != registry.get_organiser(&record.event_id)
+            && !registry.is_scanner(&record.event_id, &operator)
+        {
+            return Err(Error::NotAuthorized);
+        }
+        if record.state != RecordState::Entered {
+            return Err(Error::AlreadyClaimed);
+        }
+
+        record.state = RecordState::RacepackClaimed;
+        record.claimed_at = Some(env.ledger().timestamp());
+        let event_id = record.event_id;
+        write_record(&env, token_id, &record);
+
+        RacepackClaimed {
+            token_id,
+            event_id,
+            operator,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Publishes a finish time. Organiser only.
+    ///
+    /// Requires [`RecordState::RacepackClaimed`]: a runner who never collected
+    /// a race pack cannot receive a result, and [`RecordState::Finished`] is
+    /// terminal so a published time can never be rewritten.
+    pub fn record_finish(env: Env, token_id: u32, finish_time_s: u32) -> Result<(), Error> {
+        bump_instance(&env);
+        let mut record = read_record(&env, token_id)?;
+        auth_organiser(&env, record.event_id)?;
+
+        if finish_time_s == 0 {
+            return Err(Error::InvalidFinishTime);
+        }
+        if record.state != RecordState::RacepackClaimed {
+            return Err(Error::InvalidState);
+        }
+
+        record.state = RecordState::Finished;
+        record.finish_time_s = Some(finish_time_s);
+        record.result_at = Some(env.ledger().timestamp());
+        let event_id = record.event_id;
+        write_record(&env, token_id, &record);
+
+        RecordFinished {
+            token_id,
+            event_id,
+            finish_time_s,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Marks a no-show or a did-not-finish. Organiser only.
+    ///
+    /// Legal from [`RecordState::Entered`] (never showed up) and from
+    /// [`RecordState::RacepackClaimed`] (started, did not finish). Terminal
+    /// states reject it with [`Error::InvalidState`].
+    pub fn record_dnf(env: Env, token_id: u32) -> Result<(), Error> {
+        bump_instance(&env);
+        let mut record = read_record(&env, token_id)?;
+        auth_organiser(&env, record.event_id)?;
+
+        if !matches!(
+            record.state,
+            RecordState::Entered | RecordState::RacepackClaimed
+        ) {
+            return Err(Error::InvalidState);
+        }
+
+        record.state = RecordState::Dnf;
+        record.result_at = Some(env.ledger().timestamp());
+        let event_id = record.event_id;
+        write_record(&env, token_id, &record);
+
+        RecordDnf { token_id, event_id }.publish(&env);
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -312,8 +410,24 @@ fn read_registry(env: &Env) -> Result<Address, Error> {
     read_instance_addr(env, DataKey::RegistryAddr)
 }
 
+fn read_record(env: &Env, token_id: u32) -> Result<RecordData, Error> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Record(token_id))
+        .ok_or(Error::RecordNotFound)
+}
+
 fn write_record(env: &Env, token_id: u32, record: &RecordData) {
     let key = DataKey::Record(token_id);
     env.storage().persistent().set(&key, record);
     bump_persistent(env, &key);
+}
+
+/// Loads the event's organiser from the registry and requires *that* address's
+/// authorization. Authority always comes from registry state, never from a
+/// caller-supplied address.
+fn auth_organiser(env: &Env, event_id: u32) -> Result<Address, Error> {
+    let organiser = EventRegistryClient::new(env, &read_registry(env)?).get_organiser(&event_id);
+    organiser.require_auth();
+    Ok(organiser)
 }
