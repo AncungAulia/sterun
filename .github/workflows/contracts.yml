@@ -1,0 +1,187 @@
+# STE-14 (C3) — CI for the contract side of Sterun.
+#
+# The point of this workflow is that the claims made in sc/README.md,
+# sc/bindings/README.md and docs/specs/ stop being claims. Every one of them is
+# re-derived here from the sources, on a clean machine, on every push:
+#
+#   * the contracts build, and the wasm sha256 is printed on the job page so a
+#     third party can compare it with the table in sc/README.md themselves;
+#   * the tests pass, including the ones that parse the built wasm;
+#   * `race_record.wasm` still exports nothing that could move a record;
+#   * the built wasm, docs/specs/INTERFACE.md v1.0.0 and the generated
+#     TypeScript bindings still describe the same contract;
+#   * `cargo llvm-cov` is above the 80% floor CLAUDE.md fixes, with the actual
+#     numbers rendered onto the job summary — readable without a Rust install;
+#   * the generated bindings compile as generated, zero hand-edits;
+#   * both reference implementations of the frozen hash/TOTP spec agree on
+#     every vector.
+#
+# Versions are pinned to the toolchain recorded in sc/README.md, because that
+# is the toolchain the recorded wasm hashes came from. Changing either number
+# here means changing it there too.
+name: contracts
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned in sc/README.md ("Artefak build"). The stellar CLI version is the
+  # `uses:` ref of stellar/stellar-cli below — that action reads its own ref to
+  # decide which release to download, so the two must be edited together.
+  RUST_TOOLCHAIN: "1.93.0"
+  CARGO_LLVM_COV_VERSION: "0.8.7"
+  NODE_VERSION: "24"
+
+jobs:
+  contracts:
+    name: build · test · freeze · coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup ships on the runner, so the toolchain is pinned without pulling
+      # in a third-party action for it. llvm-tools-preview is what cargo-llvm-cov
+      # needs; wasm32v1-none is the contract target (soroban-sdk 26 / protocol 26).
+      - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal \
+            --component rustfmt,clippy,llvm-tools-preview \
+            --target wasm32v1-none
+          rustup default "$RUST_TOOLCHAIN"
+          rustc --version && cargo --version
+
+      - name: Cache cargo registry and build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            sc/target
+          key: sc-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('sc/Cargo.lock') }}
+          restore-keys: |
+            sc-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
+
+      # The documented way to get the CLI in a GitHub action. The action
+      # installs the release matching its own tag, so this ref IS the version.
+      - name: Install Stellar CLI 27.0.0
+        uses: stellar/stellar-cli@v27.0.0
+
+      - name: Install cargo-llvm-cov ${{ env.CARGO_LLVM_COV_VERSION }}
+        run: |
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v${CARGO_LLVM_COV_VERSION}/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xzf - -C "$HOME/.cargo/bin"
+          cargo llvm-cov --version
+
+      - name: rustfmt
+        working-directory: sc
+        run: cargo fmt --all -- --check
+
+      - name: clippy (warnings are errors)
+        working-directory: sc
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Must come before the tests: `exports::race_record_wasm_exports_nothing_
+      # that_could_move_a_record` reads the built wasm off disk and fails loudly
+      # rather than skipping when it is absent.
+      - name: stellar contract build
+        working-directory: sc
+        run: stellar contract build
+
+      - name: Report wasm identity
+        working-directory: sc
+        run: |
+          {
+            echo "## Built wasm"
+            echo
+            echo "Compare with the table in \`sc/README.md\`. Rust builds are not"
+            echo "bit-for-bit reproducible across machines, so a difference here is"
+            echo "information, not a failure — the interface check below is the"
+            echo "binding guarantee."
+            echo
+            echo "| Contract | sha256 | Bytes |"
+            echo "| --- | --- | ---: |"
+            for w in target/wasm32v1-none/release/*.wasm; do
+              echo "| \`$(basename "$w")\` | \`$(sha256sum "$w" | cut -d' ' -f1)\` | $(stat -c%s "$w") |"
+            done
+            echo
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: cargo test
+        working-directory: sc
+        run: cargo test
+
+      # The product claim: a race record cannot change hands, because no
+      # function that could move it is exported at all.
+      - name: Non-transferable export surface
+        run: ./sc/scripts/check-exports.sh
+
+      # The freeze: built wasm vs docs/specs/INTERFACE.md v1.0.0 vs the
+      # committed TypeScript bindings, diffed all three ways.
+      - name: Frozen interface still matches
+        run: node sc/scripts/check-interface.mjs
+
+      - name: Coverage (>80% floor, on the job summary)
+        working-directory: sc
+        run: |
+          cargo llvm-cov --no-report
+          cargo llvm-cov report --json --summary-only --output-path target/coverage.json
+          node scripts/coverage-gate.mjs target/coverage.json
+
+  bindings:
+    name: generated bindings compile
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Both packages are generator output and are committed as-is. If the
+      # generator ever emits something that does not compile, this goes red
+      # before anyone in be/ or fe/ imports it.
+      #
+      # Byte-identity of a regeneration is deliberately NOT asserted here: it
+      # holds for the same CLI version and --output-dir, but not necessarily
+      # across operating systems, and a false red would teach people to ignore
+      # this job. Semantic drift is caught by check-interface.mjs above, which
+      # is the guarantee that actually matters.
+      - name: event-registry
+        working-directory: sc/bindings/event-registry
+        run: npm ci && npm run build
+
+      - name: race-record
+        working-directory: sc/bindings/race-record
+        run: npm ci && npm run build
+
+  spec:
+    name: frozen spec vectors
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+
+      # Two independent implementations — Node with node:crypto, Rust with
+      # RustCrypto — must produce byte-identical output for every vector in
+      # docs/specs/vectors/. That agreement is what makes the C4 spec usable by
+      # James and Ancung without reading either implementation.
+      - name: docs/specs/verify.sh
+        run: bash docs/specs/verify.sh
