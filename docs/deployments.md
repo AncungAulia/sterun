@@ -302,15 +302,235 @@ alamat token yang dipakai di testnet. Yang mengonsumsinya:
 
 ---
 
-## Kontrak Soroban
+## Kontrak Soroban — LIVE di testnet (STE-33, 2026-09-01)
 
-> **Belum diisi.** Section ini diisi oleh **STE-33** (deploy testnet) setelah EventRegistry (STE-5)
-> dan RaceRecord (STE-9) ter-deploy. Jangan isi dengan nilai karangan — kosongkan sampai deploy
-> benar-benar terjadi.
+Kedua kontrak Sterun sudah hidup di Stellar testnet dan sudah di-wiring satu sama lain.
+Deploy-nya dilakukan oleh [`sc/scripts/deploy-testnet.sh`](../sc/scripts/deploy-testnet.sh),
+bukan diketik manual, jadi bisa diaudit dan diulang.
 
-| Kontrak | Contract address (`C...`) | Wasm hash | Link explorer |
+| Kontrak | Contract address (`C...`) | Wasm hash (on-chain) | Link explorer |
 | --- | --- | --- | --- |
-| EventRegistry | _(TBD — STE-33)_ | _(TBD — STE-33)_ | _(TBD — STE-33)_ |
-| RaceRecord | _(TBD — STE-33)_ | _(TBD — STE-33)_ | _(TBD — STE-33)_ |
+| **EventRegistry** (C1, STE-5) | `CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64` | `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` | <https://stellar.expert/explorer/testnet/contract/CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64> |
+| **RaceRecord** (C2, STE-9) | `CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4` | `75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` | <https://stellar.expert/explorer/testnet/contract/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4> |
+| **SAC sUSD** (STE-30) | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` | — (built-in host, bukan wasm) | <https://stellar.expert/explorer/testnet/contract/CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU> |
 
-Format link explorer yang dipakai: `https://stellar.expert/explorer/testnet/contract/<C...>`
+### Wasm hash-nya dibaca dari chain, bukan dari file lokal
+
+Kolom "Wasm hash" di atas **bukan** hasil `shasum` di laptop siapa pun — itu output
+`stellar contract info hash --contract-id <C...> --network testnet`, jadi yang dilaporkan adalah
+kode yang benar-benar dieksekusi kontraknya. Siapa pun bisa mengulangnya:
+
+```bash
+stellar contract info hash --contract-id CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64 --network testnet
+# 61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474
+```
+
+Dan **keduanya sama persis** dengan hash artefak beku di `docs/specs/INTERFACE.md` §0 dan
+`sc/README.md`. Jadi kontrak yang live di testnet ini adalah wasm yang sama yang menghasilkan TS
+bindings di `sc/bindings/` — bukan build lain yang mirip.
+
+> Ini kebetulan yang menyenangkan, bukan janji. `sc/README.md` mencatat bahwa build Rust tidak
+> bit-for-bit reproducible lintas mesin (CI Linux menghasilkan hash `event_registry.wasm` yang
+> berbeda dari macOS). Yang membuat baris di atas cocok adalah karena deploy dijalankan dari mesin
+> yang sama dengan yang membekukan spec, **dan** karena `deploy-testnet.sh` memakai
+> `stellar contract upload --optimize=false` lalu `deploy --wasm-hash` — bukan `deploy --wasm`
+> yang akan mengoptimasi ulang dan mengubah byte-nya.
+
+### Parameter deploy
+
+| Item | Nilai |
+| --- | --- |
+| Network | Stellar **testnet** (`Test SDF Network ; September 2015`) |
+| Admin / deployer | `GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` (alias `sterun-admin`) |
+| EventRegistry constructor | `admin` = address di atas |
+| RaceRecord constructor | `admin` = address di atas · `registry` = `CDL6A734…GTA64` · `token` = `CBQ6444…MOOU` (SAC sUSD) · `name` = `Sterun Race Record` · `symbol` = `STERUN` · `base_uri` = `https://sterun.xyz/record/` |
+| Upgradeability | **tidak ada** — v1 non-upgradeable sesuai `docs/SYSTEM_DESIGN.md` §11 |
+
+`token` sengaja parameter constructor, bukan konstanta: pindah ke USDC Circle di mainnet cukup
+mengganti nilai ini, tanpa satu baris pun perubahan kode kontrak.
+
+### Transaksi deploy
+
+| Langkah | Tx |
+| --- | --- |
+| `upload` wasm EventRegistry | [`1f088e37…`](https://stellar.expert/explorer/testnet/tx/1f088e37c97e246bbe11aee484bd35d14864cbac1c855e41781ccefdb3d3ba9c) |
+| `upload` wasm RaceRecord | [`295000e0…`](https://stellar.expert/explorer/testnet/tx/295000e0defa1b995bd72572c41a881819b7663aa3cba0c8f2a3076f3e0fd825) |
+| `deploy` EventRegistry (+ `__constructor`) | [`0d50c6f0…`](https://stellar.expert/explorer/testnet/tx/0d50c6f008ac15ff34431b74690d0cfcfe1a8fc529ff93de5df35824ce2d8751) |
+| `deploy` RaceRecord (+ `__constructor`) | [`ab95f07c…`](https://stellar.expert/explorer/testnet/tx/ab95f07cf49dba9fc3cd35d5a6a06fed48118c3fa2a2c6064572b0968e1abd5f) |
+| `set_race_record` (wiring, sekali seumur hidup) | [`25e6c16d…`](https://stellar.expert/explorer/testnet/tx/25e6c16d41e7445940be05d6b99a2775ab7a477ca990c3dc314ebf571bead30d) |
+
+### Wiring terverifikasi (read-only, siapa pun bisa ulang)
+
+```bash
+ER=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+RR=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+
+$ stellar contract invoke --id $ER --source-account <akun-testnet-apa-saja> --network testnet -- get_race_record
+"CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4"
+
+$ stellar contract invoke --id $RR --source-account <akun-testnet-apa-saja> --network testnet -- get_registry
+"CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64"
+
+$ stellar contract invoke --id $RR --source-account <akun-testnet-apa-saja> --network testnet -- get_token
+"CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU"
+
+$ stellar contract invoke --id $ER --source-account <akun-testnet-apa-saja> --network testnet -- event_count
+1
+```
+
+`set_race_record` **one-shot**: panggilan kedua ditolak `Error(Contract, #7)` (`RaceRecordAlreadySet`)
+— dibuktikan di bawah. Jadi caller tepercaya `reserve_slot` tidak bisa ditukar oleh siapa pun,
+termasuk admin.
+
+---
+
+## Sanity check on-chain — rehearsal penuh di testnet nyata
+
+Bukan simulasi, bukan unit test: semua di bawah ini transaksi yang benar-benar masuk ledger testnet.
+
+### Akun yang dipakai
+
+| Peran | Alias | Address |
+| --- | --- | --- |
+| Admin / deployer | `sterun-admin` | `GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` |
+| Organiser | `sterun-organiser` | `GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN` |
+| Runner | `sterun-runner-a` | `GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR` |
+
+### 1. Setup event (organiser)
+
+| Langkah | Hasil | Tx |
+| --- | --- | --- |
+| `create_event` | `event_id = 0`, event `EventCreated` ter-emit | [`4d1590cb…`](https://stellar.expert/explorer/testnet/tx/4d1590cbe9f34624b181d45d467392ea7648b48843db6fe2449465a5f114ac2a) |
+| `add_category` `10K`, quota 5, harga 5 sUSD | `category_id = 0`, `CategoryAdded` ter-emit | [`fe0cc483…`](https://stellar.expert/explorer/testnet/tx/fe0cc48398ddb5519095130fe7be672cb74966749f7be56a96d98a49d8db5106) |
+| `set_event_status` → `Open` | `EventStatusChanged` ter-emit | [`a4f3a72a…`](https://stellar.expert/explorer/testnet/tx/a4f3a72adb3e09ee7bbd836d9774dcdf88c054c64fcdfdf9094e599755b11f03) |
+
+### 2. `enter` — satu transaksi, dan urutan event beku terbukti di chain
+
+Runner memanggil `enter` sekali; harga 5 sUSD (`50000000` stroop). Yang menarik bukan cuma
+berhasilnya, tapi **event log-nya**: empat event dari **tiga emitter berbeda**, persis urutan yang
+dibekukan di `docs/specs/INTERFACE.md` §2.3 dan yang dijaga test
+`enter_emits_four_events_from_three_emitters_in_the_frozen_order`.
+
+Tx: [`3947eae3…`](https://stellar.expert/explorer/testnet/tx/3947eae36c104a6f880d09216ca83d75a08cacbb6db24180d057a1e71cedb85a)
+
+| # | Event | Emitter | Isi |
+| --- | --- | --- | --- |
+| 1 | `slot_reserved` | `CDL6A734…` EventRegistry | `event_id: 0, category_id: 0, seq: 0` |
+| 2 | `transfer` | `CBQ6444…` SAC sUSD | runner → organiser, `50000000` |
+| 3 | `mint` | `CDWFNF42…` RaceRecord | `to: runner, token_id: 0` |
+| 4 | `record_entered` | `CDWFNF42…` RaceRecord | `runner, event_id: 0, token_id: 0, bib_no: 0` |
+
+Inilah alasan indexer (STE-16) harus key ke **contract id**, bukan ke posisi: kategori gratis
+(`price_usdc == 0`) tidak memancarkan event nomor 2 sama sekali.
+
+Saldo benar-benar berpindah, dicek lewat SAC:
+
+| Akun | Sebelum | Sesudah |
+| --- | ---: | ---: |
+| Runner | `500000000` (50 sUSD) | `450000000` (45 sUSD) |
+| Organiser | `0` | `50000000` (5 sUSD) |
+
+### 3. Record yang lahir bisa diverifikasi siapa pun
+
+```bash
+$ stellar contract invoke --id $RR --source-account <akun-testnet> --network testnet -- record_of --token_id 0
+{"bib_no":0,"category_id":0,"claimed_at":null,"entered_at":1788252277,"event_id":0,
+ "finish_time_s":null,
+ "participant_hash":"feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29",
+ "result_at":null,"state":"Entered"}
+
+$ ... -- verify --token_id 0 --participant_hash feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29
+true
+$ ... -- verify --token_id 0 --participant_hash 0000000000000000000000000000000000000000000000000000000000000000
+false
+
+$ ... -- owner_of --token_id 0      => "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR"
+$ ... -- records_of --runner GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR   => [0]
+$ ... -- total_supply               => 1
+```
+
+`participant_hash` yang dipakai **bukan angka karangan**: itu `expected_hash_hex` dari vector
+`ph-04-messy-whitespace` di [`docs/specs/vectors/participant_hash.json`](specs/vectors/participant_hash.json).
+Jadi siapa pun bisa menurunkan sendiri hash itu dari input mentahnya lewat
+`bash docs/specs/verify.sh`, lalu mencocokkannya dengan yang tersimpan di chain.
+
+### 4. Lifecycle penuh: Entered → RacepackClaimed → Finished
+
+| Langkah | Hasil | Tx |
+| --- | --- | --- |
+| `claim_racepack` oleh organiser | `RacepackClaimed` ter-emit, `claimed_at` terisi | [`d3d4b5b3…`](https://stellar.expert/explorer/testnet/tx/d3d4b5b39f25db4ebc5a356d9f3cae34ec3a30ea0526f5adfec4ad3819df8156) |
+| `record_finish` 3161 detik (00:52:41) | `RecordFinished` ter-emit | [`bb03229e…`](https://stellar.expert/explorer/testnet/tx/bb03229e880230defac4d1dab73bd5e7e550eb87d5f78b93fd3779a7d78ae52a) |
+
+State akhir:
+
+```json
+{"bib_no":0,"category_id":0,"claimed_at":1788252342,"entered_at":1788252277,"event_id":0,
+ "finish_time_s":3161,
+ "participant_hash":"feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29",
+ "result_at":1788252352,"state":"Finished"}
+```
+
+### 5. Kasus negatif — guard-nya terbukti hidup di chain, bukan cuma di test
+
+Tiga panggilan berikut **sengaja** dijalankan dan **sengaja gagal**. Tidak ada yang masuk ledger
+sebagai perubahan state.
+
+| Panggilan | Hasil | Artinya |
+| --- | --- | --- |
+| `record_finish` saat state masih `Entered` | `Error(Contract, #103)` | `InvalidState` — tidak bisa mencatat finish untuk racepack yang belum diambil |
+| `claim_racepack` kedua kali | `Error(Contract, #102)` | `AlreadyClaimed` — **guard anti-double-racepack**, satu pack per entry dijamin chain, bukan kedisiplinan volunteer |
+| `set_race_record` kedua kali (oleh admin sendiri) | `Error(Contract, #7)` | `RaceRecordAlreadySet` — caller tepercaya `reserve_slot` tidak bisa ditukar, admin sekalipun |
+| `reserve_slot` dipanggil langsung dari EOA | CLI menuntut tanda tangan dari address kontrak `CDWFNF42…` | gate invoker-contract: hanya RaceRecord yang bisa memesan slot; EOA tidak akan pernah punya kunci itu |
+
+Perhatikan dua angka pertama vs yang ketiga: `#103` dan `#102` di band `100..=199` (RaceRecord),
+`#7` di band `1..=99` (EventRegistry). Tooling cuma menampilkan angka telanjang tanpa identitas
+kontrak — **band inilah** yang membuat SDK (STE-15) tahu peta error mana yang benar. Ini demonstrasi
+langsung kenapa band itu ada.
+
+### 6. Non-transferable, dicek pada kontrak yang live
+
+```bash
+$ stellar contract info interface \
+    --contract-id CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4 \
+    --network testnet \
+  | grep -cE '^[[:space:]]*fn (transfer|transfer_from|approve|approve_for_all|burn|burn_from)\('
+0
+```
+
+Nol. Kontrak yang benar-benar dipanggil orang mengekspor **18 fungsi**, dan tidak satu pun di
+antaranya bisa memindahkan record. Bukan karena ada guard yang menolak — karena fungsinya memang
+tidak ada. (EventRegistry: 16 fungsi.)
+
+---
+
+## Handoff dari STE-33 — siapa yang memakai alamat ini
+
+| Tiket | Butuh apa |
+| --- | --- |
+| **STE-15** `SterunClient` (James) | `EVENT_REGISTRY` + `RACE_RECORD` + `SUSD_SAC`; bindings-nya sudah ada di `sc/bindings/` (di-generate dari wasm yang sama dengan yang live di atas) |
+| **STE-16** indexer (James) | contract id kedua kontrak untuk filter `getEvents`; bentuk topic/data beku di `INTERFACE.md` §1.3 & §2.3 |
+| **STE-11** PII vault (James) | `participant_hash` dari `HASH_AND_TOTP.md`; contoh nyata tersimpan di `record_of(0)` |
+| **STE-17/18/21/22** apps (Ancung) | contract id + SAC untuk flow entry, QR pass, dan scanner |
+| **STE-31/32** deploy backend & web | ketiga address di atas sebagai env var |
+
+```bash
+STELLAR_NETWORK=testnet
+STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
+SUSD_ISSUER=GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW
+```
+
+> **Runner wajib punya trustline sUSD sebelum `enter`** kalau kategorinya berbayar. Tanpa
+> trustline, `transfer` di dalam `enter` gagal dan seluruh `enter` ter-rollback (kuota tidak
+> terpakai, tidak ada mint). Kategori **gratis** (`price_usdc == 0`) melewatkan `transfer`
+> sepenuhnya, jadi tidak butuh trustline sama sekali.
+
+### Re-deploy? Baca ini dulu
+
+Kontrak v1 **non-upgradeable**. Menjalankan ulang `deploy-testnet.sh` tidak meng-upgrade apa pun —
+dia menghasilkan **pasangan contract address baru** (deploy memakai salt acak), dan alamat lama
+tetap hidup dengan datanya sendiri. Kalau itu memang yang diinginkan, ganti tabel di section ini
+dan beri tahu semua konsumen di tabel handoff; jangan biarkan dua pasang alamat beredar diam-diam.
