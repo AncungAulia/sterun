@@ -41,9 +41,22 @@ Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari d
 | STE-9 | RaceRecord (C2) | selesai, 42 test |
 | STE-10 | freeze interface + hash/TOTP (C4) | selesai, spec v1.0.1 |
 | STE-14 | TS bindings + gate + CI (C3) | selesai |
-| STE-33 | deploy kontrak ke testnet | **berikutnya** |
+| STE-33 | deploy kontrak ke testnet | selesai — **kontrak LIVE** |
 
-Kontrak **belum hidup on-chain** sampai STE-33 selesai. Yang sudah live cuma SAC sUSD.
+Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
+[`docs/deployments.md`](docs/deployments.md):
+
+```
+EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
+```
+
+**M1 (D1 — kontrak) SELESAI.** Berikutnya D2/D3: STE-6 monorepo, STE-11 PII vault,
+STE-15 SterunClient, STE-16 indexer, dst — ikut `blockedBy` di Linear.
+
+Kontrak v1 **non-upgradeable**: alamat di atas permanen untuk versi ini. Deploy ulang =
+pasangan alamat baru, bukan upgrade.
 
 ## Workflow (berlaku sejak 2026-09-01, override aturan lama "tunggu approval sebelum merge")
 

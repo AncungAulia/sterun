@@ -9,7 +9,7 @@ pegang **sebelum** menulis kode di sini.
 | `contracts/event_registry/` | STE-5 (C1) | [`contracts/event_registry/CLAUDE.md`](contracts/event_registry/CLAUDE.md) |
 | `contracts/race_record/` | STE-9 (C2) | [`contracts/race_record/CLAUDE.md`](contracts/race_record/CLAUDE.md) |
 | `bindings/` | STE-14 (C3) | output generator — **jangan diedit tangan**, lihat [`bindings/README.md`](bindings/README.md) |
-| `scripts/` | STE-9 / STE-14 | tiga gate yang juga dijalankan CI |
+| `scripts/` | STE-9 / STE-14 / STE-33 | tiga gate yang dijalankan CI + script deploy testnet |
 
 ## Perintah harian
 
@@ -85,6 +85,20 @@ atau `contractimport!`. Crate kontrak lain **hanya** boleh masuk `[dev-dependenc
 untuk address apa pun — **termasuk contract address**. Jadi `mock_all_auths()` **tidak bisa**
 membuktikan gate auth di root frame (mis. gate invoker-contract `reserve_slot`). Untuk tiap
 assertion gate auth pakai `env.mock_auths(&[...])` (enforcing).
+
+## Deploy
+
+`scripts/deploy-testnet.sh` yang men-deploy pasangan kontrak yang sekarang live (alamat + bukti:
+`docs/deployments.md`). Dua hal yang jangan diubah tanpa alasan:
+
+- **`upload` dulu, baru `deploy --wasm-hash`** (bukan `deploy --wasm`). Upload mencetak hash yang
+  benar-benar mendarat di ledger, jadi hash yang dicatat dibaca dari chain. `--optimize=false`
+  menjaga byte-nya identik dengan artefak yang menurunkan bindings dan `INTERFACE.md` §0.
+- **Sanity check-nya menjalankan kasus negatif juga.** Deploy yang cuma membuktikan happy path
+  belum membuktikan guard-nya selamat sampai network nyata — dan guard itulah produknya.
+
+Kontrak v1 **non-upgradeable**: menjalankan ulang script ini menghasilkan pasangan alamat **baru**
+(deploy memakai salt acak), bukan upgrade.
 
 ## Sebelum bilang "selesai"
 

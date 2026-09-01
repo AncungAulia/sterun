@@ -181,7 +181,14 @@ Wasm yang menghasilkan bindings ini **persis** wasm yang akan di-deploy STE-33 �
 sha256-nya ada di tabel paling atas dan di `sc/README.md`. Contract id hasil
 deploy mendarat di **`docs/deployments.md`** beserta link stellar.expert-nya.
 
-> File `docs/deployments.md` datang bersama branch STE-30
-> (`ops/26-issue-susd-deploy-sac`) dan **belum ter-merge** saat branch ini
-> dibuat. Kalau belum ada di working tree kamu, itu sebabnya — bukan salah
-> tulis, dan jangan di-cherry-pick ke sini.
+Contract id yang sudah live (STE-33), siap dipakai `new Client({ contractId })`:
+
+```
+EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+```
+
+Hash wasm on-chain kedua kontrak itu **sama persis** dengan hash di tabel paling
+atas file ini — dicek lewat `stellar contract info hash --contract-id`. Jadi
+bindings ini memang mewakili kontrak yang benar-benar dipanggil, bukan build
+lain yang mirip.

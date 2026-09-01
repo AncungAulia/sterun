@@ -35,9 +35,10 @@ Landing menjual protokolnya, jadi klaim di halaman ini harus benar:
 
 - **Non-transferable** boleh disebut sebagai fakta — dibuktikan dari export surface wasm
   (`sc/contracts/race_record/CLAUDE.md`), bukan janji.
-- **Belum ada kontrak yang hidup di testnet sampai STE-33 selesai.** Jangan pasang contract
-  address, link explorer, atau "live on Stellar testnet" sebelum entrinya ada di
-  `docs/deployments.md`. Kalau butuh angka atau alamat, ambil dari file itu.
+- **"Live on Stellar testnet" sekarang benar** — EventRegistry `CDL6A734…GTA64` dan RaceRecord
+  `CDWFNF42…XNB4` sudah hidup sejak STE-33. Tetap ambil alamat dan link explorer dari
+  `docs/deployments.md`, jangan diketik ulang; itu satu-satunya sumber yang diperbarui saat
+  alamatnya berubah.
 - Testnet memakai **sUSD**, bukan USDC. USDC baru di mainnet.
 
 ## Konvensi
