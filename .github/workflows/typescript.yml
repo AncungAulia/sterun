@@ -39,19 +39,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # package-manager-cache is off because it fires BEFORE pnpm exists: it
+      # sees pnpm-lock.yaml, shells out to `pnpm store path`, and the job dies
+      # with "Unable to locate executable file: pnpm". The cache step below does
+      # the same work in the right order, and asks pnpm itself where its store
+      # is rather than assuming a path that differs per OS.
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
 
       - name: Install pnpm ${{ env.PNPM_VERSION }}
         run: |
           npm install --global "pnpm@$PNPM_VERSION"
           pnpm --version
 
+      - name: Locate the pnpm store
+        id: store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
       - name: Cache the pnpm store
         uses: actions/cache@v5
         with:
-          path: ~/.local/share/pnpm/store
+          path: ${{ steps.store.outputs.path }}
           key: pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-
