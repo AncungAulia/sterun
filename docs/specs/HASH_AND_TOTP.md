@@ -1,4 +1,4 @@
-# HASH & TOTP — spesifikasi byte-exact (v1.0.0)
+# HASH & TOTP — spesifikasi byte-exact (v1.0.1)
 
 > **Status: FROZEN 2026-08-31 (STE-10, komponen C4).**
 > Ini *handoff contract* nomor 2 di `docs/SYSTEM_DESIGN.md` §9: definisi byte-exact
@@ -244,7 +244,6 @@ Bagaimana input formulir yang berantakan menjadi field yang bersih:
 | Field | Mentah (escape Unicode) | Ternormalisasi |
 | --- | --- | --- |
 | `name` | `"  Siti\u00a0 Aminah   binti\u0009Rahman\u000a"` | `Siti Aminah binti Rahman` |
-"` | `Siti Aminah binti Rahman` |
 | `national_id` | `" a1-2345 6789-0b "` | `A1234567890B` |
 | `emergency_contact` | `" +62 (812) 3456-7890 "` | `+6281234567890` |
 

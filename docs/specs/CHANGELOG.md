@@ -12,6 +12,11 @@ Versi mengikuti **semver**, dibaca dari sudut pandang konsumen (SDK D2 + app D3)
 | MINOR | tambah fungsi baru, tambah event baru, tambah varian error baru (nomor bebas berikutnya di band-nya) | client lama tetap jalan |
 | PATCH | perbaikan dokumen/penjelasan yang **tidak** mengubah satu byte pun perilaku | tidak ada |
 
+Versinya **satu untuk seluruh folder**. Judul tiap file membawa versi di mana **file itu**
+terakhir berubah, jadi header yang berbeda antar file itu disengaja: `INTERFACE.md (v1.0.0)` di
+sebelah `HASH_AND_TOTP.md (v1.0.1)` berarti dokumen interface-nya memang tidak tersentuh sejak
+pembekuan. Yang berlaku untuk konsumen selalu entri paling atas di daftar versi bawah.
+
 ---
 
 ## Aturan perubahan (WAJIB, berlaku sejak v1.0.0 merged)
@@ -39,6 +44,47 @@ OZ); nomor varian yang dihapus **tidak boleh** dipakai ulang.
 **Perubahan definisi hash membatalkan setiap `participant_hash` yang sudah ada on-chain** —
 record lama tidak bisa diverifikasi ulang dengan aturan baru. Jadi itu minimal MAJOR, plus rencana
 migrasi tertulis, bukan patch.
+
+---
+
+## [1.0.1] — 2026-09-01
+
+**PATCH — perbaikan render, nol perubahan perilaku.** Tidak ada satu byte pun yang berubah:
+tidak ada signature, layout event, kode error, definisi hash/TOTP, vector, maupun implementasi
+referensi yang tersentuh. Konsumen yang sudah menggenerate terhadap v1.0.0 **tidak perlu
+melakukan apa pun**, dan bindings TS **tidak** di-regenerate — wasm dan `INTERFACE.md` sama
+persis.
+
+### Diperbaiki
+
+- **`HASH_AND_TOTP.md` §3.5** — baris tabel `name` pecah menjadi dua. Di bawah baris `name`
+  yang utuh tertinggal satu potongan sebagai baris tersendiri:
+
+  ```text
+  "` | `Siti Aminah binti Rahman` |
+  ```
+
+  Baris itu tidak diawali `|`, jadi GitHub (dan penampil Markdown mana pun) berhenti membaca
+  tabelnya di situ: dua baris terakhir (`national_id`, `emergency_contact`) ikut keluar dari
+  tabel. Fragmennya dihapus. Baris `name` yang utuh sudah benar dan **tidak** diubah.
+
+  Nilai-nilainya diverifikasi ulang terhadap vector `ph-04-messy-whitespace` di
+  `vectors/participant_hash.json`, bukan dibaca sekilas: mentahnya persis
+  `"  Siti\u00a0 Aminah   binti\u0009Rahman\u000a"` (NBSP `U+00A0` + spasi, TAB `U+0009`, LF
+  `U+000A` di ujung) dan hasil normalisasinya `Siti Aminah binti Rahman` — sama seperti yang
+  sudah tertulis. Hash `feb3ce…fe29` di paragraf bawahnya juga tetap.
+
+Ini penting justru karena §3.5 adalah satu-satunya tempat aturan normalisasi ditunjukkan sebagai
+*contoh* dan bukan sebagai prosa: itu yang dibaca James dan Ancung lebih dulu. Tabel yang tidak
+ter-render membuat kolom "mentah" dan "ternormalisasi" tampak menyatu — persis salah baca yang
+menghasilkan dua implementasi dengan hash berbeda.
+
+### Verifikasi
+
+- `bash docs/specs/verify.sh` — hijau, kedua implementasi referensi tetap sepakat di tiap vector.
+- `cd sc && cargo test` — hijau (33 + 42), termasuk
+  `host_sha256_matches_every_participant_hash_vector`.
+- `node sc/scripts/check-interface.mjs` — hijau, wasm ↔ `INTERFACE.md` ↔ bindings tidak bergerak.
 
 ---
 
