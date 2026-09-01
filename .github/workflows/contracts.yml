@@ -158,9 +158,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # package-manager-cache off: it detects the root pnpm-lock.yaml added in
+      # STE-6 and shells out to `pnpm store path`, which fails because these
+      # jobs have no pnpm and do not want it — the bindings install with
+      # `npm ci` inside each generated package, and the spec job needs nothing
+      # but node itself.
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
 
       # Both packages are generator output and are committed as-is. If the
       # generator ever emits something that does not compile, this goes red
@@ -184,9 +190,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # package-manager-cache off: it detects the root pnpm-lock.yaml added in
+      # STE-6 and shells out to `pnpm store path`, which fails because these
+      # jobs have no pnpm and do not want it — the bindings install with
+      # `npm ci` inside each generated package, and the spec job needs nothing
+      # but node itself.
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
       - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
