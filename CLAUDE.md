@@ -1,15 +1,30 @@
-# Sterun — Instawards MVP (CLAUDE.md)
+# Sterun — Instawards MVP (CLAUDE.md root)
 
-Protokol **race record non-transferable** untuk event lari di **Stellar/Soroban**. Grant Instawards $5k / 30 hari.
-Design lengkap: **`docs/SYSTEM_DESIGN.md`** (C1-C14, storage model, lifecycle, TOTP, user flows). WAJIB dibaca sebelum kerja.
+Protokol **race record non-transferable** untuk event lari di **Stellar/Soroban**. Grant Instawards
+$5k / 30 hari. Design lengkap: **`docs/SYSTEM_DESIGN.md`** (C1–C14, storage model, lifecycle, TOTP,
+user flows). WAJIB dibaca sebelum kerja.
+
+File ini adalah konvensi yang berlaku di **seluruh** repo. Tiap folder punya `CLAUDE.md` sendiri
+berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sentuh:
+
+| Folder | Isi `CLAUDE.md`-nya |
+| --- | --- |
+| [`sc/`](sc/CLAUDE.md) | cargo workspace kontrak: build, test, gate, versi pinned, band error |
+| [`sc/contracts/event_registry/`](sc/contracts/event_registry/CLAUDE.md) | C1 — storage, kuota, scanner allowlist, `reserve_slot` |
+| [`sc/contracts/race_record/`](sc/contracts/race_record/CLAUDE.md) | C2 — non-transferable, lifecycle, `enter` atomik, TTL |
+| [`docs/`](docs/CLAUDE.md) | SYSTEM_DESIGN + `deployments.md` (bukti deploy) |
+| [`docs/specs/`](docs/specs/CLAUDE.md) | spec BEKU C4: aturan mengubahnya, cara memverifikasinya |
+| [`be/`](be/CLAUDE.md) | backend Node/TS (James) — masih kosong |
+| [`fe/`](fe/CLAUDE.md) | web app Next.js (Ancung) — scaffolded |
+| [`landing-page/`](landing-page/CLAUDE.md) | landing (Nabil) — scaffolded |
 
 ## Scope kerja (WAJIB)
 - Kerja **HANYA di repo ini** (AncungAulia/sterun). JANGAN pernah sentuh repo `web3-rich`.
-- Kerjakan tiket **berurutan** dari Linear.
+- Kerjakan tiket **berurutan** dari Linear, satu per satu, ikut `blockedBy`.
 
 ## Layout repo (pakai yang SUDAH ada, jangan diubah)
 ```
-sc/            smart contracts (Soroban Rust) — masih kosong (.gitkeep)
+sc/            smart contracts (Soroban Rust) + bindings TS hasil generate
 be/            backend (Node/TS) — masih kosong (.gitkeep)
 fe/            web app (Next.js) — scaffolded
 landing-page/  landing (Next.js) — scaffolded
@@ -17,65 +32,68 @@ docs/          SYSTEM_DESIGN.md + deployments.md (bukti deploy) + specs/ (spec B
 ```
 Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari draft tiket).
 
-## Spec BEKU — `docs/specs/` (STE-10, C4) — BACA SEBELUM BIKIN BE/FE/SDK
-Handoff contract untuk James (backend/indexer) + Ancung (web/PWA), dibekukan **v1.0.0 (2026-08-31)**:
-- **`docs/specs/INTERFACE.md`** — signature fungsi, layout `#[contractevent]` (topic vs data),
-  kode error + band, wasm hash, alamat SAC sUSD. Diturunkan mekanis dari
-  `stellar contract info interface --wasm`.
-- **`docs/specs/HASH_AND_TOTP.md`** — `participant_hash` + TOTP + payload QR **byte-exact**.
-- **`docs/specs/vectors/`** — test vector; **`docs/specs/reference/`** — 2 implementasi (Node + Rust).
-- **`bash docs/specs/verify.sh`** wajib hijau (kedua implementasi harus sepakat).
-- Ubah signature / layout event / kode error / definisi hash-TOTP = **PR baru + approval Axel +
-  fable + entri `docs/specs/CHANGELOG.md` + regenerate TS bindings (STE-14)**. Kode error **tidak
-  pernah di-renumber**.
+## Status sekarang (per 2026-09-01)
 
-## Tiket (Linear MCP)
-- Workspace "Sterun", team key **STE**, project **"Sterun Instawards MVP"**. Tiket **STE-5 .. STE-33**.
-- Baca tiap tiket via Linear MCP (Requirements / Not in this / Left to the owner / Tasks lengkap ada di deskripsi).
-- Urutan build: **STE-5** EventRegistry → **STE-30** issue sUSD + deploy SAC → **STE-9** RaceRecord → **STE-10** tests+bindings → **STE-33** deploy testnet → dst (ikuti `blockedBy`).
+| Tiket | Komponen | Status |
+| --- | --- | --- |
+| STE-5 | EventRegistry (C1) | selesai, 33 test |
+| STE-30 | sUSD + SAC testnet | selesai, SAC `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` |
+| STE-9 | RaceRecord (C2) | selesai, 42 test |
+| STE-10 | freeze interface + hash/TOTP (C4) | selesai, spec v1.0.1 |
+| STE-14 | TS bindings + gate + CI (C3) | selesai |
+| STE-33 | deploy kontrak ke testnet | **berikutnya** |
+
+Kontrak **belum hidup on-chain** sampai STE-33 selesai. Yang sudah live cuma SAC sUSD.
+
+## Workflow (berlaku sejak 2026-09-01, override aturan lama "tunggu approval sebelum merge")
+
+1. **Branch baru per tiket**, pakai nama branch dari deskripsi tiket (mis.
+   `feat/1-event-registry-contract`).
+2. **Commit kecil-kecil**, satu langkah bermakna per commit, pesan commit rujuk `STE-#`. Badan
+   commit menjelaskan **kenapa**, bukan mengulang diff.
+3. Tiket beres + test hijau → **merge ke `main` langsung** (`git checkout main && git merge <branch>
+   && git push origin main`), lalu **update status tiket di Linear jadi Done**. Satu tiket per satu
+   merge, urut dependency. Axel sudah memberi izin; tidak perlu menunggu approval per PR lagi.
+4. Model **Opus** untuk PM maupun worker (`claude --model opus`). Jangan fable.
+5. **Update `CLAUDE.md` folder yang kamu sentuh** di commit yang sama kalau konvensinya berubah.
+6. Deploy WAJIB commit bukti (CA + link stellar.expert, atau URL live) di **`docs/deployments.md`**.
+7. Update worktree comment tiap checkpoint:
+   `orca worktree set --worktree active --comment "..."`.
 
 ## Tooling WAJIB
-- **MCP Stellar Raven** (`mcp__stellar-raven__search` / `execute` via ToolSearch) — verifikasi SETIAP keputusan Stellar/Soroban (OZ non-fungible base, SEP-41/SAC, Wallets Kit, state archival/TTL, `stellar contract bindings typescript`, `stellar contract asset deploy`).
-- **Skill Stellar Soroban** (stellar-dev smart-contracts) — pola scaffold/build/test kontrak.
+- **MCP Stellar Raven** (`mcp__stellar-raven__search` / `execute` via ToolSearch) — verifikasi
+  **SETIAP** keputusan Stellar/Soroban (OZ non-fungible base, SEP-41/SAC, Wallets Kit, state
+  archival/TTL, `stellar contract bindings typescript`, `stellar contract asset deploy`, cara
+  install CLI di CI). Jangan mengandalkan ingatan.
+- **Skill Stellar Soroban** (`stellar-dev:smart-contracts`) — pola scaffold/build/test kontrak.
 
-## Keputusan FINAL
-- Asset testnet = **sUSD (Sterun USD)** issue sendiri via SAC/SEP-41; mainnet = USDC (Circle).
-- **TOTP 6 digit**.
-- v1 non-upgradeable; PII off-chain (cuma `participant_hash` on-chain).
-- **Versi crate kontrak (pinned EXACT di `sc/Cargo.toml`)**: `soroban-sdk = "=26.1.1"` (protocol 26),
-  OZ `stellar-tokens`/`stellar-access`/`stellar-contract-utils`/`stellar-macros` = `"=0.7.2"`.
-  Alasan: OZ 0.7.2 (rilis terbaru per 2026-08-31) mensyaratkan `soroban-sdk ^26.1.0`, jadi kita
-  TIDAK bisa pakai soroban-sdk 27/28 selama masih memakai OZ non-fungible base. Naikkan hanya
-  setelah OZ merilis versi kompatibel protocol 27. Stellar CLI 27 tetap dipakai (build/deploy
-  kompatibel mundur).
-- **Layout kontrak**: cargo workspace di `sc/`, member `sc/contracts/<nama_kontrak>/`
-  (`event_registry`, lalu `race_record`). Bukan `contracts/` di root (draft tiket) — ikuti `sc/`.
-- **Band kode error `#[contracterror]` (WAJIB, disjoint per kontrak)**:
-  `1..=99` EventRegistry (C1) · `100..=199` RaceRecord (C2) · `200+` dipakai OZ
-  `NonFungibleTokenError` · kontrak baru ambil ratusan berikutnya.
-  Alasan: `ScError` Soroban cuma membawa `u32` **tanpa identitas kontrak**. `enter` cross-call
-  ke EventRegistry + SAC, dan revert mereka merambat apa adanya ke pemanggil — tanpa band
-  disjoint, `Error(Contract, #4)` dari `enter` bisa `EventNotOpen` (C1) ATAU `InvalidState` (C2),
-  dan SDK D2 harus menebak. Kode error = ABI publik: **jangan pernah di-renumber** setelah
-  STE-10 (freeze) merged. Test `error_codes_of_the_two_contracts_are_disjoint_bands` menjaga ini.
-- **Caveat test auth (soroban-sdk 26.1.1)**: `mock_all_auths()` memakai *recording* auth mode di
-  mana `require_auth` pada root frame dipenuhi untuk address apa pun — **termasuk contract
-  address**. Jadi `mock_all_auths()` TIDAK bisa membuktikan gate auth di root frame (mis. gate
-  invoker-contract `reserve_slot`). Pakai `env.mock_auths(&[...])` (enforcing) untuk setiap
-  assertion gate auth.
-- **Kontrak tidak boleh dipakai sebagai dependency biasa antar-member**: menautkan rlib kontrak
-  lain ke cdylib bikin simbol `#[export_name]`-nya bentrok (`__constructor` multiply defined) /
-  bocor ke wasm. Untuk cross-call pakai `#[contractclient]` lokal (atau `contractimport!`);
-  crate kontrak lain hanya boleh jadi `[dev-dependencies]` untuk test.
+## CI — `.github/workflows/contracts.yml`
+Jalan tiap push dan PR, tiga job: `contracts` (fmt, clippy `-D warnings`, build, `cargo test`,
+`check-exports.sh`, `check-interface.mjs`, coverage gate 80%), `bindings` (kedua paket TS compile
+apa adanya), `spec` (`docs/specs/verify.sh` — dua implementasi referensi sepakat).
+
+sha256 wasm dan tabel coverage ditulis ke **job summary**, jadi bisa dibaca orang yang tidak
+meng-install Rust sama sekali (mis. reviewer grant yang cuma pegang URL run-nya).
 
 ## Testing (WAJIB, no bug)
 - **e2e** + **edge case** + **positive case** + **negative case** untuk tiap tiket.
-- Kontrak: unit + integration (soroban testutils), `cargo llvm-cov` **>80%**, semua revert path (QuotaFull, EventNotOpen, AlreadyClaimed, finish-before-claim), quota race, TTL extension, assert non-transferable (tidak ada export transfer/approve/burn).
-- Jangan lanjut tiket berikutnya sebelum tiket sekarang lolos test.
+- Kontrak: unit + integration (soroban testutils), `cargo llvm-cov` **>80%** (sekarang 99%), semua
+  revert path (QuotaFull, EventNotOpen, AlreadyClaimed, finish-before-claim), quota race, TTL
+  extension, assert non-transferable (tidak ada export transfer/approve/burn).
+- **Jangan lanjut tiket berikutnya sebelum tiket sekarang lolos test dan ter-merge.**
 
-## Git & workflow
-- **Branch baru per tiket** (pakai nama branch dari deskripsi tiket, mis. `feat/1-event-registry-contract`).
-- **Commit kecil-kecil** (per langkah bermakna), pesan commit rujuk STE-#.
-- **PR mention @Axel (PM) + @fable (AI co-PM)** sebelum merge. **JANGAN self-merge ke `main`**.
-- Deploy WAJIB commit bukti (CA + link stellar.expert, atau URL live) di **`docs/deployments.md`**.
-- Update CLAUDE.md ini kalau ada konvensi/keputusan baru yang relevan.
+## Keputusan FINAL (jangan diputuskan ulang)
+- Asset testnet = **sUSD (Sterun USD)** issue sendiri via SAC/SEP-41; mainnet = USDC (Circle).
+- **TOTP 6 digit**. v1 non-upgradeable. PII off-chain (cuma `participant_hash` on-chain).
+- **Versi crate kontrak (pinned EXACT di `sc/Cargo.toml`)**: `soroban-sdk = "=26.1.1"` (protocol
+  26), OZ `stellar-tokens`/`stellar-access`/`stellar-contract-utils`/`stellar-macros` = `"=0.7.2"`.
+  Alasan + syarat menaikkannya: `sc/CLAUDE.md`.
+- **Layout kontrak**: cargo workspace di `sc/`, member `sc/contracts/<nama_kontrak>/`.
+- **Band kode error** `1..=99` C1 · `100..=199` C2 · `200+` OZ — alasan dan konsekuensinya di
+  `sc/CLAUDE.md`. Kode error **tidak pernah di-renumber**.
+- **Spec `docs/specs/` BEKU.** Mengubah signature / layout event / kode error / definisi
+  hash-TOTP butuh prosedur di `docs/specs/CLAUDE.md`.
+
+## Bahasa
+Dokumen (`*.md`) dan pesan ke Axel: **Bahasa Indonesia**. Komentar di dalam kode dan pesan commit:
+**Inggris** — itu yang dibaca James, Ancung, Nabil, dan reviewer grant di diff.
