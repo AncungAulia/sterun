@@ -1,0 +1,22 @@
+# STE-6 — the JavaScript/TypeScript side of the repo.
+#
+# Deliberately NOT here: sc/bindings/*. Those two packages are output of
+# `stellar contract bindings typescript`, carry their own generated
+# package.json + package-lock.json, and must never be hand-edited (see
+# sc/bindings/README.md). Consumers depend on them with `file:`, which works
+# identically under pnpm and npm, and CI installs them with `npm ci` exactly as
+# the generator intends. Pulling them into this workspace would put two package
+# managers in charge of the same directory for no gain.
+packages:
+  - be
+  - fe
+  - landing-page
+
+# pnpm 10 refuses to run install scripts unless they are named here. Every
+# entry is a build-from-source or binary-fetch step of a tool we actually use;
+# nothing is approved just to silence the warning.
+onlyBuiltDependencies:
+  - esbuild
+  - "@tailwindcss/oxide"
+  - sharp
+  - unrs-resolver
