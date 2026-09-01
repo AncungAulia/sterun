@@ -78,6 +78,20 @@ tidak bit-for-bit reproducible lintas mesin, versi toolchain, dan path — dan
 supaya ada satu artefak konkret yang bisa ditunjuk dan dibandingkan orang lain,
 bukan sebagai janji determinisme.
 
+Ini bukan kehati-hatian teoretis, dan tidak seragam. Run CI pertama
+(`ubuntu-24.04`, toolchain sama persis) menghasilkan:
+
+| Kontrak | macOS (tabel di atas) | Linux CI | Sama? |
+| --- | --- | --- | --- |
+| `race_record.wasm` | `75d38045…07919f` | `75d38045…07919f` | ya |
+| `event_registry.wasm` | `61d85dd5…578474` | `ed6c552a…7f80e8` | **tidak** |
+
+Satu wasm identik, satunya tidak, dari commit dan toolchain yang sama. Itulah
+alasan `check-interface.mjs` memperlakukan beda hash sebagai **WARN** dan beda
+*interface* sebagai **FAIL**: yang pertama bergantung pada mesin, yang kedua
+tidak. Deploy STE-33 karena itu mencatat hash artefak yang **benar-benar
+di-upload**, bukan mengasumsikan hash di tabel ini.
+
 Yang **wajib** sama dan dijaga mekanis adalah **isi interface**-nya. Itu tugas:
 
 ```bash
