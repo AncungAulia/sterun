@@ -1,0 +1,164 @@
+{
+  "spec": "sterun/participant_hash",
+  "version": "1.0.0",
+  "frozen": "2026-08-31",
+  "ticket": "STE-10",
+  "normative_document": "docs/specs/HASH_AND_TOTP.md",
+  "hash": "SHA-256",
+  "preimage": "utf8(norm_name) || 0x00 || utf8(norm_id) || 0x00 || utf8(norm_contact) || 0x00 || salt(32 raw bytes)",
+  "hex_encoding": "lowercase, no 0x prefix",
+  "salt_bytes": 32,
+  "note": "Every string in this file is written with \\uXXXX escapes for anything outside printable ASCII, so the NFC test data cannot be silently re-normalized by an editor. Read them with a normal JSON parser.",
+  "vectors": [
+    {
+      "id": "ph-01-ascii-plain",
+      "note": "Baseline. Pure ASCII, already normalized: normalization is the identity here, so this vector pins the concatenation and the SHA-256 itself.",
+      "input": {
+        "name": "Budi Santoso",
+        "national_id": "3174012509900001",
+        "emergency_contact": "+6281234567890",
+        "salt_hex": "a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e"
+      },
+      "normalized": {
+        "name": "Budi Santoso",
+        "national_id": "3174012509900001",
+        "emergency_contact": "+6281234567890"
+      },
+      "preimage_hex": "427564692053616e746f736f0033313734303132353039393030303031002b3632383132333435363738393000a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e",
+      "preimage_len": 77,
+      "expected_hash_hex": "11b4bbdb068b470aa79124846c6684b70ad0e5d7b5f7d74fe88cdc9fafdec8fe"
+    },
+    {
+      "id": "ph-02-nfc-precomposed",
+      "note": "Accented Indonesian name in PRECOMPOSED form (U+00E9 LATIN SMALL LETTER E WITH ACUTE, U+00F1 LATIN SMALL LETTER N WITH TILDE). Must hash identically to ph-03.",
+      "input": {
+        "name": "Jos\u00e9 Nu\u00f1ez Wijaya",
+        "national_id": "3273016607950012",
+        "emergency_contact": "+628119900123",
+        "salt_hex": "5b9e2d47f0a13c8695de720b4f61a3c8d02e9758b1364fa0c5e8790d2b4a6183"
+      },
+      "normalized": {
+        "name": "Jos\u00e9 Nu\u00f1ez Wijaya",
+        "national_id": "3273016607950012",
+        "emergency_contact": "+628119900123"
+      },
+      "preimage_hex": "4a6f73c3a9204e75c3b1657a2057696a6179610033323733303136363037393530303132002b363238313139393030313233005b9e2d47f0a13c8695de720b4f61a3c8d02e9758b1364fa0c5e8790d2b4a6183",
+      "preimage_len": 83,
+      "expected_hash_hex": "f5f43fc590b0edfbdf7a7b9c8c0751fa9c69329fec716b64afbd829962293f95"
+    },
+    {
+      "id": "ph-03-nfc-decomposed",
+      "note": "The SAME person as ph-02, typed on a keyboard that emits DECOMPOSED sequences (e + U+0301 COMBINING ACUTE ACCENT, n + U+0303 COMBINING TILDE). NFC folds it back onto ph-02: identical preimage, identical hash. If an implementation makes these differ, its normalization is wrong.",
+      "input": {
+        "name": "Jose\u0301 Nun\u0303ez Wijaya",
+        "national_id": "3273016607950012",
+        "emergency_contact": "+628119900123",
+        "salt_hex": "5b9e2d47f0a13c8695de720b4f61a3c8d02e9758b1364fa0c5e8790d2b4a6183"
+      },
+      "normalized": {
+        "name": "Jos\u00e9 Nu\u00f1ez Wijaya",
+        "national_id": "3273016607950012",
+        "emergency_contact": "+628119900123"
+      },
+      "preimage_hex": "4a6f73c3a9204e75c3b1657a2057696a6179610033323733303136363037393530303132002b363238313139393030313233005b9e2d47f0a13c8695de720b4f61a3c8d02e9758b1364fa0c5e8790d2b4a6183",
+      "preimage_len": 83,
+      "expected_hash_hex": "f5f43fc590b0edfbdf7a7b9c8c0751fa9c69329fec716b64afbd829962293f95",
+      "same_hash_as": "ph-02-nfc-precomposed"
+    },
+    {
+      "id": "ph-04-messy-whitespace",
+      "note": "Everything a real registration form produces: leading/trailing blanks, a TAB and a NO-BREAK SPACE inside the name, a dashed and spaced national id in lower case, and a phone number formatted with spaces, parentheses and a dash. The leading + survives.",
+      "input": {
+        "name": "  Siti\u00a0 Aminah   binti\u0009Rahman\u000a",
+        "national_id": " a1-2345 6789-0b ",
+        "emergency_contact": " +62 (812) 3456-7890 ",
+        "salt_hex": "e01d4a72c95b386f1027ae4d6b8c0359f24e7180a3d5c69b7e02f14859ba3c6d"
+      },
+      "normalized": {
+        "name": "Siti Aminah binti Rahman",
+        "national_id": "A1234567890B",
+        "emergency_contact": "+6281234567890"
+      },
+      "preimage_hex": "5369746920416d696e61682062696e7469205261686d616e00413132333435363738393042002b3632383132333435363738393000e01d4a72c95b386f1027ae4d6b8c0359f24e7180a3d5c69b7e02f14859ba3c6d",
+      "preimage_len": 85,
+      "expected_hash_hex": "feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29"
+    },
+    {
+      "id": "ph-05-salt-only-differs",
+      "note": "Byte-for-byte ph-01 except for the salt. Proves the salt is inside the preimage: same person, different record, unlinkable hashes.",
+      "input": {
+        "name": "Budi Santoso",
+        "national_id": "3174012509900001",
+        "emergency_contact": "+6281234567890",
+        "salt_hex": "0f2e4c6a8b1d3f507294a6c8e0b2d4f61735975bd9f1e3c5a7092b4d6e8f0a1c"
+      },
+      "normalized": {
+        "name": "Budi Santoso",
+        "national_id": "3174012509900001",
+        "emergency_contact": "+6281234567890"
+      },
+      "preimage_hex": "427564692053616e746f736f0033313734303132353039393030303031002b36323831323334353637383930000f2e4c6a8b1d3f507294a6c8e0b2d4f61735975bd9f1e3c5a7092b4d6e8f0a1c",
+      "preimage_len": 77,
+      "expected_hash_hex": "4799814afd98d8cccb1db3f9cd395adc6527fdcb1d3df7a48407f62ef27ab15b",
+      "differs_from": "ph-01-ascii-plain"
+    }
+  ],
+  "rejects": [
+    {
+      "id": "rj-01-name-blank",
+      "note": "Name is nothing but whitespace, so N2/N3 leave an empty string. N4 rejects: an empty component would let two different people share a preimage shape.",
+      "input": {
+        "name": " \u0009 \u3000\u000a",
+        "national_id": "3174012509900001",
+        "emergency_contact": "+6281234567890",
+        "salt_hex": "a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e"
+      },
+      "expected_error": {
+        "field": "name",
+        "code": "E_EMPTY"
+      }
+    },
+    {
+      "id": "rj-02-id-contains-nul",
+      "note": "A U+0000 inside the national id would forge a field boundary, because 0x00 is exactly the separator byte. N4 rejects it, which is what makes the separator sufficient without length prefixes.",
+      "input": {
+        "name": "Budi Santoso",
+        "national_id": "3174\u000001250990",
+        "emergency_contact": "+6281234567890",
+        "salt_hex": "a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e"
+      },
+      "expected_error": {
+        "field": "national_id",
+        "code": "E_NUL"
+      }
+    },
+    {
+      "id": "rj-03-id-only-separators",
+      "note": "Survives N4 (the trimmed string is non-empty) but N5 strips every character. Rejected by the post-strip emptiness check, N5b.",
+      "input": {
+        "name": "Budi Santoso",
+        "national_id": " -- - ",
+        "emergency_contact": "+6281234567890",
+        "salt_hex": "a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e"
+      },
+      "expected_error": {
+        "field": "national_id",
+        "code": "E_EMPTY"
+      }
+    },
+    {
+      "id": "rj-04-contact-only-punctuation",
+      "note": "Same shape as rj-03 on the contact field: N6 strips ( ) - and whitespace, leaving nothing. Rejected by N6b.",
+      "input": {
+        "name": "Budi Santoso",
+        "national_id": "3174012509900001",
+        "emergency_contact": " ( ) - ",
+        "salt_hex": "a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e"
+      },
+      "expected_error": {
+        "field": "emergency_contact",
+        "code": "E_EMPTY"
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# Standalone crate: deliberately NOT a member of the contract workspace in
+# `sc/`. Its dependencies must never reach a contract build, so it declares its
+# own empty `[workspace]`.
+[workspace]
+
+[package]
+name = "sterun-spec-reference"
+version = "1.0.0"
+edition = "2021"
+publish = false
+description = "Reference implementation of Sterun participant_hash + TOTP (STE-10, component C4)"
+
+# Pinned with `=` like the rest of the project (see CLAUDE.md): a frozen spec
+# whose reference implementation drifts with a minor bump is not frozen. All
+# four are RustCrypto / unicode-rs crates with no transitive surprises.
+[dependencies]
+sha2 = "=0.10.9"
+hmac = "=0.12.1"
+unicode-normalization = "=0.1.25"
+
+[dev-dependencies]
+serde_json = "=1.0.151"
