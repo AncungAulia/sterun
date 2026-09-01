@@ -64,7 +64,7 @@ describe("envelope", () => {
     const blob = encrypt(ring, NAME, aad("pii.name", row));
     for (const index of [0, 3, 20, blob.length - 1]) {
       const tampered = Buffer.from(blob);
-      tampered[index] ^= 0xff;
+      tampered.writeUInt8(tampered.readUInt8(index) ^ 0xff, index);
       expect(() => decrypt(ring, tampered, aad("pii.name", row))).toThrow();
     }
   });

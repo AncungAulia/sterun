@@ -1,0 +1,31 @@
+# STE-11 — Postgres for local development and tests.
+#
+# Not a deployment artefact: the real backend lands on a VPS in STE-31. This
+# exists so `pnpm test` has a real Postgres to run against rather than a mock,
+# because the vault's central claim — the PII columns hold no plaintext — is
+# only meaningful when checked against bytes an actual database stored.
+#
+#   docker compose up -d postgres
+#   DATABASE_URL=postgres://sterun:sterun@127.0.0.1:55432/sterun pnpm test
+#
+# Port 55432 rather than 5432 so it cannot collide with a Postgres already
+# running on the machine (there usually is one, and it usually belongs to
+# something else).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sterun-postgres
+    environment:
+      POSTGRES_USER: sterun
+      POSTGRES_PASSWORD: sterun
+      POSTGRES_DB: sterun
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sterun -d sterun"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    # No named volume: this database is disposable by design. Nothing here is
+    # worth keeping across a `docker compose down`, and a volume that survives
+    # would let a stale schema outlive the migration that created it.
