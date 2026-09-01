@@ -24,13 +24,18 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 
 ## Layout repo (pakai yang SUDAH ada, jangan diubah)
 ```
-sc/            smart contracts (Soroban Rust) + bindings TS hasil generate
-be/            backend (Node/TS) — masih kosong (.gitkeep)
+sc/            smart contracts (Soroban Rust) + bindings TS hasil generate — cargo workspace
+be/            backend (Node/TS, Fastify) — API + helper Stellar + faucet sUSD
 fe/            web app (Next.js) — scaffolded
 landing-page/  landing (Next.js) — scaffolded
 docs/          SYSTEM_DESIGN.md + deployments.md (bukti deploy) + specs/ (spec BEKU)
 ```
 Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari draft tiket).
+
+`be/` + `fe/` + `landing-page/` adalah **satu pnpm workspace** (root `pnpm-workspace.yaml`);
+`sc/` cargo workspace terpisah. `sc/bindings/*` **tidak** masuk pnpm workspace — itu output
+generator, dikonsumsi lewat `file:` dependency. Dari root: `pnpm install`, `pnpm dev`,
+`pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm faucet`.
 
 ## Status sekarang (per 2026-09-01)
 
@@ -42,6 +47,7 @@ Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari d
 | STE-10 | freeze interface + hash/TOTP (C4) | selesai, spec v1.0.1 |
 | STE-14 | TS bindings + gate + CI (C3) | selesai |
 | STE-33 | deploy kontrak ke testnet | selesai — **kontrak LIVE** |
+| STE-6 | monorepo pnpm + CI TS + backend skeleton + faucet sUSD | selesai |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
@@ -52,8 +58,9 @@ RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
 SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 ```
 
-**M1 (D1 — kontrak) SELESAI.** Berikutnya D2/D3: STE-6 monorepo, STE-11 PII vault,
-STE-15 SterunClient, STE-16 indexer, dst — ikut `blockedBy` di Linear.
+**M1 (D1 — kontrak) SELESAI.** Sekarang M2 (D2 — `@sterun/sdk` + backend), urut:
+**STE-11** PII vault → **STE-16** indexer + TTL keeper → **STE-15** SterunClient →
+**STE-19** JSON Schema + npm publish.
 
 Kontrak v1 **non-upgradeable**: alamat di atas permanen untuk versi ini. Deploy ulang =
 pasangan alamat baru, bukan upgrade.
@@ -80,10 +87,12 @@ pasangan alamat baru, bukan upgrade.
   install CLI di CI). Jangan mengandalkan ingatan.
 - **Skill Stellar Soroban** (`stellar-dev:smart-contracts`) — pola scaffold/build/test kontrak.
 
-## CI — `.github/workflows/contracts.yml`
-Jalan tiap push dan PR, tiga job: `contracts` (fmt, clippy `-D warnings`, build, `cargo test`,
-`check-exports.sh`, `check-interface.mjs`, coverage gate 80%), `bindings` (kedua paket TS compile
-apa adanya), `spec` (`docs/specs/verify.sh` — dua implementasi referensi sepakat).
+## CI — dua workflow, jalan tiap push dan PR
+- **`contracts.yml`** — tiga job: `contracts` (fmt, clippy `-D warnings`, build, `cargo test`,
+  `check-exports.sh`, `check-interface.mjs`, coverage gate 80%), `bindings` (kedua paket TS compile
+  apa adanya), `spec` (`docs/specs/verify.sh` — dua implementasi referensi sepakat).
+- **`typescript.yml`** — install dari lockfile (`--frozen-lockfile`), lint, typecheck, build, test
+  seluruh workspace TS. Tidak menyentuh network, jadi tidak bisa merah gara-gara testnet.
 
 sha256 wasm dan tabel coverage ditulis ke **job summary**, jadi bisa dibaca orang yang tidak
 meng-install Rust sama sekali (mis. reviewer grant yang cuma pegang URL run-nya).

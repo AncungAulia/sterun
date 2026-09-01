@@ -1,0 +1,18 @@
+# Dependencies (pnpm workspace — one store, symlinked into each package)
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Local environment. `.env.example` IS committed; `.env` never is — it holds
+# the distributor secret key that can move real testnet sUSD.
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.swp

@@ -1,0 +1,98 @@
+# STE-6 (infra) — CI for the TypeScript side: be/, fe/, landing-page/.
+#
+# Companion to contracts.yml, which owns everything under sc/. Split rather
+# than merged because the two have nothing in common: different toolchains,
+# different cache keys, and a Rust build that takes minutes should not sit in
+# front of a lint error in a Next.js page.
+#
+# What this proves on every push: the workspace installs from the committed
+# lockfile exactly, every package lints, every package's types check, every
+# package builds, and the backend's tests pass. Nothing here touches the
+# network, so it cannot go red because testnet had a bad afternoon — the
+# faucet's live behaviour is exercised by hand and written up in
+# docs/deployments.md instead.
+name: typescript
+
+# docs/deployments.md is in this list on purpose and is easy to miss: the
+# backend parses that file for its Stellar addresses, and its tests assert
+# against it. Editing the deploy evidence can break `pnpm test`, so it has to
+# be able to.
+on:
+  push:
+    branches: ["**"]
+    paths: &ts_paths
+      - "be/**"
+      - "fe/**"
+      - "landing-page/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "docs/deployments.md"
+      - ".github/workflows/typescript.yml"
+  pull_request:
+    paths: *ts_paths
+  workflow_dispatch:
+
+concurrency:
+  group: typescript-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Must match `packageManager` in the root package.json. Installed with npm
+  # rather than a third-party action so the pinned version is the only input.
+  PNPM_VERSION: "10.12.4"
+  NODE_VERSION: "24"
+
+jobs:
+  workspace:
+    name: lint · typecheck · build · test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # package-manager-cache is off because it fires BEFORE pnpm exists: it
+      # sees pnpm-lock.yaml, shells out to `pnpm store path`, and the job dies
+      # with "Unable to locate executable file: pnpm". The cache step below does
+      # the same work in the right order, and asks pnpm itself where its store
+      # is rather than assuming a path that differs per OS.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install pnpm ${{ env.PNPM_VERSION }}
+        run: |
+          npm install --global "pnpm@$PNPM_VERSION"
+          pnpm --version
+
+      - name: Locate the pnpm store
+        id: store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-
+
+      # --frozen-lockfile: a dependency change that was not committed fails
+      # here rather than silently resolving to something nobody reviewed.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
