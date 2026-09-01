@@ -10,7 +10,8 @@ Cargo workspace untuk kontrak Sterun (Stellar/Soroban, Rust `#![no_std]`, target
 ## Spec BEKU (STE-10) — baca sebelum konsumsi kontrak ini
 
 Interface kedua kontrak, layout event, dan kode error **sudah dibekukan** di
-`docs/specs/` (v1.0.0, 2026-08-31). Kalau kamu bikin backend, indexer, SDK, atau
+`docs/specs/` (beku sejak v1.0.0, 2026-08-31; folder sekarang di **v1.0.1** — patch dokumen,
+nol perubahan perilaku). Kalau kamu bikin backend, indexer, SDK, atau
 frontend, itu sumber kebenarannya — bukan file `lib.rs` ini:
 
 | File | Isi |
@@ -42,6 +43,73 @@ kalau spec dan kontrak pernah berpisah jalan, `cargo test` yang gagal duluan.
   Naikkan ke 27 hanya setelah OZ merilis versi yang kompatibel.
 - OZ crates `= "0.7.2"` di `[workspace.dependencies]`.
 
+## Artefak build (STE-14)
+
+`stellar contract build` di `sc/` menghasilkan dua wasm. Ini yang akan di-deploy
+STE-33, dan yang menjadi sumber TS bindings di [`bindings/`](bindings/):
+
+| Kontrak | Wasm | sha256 | Ukuran |
+| --- | --- | --- | ---: |
+| EventRegistry (C1) | `target/wasm32v1-none/release/event_registry.wasm` | `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` | 14.964 B |
+| RaceRecord (C2) | `target/wasm32v1-none/release/race_record.wasm` | `75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` | 19.435 B |
+
+Toolchain yang menghasilkan angka di atas:
+
+| | Versi |
+| --- | --- |
+| `rustc` | 1.93.0 (254b59607 2026-01-19) |
+| `stellar` CLI | 27.0.0 |
+| `soroban-sdk` | `=26.1.1` (pinned, lihat di atas) |
+| OZ `stellar-tokens` dkk | `=0.7.2` (pinned) |
+| target | `wasm32v1-none`, profil `release` dari `Cargo.toml` |
+
+Cek ulang tanpa Stellar CLI — `stellar contract info hash` mengembalikan sha256
+biasa dari file wasm, jadi `shasum` sudah cukup:
+
+```bash
+shasum -a 256 target/wasm32v1-none/release/*.wasm
+```
+
+### Yang reproducible: interface-nya, bukan byte-nya
+
+**Jangan berasumsi hash di atas akan sama persis di mesin kamu.** Build Rust
+tidak bit-for-bit reproducible lintas mesin, versi toolchain, dan path — dan
+`docs/specs/INTERFACE.md` §0 sudah menyatakan itu terbuka-terbukaan. Hash ada
+supaya ada satu artefak konkret yang bisa ditunjuk dan dibandingkan orang lain,
+bukan sebagai janji determinisme.
+
+Ini bukan kehati-hatian teoretis, dan tidak seragam. Run CI pertama
+(`ubuntu-24.04`, toolchain sama persis) menghasilkan:
+
+| Kontrak | macOS (tabel di atas) | Linux CI | Sama? |
+| --- | --- | --- | --- |
+| `race_record.wasm` | `75d38045…07919f` | `75d38045…07919f` | ya |
+| `event_registry.wasm` | `61d85dd5…578474` | `ed6c552a…7f80e8` | **tidak** |
+
+Satu wasm identik, satunya tidak, dari commit dan toolchain yang sama. Itulah
+alasan `check-interface.mjs` memperlakukan beda hash sebagai **WARN** dan beda
+*interface* sebagai **FAIL**: yang pertama bergantung pada mesin, yang kedua
+tidak. Deploy STE-33 karena itu mencatat hash artefak yang **benar-benar
+di-upload**, bukan mengasumsikan hash di tabel ini.
+
+Yang **wajib** sama dan dijaga mekanis adalah **isi interface**-nya. Itu tugas:
+
+```bash
+node scripts/check-interface.mjs      # butuh `stellar contract build` dulu
+```
+
+Script itu membaca tiga sisi dan mem-*diff* ketiganya:
+
+1. `stellar contract info interface --output json` dari wasm yang barusan di-build,
+2. tabel beku di `docs/specs/INTERFACE.md` (signature + argumen + tipe return,
+   kode error, layout event, field tipe),
+3. `bindings/*/src/index.ts` hasil generate.
+
+Beda signature, kode error yang di-renumber, field event yang pindah dari topic
+ke data, atau fungsi baru yang belum didokumentasikan = **exit non-zero**.
+Perbedaan hash wasm cuma **WARN**, dengan alasannya dicetak. Itu jaminan yang
+jujur: bentuknya reproducible, byte-nya tidak.
+
 ## Perintah
 
 ```bash
@@ -50,9 +118,55 @@ stellar contract build            # -> target/wasm32v1-none/release/*.wasm
 cargo test                        # unit + integration test (butuh build di atas, lihat catatan)
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
-cargo llvm-cov --summary-only     # coverage (target >80%)
+cargo llvm-cov --summary-only     # coverage (floor 80%)
 ./scripts/check-exports.sh        # WAJIB sebelum PR/deploy — lihat di bawah
+node scripts/check-interface.mjs  # WAJIB — spec beku vs wasm vs bindings
 ```
+
+Dua script Node di `scripts/` adalah gerbang yang sama yang dipakai CI:
+
+```bash
+node scripts/check-interface.mjs               # butuh `stellar contract build` dulu
+
+cargo llvm-cov --no-report                     # coverage, tiga langkah
+cargo llvm-cov report --json --summary-only --output-path target/coverage.json
+node scripts/coverage-gate.mjs target/coverage.json
+```
+
+`coverage-gate.mjs` mencetak tabel Markdown dan **exit non-zero** kalau
+`lib.rs` salah satu kontrak turun di bawah 80% (region atau line). Yang di-gate
+cuma dua `lib.rs` itu: coverage `test.rs` nyaris tak bermakna (kode test
+meng-cover dirinya sendiri) dan `race_record/src/registry.rs` cuma deklarasi
+trait `#[contractclient]` — input makro tanpa body, jadi llvm-cov selamanya
+melaporkannya 0%. Keduanya tetap dicetak, tidak disembunyikan.
+
+Mau bukti gerbangnya bukan hiasan? Naikkan ambangnya dan lihat dia merah:
+
+```bash
+COVERAGE_MIN=99 node scripts/coverage-gate.mjs target/coverage.json
+```
+
+## CI — `.github/workflows/contracts.yml`
+
+Semua klaim di file ini diturunkan ulang dari sumbernya di mesin bersih tiap
+push dan PR, dalam tiga job:
+
+| Job | Yang dibuktikan |
+| --- | --- |
+| `contracts` | `cargo fmt --check`, `clippy -D warnings`, `stellar contract build`, `cargo test`, `check-exports.sh`, `check-interface.mjs`, lalu `cargo llvm-cov` lewat `coverage-gate.mjs` |
+| `bindings` | kedua paket di `bindings/` `npm ci && npm run build` — compile apa adanya, tanpa edit tangan |
+| `spec` | `bash ../docs/specs/verify.sh` — implementasi Node dan Rust sepakat di tiap vector beku |
+
+Dua angka sengaja ditulis ke **job summary** (bukan cuma log), supaya bisa
+dibaca orang yang tidak akan pernah meng-install Rust — mis. reviewer grant yang
+cuma punya URL run-nya: **sha256 + ukuran tiap wasm**, dan **tabel coverage**
+dengan lantai 80% ditandai.
+
+Versi di workflow di-pin ke toolchain yang tercatat di atas: Rust `1.93.0`
+(lewat `rustup` bawaan runner, tanpa action pihak ketiga), stellar CLI `27.0.0`
+(lewat `stellar/stellar-cli@v27.0.0` — action itu membaca ref-nya sendiri untuk
+memilih rilis, jadi ref itulah versinya), dan `cargo-llvm-cov 0.8.7`. Mengubah
+salah satu angka di sana berarti mengubahnya di sini juga.
 
 > **Urutan build → test itu wajib.** Test
 > `race_record::test::exports::race_record_wasm_exports_nothing_that_could_move_a_record`

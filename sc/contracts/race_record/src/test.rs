@@ -2,6 +2,7 @@
 extern crate std;
 
 use event_registry::{EventRegistry, EventRegistryClient as RegistryClient, EventStatus};
+use soroban_sdk::xdr::{ContractEvent, ContractEventBody, ScVal};
 use soroban_sdk::{
     symbol_short,
     testutils::{
@@ -566,6 +567,102 @@ fn emits_record_dnf() {
     assert_eq!(
         w.env.events().all().filter_by_contract(&w.contract),
         std::vec![RecordDnf { token_id, event_id }.to_xdr(&w.env, &w.contract)]
+    );
+}
+
+/// `docs/specs/INTERFACE.md` §2.3 freezes the emission order of one successful
+/// `enter`, and STE-16's indexer is written against it: four events from
+/// **three different emitters**, in this order —
+///
+///   1. `slot_reserved`  — EventRegistry's contract id
+///   2. `transfer`       — the SEP-41 token's contract id (**only** when `price > 0`)
+///   3. `mint`           — RaceRecord's contract id
+///   4. `record_entered` — RaceRecord's contract id
+///
+/// Every other emission test above calls `filter_by_contract` first, which is
+/// exactly the thing that hides this: filtering to one emitter can never show
+/// that the registry's event precedes the token's, or that `mint` precedes
+/// `record_entered` across the whole invocation. The doc tells the indexer to
+/// key on the **contract id** rather than the topic name alone; until this test
+/// existed that instruction was the one frozen claim with nothing holding it
+/// down.
+#[test]
+fn enter_emits_four_events_from_three_emitters_in_the_frozen_order() {
+    /// Event names in emission order, read off topic 0 of each event.
+    fn names(events: &[ContractEvent]) -> std::vec::Vec<std::string::String> {
+        events
+            .iter()
+            .map(|e| {
+                let ContractEventBody::V0(body) = &e.body;
+                match body
+                    .topics
+                    .first()
+                    .expect("every event carries its name as topic 0")
+                {
+                    ScVal::Symbol(s) => s.0.to_utf8_string_lossy(),
+                    other => panic!("topic 0 is not a Symbol: {other:?}"),
+                }
+            })
+            .collect()
+    }
+
+    // -- paid category: the token sits in the middle of the sequence.
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    w.enter(&w.runner(), event_id, category_id, 12);
+
+    let all = w.env.events().all();
+    let seq = all.events();
+
+    assert_eq!(
+        names(seq),
+        std::vec!["slot_reserved", "transfer", "mint", "record_entered"],
+        "frozen emission order of a paid `enter` (INTERFACE.md §2.3)"
+    );
+
+    // Which emitter sits at which position. `filter_by_contract` keeps the
+    // events themselves, so comparing its output against a *slice* of the
+    // global sequence pins both identity and position at once — a topic-name
+    // filter alone could never tell these three emitters apart.
+    assert_eq!(
+        all.filter_by_contract(&w.registry).events(),
+        &seq[0..1],
+        "position 0 must come from EventRegistry"
+    );
+    assert_eq!(
+        all.filter_by_contract(&w.token).events(),
+        &seq[1..2],
+        "position 1 must come from the SEP-41 token"
+    );
+    assert_eq!(
+        all.filter_by_contract(&w.contract).events(),
+        &seq[2..4],
+        "positions 2-3 must come from RaceRecord, mint before record_entered"
+    );
+
+    // -- free category: the token is never called, so its event is absent and
+    //    the remaining three close ranks. An indexer that keyed on a fixed
+    //    offset instead of the contract id breaks exactly here.
+    let free = World::new();
+    let (event_id, category_id) = free.open_event(5, 0);
+    free.enter(&Address::generate(&free.env), event_id, category_id, 13);
+
+    let free_all = free.env.events().all();
+    let free_seq = free_all.events();
+
+    assert_eq!(
+        names(free_seq),
+        std::vec!["slot_reserved", "mint", "record_entered"],
+        "a free entry emits no token event at all"
+    );
+    assert_eq!(
+        free_all.filter_by_contract(&free.registry).events(),
+        &free_seq[0..1]
+    );
+    assert!(free_all.filter_by_contract(&free.token).events().is_empty());
+    assert_eq!(
+        free_all.filter_by_contract(&free.contract).events(),
+        &free_seq[1..3]
     );
 }
 
