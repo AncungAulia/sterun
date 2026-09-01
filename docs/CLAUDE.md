@@ -34,10 +34,16 @@ Setiap deploy **wajib** di-commit ke sini. Yang minimal harus ada per entri:
 | **sha256 wasm yang benar-benar di-upload** | bukan hash dari tabel README — build Rust tidak reproducible lintas mesin (buktinya di `sc/README.md`) |
 | tiket | STE-# yang menghasilkannya |
 
-Sudah tercatat: **SAC sUSD testnet**
-`CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` (STE-30).
-Belum: EventRegistry + RaceRecord — itu STE-33, dan sampai itu selesai **kontraknya belum hidup
-on-chain**.
+Sudah tercatat, semuanya **live di testnet**:
+
+| Apa | Address | Tiket |
+| --- | --- | --- |
+| SAC sUSD | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` | STE-30 |
+| EventRegistry | `CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64` | STE-33 |
+| RaceRecord | `CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4` | STE-33 |
+
+Entri STE-33 juga memuat rehearsal on-chain penuh (`enter` → `claim_racepack` → `record_finish`)
+berikut kasus negatifnya. Kalau kamu perlu contoh bentuk bukti yang cukup, itu contohnya.
 
 Klaim "sudah deploy" tanpa entri di file ini dianggap tidak terjadi. Reviewer grant memverifikasi
 dari sini.
