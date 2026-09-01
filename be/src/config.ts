@@ -10,6 +10,7 @@
  * talk to the wrong contract.
  */
 import { Networks } from "@stellar/stellar-sdk";
+import { parseKeyring, type Keyring } from "./crypto/keyring.js";
 import { loadDeployments, type Deployments } from "./deployments.js";
 
 export interface Config {
@@ -32,6 +33,20 @@ export interface Config {
   readonly distributorSecret: string | undefined;
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
+  /**
+   * The PII vault, or `undefined` when this process is not running one.
+   *
+   * Absent is a legitimate state — `pnpm dev` with no setup should still start
+   * and serve /health — but a HALF-configured vault is not. A DATABASE_URL
+   * without PII_KEYS would be a service that can reach a database and cannot
+   * encrypt, and the only safe thing to do with that is refuse to start.
+   */
+  readonly vault:
+    | {
+        readonly databaseUrl: string;
+        readonly keyring: Keyring;
+      }
+    | undefined;
 }
 
 const num = (v: string | undefined, fallback: number): number => {
@@ -66,7 +81,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     distributorSecret: env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    vault: loadVaultConfig(env),
   };
+}
+
+function loadVaultConfig(env: NodeJS.ProcessEnv): Config["vault"] {
+  const databaseUrl = env.DATABASE_URL;
+  const keys = env.PII_KEYS;
+
+  if (!databaseUrl && !keys) return undefined;
+  if (!databaseUrl) {
+    throw new Error("PII_KEYS is set but DATABASE_URL is not — the vault has nowhere to store rows");
+  }
+  if (!keys) {
+    throw new Error(
+      "DATABASE_URL is set but PII_KEYS is not. Refusing to start a vault that can reach a " +
+        "database and cannot encrypt: that configuration would store identity documents in the clear. " +
+        "See be/OPERATIONS.md.",
+    );
+  }
+  return { databaseUrl, keyring: parseKeyring(keys, env.PII_ACTIVE_KEY_ID ?? "") };
 }
 
 /** sUSD has 7 decimals, like every classic Stellar asset. */

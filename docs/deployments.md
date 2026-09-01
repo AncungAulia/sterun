@@ -13,6 +13,54 @@ reviewer, PM, atau juri grant bisa memverifikasi sendiri tanpa perlu menjalankan
 
 ---
 
+## Indeks alamat — semuanya, dengan link yang bisa diklik
+
+Satu tabel supaya tidak perlu men-scroll: **setiap** contract address dan account address yang
+dipakai Sterun di testnet, apa perannya, dan tiket yang menghasilkannya. Detail masing-masing ada
+di section-section di bawah.
+
+### Kontrak
+
+| Kontrak | Peran | Address (klik = explorer) | Tiket |
+| --- | --- | --- | --- |
+| **EventRegistry** (C1) | event, kategori, kuota, harga, scanner allowlist, `reserve_slot` | [`CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64`](https://stellar.expert/explorer/testnet/contract/CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64) | STE-33 |
+| **RaceRecord** (C2) | record lari non-transferable + lifecycle, `enter` atomik | [`CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4`](https://stellar.expert/explorer/testnet/contract/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4) | STE-33 |
+| **SAC sUSD** | token biaya pendaftaran (SEP-41) yang dipanggil `enter` | [`CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU`](https://stellar.expert/explorer/testnet/contract/CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU) | STE-30 |
+
+### Account
+
+| Account | Peran | Address (klik = explorer) | Tiket |
+| --- | --- | --- | --- |
+| `sterun-susd-issuer` | menerbitkan asset `sUSD` | [`GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW`](https://stellar.expert/explorer/testnet/account/GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW) | STE-30 |
+| `sterun-susd-distributor` | memegang supply awal; sumber faucet | [`GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO`](https://stellar.expert/explorer/testnet/account/GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO) | STE-30 |
+| `sterun-admin` | deployer + admin kedua kontrak | [`GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP`](https://stellar.expert/explorer/testnet/account/GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP) | STE-33 |
+| `sterun-organiser` | organiser event rehearsal; penerima biaya pendaftaran | [`GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN`](https://stellar.expert/explorer/testnet/account/GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN) | STE-33 |
+| `sterun-runner-a` | runner rehearsal — `token_id 0`, lifecycle penuh sampai `Finished` | [`GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR`](https://stellar.expert/explorer/testnet/account/GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR) | STE-33 |
+| `sterun-runner-b` | runner hasil `pnpm faucet` — `token_id 1` | [`GD7DHD3FDWZRBU5GCI5LTQT2VFRJXRTSCG6DJOP5SNVOATYE76POYVCE`](https://stellar.expert/explorer/testnet/account/GD7DHD3FDWZRBU5GCI5LTQT2VFRJXRTSCG6DJOP5SNVOATYE76POYVCE) | STE-6 |
+| runner e2e STE-11 | akun yang PII-nya lewat API — `token_id 2` | [`GCYYG7CP3RCOSRSAFPQGY6MTAT2DVF5HTSLNCWRIR2PF626CHZMVGIEE`](https://stellar.expert/explorer/testnet/account/GCYYG7CP3RCOSRSAFPQGY6MTAT2DVF5HTSLNCWRIR2PF626CHZMVGIEE) | STE-11 |
+| `sterun-test-a` | uji `transfer` SEP-41 | [`GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF`](https://stellar.expert/explorer/testnet/account/GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF) | STE-30 |
+| `sterun-test-b` | uji `transfer` SEP-41 | [`GD22GHP4CCK2JWXQMPA7GLOMCYIYTL52UUND5NJGHKNSBRPDIRYZ23LS`](https://stellar.expert/explorer/testnet/account/GD22GHP4CCK2JWXQMPA7GLOMCYIYTL52UUND5NJGHKNSBRPDIRYZ23LS) | STE-30 |
+
+Asset `sUSD` sendiri:
+<https://stellar.expert/explorer/testnet/asset/sUSD-GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW>
+
+> **Semua di sini TESTNET.** Tidak ada nilai riil. Yang di-commit hanya public address (`G...`),
+> contract address (`C...`), dan tx hash — tidak pernah secret key.
+
+Env var untuk client (SDK STE-15, indexer STE-16, apps STE-17/18/21/22):
+
+```bash
+STELLAR_NETWORK=testnet
+STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
+SUSD_ISSUER=GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW
+```
+
+---
+
 ## sUSD (Sterun USD) — asset pembayaran testnet
 
 `sUSD` adalah asset klasik Stellar yang kita issue sendiri untuk testnet, dipakai sebagai token biaya
@@ -554,6 +602,33 @@ $ stellar contract info interface \
 Nol. Kontrak yang benar-benar dipanggil orang mengekspor **18 fungsi**, dan tidak satu pun di
 antaranya bisa memindahkan record. Bukan karena ada guard yang menolak — karena fungsinya memang
 tidak ada. (EventRegistry: 16 fungsi.)
+
+---
+
+## Bukti e2e STE-11 — hash dari backend diterima kontrak yang live
+
+Rehearsal di atas memakai `participant_hash` dari file vector. Ini yang membuktikan **backend
+sungguhan** menghasilkan nilai yang diterima kontrak: PII masuk lewat API, hash-nya keluar, dan
+hash itu yang dipakai `enter`.
+
+| # | Langkah | Hasil |
+| --- | --- | --- |
+| 1 | `pnpm faucet` untuk akun yang baru dibuat | akun `GCYYG7CP…GIEE` pegang 50 sUSD |
+| 2 | `POST /auth/challenge` + tanda tangan nonce | nonce sekali pakai, terverifikasi |
+| 3 | `POST /participants` dengan PII berantakan (NBSP, TAB, LF, NIK ber-strip) | `participant_hash = dc86cb0d…15d1`, salt + `totp_secret` dikirim **sekali**; response tidak memuat satu pun potongan PII |
+| 4 | `enter` di RaceRecord **live** dengan hash itu | `token_id = 2`, `bib_no = 2` — [`54c24055…`](https://stellar.expert/explorer/testnet/tx/54c24055a7bdc36e86531bbf686f8eebfd27f59be596258e8cbc89e90914630e) |
+| 5 | `verify(2, dc86cb0d…15d1)` di kontrak | **`true`** |
+| 6 | `POST /participants/2/confirm` | baris vault tertaut ke `token_id 2` + tx hash-nya |
+| 7 | `GET /participants/:id` | metadata saja — nol PII di body |
+| 8 | roster handoff (STE-16) | `totp_secret` ketemu dari `token_id`, menghasilkan kode check-in 6 digit |
+| 9 | `SELECT name_enc` langsung dari Postgres | 62 byte ciphertext; `includes("Siti")` → **false** |
+
+Yang dibuktikan langkah 4–5 dan tidak bisa dibuktikan test lokal mana pun: normalisasi backend
+(NFC, collapse whitespace, strip separator NIK) menghasilkan **byte yang sama persis** dengan yang
+di-hash `env.crypto().sha256()` di dalam host Soroban. Kalau backend dan spec pernah berpisah jalan
+satu byte pun, langkah 5 mengembalikan `false`.
+
+Record `token_id 2` di RaceRecord: <https://stellar.expert/explorer/testnet/contract/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4>
 
 ---
 

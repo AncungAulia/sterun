@@ -1,7 +1,7 @@
 # `be/` — backend Node/TS (CLAUDE.md)
 
-API + helper Stellar. Owner: **James**. Komponen C7 (PII vault + API) dan C8 (indexer + TTL
-keeper). Sekarang berisi skeleton dari **STE-6**; isi sesungguhnya menyusul di STE-11 dan STE-16.
+API + helper Stellar + **PII vault**. Owner: **James**. Komponen C7 (PII vault + API) dan C8
+(indexer + TTL keeper, STE-16 — belum ada).
 
 ## Stack (sudah dipilih, jangan diputuskan ulang tanpa alasan)
 
@@ -10,6 +10,8 @@ keeper). Sekarang berisi skeleton dari **STE-6**; isi sesungguhnya menyusul di S
 | Runtime | Node ≥ 22 (dipakai 24), ESM (`"type": "module"`) | Next.js dan bindings juga ESM |
 | Framework | **Fastify 5** | ringan, TS-first, schema validation bawaan |
 | Stellar | `@stellar/stellar-sdk` ^17 | mayor terbaru; be/ bicara langsung ke testnet protocol 26 |
+| Database | **Postgres 17** + `pg`, tanpa ORM | yang dilakukan service ini ke DB cuma segelintir statement tangan; ORM menambah lapisan mapping dan SQL kejutan tanpa imbalan |
+| Migrasi | script sendiri (~60 baris) di `src/db/migrate.ts` | urut nama, sekali jalan, dalam transaksi, sha256 dicatat; framework menambah DSL dan mode gagal untuk fitur yang tidak dipakai |
 | Test | **Vitest** | cepat, ESM native, `inject()` Fastify tanpa buka socket |
 | Lint | ESLint 10 flat config + typescript-eslint | |
 | Build | `tsc` ke `dist/`, `tsx` untuk dev/CLI | |
@@ -19,12 +21,18 @@ keeper). Sekarang berisi skeleton dari **STE-6**; isi sesungguhnya menyusul di S
 mentranspilasi test, tidak mengecek tipenya.
 
 ```bash
-pnpm --filter be dev        # atau `pnpm dev` dari root
-pnpm --filter be test
+docker compose up -d postgres   # dari root — Postgres di :55432
+cp be/.env.example be/.env      # isi DATABASE_URL + PII_KEYS
+pnpm --filter be dev            # atau `pnpm dev` dari root
+pnpm --filter be test           # test DB di-skip kalau DATABASE_URL kosong
 pnpm --filter be lint
 pnpm --filter be typecheck
-pnpm faucet --new           # dari root
+pnpm faucet --new               # dari root
 ```
+
+Test yang butuh database **di-skip** lokal kalau `DATABASE_URL` kosong (dengan instruksinya), tapi
+**gagal keras** kalau `CI` di-set. Suite yang diam-diam melewati test terpentingnya lebih buruk
+daripada tidak ada suite.
 
 ## Aturan yang tidak bisa ditawar
 
@@ -42,8 +50,19 @@ Sesuatu yang bisa mengidentifikasi orang dan terlanjur masuk chain **tidak bisa 
 0,1 sUSD meleset satu stroop, dan satu stroop meleset di biaya pendaftaran = `enter` gagal tanpa
 penjelasan. Pakai `BigInt`; `parseFloat` diblokir eslint di paket ini.
 
-**4. Secret cuma di `be/.env`.** `SUSD_DISTRIBUTOR_SECRET` bisa memindahkan seluruh supply test.
-`.env` di-gitignore, `.env.example` yang di-commit. Jangan pernah menaruh `S...` di file lain.
+**4. Secret cuma di `be/.env`.** `SUSD_DISTRIBUTOR_SECRET` bisa memindahkan seluruh supply test;
+`PII_KEYS` membuka seluruh PII. `.env` di-gitignore, `.env.example` yang di-commit. Jangan pernah
+menaruh `S...` atau kunci PII di file lain, di tiket, di chat, atau di log.
+
+**5. Response tidak boleh bisa membawa PII.** Tiap response punya JSON schema eksplisit dengan
+`additionalProperties: false`. Fastify men-serialisasi **hanya** properti yang disebut schema, jadi
+field yang tidak ada di schema **tidak bisa** sampai ke client walaupun ada di object-nya. Ini
+kontrol keamanan, bukan dokumentasi — dan ada test yang membaca schema-nya untuk membuktikan tidak
+satu pun bisa mengekspresikan `name`/`national_id`/`emergency_contact`.
+
+**6. `removeAdditional` dimatikan.** Default Fastify diam-diam **membuang** field yang tidak dikenal
+schema. Untuk API yang dipakai orang lain, itu mengubah typo nama field jadi request yang sukses
+sambil membuang sesuatu yang dikira terkirim. Sekarang `additionalProperties: false` berarti **400**.
 
 ## Kode error kontrak: pilih peta dari band-nya
 
@@ -90,9 +109,37 @@ atau tidak.
 > Memakainya berarti mengubah RaceRecord yang interface-nya **beku** v1.0.0 — itu PR spec-change
 > (`docs/specs/CLAUDE.md`), bukan keputusan backend. Dicatat sebagai penyederhanaan v2.
 
+## PII vault (STE-11)
+
+Aturan produknya: **PII masuk, dan tidak pernah keluar.** Tidak ada method di `Vault` yang
+mengembalikan nama, NIK, atau kontak — bukan karena belum sempat, tapi karena tidak ada bagian
+desain Sterun yang perlu membacanya. Yang dibutuhkan hilir cuma hash (on-chain), `totp_secret`
+(roster bundle STE-16), dan tautan baris vault ↔ `token_id`.
+
+`decryptForAudit` satu-satunya pengecualian, dan sengaja dinamai bikin tidak nyaman. Dia ada supaya
+"kita enkripsi" jadi klaim yang bisa dites, dan supaya permintaan akses data yang sah punya jalur
+yang terdefinisi. **Tidak terhubung ke route mana pun.**
+
+Enkripsi: AES-256-GCM level aplikasi, kunci bernomor (`PII_KEYS`), AAD `"<kolom>:<row uuid>"` yang
+mengikat tiap ciphertext ke barisnya — tanpa itu, siapa pun yang bisa menulis ke DB bisa memindahkan
+nama terenkripsi orang A ke baris orang B dan decrypt-nya tetap sukses.
+
+**Custody kunci, prosedur rotasi, dan dampak kalau DB bocor: [`OPERATIONS.md`](OPERATIONS.md).**
+Baca sebelum menyalakan ini di mana pun selain laptop sendiri.
+
+Auth: signature wallet Stellar (challenge → sign → spend). Nonce sekali pakai, kedaluwarsa 2 menit,
+terikat ke satu address. **Store-nya masih in-memory** — aman untuk satu proses, tidak aman untuk
+dua; STE-31 wajib memindahkannya sebelum ada instance kedua.
+
+> Jebakan yang pasti kena client: `Keypair.sign()` mengembalikan `Uint8Array`, dan
+> `Uint8Array.toString("base64")` **mengabaikan argumennya** — hasilnya `"12,34,56,…"`. Bungkus:
+> `Buffer.from(kp.sign(msg)).toString("base64")`. Server menjawabnya dengan `malformed-signature`
+> yang menyebut perbaikannya, bukan `bad-signature` yang menyuruh orang mencurigai kuncinya.
+
 ## Test
 
-57 test (`pnpm --filter be test`), dan sebagian besar kasus negatif — di situ kerusakannya.
+172 test (`pnpm --filter be test`; 37 di antaranya butuh Postgres), dan sebagian besar kasus
+negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
 faucet dibuktikan manual lalu dicatat di `docs/deployments.md`.
@@ -101,5 +148,6 @@ Tiap tiket berikutnya: **e2e + edge + positive + negative**, sama seperti sisi k
 
 ## Yang belum ada (jangan diasumsikan sudah)
 
-Database, autentikasi, PII vault (STE-11), indexer + TTL keeper (STE-16), roster bundle, deploy ke
-VPS (STE-31). Perbarui file ini begitu salah satunya mendarat.
+Indexer + TTL keeper (STE-16), roster bundle, rate limit, job re-encrypt untuk rotasi kunci, nonce
+store yang tahan multi-instance, dan deploy ke VPS (STE-31). Daftar lengkapnya di bagian akhir
+[`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah satunya mendarat.
