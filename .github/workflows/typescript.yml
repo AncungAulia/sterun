@@ -13,10 +13,24 @@
 # docs/deployments.md instead.
 name: typescript
 
+# docs/deployments.md is in this list on purpose and is easy to miss: the
+# backend parses that file for its Stellar addresses, and its tests assert
+# against it. Editing the deploy evidence can break `pnpm test`, so it has to
+# be able to.
 on:
   push:
     branches: ["**"]
+    paths: &ts_paths
+      - "be/**"
+      - "fe/**"
+      - "landing-page/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "docs/deployments.md"
+      - ".github/workflows/typescript.yml"
   pull_request:
+    paths: *ts_paths
   workflow_dispatch:
 
 concurrency:

@@ -21,10 +21,23 @@
 # here means changing it there too.
 name: contracts
 
+# Path-filtered so a README or frontend commit does not spend four minutes
+# rebuilding Rust to prove nothing changed. docs/specs/ is in the list because
+# this workflow verifies the freeze against the built wasm and runs the two
+# reference implementations against the frozen vectors — a spec edit must go
+# through it.
 on:
   push:
     branches: ["**"]
+    paths:
+      - "sc/**"
+      - "docs/specs/**"
+      - ".github/workflows/contracts.yml"
   pull_request:
+    paths:
+      - "sc/**"
+      - "docs/specs/**"
+      - ".github/workflows/contracts.yml"
   workflow_dispatch:
 
 concurrency:
