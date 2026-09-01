@@ -10,7 +10,8 @@ Cargo workspace untuk kontrak Sterun (Stellar/Soroban, Rust `#![no_std]`, target
 ## Spec BEKU (STE-10) — baca sebelum konsumsi kontrak ini
 
 Interface kedua kontrak, layout event, dan kode error **sudah dibekukan** di
-`docs/specs/` (v1.0.0, 2026-08-31). Kalau kamu bikin backend, indexer, SDK, atau
+`docs/specs/` (beku sejak v1.0.0, 2026-08-31; folder sekarang di **v1.0.1** — patch dokumen,
+nol perubahan perilaku). Kalau kamu bikin backend, indexer, SDK, atau
 frontend, itu sumber kebenarannya — bukan file `lib.rs` ini:
 
 | File | Isi |
