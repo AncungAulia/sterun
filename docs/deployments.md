@@ -136,8 +136,64 @@ yang sama (atau error "sudah ter-deploy"), bukan kontrak baru.
 
 ## Cara dapat trustline + sUSD buat testing (buat James & Ancung)
 
-Untuk bisa memegang sUSD, sebuah akun **wajib** punya trustline dulu. Tanpa trustline, `transfer`
-lewat SAC akan gagal. Langkahnya:
+Untuk bisa memegang sUSD, sebuah akun **wajib** punya trustline dulu. Tanpa trustline `transfer`
+lewat SAC gagal — dan karena `enter` atomik, seluruh pendaftaran ikut ter-rollback.
+
+**Sejak STE-6, ini satu perintah** (dari root repo):
+
+```bash
+pnpm install     # sekali
+pnpm faucet --new
+```
+
+```
+generated a new testnet keypair — the secret is printed once and saved nowhere:
+  public  GD7DHD3FDWZRBU5GCI5LTQT2VFRJXRTSCG6DJOP5SNVOATYE76POYVCE
+  secret  S…
+
+account GD7DHD3FDWZRBU5GCI5LTQT2VFRJXRTSCG6DJOP5SNVOATYE76POYVCE
+  1/3 XLM       account created and funded by Friendbot
+  2/3 trustline opened for sUSD
+  3/3 payout    12.5 sUSD sent, tx 3688fa62…
+  balance seen by contracts (SAC): 12.5 sUSD
+```
+
+Baris terakhir dibaca lewat **SAC**, bukan Horizon. Itu disengaja: `RaceRecord.enter` memanggil
+`balance` di SAC waktu menagih biaya, jadi angka itulah yang menentukan runner bisa bayar atau
+tidak. Saldo yang kelihatan di explorer tapi tidak kelihatan dari kontrak tidak ada gunanya.
+
+| Kondisi kamu | Perintah |
+| --- | --- |
+| belum punya akun | `pnpm faucet --new` |
+| sudah punya akun | `pnpm faucet --secret S...` |
+| **tidak** pegang kunci distributor | `pnpm faucet --new --no-payout` → akun + trustline beres, tinggal minta sUSD ke PM |
+| butuh jumlah lain | `pnpm faucet --secret S... --amount 25` |
+
+Tiap langkah aman diulang: jalankan dua kali, yang kedua cuma membaca dan melaporkan `already
+present`. Membayar sUSD butuh `SUSD_DISTRIBUTOR_SECRET` di `be/.env`; tanpa itu dua langkah pertama
+tetap jalan dan tool-nya menyebutkan apa yang kurang.
+
+Alamat issuer, distributor, dan SAC **tidak di-hardcode** di backend — dibaca dari file ini.
+Kalau nanti ada redeploy, ubah tabel di dokumen ini dan faucet ikut pindah dengan sendirinya.
+
+### Bukti: akun hasil faucet benar-benar bisa `enter`
+
+Ini yang membuat faucet-nya bukan sekadar "kelihatan berhasil". Akun
+`GD7DHD3F…YVCE` di atas — yang lima menit sebelumnya belum ada di jaringan — memanggil `enter` di
+RaceRecord yang live:
+
+Tx: [`60948206…`](https://stellar.expert/explorer/testnet/tx/609482066aa04f3147e11c5cbdc3a2a88025ad83e31e459f4cac56c22e232c97)
+
+```
+slot_reserved   CDL6A734…  event_id 0, category_id 0, seq 1
+transfer        CBQ6444…   GD7DHD3F… → GBGUI5MP…, 50000000 (5 sUSD)
+mint            CDWFNF42…  to GD7DHD3F…, token_id 1
+record_entered  CDWFNF42…  event_id 0, token_id 1, bib_no 1
+```
+
+Nol sampai pegang record: satu perintah faucet, satu panggilan `enter`.
+
+### Cara manual (kalau tidak mau pakai Node)
 
 ```bash
 ISSUER=GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW
@@ -152,9 +208,7 @@ stellar tx new change-trust \
   --network testnet
 ```
 
-Setelah trustline aktif, minta saldo sUSD ke pemegang distributor (PM) — atau, kalau kamu yang pegang
-alias `sterun-susd-distributor`, kirim sendiri lewat SAC (lihat section verifikasi di bawah untuk
-bentuk perintah `transfer`-nya). Alur faucet yang rapi akan dibungkus di **STE-6**.
+Setelah trustline aktif, minta saldo sUSD ke pemegang alias `sterun-susd-distributor` (PM).
 
 Dari sisi frontend/wallet (Freighter, Stellar Wallets Kit) trustline ini adalah operasi
 `changeTrust` klasik dengan asset `sUSD` + issuer di atas — bukan panggilan kontrak.
