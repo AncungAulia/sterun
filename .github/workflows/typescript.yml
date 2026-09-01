@@ -28,6 +28,7 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "docs/deployments.md"
+      - "docs/specs/vectors/**"
       - ".github/workflows/typescript.yml"
   pull_request:
     paths: *ts_paths
@@ -50,6 +51,27 @@ jobs:
   workspace:
     name: lint · typecheck · build · test
     runs-on: ubuntu-24.04
+
+    # A real Postgres, not a mock. The PII vault's central claim is that the
+    # stored bytes contain no plaintext, and the only way to check that is to
+    # read bytes a database actually wrote. test/helpers/db.ts turns a missing
+    # DATABASE_URL into a hard failure when CI is set, so this service going
+    # away cannot quietly reduce the suite to the tests that do not matter.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: sterun
+          POSTGRES_PASSWORD: sterun
+          POSTGRES_DB: sterun
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sterun -d sterun"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
     steps:
       - uses: actions/checkout@v5
 
@@ -96,3 +118,5 @@ jobs:
 
       - name: Test
         run: pnpm test
+        env:
+          DATABASE_URL: postgres://sterun:sterun@127.0.0.1:5432/sterun
