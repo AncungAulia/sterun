@@ -557,6 +557,33 @@ tidak ada. (EventRegistry: 16 fungsi.)
 
 ---
 
+## Bukti e2e STE-11 — hash dari backend diterima kontrak yang live
+
+Rehearsal di atas memakai `participant_hash` dari file vector. Ini yang membuktikan **backend
+sungguhan** menghasilkan nilai yang diterima kontrak: PII masuk lewat API, hash-nya keluar, dan
+hash itu yang dipakai `enter`.
+
+| # | Langkah | Hasil |
+| --- | --- | --- |
+| 1 | `pnpm faucet` untuk akun yang baru dibuat | akun `GCYYG7CP…GIEE` pegang 50 sUSD |
+| 2 | `POST /auth/challenge` + tanda tangan nonce | nonce sekali pakai, terverifikasi |
+| 3 | `POST /participants` dengan PII berantakan (NBSP, TAB, LF, NIK ber-strip) | `participant_hash = dc86cb0d…15d1`, salt + `totp_secret` dikirim **sekali**; response tidak memuat satu pun potongan PII |
+| 4 | `enter` di RaceRecord **live** dengan hash itu | `token_id = 2`, `bib_no = 2` — [`54c24055…`](https://stellar.expert/explorer/testnet/tx/54c24055a7bdc36e86531bbf686f8eebfd27f59be596258e8cbc89e90914630e) |
+| 5 | `verify(2, dc86cb0d…15d1)` di kontrak | **`true`** |
+| 6 | `POST /participants/2/confirm` | baris vault tertaut ke `token_id 2` + tx hash-nya |
+| 7 | `GET /participants/:id` | metadata saja — nol PII di body |
+| 8 | roster handoff (STE-16) | `totp_secret` ketemu dari `token_id`, menghasilkan kode check-in 6 digit |
+| 9 | `SELECT name_enc` langsung dari Postgres | 62 byte ciphertext; `includes("Siti")` → **false** |
+
+Yang dibuktikan langkah 4–5 dan tidak bisa dibuktikan test lokal mana pun: normalisasi backend
+(NFC, collapse whitespace, strip separator NIK) menghasilkan **byte yang sama persis** dengan yang
+di-hash `env.crypto().sha256()` di dalam host Soroban. Kalau backend dan spec pernah berpisah jalan
+satu byte pun, langkah 5 mengembalikan `false`.
+
+Record `token_id 2` di RaceRecord: <https://stellar.expert/explorer/testnet/contract/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4>
+
+---
+
 ## Handoff dari STE-33 — siapa yang memakai alamat ini
 
 | Tiket | Butuh apa |
