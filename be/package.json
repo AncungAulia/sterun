@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "faucet": "tsx src/cli/faucet.ts"
+    "faucet": "tsx src/cli/faucet.ts",
+    "indexer": "tsx src/cli/indexer.ts",
+    "keeper": "tsx src/cli/keeper.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^17.0.1",

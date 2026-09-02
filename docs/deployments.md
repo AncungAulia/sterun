@@ -632,12 +632,169 @@ Record `token_id 2` di RaceRecord: <https://stellar.expert/explorer/testnet/cont
 
 ---
 
+## Bukti e2e STE-16 — indexer, rebuild, dan TTL keeper terhadap testnet yang live
+
+Dijalankan **2026-09-02**, terhadap kontrak yang live di section di atas dan RPC testnet
+(`https://soroban-testnet.stellar.org`). Tidak ada mock, tidak ada fixture: semua baris di bawah
+diturunkan dari `enter`, `claim_racepack`, dan `record_finish` yang sudah benar-benar terjadi
+on-chain di rehearsal STE-33 dan STE-11.
+
+Postgres 17.6 lokal, database kosong. Perintahnya persis yang ada di `be/OPERATIONS.md`.
+
+### 1. Poller: `getEvents` -> Postgres
+
+```
+$ pnpm indexer poll        # diulang sampai lastLedger >= latestLedger
+poll  1: fetched=0  applied=0  last=4348835  latest=4469782
+...
+poll  9: fetched=14 applied=14 last=4446532  latest=4469791
+poll 12: fetched=0  applied=0  last=4469794  latest=4469794   -> caught up
+```
+
+RPC memindai 10.000 ledger per request, jadi menyusuri jendela retensi butuh dua belas request.
+Delapan di antaranya kosong, dan **halaman kosong bukan berarti sudah kejar** — itu yang membuat
+`last_ledger` dibaca dari cursor, bukan dari `latestLedger` (lihat `be/OPERATIONS.md`).
+
+14 event Sterun yang masuk, dipisah per nama:
+
+| `chain_events.name` | jumlah |
+| --- | ---: |
+| `event_created` | 1 |
+| `category_added` | 1 |
+| `event_status_changed` | 1 |
+| `slot_reserved` | 3 |
+| `mint` | 3 |
+| `record_entered` | 3 |
+| `racepack_claimed` | 1 |
+| `record_finished` | 1 |
+
+Yang ter-materialisasi:
+
+```
+events      | 0 | GBGUI5MP…C4TN | Sterun Testnet Rehearsal 2026 | Open | source=event | ledger 4445728
+categories  | 0 | 0 | 10K | 10000 m | quota 5 | 50000000 stroop | entered_count 3
+records     | 0 | bib 0 | Finished | finish_time_s 3161 | source=event | ledger 4445753
+            | 1 | bib 1 | Entered  |                    | source=event | ledger 4446148
+            | 2 | bib 2 | Entered  |                    | source=event | ledger 4446532
+```
+
+`record_transitions`, dengan ledger dan tx hash sungguhan:
+
+| token | dari | ke | `occurred_at` | ledger |
+| ---: | --- | --- | --- | ---: |
+| 0 | — | `Entered` | 1788252277 | 4445738 |
+| 0 | `Entered` | `RacepackClaimed` | 1788252342 | 4445751 |
+| 0 | `RacepackClaimed` | `Finished` | 1788252352 | 4445753 |
+| 1 | — | `Entered` | 1788254327 | 4446148 |
+| 2 | — | `Entered` | 1788256247 | 4446532 |
+
+**Ini skenario cek yang diminta tiket** ("lakukan `enter` di testnet → row record muncul di Postgres
+dengan state `Entered`"): record 1 dan 2 adalah dua `enter` sungguhan, dan keduanya mendarat sebagai
+baris ber-state `Entered` dengan bib yang benar. `occurred_at` diambil dari jam kontrak
+(`env.ledger().timestamp()`), bukan dari jam indexer.
+
+### 2. `doctor` setelah follow
+
+```
+$ pnpm indexer doctor
+{ "ok": true,
+  "chain": { "events": 1, "records": 3 },
+  "index": { "events": 1, "records": 3 },
+  "findings": [] }
+```
+
+### 3. Drop -> rebuild -> konsisten lagi
+
+Cek skenario kedua dari tiket, dijalankan terhadap chain sungguhan.
+
+```
+$ psql -c 'TRUNCATE records, events RESTART IDENTITY CASCADE'
+   events=0  records=0  transitions=0  chain_events=14      # log mentah sengaja selamat
+
+$ pnpm indexer rebuild
+reading contract state — nothing is written until the walk finishes
+rebuilt in 4536ms: 1 events, 1 categories, 3 records, 5 transitions.
+Following resumes at ledger 4469811.
+doctor: index matches the chain
+```
+
+Rebuild tidak membaca satu event pun — semuanya dari `event_count`, `get_event`, `category_count`,
+`get_category`, `total_supply`, `record_of`, `owner_of`. Riwayat transisinya direkonstruksi dari
+`entered_at`/`claimed_at`/`result_at` di `RecordData` dan ditandai `source = 'state'`,
+`ledger IS NULL` — jujur soal apa yang tidak bisa diketahui state.
+
+### 4. Endpoint query cepat, terhadap data hasil rebuild di atas
+
+```
+$ curl -s localhost:3011/indexer/status
+{"stream":"contracts","last_ledger":4469811,"counts":{"events":1,"categories":1,"records":3,
+ "record_transitions":5,"event_scanners":0,"chain_events":14},"cursor":null,...}
+
+$ curl -s localhost:3011/events
+{"events":[{"event_id":0,"organiser":"GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN",
+ "event_name":"Sterun Testnet Rehearsal 2026","starts_at":"1789000000","status":"Open",
+ "last_ledger":4469811,"metadata_hash":"2d548a2b…3b68",
+ "uri":"https://sterun.xyz/events/sanity-2026-09-01.json","source":"state"}],"count":1}
+
+$ curl -s localhost:3011/records/0
+{"record":{"token_id":0,"bib_no":0,"runner_address":"GAJVXTF5…PWVR","state":"Finished",
+ "participant_hash":"feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29",
+ "entered_at":"1788252277","claimed_at":"1788252342","finish_time_s":3161,
+ "result_at":"1788252352",…},"transitions":[…3 baris…]}
+
+$ curl -s localhost:3011/runners/GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR/records
+{"records":[{"token_id":0,…,"state":"Finished",…}],"count":1}
+```
+
+`participant_hash` `feb3cea9…fe29` di baris itu sama persis dengan yang dikembalikan `record_of(0)`
+langsung dari kontrak — index-nya cache, bukan sumber kedua yang bisa berbeda pendapat.
+
+### 5. Roster: allowlist dibaca dari chain, bukan dari database
+
+```
+$ curl -s localhost:3011/events/0/roster
+401 {"error":"missing-credentials",…}
+
+# keypair acak, challenge + tanda tangan yang sah:
+/events/0/roster  403 {"error":"forbidden","message":"the authenticated account is neither the
+                        organiser of this event nor an allowlisted scanner for it on-chain"}
+/events/9/roster  404 {"error":"not_found","message":"no such event on-chain"}
+```
+
+403 itu jawaban `is_scanner(0, addr)` + `get_organiser(0)` dari **EventRegistry yang live**; 404-nya
+adalah revert `EventNotFound(2)` yang dipetakan lewat band kode error. Jalur positifnya (bundle
+lengkap dengan `totp_secret`, bib, dan `state`) butuh kunci scanner yang ter-allowlist on-chain —
+tidak dipegang di mesin ini, dan sudah dites end-to-end di `be/test/roster-routes.test.ts`.
+
+### 6. TTL keeper terhadap ledger key sungguhan
+
+```
+$ pnpm keeper scan
+threshold 2073600 ledgers (~120.0 days), extend to 3110400 (~180.0 days)
+run #1 (dry-run) at ledger 4469813: scanned 14 keys, 9 due, 0 extended, 0 not served by RPC
+```
+
+14 ledger key itu didapat dengan mensimulasikan `record_of`, `owner_of`, dan `records_of` untuk tiap
+record dan tiap runner di index, lalu mengambil footprint yang dihitung host — termasuk entry `Owner`
+milik OpenZeppelin dan index enumerable per-owner, yang **tidak** disentuh
+`RaceRecord::extend_record_ttl`. TTL-nya nyata, dibaca lewat `getLedgerEntries`.
+
+9 dari 14 jatuh tempo karena entry persistent yang baru ditulis memang mulai di sekitar 120 hari,
+yang sama dengan threshold-nya. Itu perilaku yang benar dan dijelaskan di `be/OPERATIONS.md`.
+`0 not served by RPC` = belum ada yang ter-archive, jadi runbook restore belum pernah dipakai.
+
+> `pnpm keeper run` (yang benar-benar mengirim `ExtendFootprintTTLOp`) butuh `TTL_KEEPER_SECRET`.
+> Belum dijalankan: akun keeper-nya dibuat saat deploy VPS (STE-31), dan hash transaksinya dicatat
+> di sini begitu run pertama mendarat.
+
+---
+
 ## Handoff dari STE-33 — siapa yang memakai alamat ini
 
 | Tiket | Butuh apa |
 | --- | --- |
 | **STE-15** `SterunClient` (James) | `EVENT_REGISTRY` + `RACE_RECORD` + `SUSD_SAC`; bindings-nya sudah ada di `sc/bindings/` (di-generate dari wasm yang sama dengan yang live di atas) |
-| **STE-16** indexer (James) | contract id kedua kontrak untuk filter `getEvents`; bentuk topic/data beku di `INTERFACE.md` §1.3 & §2.3 |
+| **STE-16** indexer (James) | **SELESAI** — contract id kedua kontrak untuk filter `getEvents`; bentuk topic/data beku di `INTERFACE.md` §1.3 & §2.3. Bukti live di section di atas |
 | **STE-11** PII vault (James) | `participant_hash` dari `HASH_AND_TOTP.md`; contoh nyata tersimpan di `record_of(0)` |
 | **STE-17/18/21/22** apps (Ancung) | contract id + SAC untuk flow entry, QR pass, dan scanner |
 | **STE-31/32** deploy backend & web | ketiga address di atas sebagai env var |

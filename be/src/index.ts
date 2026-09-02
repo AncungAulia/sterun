@@ -7,6 +7,7 @@
  * migrations run before the socket opens, so the service is never briefly
  * accepting registrations against a schema that does not exist yet.
  */
+import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
@@ -24,7 +25,23 @@ if (pool && config.vault) {
   }
 }
 
-const app = buildServer(config, pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {});
+// Constructing the reader costs nothing — no network call happens until the
+// first roster request — so it is always available when the process can serve
+// one. Whether the route mounts is decided by the pool and the vault.
+const reader = new ChainReader(
+  new RpcContractCaller(
+    config.network.rpcUrl,
+    config.network.passphrase,
+    config.indexer.simulationSource,
+  ),
+  { eventRegistry: config.addresses.eventRegistry, raceRecord: config.addresses.raceRecord },
+);
+
+const app = buildServer(config, {
+  ...(pool ? { pool } : {}),
+  ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
+  reader,
+});
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -48,7 +65,16 @@ try {
   );
   if (!config.vault) {
     app.log.warn(
-      "PII vault is OFF — /participants is not mounted. Set DATABASE_URL and PII_KEYS to enable it (be/OPERATIONS.md).",
+      "PII vault is OFF — /participants and the roster bundle are not mounted. " +
+        "Set DATABASE_URL and PII_KEYS to enable them (be/OPERATIONS.md).",
+    );
+  }
+  if (pool) {
+    // The API serves the index; it does not fill it. Saying so here saves the
+    // "why is /events empty" question, which otherwise gets asked once per
+    // person who deploys this.
+    app.log.info(
+      "index read endpoints are mounted. The poller is a separate process: `pnpm indexer follow`.",
     );
   }
 } catch (err) {

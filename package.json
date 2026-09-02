@@ -13,6 +13,8 @@
     "lint": "pnpm --recursive lint",
     "test": "pnpm --recursive test",
     "typecheck": "pnpm --recursive typecheck",
-    "faucet": "pnpm --filter be faucet"
+    "faucet": "pnpm --filter be faucet",
+    "indexer": "pnpm --filter be indexer",
+    "keeper": "pnpm --filter be keeper"
   }
 }
