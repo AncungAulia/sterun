@@ -10,9 +10,15 @@
  * outside contributor should get useful signal from `pnpm test` without Docker.
  * In CI it is a hard failure, because a suite that silently skips its most
  * important tests is worse than no suite.
+ *
+ * **Each caller gets its own schema.** Vitest runs test files in parallel, and
+ * these tests assert on row counts and truncate tables; sharing `public` means
+ * one file's TRUNCATE lands in the middle of another file's assertions, and the
+ * failure looks like a bug in the code rather than in the harness. A schema per
+ * database is cheap, and it is dropped on close.
  */
 import { randomBytes } from "node:crypto";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 import { createPool } from "../../src/db/pool.js";
 import { migrate } from "../../src/db/migrate.js";
 import { parseKeyring, type Keyring } from "../../src/crypto/keyring.js";
@@ -33,20 +39,47 @@ export const SKIP_REASON =
 export const testKeyring = (): Keyring =>
   parseKeyring(`1:${randomBytes(32).toString("hex")}`, "1");
 
+export interface TestDatabase {
+  pool: Pool;
+  keyring: Keyring;
+  schema: string;
+  close: () => Promise<void>;
+}
+
 /**
- * A migrated, empty database.
+ * A migrated, empty database in a schema of its own.
  *
  * Every run starts from nothing: these tests assert on row counts and unique
  * constraints, and leftovers from a previous run would make them pass or fail
  * for reasons unrelated to the code.
  */
-export async function freshDatabase(): Promise<{
-  pool: Pool;
-  keyring: Keyring;
-  close: () => Promise<void>;
-}> {
-  const pool = createPool({ connectionString: DATABASE_URL as string });
-  await pool.query("DROP TABLE IF EXISTS participants, schema_migrations CASCADE");
+export async function freshDatabase(): Promise<TestDatabase> {
+  // `t_` prefix and hex only: this is interpolated into DDL, so it must not be
+  // able to contain anything a quote could escape out of.
+  const schema = `t_${randomBytes(8).toString("hex")}`;
+
+  const admin = new Pool({ connectionString: DATABASE_URL as string, max: 1 });
+  try {
+    await admin.query(`CREATE SCHEMA ${schema}`);
+  } finally {
+    await admin.end();
+  }
+
+  const pool = createPool({ connectionString: DATABASE_URL as string, searchPath: schema });
   await migrate(pool);
-  return { pool, keyring: testKeyring(), close: () => pool.end() };
+
+  return {
+    pool,
+    keyring: testKeyring(),
+    schema,
+    close: async () => {
+      await pool.end();
+      const cleanup = new Pool({ connectionString: DATABASE_URL as string, max: 1 });
+      try {
+        await cleanup.query(`DROP SCHEMA ${schema} CASCADE`);
+      } finally {
+        await cleanup.end();
+      }
+    },
+  };
 }
