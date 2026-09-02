@@ -108,9 +108,12 @@ try {
               `ignored ${result.ignored}, orphans ${result.orphans}`,
           );
         }
-        // A full page means there is more waiting; go straight round again
-        // rather than sleeping through a backlog.
-        if (result.fetched < config.indexer.pageLimit) {
+        // Sleep only when the index has actually reached the network's latest
+        // ledger. A short or empty page is NOT the end: RPC scans a bounded
+        // window per request and hands back a cursor to continue from, so
+        // sleeping on `fetched === 0` would crawl through a backlog seven
+        // seconds at a time.
+        if (result.lastLedger >= result.latestLedger) {
           await sleep(config.indexer.pollIntervalMs);
         }
       }

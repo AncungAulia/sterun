@@ -41,7 +41,7 @@ import type { Pool, PoolClient } from "pg";
 import type { ChainCategory, ChainEvent, ChainRecord, RecordState } from "../chain/decode.js";
 import { decodeChainEvent, type ChainEventEnvelope, type KnownContracts } from "../chain/events.js";
 import type { ChainReader } from "../chain/reader.js";
-import type { EventSource } from "./source.js";
+import { ledgerFromCursor, type EventSource } from "./source.js";
 import * as store from "./store.js";
 
 /**
@@ -189,13 +189,19 @@ export class Indexer {
         orphans += await this.apply(client, envelope, hydration);
         applied += 1;
       }
-      // An empty page is not "no information": RPC serves events up to its
-      // latest ledger, so nothing coming back means nothing happened through
-      // that ledger, and the index really is caught up to it.
-      const lastLedger = Math.max(
-        saved?.lastLedger ?? 0,
-        ...page.events.map((e) => e.ledger),
-        page.events.length === 0 ? page.latestLedger : 0,
+      // How far we have actually got. The cursor is the authority: RPC scans a
+      // bounded window per request and answers with an empty page and a cursor
+      // when that window held nothing, so "no events" is not "caught up". Using
+      // latestLedger here instead would have the status endpoint claim we were
+      // current while still a dozen requests behind — which is exactly what it
+      // did until a run against live testnet showed the gap.
+      const lastLedger = Math.min(
+        Math.max(
+          saved?.lastLedger ?? 0,
+          ...page.events.map((e) => e.ledger),
+          ledgerFromCursor(page.cursor) ?? 0,
+        ),
+        page.latestLedger,
       );
       await store.saveCursor(client, {
         cursor: page.cursor,

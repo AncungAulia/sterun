@@ -36,6 +36,31 @@ export interface EventSource {
   getEvents(request: EventPageRequest): Promise<EventPage>;
 }
 
+/**
+ * The ledger a `getEvents` cursor points at, or `null` if it is not the shape
+ * we know.
+ *
+ * This matters more than it looks. RPC scans a bounded window per request
+ * (10,000 ledgers on testnet today) and answers with an **empty page plus a
+ * cursor** when nothing in that window matched. An empty page therefore does
+ * NOT mean "caught up" — it means "nothing here, ask again from the cursor".
+ * Reading the ledger back out of the cursor is what lets the poller tell those
+ * two apart, and it is the difference between `/indexer/status` reporting real
+ * progress and reporting the network's latest ledger while still twelve
+ * requests behind it.
+ *
+ * The cursor is `<toid>-<index>`, where the Total Order ID packs the ledger
+ * sequence into its high 32 bits. Parsed defensively: an unrecognised shape
+ * returns null and the caller falls back to what the events themselves say,
+ * which is conservative rather than wrong.
+ */
+export function ledgerFromCursor(cursor: string): number | null {
+  const toid = cursor.split("-")[0];
+  if (!toid || !/^\d+$/.test(toid)) return null;
+  const ledger = Number(BigInt(toid) >> 32n);
+  return Number.isSafeInteger(ledger) && ledger > 0 ? ledger : null;
+}
+
 export class RpcEventSource implements EventSource {
   private readonly server: rpc.Server;
 

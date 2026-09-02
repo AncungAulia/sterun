@@ -1,7 +1,18 @@
 # `be/` — backend Node/TS (CLAUDE.md)
 
-API + helper Stellar + **PII vault**. Owner: **James**. Komponen C7 (PII vault + API) dan C8
-(indexer + TTL keeper, STE-16 — belum ada).
+API + helper Stellar + **PII vault** + **indexer** + **TTL keeper**. Owner: **James**.
+Komponen **C7** (PII vault + API, STE-11) dan **C8** (indexer, TTL keeper, roster bundle, STE-16).
+
+Tiga proses, satu paket. Yang mana yang jalan ditentukan oleh perintah yang kamu ketik, bukan flag:
+
+| Proses | Perintah | Tugasnya |
+| --- | --- | --- |
+| API | `pnpm dev` | melayani vault, directory/history, roster bundle |
+| Poller | `pnpm indexer follow` | `getEvents` → Postgres |
+| Keeper | `pnpm keeper run` | bayar sewa record supaya tidak ter-archive (cron mingguan) |
+
+API **melayani** index; dia tidak mengisinya. Kalau `/events` kosong, yang belum jalan adalah
+poller-nya. Operasional lengkap (rebuild, runbook restore, format roster): [`OPERATIONS.md`](OPERATIONS.md).
 
 ## Stack (sudah dipilih, jangan diputuskan ulang tanpa alasan)
 
@@ -28,6 +39,8 @@ pnpm --filter be test           # test DB di-skip kalau DATABASE_URL kosong
 pnpm --filter be lint
 pnpm --filter be typecheck
 pnpm faucet --new               # dari root
+pnpm indexer follow             # poller (STE-16); `poll`, `rebuild`, `doctor`, `status`
+pnpm keeper scan                # TTL keeper dry run; `run`, `report`, `restore`
 ```
 
 Test yang butuh database **di-skip** lokal kalau `DATABASE_URL` kosong (dengan instruksinya), tapi
@@ -46,6 +59,12 @@ alamat SAC muncul di tiga tabel, ketiganya wajib sama.
 darurat: terenkripsi at rest, off-chain, tidak pernah masuk `uri`, tidak pernah masuk event.
 Sesuatu yang bisa mengidentifikasi orang dan terlanjur masuk chain **tidak bisa dihapus**.
 
+> Satu-satunya turunan nama yang keluar dari vault adalah **`name_fragment`** di roster bundle
+> (STE-16): nama depan utuh + inisial sisanya, dihitung sekali saat submit dan **itu** yang
+> disimpan, terenkripsi dengan AAD per-baris yang sama. Bukan nama yang dikaburkan — informasinya
+> memang sudah tidak ada di sana. Alasannya, batasannya, dan siapa yang boleh mengunduhnya:
+> [`OPERATIONS.md`](OPERATIONS.md) bagian roster bundle.
+
 **3. Uang tidak pernah lewat float.** sUSD itu `i128` stroop, 7 desimal. Round-trip float untuk
 0,1 sUSD meleset satu stroop, dan satu stroop meleset di biaya pendaftaran = `enter` gagal tanpa
 penjelasan. Pakai `BigInt`; `parseFloat` diblokir eslint di paket ini.
@@ -59,6 +78,15 @@ menaruh `S...` atau kunci PII di file lain, di tiket, di chat, atau di log.
 field yang tidak ada di schema **tidak bisa** sampai ke client walaupun ada di object-nya. Ini
 kontrol keamanan, bukan dokumentasi — dan ada test yang membaca schema-nya untuk membuktikan tidak
 satu pun bisa mengekspresikan `name`/`national_id`/`emergency_contact`.
+
+`test/response-schemas.test.ts` menjalankan itu ke **seluruh** API sekaligus, jadi router baru ikut
+terjaga tanpa menambah test. Konsekuensi yang kelihatan aneh sampai kamu tahu alasannya: nama event
+on-chain dikirim sebagai **`event_name`**, bukan `name`. Satu aturan tanpa pengecualian bisa
+diperiksa; aturan dengan daftar "yang ini `name` boleh" berhenti menangkap apa pun.
+
+**5b. Nilai yang tidak muat di JSON number dikirim sebagai string.** `starts_at`, `entered_at`,
+`price_stroops`, dan kawan-kawannya adalah u64/i128. Ada test yang membaca schema-nya dan menolak
+`type: "integer"` untuk field-field itu.
 
 **6. `removeAdditional` dimatikan.** Default Fastify diam-diam **membuang** field yang tidak dikenal
 schema. Untuk API yang dipakai orang lain, itu mengubah typo nama field jadi request yang sukses
@@ -78,16 +106,27 @@ cuma `u32` tanpa identitas kontrak, jadi angkanya yang menentukan:
 `Error(Contract, #4)` dari `enter` **bukan** error RaceRecord — itu `EventNotOpen` milik
 EventRegistry.
 
-## Memanggil kontrak (mulai STE-15)
+## Memanggil kontrak
 
-Bindings TS sudah di-generate dan di-commit di `sc/bindings/`. Pakai lewat `file:` dependency:
+Ada **dua** jalur, dan yang mana dipakai bukan selera:
+
+| Jalur | Dipakai oleh | Kenapa |
+| --- | --- | --- |
+| `@stellar/stellar-sdk` ^17 langsung (`src/chain/`) | faucet (STE-6), indexer + keeper (STE-16) | satu versi SDK di dalam proses yang jalan terus, dan tidak menambah langkah build ke CI TS |
+| bindings di `sc/bindings/` lewat `file:` | `SterunClient` (STE-15) | tidak mengetik ulang signature kontrak untuk konsumen D2/D3 |
+
+Alasan indexer **tidak** memakai bindings, ditulis supaya tidak dibahas ulang: bindings menyematkan
+`@stellar/stellar-sdk ^14.6.1` (dua RPC client dalam satu proses), `dist/`-nya tidak di-commit
+sehingga butuh `npm install && npm run build` di dua paket lagi — langkah yang tidak dimiliki
+`typescript.yml` dan tidak pantas ditambahkan hanya supaya indexer bisa membaca sebuah struct — dan
+yang dibutuhkan indexer cuma **bentuk** empat return value, yang dicek `src/chain/decode.ts` lebih
+ketat daripada parser hasil generate.
 
 ```json
 { "dependencies": { "race-record": "file:../sc/bindings/race-record" } }
 ```
 
-Belum dipasang di STE-6 karena faucet cuma butuh operasi classic. Detail + tiga jebakan pertama:
-[`sc/bindings/README.md`](../sc/bindings/README.md).
+Detail + tiga jebakan pertama: [`sc/bindings/README.md`](../sc/bindings/README.md).
 
 > **Seam yang perlu diingat:** bindings memakai `@stellar/stellar-sdk ^14.6.1` (output generator,
 > jangan diedit), `be/` memakai ^17. Aman karena yang menyeberangi batas itu **string XDR**, bukan
@@ -136,18 +175,53 @@ dua; STE-31 wajib memindahkannya sebelum ada instance kedua.
 > `Buffer.from(kp.sign(msg)).toString("base64")`. Server menjawabnya dengan `malformed-signature`
 > yang menyebut perbaikannya, bukan `bad-signature` yang menyuruh orang mencurigai kuncinya.
 
+## Indexer, TTL keeper, roster (STE-16, C8)
+
+Aturan pokoknya satu: **chain sumber kebenaran, ini cache.** Tidak ada apa pun di Postgres yang jadi
+satu-satunya salinan, dan itulah yang membuat `pnpm indexer rebuild` mungkin — truncate semua tabel
+materialisasi, jalan ulang dari **state** kontrak, dan index-nya utuh lagi. Jalur itu ada karena RPC
+testnet cuma menyimpan jendela `getEvents` terbatas; desain yang butuh replay event akan berjarak
+satu minggu buruk dari index yang tidak bisa diperbaiki.
+
+Empat hal yang akan bikin bingung kalau tidak disebut:
+
+1. **`source` di tiap baris bukan hiasan.** `'event'` = poller melihatnya terjadi (ada ledger + tx
+   hash). `'state'` = rebuild membacanya dari storage: sama benarnya, tanpa provenance.
+2. **Event tidak pernah dipercaya sendirian.** `EventCreated` tidak membawa nama, `CategoryAdded`
+   tidak membawa jarak, `RecordEntered` tidak membawa kategori. Yang kurang dibaca ulang dari
+   kontrak, dan yang dibawa event **dicocokkan** dengan hasil bacaan itu. Beda = `throw`, bukan
+   pilih salah satu.
+3. **Filter per contract id, bukan per nama topic** (`INTERFACE.md` §2.3). `getEvents` itu feed
+   publik; siapa pun bisa men-deploy kontrak yang memancarkan topic `record_entered`.
+4. **Keeper memperpanjang ledger key, bukan memanggil `extend_record_ttl`.** Fungsi kontrak itu
+   tidak menyentuh entry `Owner` milik OpenZeppelin, dan record yang entry `Owner`-nya ter-archive
+   tetap mematahkan `verify` dan `records_of`. Key-nya didapat dari footprint hasil simulasi, bukan
+   disusun tangan.
+
+Threshold TTL **wajib sama** dengan konstanta di `sc/contracts/race_record/src/lib.rs` (120 hari /
+180 hari). Angka yang beda membuat "kapan ini kedaluwarsa" bergantung pada siapa yang terakhir
+menyentuh entry-nya.
+
 ## Test
 
-172 test (`pnpm --filter be test`; 37 di antaranya butuh Postgres), dan sebagian besar kasus
+452 test (`pnpm --filter be test`; 131 di antaranya butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
-faucet dibuktikan manual lalu dicatat di `docs/deployments.md`.
+faucet + indexer + keeper dibuktikan manual lalu dicatat di `docs/deployments.md`.
+
+Yang dipalsukan hanya **network**, tidak pernah kode kita: `test/helpers/fake-chain.ts` meng-implement
+`ContractCaller` dan menjawab dengan `xdr.ScVal` sungguhan dalam bentuk yang dibekukan
+`INTERFACE.md`, jadi decoder, reader, indexer, dan keeper jalan apa adanya di atasnya.
+
+Tiap file test dapat **schema Postgres sendiri** (`freshDatabase()`). Vitest menjalankan file secara
+paralel dan test-test ini men-truncate tabel; berbagi `public` bikin suite yang gagal satu dari lima
+run, dan suite begitu berhenti dibaca orang.
 
 Tiap tiket berikutnya: **e2e + edge + positive + negative**, sama seperti sisi kontrak.
 
 ## Yang belum ada (jangan diasumsikan sudah)
 
-Indexer + TTL keeper (STE-16), roster bundle, rate limit, job re-encrypt untuk rotasi kunci, nonce
-store yang tahan multi-instance, dan deploy ke VPS (STE-31). Daftar lengkapnya di bagian akhir
+Rate limit, job re-encrypt untuk rotasi kunci, nonce store yang tahan multi-instance, alert kalau
+keeper tidak jalan, dan deploy ke VPS (STE-31). Daftar lengkapnya di bagian akhir
 [`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah satunya mendarat.

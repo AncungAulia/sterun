@@ -26,6 +26,7 @@ import {
   recordEntered,
   recordFinished,
   slotReserved,
+  toidCursor,
 } from "./helpers/fake-events.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
 
@@ -241,8 +242,11 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       const body = (await app.inject({ url: "/indexer/status" })).json();
       expect(body).toMatchObject({
         stream: "contracts",
-        cursor: "cursor-1",
-        last_ledger: 140,
+        cursor: toidCursor(1_000),
+        // 1000, not 140: RPC served everything through its latest ledger and
+        // there was simply nothing after the last event. `last_ledger` is how
+        // far the index has READ, not when it last found something.
+        last_ledger: 1_000,
         counts: { events: 1, categories: 1, records: 2, record_transitions: 4 },
       });
     });

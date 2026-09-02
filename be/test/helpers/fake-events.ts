@@ -108,6 +108,19 @@ export const recordDnf = (ctx: EventContext, tokenId: number, eventId: number): 
   envelope(ctx, ["record_dnf", tokenId, eventId], {});
 
 /**
+ * A `getEvents` pagination cursor for "the end of ledger N", in the shape RPC
+ * actually returns: `<toid>-<index>`, where the Total Order ID packs the ledger
+ * sequence into its high 32 bits.
+ *
+ * Built properly rather than as an opaque string, because the poller reads the
+ * ledger back out of it to tell "nothing in this window" apart from "caught up"
+ * — see `ledgerFromCursor`. A fake cursor of "cursor-1" would make that code
+ * path untestable.
+ */
+export const toidCursor = (ledger: number): string =>
+  `${(BigInt(ledger) << 32n) + 0xffff_ffffn}-4294967295`;
+
+/**
  * An `EventSource` that serves a scripted list of pages.
  *
  * It records every request, so a test can assert that the second poll used the
@@ -118,6 +131,12 @@ export class FakeEventSource implements EventSource {
   readonly requests: EventPageRequest[] = [];
   latestLedger = 1_000;
   oldestLedger = 1;
+  /**
+   * The ledger the returned cursor points at. Defaults to caught up; set it
+   * lower to model RPC's bounded scan window, which is the case that made the
+   * poller report false progress against live testnet.
+   */
+  cursorLedger: number | undefined;
   private readonly pages: RawChainEvent[][];
   private next = 0;
 
@@ -129,13 +148,17 @@ export class FakeEventSource implements EventSource {
     return { latestLedger: this.latestLedger, oldestLedger: this.oldestLedger };
   }
 
+  get cursor(): string {
+    return toidCursor(this.cursorLedger ?? this.latestLedger);
+  }
+
   async getEvents(request: EventPageRequest): Promise<EventPage> {
     this.requests.push(request);
     const events = this.pages[this.next] ?? [];
     this.next += 1;
     return {
       events,
-      cursor: `cursor-${this.next}`,
+      cursor: this.cursor,
       latestLedger: this.latestLedger,
       oldestLedger: this.oldestLedger,
     };

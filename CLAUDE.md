@@ -14,7 +14,7 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 | [`sc/contracts/race_record/`](sc/contracts/race_record/CLAUDE.md) | C2 — non-transferable, lifecycle, `enter` atomik, TTL |
 | [`docs/`](docs/CLAUDE.md) | SYSTEM_DESIGN + `deployments.md` (bukti deploy) |
 | [`docs/specs/`](docs/specs/CLAUDE.md) | spec BEKU C4: aturan mengubahnya, cara memverifikasinya |
-| [`be/`](be/CLAUDE.md) | backend Node/TS (James) — masih kosong |
+| [`be/`](be/CLAUDE.md) | backend Node/TS (James) — API + PII vault + indexer + TTL keeper |
 | [`fe/`](fe/CLAUDE.md) | web app Next.js (Ancung) — scaffolded |
 | [`landing-page/`](landing-page/CLAUDE.md) | landing (Nabil) — scaffolded |
 
@@ -35,9 +35,9 @@ Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari d
 `be/` + `fe/` + `landing-page/` adalah **satu pnpm workspace** (root `pnpm-workspace.yaml`);
 `sc/` cargo workspace terpisah. `sc/bindings/*` **tidak** masuk pnpm workspace — itu output
 generator, dikonsumsi lewat `file:` dependency. Dari root: `pnpm install`, `pnpm dev`,
-`pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm faucet`.
+`pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm faucet`, `pnpm indexer`, `pnpm keeper`.
 
-## Status sekarang (per 2026-09-01)
+## Status sekarang (per 2026-09-03)
 
 | Tiket | Komponen | Status |
 | --- | --- | --- |
@@ -48,6 +48,8 @@ generator, dikonsumsi lewat `file:` dependency. Dari root: `pnpm install`, `pnpm
 | STE-14 | TS bindings + gate + CI (C3) | selesai |
 | STE-33 | deploy kontrak ke testnet | selesai — **kontrak LIVE** |
 | STE-6 | monorepo pnpm + CI TS + backend skeleton + faucet sUSD | selesai |
+| STE-11 | PII vault + hash/TOTP backend (C7) | selesai |
+| STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 452 test |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
@@ -59,8 +61,12 @@ SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 ```
 
 **M1 (D1 — kontrak) SELESAI.** Sekarang M2 (D2 — `@sterun/sdk` + backend), urut:
-**STE-11** PII vault → **STE-16** indexer + TTL keeper → **STE-15** SterunClient →
+~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → **STE-15** SterunClient →
 **STE-19** JSON Schema + npm publish.
+
+Backend sudah bisa dijalankan: API (`pnpm dev`), poller (`pnpm indexer follow`), dan TTL keeper
+(`pnpm keeper run`) — tiga proses dari satu paket `be/`. Bukti jalannya terhadap testnet yang live
+ada di [`docs/deployments.md`](docs/deployments.md).
 
 Kontrak v1 **non-upgradeable**: alamat di atas permanen untuk versi ini. Deploy ulang =
 pasangan alamat baru, bukan upgrade.

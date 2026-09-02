@@ -35,6 +35,7 @@ import {
   scannerAdded,
   scannerRemoved,
   slotReserved,
+  toidCursor,
 } from "./helpers/fake-events.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
 
@@ -253,7 +254,7 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       await indexer.pollOnce();
       // The second poll continues where the first left off rather than
       // re-reading the same window.
-      expect(source.requests[1]).toEqual({ cursor: "cursor-1", limit: 200 });
+      expect(source.requests[1]).toEqual({ cursor: toidCursor(1_000), limit: 200 });
     });
 
     it("never asks for a ledger older than RPC retains", async () => {
@@ -264,11 +265,32 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       expect(source.requests[0]).toEqual({ startLedger: 900, limit: 200 });
     });
 
-    it("treats an empty page as proof of being caught up to the latest ledger", async () => {
+    it("takes its progress from the cursor, not from the latest ledger", async () => {
+      // RPC scans a bounded window per request and answers with an empty page
+      // and a cursor when nothing in that window matched. Reporting
+      // latestLedger here would claim the index was current while it was still
+      // a dozen requests behind — which is what it did until a run against live
+      // testnet showed the gap.
+      const source = new FakeEventSource([[]]);
+      source.latestLedger = 4_469_746;
+      source.cursorLedger = 4_358_786;
+      const result = await build(source).pollOnce();
+      expect(result.lastLedger).toBe(4_358_786);
+      expect(result.latestLedger).toBe(4_469_746);
+    });
+
+    it("reports caught up once the cursor reaches the latest ledger", async () => {
       const source = new FakeEventSource([[]]);
       source.latestLedger = 4_321;
       const result = await build(source).pollOnce();
       expect(result.lastLedger).toBe(4_321);
+    });
+
+    it("never reports progress past the ledger RPC says is latest", async () => {
+      const source = new FakeEventSource([[]]);
+      source.latestLedger = 100;
+      source.cursorLedger = 999_999;
+      expect((await build(source).pollOnce()).lastLedger).toBe(100);
     });
 
     it("applies a replayed page exactly once", async () => {
@@ -361,7 +383,7 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       expect(warnings).toContain("lifecycle event for a record that is not indexed");
       // The cursor still moved: refusing to advance would wedge the poller on a
       // gap that only `rebuild` can close.
-      expect((await store.getCursor(pool))?.cursor).toBe("cursor-1");
+      expect((await store.getCursor(pool))?.cursor).toBe(toidCursor(1_000));
     });
 
     it("counts a category for an unknown event as an orphan instead of failing its foreign key", async () => {
