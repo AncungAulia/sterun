@@ -4,6 +4,8 @@
 | --- | --- | --- |
 | `SYSTEM_DESIGN.md` | desain otoritatif C1–C14: arsitektur, storage model, lifecycle, TOTP, user flow, 30-day plan | ya, tapi lihat di bawah |
 | `deployments.md` | **bukti** deploy: contract address, link stellar.expert, wasm hash, tanggal | append-only |
+| `brand.md` | panduan aset, warna, huruf (C13) — rangkuman yang bisa dibaca tanpa buka kode | ya, tapi lihat di bawah |
+| `social/` | draft konten publik sebelum tayang, plus URL-nya sesudah tayang | ya |
 | `specs/` | handoff contract **BEKU** (C4) | punya aturannya sendiri → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
 
 ## `SYSTEM_DESIGN.md`
@@ -21,6 +23,25 @@ Yang sudah dipindah ke tempat yang lebih ketat, jangan diduplikasi di sini:
 
 Nilai konkret di `SYSTEM_DESIGN.md` (mis. "USDC") boleh tertinggal di belakang keputusan final
 (testnet = **sUSD**); `CLAUDE.md` root yang berlaku kalau bentrok.
+
+## `brand.md` — rangkuman, bukan sumber kebenaran
+
+Nilai token yang sebenarnya hidup di `landing-page/app/tokens.css` (dan salinannya di
+`fe/app/tokens.css`). `brand.md` menyalin sebagiannya supaya orang yang tidak membuka kode tetap
+bisa membacanya. Kalau keduanya bentrok, **token yang menang** — dan `brand.md` yang salah, perbaiki
+di commit yang sama.
+
+Aset logo sendiri tidak di sini: `landing-page/public/brand/logo/` + salinan di `fe/`.
+
+## `social/` — draft dulu, tayang belakangan
+
+Konten yang mewakili project di depan publik ditulis sebagai file di sini, direview Axel (PM),
+baru diposting. Setelah tayang, URL-nya dicatat balik ke file yang sama.
+
+Alasannya sama dengan `deployments.md`: klaim yang tidak bisa dicek orang lain dianggap tidak
+terjadi. Bedanya di sini yang diperiksa adalah **akurasi klaim teknis** — post yang menyebut
+mainnet, USDC, atau tanggal rilis, padahal belum ada, lebih mahal daripada tidak posting sama
+sekali.
 
 ## `deployments.md` — aturan bukti
 
