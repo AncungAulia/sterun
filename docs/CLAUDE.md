@@ -5,6 +5,7 @@
 | `SYSTEM_DESIGN.md` | desain otoritatif C1–C14: arsitektur, storage model, lifecycle, TOTP, user flow, 30-day plan | ya, tapi lihat di bawah |
 | `deployments.md` | **bukti** deploy: contract address, link stellar.expert, wasm hash, tanggal | append-only |
 | `brand.md` | panduan aset, warna, huruf (C13) — rangkuman yang bisa dibaca tanpa buka kode | ya, tapi lihat di bawah |
+| `landing-copy.md` | teks landing page (STE-12) + keputusan yang menguncinya | ya; kalau teks di kode beda, samakan di commit yang sama |
 | `social/` | draft konten publik sebelum tayang, plus URL-nya sesudah tayang | ya |
 | `specs/` | handoff contract **BEKU** (C4) | punya aturannya sendiri → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
 

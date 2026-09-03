@@ -5,7 +5,7 @@
 Blok `@AGENTS.md` di atas ditulis ulang oleh `next dev` — biarkan, dan commit bersama kerjaanmu.
 Isi di bawah ini punya Sterun.
 
-Owner: **Nabil**. Komponen C13 (landing + design system). **Belum ada kode Sterun di sini** — masih
+Owner: **Nabil**. Komponen C13 (landing + design system).
 scaffold `create-next-app`, sama persis dengan `fe/`.
 
 Stack terpasang: **Next.js 16.3.3**, React 19.2.8, Tailwind v4, TypeScript 5, ESLint 9. Dua
@@ -43,7 +43,10 @@ Landing menjual protokolnya, jadi klaim di halaman ini harus benar:
 
 ## Konvensi
 
-- Copy landing: **Bahasa Indonesia**, kecuali diputuskan lain oleh Axel.
+- Copy landing: **English** (keputusan Nabil, STE-12). Pembacanya reviewer Instawards dan
+  ekosistem Stellar global; versi Indonesia untuk organiser lokal adalah percakapan lain, bukan
+  halaman ini. Teksnya tinggal di [`docs/landing-copy.md`](../docs/landing-copy.md) berikut
+  larangan yang berlaku — kalau teks di kode berbeda dengan file itu, samakan di commit yang sama.
 - Aksesibilitas dan performa bukan polish belakangan — ini halaman yang dibuka reviewer grant
   duluan.
 - Perbarui file ini begitu design system-nya punya bentuk (token, komponen, cara `fe/` memakainya).
