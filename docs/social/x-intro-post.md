@@ -4,8 +4,20 @@ Tiket: **STE-7**. Owner: Nabil. Reviewer sebelum tayang: **Axel (PM)**.
 
 Handle akun: **[@sterunxyz](https://x.com/sterunxyz)**
 
-Status: **draft final, menunggu approve Axel.** Setelah tayang, isi bagian
-[Setelah tayang](#setelah-tayang) di bawah.
+Status: **copy disetujui Axel, tayang ditunda.**
+
+Axel memutuskan post ini baru tayang **setelah web app ter-deploy dan domainnya ada**,
+supaya post pertama akun ini punya sesuatu yang bisa diklik orang. Karena itu STE-7
+ditutup tanpa post yang tayang, meski daftar requirement-nya menyebut sebaliknya —
+keputusan PM mengubah syarat itu, bukan kelalaian.
+
+Pemicunya: **[STE-32](https://linear.app/sterun/issue/STE-32)** (deploy web + landing ke
+Vercel, owner Ancung, target 2026-10-01). Begitu URL-nya hidup, posting copy di bawah,
+lalu isi [Setelah tayang](#setelah-tayang).
+
+Peringatan untuk siapa pun yang membaca ini nanti: STE-7 sudah Done, jadi **tidak ada
+tiket yang memiliki pekerjaan ini lagi.** Kalau STE-32 mundur, post ini ikut mundur tanpa
+ada yang mengingatkan.
 
 ---
 
