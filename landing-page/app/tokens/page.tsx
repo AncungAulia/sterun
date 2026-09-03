@@ -22,7 +22,6 @@ const brand: Swatch[] = [
   { name: "paper", hex: "#f8f8f8", note: "Page background" },
   { name: "ink", hex: "#1e232b", onPaper: "15.0:1", whiteOn: "15.8:1", note: "Primary text" },
   { name: "teal", hex: "#016985", onPaper: "5.8:1", whiteOn: "6.2:1", note: "The only accent" },
-  { name: "logo-grey", hex: "#9d9a99", note: "Inside the logo art only" },
 ];
 
 const neutrals: Swatch[] = [
@@ -203,7 +202,7 @@ export default function TokenPreview() {
         <Section
           n="01"
           title="Logo"
-          lede="Dark mark on light surfaces, light mark on dark. The lockup is for wide slots — a site header, an X banner, a slide."
+          lede="Four files, two decisions: mark or lockup, and dark or light. The mark is for square slots — favicon, avatar, app header. The lockup is for wide ones — site header, X banner, a slide."
         >
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-n-200 bg-white p-8 shadow-card">
@@ -216,73 +215,73 @@ export default function TokenPreview() {
             </div>
             <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-n-200 bg-teal-50 p-8 shadow-card">
               <Image
-                src="/brand/logo/sterun-lockup.svg"
+                src="/brand/logo/sterun-lockup-black.svg"
                 alt=""
                 width={280}
                 height={90}
                 className="w-full"
               />
-              <div className="numeric text-xs text-n-500">sterun-lockup.svg</div>
+              <div className="numeric text-xs text-n-500">sterun-lockup-black.svg</div>
             </div>
           </div>
 
           <div className="mt-4 rounded-lg border border-n-200 bg-white p-5 shadow-card">
             <div className="mb-3 text-xs font-semibold tracking-widest text-teal">
-              LOCKUP — TRANSPARENT BACKGROUND
+              LOCKUP — PICK THE VARIANT, NOT A FILTER
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
-                ["bg-paper", "paper"],
-                ["bg-n-200", "n-200"],
-                ["bg-ink", "ink"],
-              ].map(([cls, label]) => (
+                ["bg-paper", "paper", "sterun-lockup-black.svg"],
+                ["bg-n-200", "n-200", "sterun-lockup-black.svg"],
+                ["bg-ink", "ink", "sterun-lockup-white.svg"],
+              ].map(([cls, label, file]) => (
                 <div key={label} className={`rounded-md p-5 ${cls}`}>
-                  <Image
-                    src="/brand/logo/sterun-lockup.svg"
-                    alt=""
-                    width={280}
-                    height={90}
-                    className="w-full"
-                  />
+                  <Image src={`/brand/logo/${file}`} alt="" width={280} height={90} className="w-full" />
                   <div
                     className={`numeric mt-3 text-center text-xs ${
                       label === "ink" ? "text-n-400" : "text-n-500"
                     }`}
                   >
-                    {label}
+                    {label} · {file.replace("sterun-lockup-", "").replace(".svg", "")}
                   </div>
                 </div>
               ))}
             </div>
             <p className="mt-3 max-w-3xl text-sm text-n-500">
-              The white plate behind the lockup is gone, so it now takes the colour of whatever it
-              sits on. The dark panel is the honest test: the wordmark is drawn in ink, so on ink it
-              disappears. That is expected — a dark surface wants a light lockup, which does not
-              exist yet.
+              Both lockups are transparent, so each takes the colour it sits on. Light surfaces get
+              the black file, dark surfaces the white one — there is no CSS trick that turns one
+              into the other correctly, so ship the right file.
             </p>
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-4">
-            {[96, 48, 32, 24].map((px) => (
-              <div
-                key={px}
-                className="flex flex-col items-center justify-end gap-2 rounded-lg border border-n-200 bg-white p-5 shadow-card"
-              >
-                <Image src="/brand/logo/sterun-logo-black.svg" alt="" width={px} height={px} />
-                <div className="numeric text-xs text-n-400">{px}px</div>
-              </div>
-            ))}
+
+          <div className="mt-4 rounded-lg border border-n-200 bg-white p-5 shadow-card">
+            <div className="mb-3 text-xs font-semibold tracking-widest text-teal">
+              MARK AT SIZE — WHERE IT STOPS WORKING
+            </div>
+            <div className="grid gap-4 sm:grid-cols-4">
+              {[96, 48, 32, 24].map((px) => (
+                <div
+                  key={px}
+                  className="flex flex-col items-center justify-end gap-2 rounded-md bg-paper p-5"
+                >
+                  <Image src="/brand/logo/sterun-logo-black.svg" alt="" width={px} height={px} />
+                  <div className="numeric text-xs text-n-500">{px}px</div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 max-w-3xl text-sm text-n-500">
+              The runner is drawn in thin open strokes, and thin strokes are the first thing a small
+              size destroys. It holds at 32px, which is what a modern browser tab actually renders;
+              at 24px and below the strokes start closing into a blob. That sets the minimum size in
+              docs/brand.md — and it is a property of every fine-line mark, not a fault in this one.
+            </p>
           </div>
-          <p className="mt-4 max-w-3xl text-sm text-n-500">
-            The 24px row is the favicon and the scanner header. If the mark stops reading there, it
-            needs a simplified small-size variant — that is a normal thing for a logo to have, not a
-            flaw in the drawing.
-          </p>
         </Section>
 
         <Section
           n="02"
           title="Brand"
-          lede="The three colours from the X banner, plus the one grey that lives inside the logo art. One accent only: if it is teal, it does something."
+          lede="The three colours from the X banner, and nothing else. One accent only: if it is teal, it does something."
         >
           <Chips items={brand} />
         </Section>
