@@ -17,6 +17,7 @@
  * spend nothing but its own fees.
  */
 import { Keypair } from "@stellar/stellar-sdk";
+import { loadEnvFile } from "../env.js";
 import { ChainReader, RpcContractCaller } from "../chain/reader.js";
 import { loadConfig } from "../config.js";
 import { createPool } from "../db/pool.js";
@@ -25,6 +26,10 @@ import { TtlKeeper } from "../keeper/keeper.js";
 import { RpcTtlKeeperClient } from "../keeper/rpc.js";
 import { recentRuns } from "../keeper/runs.js";
 import { DAY_IN_LEDGERS } from "../keeper/ttl.js";
+
+// The documented setup is "copy .env.example to be/.env"; config reads
+// process.env. Real environment variables still win — see src/env.ts.
+loadEnvFile();
 
 const USAGE = `sterun keeper — keep race records out of state archival (STE-16)
 

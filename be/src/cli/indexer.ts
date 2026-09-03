@@ -12,6 +12,7 @@
  * for. It exists because testnet RPC only retains `getEvents` for a window, so
  * "replay the events" is not always available — but contract state always is.
  */
+import { loadEnvFile } from "../env.js";
 import { ChainReader, RpcContractCaller } from "../chain/reader.js";
 import { loadConfig } from "../config.js";
 import { createPool } from "../db/pool.js";
@@ -19,6 +20,10 @@ import { migrate } from "../db/migrate.js";
 import { Indexer } from "../indexer/indexer.js";
 import { RpcEventSource } from "../indexer/source.js";
 import * as store from "../indexer/store.js";
+
+// The documented setup is "copy .env.example to be/.env"; config reads
+// process.env. Real environment variables still win — see src/env.ts.
+loadEnvFile();
 
 const USAGE = `sterun indexer — materialise contract events into Postgres (STE-16)
 

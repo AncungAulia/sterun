@@ -41,14 +41,26 @@ import type { xdr } from "@stellar/stellar-sdk";
 
 /** ~5s per ledger, the same constant the contracts use. */
 export const DAY_IN_LEDGERS = 17_280;
-/** Below ~120 days remaining, pay. Matches `BUMP_THRESHOLD`. */
+/** Below ~120 days remaining, pay. Matches the contract's `BUMP_THRESHOLD`. */
 export const DEFAULT_THRESHOLD_LEDGERS = 120 * DAY_IN_LEDGERS;
+/** The network's `max_entry_ttl`: ~180 days. Also the contract's `BUMP_TO`. */
+export const MAX_ENTRY_TTL_LEDGERS = 180 * DAY_IN_LEDGERS;
 /**
- * Extend to ~180 days. Matches `BUMP_TO`, and is the network's maximum entry
- * TTL — if a future network lowers `max_entry_ttl`, this and the contract's
- * constant both have to come down or the operation starts failing.
+ * One ledger below the maximum, and the `- 1` is load-bearing.
+ *
+ * `ExtendFootprintTTLOp` validates `extendTo` **strictly** below
+ * `max_entry_ttl` and rejects the boundary with `EXTEND_FOOTPRINT_TTL_MALFORMED`
+ * — a submission failure whose only visible symptom is `txFailed`. The
+ * contract's own `BUMP_TO` is the full `180 * DAY_IN_LEDGERS` and that is
+ * correct there: the host function `extend_ttl` CLAMPS to the maximum instead of
+ * refusing. Same intent, two different validators, so the constants differ by
+ * one on purpose. Raising this to match the contract's number breaks every
+ * keeper run, and it breaks them at submission where the error says nothing.
+ *
+ * Found by running it against testnet: `3110400` was malformed, `3110399`
+ * landed (tx `3ced4284…`, see docs/deployments.md).
  */
-export const DEFAULT_EXTEND_TO_LEDGERS = 180 * DAY_IN_LEDGERS;
+export const DEFAULT_EXTEND_TO_LEDGERS = MAX_ENTRY_TTL_LEDGERS - 1;
 /**
  * Ledger keys per extension transaction.
  *

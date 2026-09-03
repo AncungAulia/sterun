@@ -49,7 +49,7 @@ generator, dikonsumsi lewat `file:` dependency. Dari root: `pnpm install`, `pnpm
 | STE-33 | deploy kontrak ke testnet | selesai — **kontrak LIVE** |
 | STE-6 | monorepo pnpm + CI TS + backend skeleton + faucet sUSD | selesai |
 | STE-11 | PII vault + hash/TOTP backend (C7) | selesai |
-| STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 452 test |
+| STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 479 test |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):

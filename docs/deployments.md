@@ -766,26 +766,46 @@ adalah revert `EventNotFound(2)` yang dipetakan lewat band kode error. Jalur pos
 lengkap dengan `totp_secret`, bib, dan `state`) butuh kunci scanner yang ter-allowlist on-chain —
 tidak dipegang di mesin ini, dan sudah dites end-to-end di `be/test/roster-routes.test.ts`.
 
-### 6. TTL keeper terhadap ledger key sungguhan
+### 6. TTL keeper — sewa dibayar beneran on-chain
 
 ```
 $ pnpm keeper scan
-threshold 2073600 ledgers (~120.0 days), extend to 3110400 (~180.0 days)
-run #1 (dry-run) at ledger 4469813: scanned 14 keys, 9 due, 0 extended, 0 not served by RPC
+threshold 2073600 ledgers (~120.0 days), extend to 3110399 (~180.0 days)
+run #2 (dry-run) at ledger 4477717: scanned 14 keys, 9 due, 0 extended, 0 not served by RPC
+
+$ pnpm keeper run
+run #5 (ok) at ledger 4477738: scanned 14 keys, 9 due, 9 extended, 0 not served by RPC
+  SUCCESS 3ced4284f84850d37d2e0928f5bad958bc672c014daefd9e4a2b9e4055dd5a4c (9 keys)
+
+$ pnpm keeper run          # sekali lagi, beberapa detik kemudian
+run #6 (ok) at ledger 4477753: scanned 14 keys, 0 due, 0 extended, 0 not served by RPC
 ```
 
-14 ledger key itu didapat dengan mensimulasikan `record_of`, `owner_of`, dan `records_of` untuk tiap
+**Transaksi:**
+[`3ced4284…`](https://stellar.expert/explorer/testnet/tx/3ced4284f84850d37d2e0928f5bad958bc672c014daefd9e4a2b9e4055dd5a4c)
+— satu `ExtendFootprintTTLOp` atas 9 ledger key.
+Akun keeper: [`GCYM7TQB…XV26`](https://stellar.expert/explorer/testnet/account/GCYM7TQBS7U6KSVJCFCYDHREYKO6UFINLSJ3K3EJAL2VHWIYRQLPXV26)
+— XLM saja, tidak menguasai record apa pun.
+
+Run #6 yang menemukan **0 due** beberapa detik setelah #5 adalah buktinya: perpanjangannya benar-benar
+mendarat, dan sembilan entry itu sekarang di ~180 hari, bukan ~120.
+
+14 ledger key-nya didapat dengan mensimulasikan `record_of`, `owner_of`, dan `records_of` untuk tiap
 record dan tiap runner di index, lalu mengambil footprint yang dihitung host — termasuk entry `Owner`
 milik OpenZeppelin dan index enumerable per-owner, yang **tidak** disentuh
 `RaceRecord::extend_record_ttl`. TTL-nya nyata, dibaca lewat `getLedgerEntries`.
 
-9 dari 14 jatuh tempo karena entry persistent yang baru ditulis memang mulai di sekitar 120 hari,
-yang sama dengan threshold-nya. Itu perilaku yang benar dan dijelaskan di `be/OPERATIONS.md`.
-`0 not served by RPC` = belum ada yang ter-archive, jadi runbook restore belum pernah dipakai.
+9 dari 14 jatuh tempo di run pertama karena entry persistent yang baru ditulis memang mulai di sekitar
+120 hari, sama dengan threshold-nya. `0 not served by RPC` = belum ada yang ter-archive, jadi runbook
+restore belum pernah dipakai.
 
-> `pnpm keeper run` (yang benar-benar mengirim `ExtendFootprintTTLOp`) butuh `TTL_KEEPER_SECRET`.
-> Belum dijalankan: akun keeper-nya dibuat saat deploy VPS (STE-31), dan hash transaksinya dicatat
-> di sini begitu run pertama mendarat.
+> **Bug yang cuma ketahuan dengan mengirim transaksi sungguhan.** Run #3 dan #4 gagal
+> `txFailed {"op_inner":{"extend_footprint_ttl":"malformed"}}`. Penyebabnya: `ExtendFootprintTTLOp`
+> memvalidasi `extendTo` **strictly** di bawah `max_entry_ttl`, jadi `3110400` (= 180 hari, angka yang
+> sama dengan `BUMP_TO` di kontrak) ditolak dan `3110399` diterima. Konstanta kontraknya tetap benar —
+> host function `extend_ttl` **meng-clamp** ke maksimum, sementara operasinya **menolak**. Dua
+> validator, satu maksud, beda satu ledger. Sekarang ditulis eksplisit di `be/src/keeper/ttl.ts` biar
+> tidak ada yang "membetulkannya" balik.
 
 ---
 

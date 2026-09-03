@@ -233,10 +233,18 @@ itu diam selama berbulan-bulan.
 
 ### Angka
 
-Sama persis dengan konstanta di kontrak (`sc/contracts/race_record/src/lib.rs`): perpanjang saat
-tersisa di bawah **~120 hari**, perpanjang sampai **~180 hari** (1 ledger sekitar 5 detik, jadi
-2.073.600 dan 3.110.400 ledger). Angka berbeda akan membuat "kapan ini kedaluwarsa" bergantung pada
-siapa yang terakhir menyentuh entry-nya. Override: `TTL_THRESHOLD_LEDGERS`, `TTL_EXTEND_TO_LEDGERS`.
+Threshold-nya sama persis dengan konstanta di kontrak (`sc/contracts/race_record/src/lib.rs`):
+perpanjang saat tersisa di bawah **~120 hari** (2.073.600 ledger, 1 ledger sekitar 5 detik). Angka
+berbeda akan membuat "kapan ini kedaluwarsa" bergantung pada siapa yang terakhir menyentuh entry-nya.
+
+Target perpanjangannya **3.110.399**, yaitu satu ledger **di bawah** `max_entry_ttl` — dan `-1` itu
+bukan salah ketik. `ExtendFootprintTTLOp` memvalidasi `extendTo` strictly di bawah maksimum dan
+menolak angka batasnya dengan `EXTEND_FOOTPRINT_TTL_MALFORMED`, yang di permukaan cuma kelihatan
+sebagai `txFailed`. `BUMP_TO` di kontrak tetap 180 hari penuh dan itu benar di sana: host function
+`extend_ttl` meng-**clamp** ke maksimum, bukan menolak. Dua validator, satu maksud, beda satu ledger.
+Menaikkan angka ini biar "cocok" dengan kontrak akan mematahkan semua run keeper.
+
+Override: `TTL_THRESHOLD_LEDGERS`, `TTL_EXTEND_TO_LEDGERS`.
 
 > Konsekuensi yang perlu diketahui sekali: entry persistent yang baru ditulis **mulai** di sekitar
 > 120 hari, jadi run pertama menemukan hampir semuanya jatuh tempo. Itu normal. Setelah satu run yang
