@@ -17,10 +17,6 @@
   --color-ink: #1e232b; /* primary text, dark surfaces */
   --color-teal: #016985; /* the one accent: if it's teal, it's actionable */
 
-  /* The logo art carries one more grey of its own, warmer than the UI greys
-     below. It exists so the mark reads at small sizes; do not use it in UI. */
-  --color-logo-grey: #9d9a99;
-
   /* --- Neutrals --------------------------------------------------------- */
   /* Tinted toward ink's hue, not pure grey, so borders sit with the brand. */
   --color-n-50: #f8f8f8;
