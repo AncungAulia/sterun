@@ -21,6 +21,7 @@ import {
   DAY_IN_LEDGERS,
   DEFAULT_EXTEND_TO_LEDGERS,
   DEFAULT_THRESHOLD_LEDGERS,
+  MAX_ENTRY_TTL_LEDGERS,
   batch,
   selectDueKeys,
   type KeyTtl,
@@ -100,13 +101,29 @@ describe("batch", () => {
 });
 
 describe("thresholds", () => {
-  it("matches the contract's own constants", () => {
-    // sc/contracts/race_record/src/lib.rs: BUMP_THRESHOLD 120 days,
-    // BUMP_TO 180 days. Different numbers here would make "when does this
-    // expire" depend on which of the two touched the entry last.
+  it("matches the contract's threshold exactly", () => {
+    // sc/contracts/race_record/src/lib.rs: BUMP_THRESHOLD 120 days. A different
+    // number would make "when does this expire" depend on which of the two
+    // touched the entry last.
     expect(DAY_IN_LEDGERS).toBe(17_280);
     expect(DEFAULT_THRESHOLD_LEDGERS).toBe(120 * 17_280);
-    expect(DEFAULT_EXTEND_TO_LEDGERS).toBe(180 * 17_280);
+    expect(MAX_ENTRY_TTL_LEDGERS).toBe(180 * 17_280);
+  });
+
+  it("extends to ONE LEDGER BELOW the maximum, not to it", () => {
+    // ExtendFootprintTTLOp validates extendTo strictly below max_entry_ttl and
+    // rejects the boundary as EXTEND_FOOTPRINT_TTL_MALFORMED — visible only as
+    // `txFailed`. The contract's BUMP_TO is the full 180 days and is right
+    // there, because the host's extend_ttl clamps instead of refusing.
+    // Verified against testnet: 3110400 malformed, 3110399 landed.
+    expect(DEFAULT_EXTEND_TO_LEDGERS).toBe(MAX_ENTRY_TTL_LEDGERS - 1);
+    expect(DEFAULT_EXTEND_TO_LEDGERS).toBeLessThan(MAX_ENTRY_TTL_LEDGERS);
+  });
+
+  it("still leaves 60 days of quiet between runs", () => {
+    // The off-by-one must not eat the gap that makes a weekly cron cheap.
+    const quietLedgers = DEFAULT_EXTEND_TO_LEDGERS - DEFAULT_THRESHOLD_LEDGERS;
+    expect(quietLedgers / DAY_IN_LEDGERS).toBeGreaterThan(59);
   });
 });
 

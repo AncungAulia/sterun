@@ -7,12 +7,17 @@
  * migrations run before the socket opens, so the service is never briefly
  * accepting registrations against a schema that does not exist yet.
  */
+import { loadEnvFile } from "./env.js";
 import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
 import { buildServer } from "./server.js";
 import { Vault } from "./vault.js";
+
+// The documented setup is "copy .env.example to be/.env"; config reads
+// process.env. Real environment variables still win — see src/env.ts.
+loadEnvFile();
 
 const config = loadConfig();
 

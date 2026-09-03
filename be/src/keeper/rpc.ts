@@ -126,13 +126,33 @@ export class RpcTtlKeeperClient implements TtlRpc {
 
     const sent = await this.server.sendTransaction(prepared);
     if (sent.status === "ERROR") {
+      // The useful part is the OPERATION result, not the transaction one:
+      // `txFailed` on its own says nothing a person can act on, while
+      // `opExtendFootprintTtlInsufficientRefundableFee` says exactly what to do.
       throw new Error(
-        "TTL transaction rejected on submission: " +
-          `${sent.errorResult ? sent.errorResult.result.type : sent.status}`,
+        `TTL transaction rejected on submission: ${describeSubmitFailure(sent)}`,
       );
     }
 
     const final = await this.server.pollTransaction(sent.hash, { attempts: POLL_ATTEMPTS });
     return { hash: sent.hash, status: final.status, keys: keyCount };
+  }
+}
+
+/**
+ * A submission failure, rendered so the message names the actual cause.
+ *
+ * Horizon and RPC both bury the operation-level code inside the transaction
+ * result. `txFailed` is true and useless; the operation result underneath is
+ * what distinguishes "the fee was short" from "that TTL is above the network
+ * maximum", and those have completely different fixes.
+ */
+export function describeSubmitFailure(sent: rpc.Api.SendTransactionResponse): string {
+  const result = sent.errorResult;
+  if (!result) return sent.status;
+  try {
+    return `${result.result.type} ${JSON.stringify(result.result.toJson())}`;
+  } catch {
+    return result.result.type;
   }
 }

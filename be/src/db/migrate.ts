@@ -10,6 +10,14 @@
  * files run in filename order, exactly once, inside a transaction, and their
  * sha256 is recorded so an already-applied file that later changes on disk is
  * an error rather than a silent divergence between environments.
+ *
+ * The checksum is taken over the file with line endings normalised, and that is
+ * not a detail. `core.autocrlf` is on by default on Windows, so the same commit
+ * checks out with CRLF there and LF everywhere else. Hashing the raw bytes made
+ * a plain `git checkout` look like someone had edited an applied migration —
+ * which is a hard failure at startup, on a developer machine, for a file nobody
+ * touched. The guard is supposed to catch a changed migration, not a changed
+ * checkout.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
@@ -18,6 +26,16 @@ import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 
 const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "migrations");
+
+/**
+ * The checksum of a migration's *content*, independent of how it was checked
+ * out. CRLF and a trailing newline are the two things git and editors change
+ * without anybody meaning to.
+ */
+export function migrationChecksum(sql: string): string {
+  const normalised = `${sql.replace(/\r\n/g, "\n").trimEnd()}\n`;
+  return createHash("sha256").update(normalised).digest("hex");
+}
 
 export interface AppliedMigration {
   name: string;
@@ -42,16 +60,26 @@ export async function migrate(pool: Pool, dir = MIGRATIONS_DIR): Promise<Applied
 
   for (const name of files) {
     const sql = readFileSync(join(dir, name), "utf8");
-    const sha256 = createHash("sha256").update(sql).digest("hex");
+    const sha256 = migrationChecksum(sql);
     const previous = applied.get(name);
 
     if (previous !== undefined) {
       if (previous !== sha256) {
-        throw new Error(
-          `migration ${name} has already been applied but its contents have changed. ` +
-            "Applied migrations are immutable — add a new file instead, or this database and " +
-            "the next one will silently have different schemas.",
-        );
+        // A database written before the checksum was normalised holds the hash
+        // of the raw bytes. That is not tampering, so it is upgraded in place
+        // rather than turned into an outage.
+        if (previous === createHash("sha256").update(sql).digest("hex")) {
+          await pool.query("UPDATE schema_migrations SET sha256 = $2 WHERE name = $1", [
+            name,
+            sha256,
+          ]);
+        } else {
+          throw new Error(
+            `migration ${name} has already been applied but its contents have changed. ` +
+              "Applied migrations are immutable — add a new file instead, or this database and " +
+              "the next one will silently have different schemas.",
+          );
+        }
       }
       result.push({ name, alreadyApplied: true });
       continue;

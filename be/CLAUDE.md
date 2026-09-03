@@ -198,13 +198,26 @@ Empat hal yang akan bikin bingung kalau tidak disebut:
    tetap mematahkan `verify` dan `records_of`. Key-nya didapat dari footprint hasil simulasi, bukan
    disusun tangan.
 
-Threshold TTL **wajib sama** dengan konstanta di `sc/contracts/race_record/src/lib.rs` (120 hari /
-180 hari). Angka yang beda membuat "kapan ini kedaluwarsa" bergantung pada siapa yang terakhir
-menyentuh entry-nya.
+Threshold TTL **wajib sama** dengan `BUMP_THRESHOLD` di `sc/contracts/race_record/src/lib.rs`
+(120 hari). Tapi target perpanjangannya **satu ledger di bawah** `BUMP_TO` (3.110.399, bukan
+3.110.400): `ExtendFootprintTTLOp` menolak angka batasnya sebagai malformed, sementara host function
+`extend_ttl` yang dipakai kontrak justru meng-clamp ke situ. Beda satu ledger itu disengaja dan ada
+komentarnya di `src/keeper/ttl.ts` — jangan "dibetulkan" biar cocok.
+
+## `be/.env` benar-benar dibaca sekarang
+
+`src/env.ts` memuat `be/.env` di tiap entry point (API + kedua CLI). Sebelumnya tidak ada yang
+membacanya sama sekali, padahal dokumennya sejak STE-6 menyuruh `cp .env.example .env` — secret-nya
+nangkring di file dan prosesnya jalan tanpa itu, persis kelihatan seperti kunci yang salah.
+
+Dua aturannya: **env var asli selalu menang** (CI dan systemd yang menentukan, bukan `.env` basi di
+laptop yang sama — ini kebalikan dari `process.loadEnvFile()`), dan **file yang tidak ada bukan
+error** (clone baru harus tetap bisa start). Tidak dipanggil dari `config.ts`: modul itu tetap murni
+supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-452 test (`pnpm --filter be test`; 131 di antaranya butuh Postgres), dan sebagian besar kasus
+479 test (`pnpm --filter be test`; 138 di antaranya butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
