@@ -762,9 +762,9 @@ $ curl -s localhost:3011/events/0/roster
 ```
 
 403 itu jawaban `is_scanner(0, addr)` + `get_organiser(0)` dari **EventRegistry yang live**; 404-nya
-adalah revert `EventNotFound(2)` yang dipetakan lewat band kode error. Jalur positifnya (bundle
-lengkap dengan `totp_secret`, bib, dan `state`) butuh kunci scanner yang ter-allowlist on-chain —
-tidak dipegang di mesin ini, dan sudah dites end-to-end di `be/test/roster-routes.test.ts`.
+adalah revert `EventNotFound(2)` yang dipetakan lewat band kode error. Jalur positifnya — bundle
+lengkap dengan `totp_secret`, bib, dan `state` — dibuktikan di section 7 di bawah, setelah organiser
+menjalankan `add_scanner`.
 
 ### 6. TTL keeper — sewa dibayar beneran on-chain
 
@@ -806,6 +806,68 @@ restore belum pernah dipakai.
 > host function `extend_ttl` **meng-clamp** ke maksimum, sementara operasinya **menolak**. Dua
 > validator, satu maksud, beda satu ledger. Sekarang ditulis eksplisit di `be/src/keeper/ttl.ts` biar
 > tidak ada yang "membetulkannya" balik.
+
+---
+
+### 7. Rangkaian penuh: PII → `enter` → indexer → roster, semuanya live
+
+Dijalankan **2026-09-03**, setelah Axel mendanai runner dengan 50 sUSD dan menjalankan
+`add_scanner(0, GCXOLP4L…ASSJ)`. Ini yang menutup dua lubang terakhir di bukti STE-16 — sebelumnya
+`enter` yang di-index adalah `enter` orang lain, dan roster baru terbukti *menolak* orang asing.
+
+| Identitas | Address | Peran |
+| --- | --- | --- |
+| runner | [`GAGDD5EP…E4SK`](https://stellar.expert/explorer/testnet/account/GAGDD5EPZKCBKCDDM373LDCUT2U5TMQHF675UAJ37CF6CQY3OGPBE4SK) | daftar + bayar 5 sUSD |
+| scanner | [`GCXOLP4L…ASSJ`](https://stellar.expert/explorer/testnet/account/GCXOLP4LINZ4VDGFYBGA623YDGLID4Q6UT3T5O6N6LFCCDXK5T7NASSJ) | ter-allowlist on-chain oleh organiser |
+| TTL keeper | [`GCYM7TQB…XV26`](https://stellar.expert/explorer/testnet/account/GCYM7TQBS7U6KSVJCFCYDHREYKO6UFINLSJ3K3EJAL2VHWIYRQLPXV26) | bayar sewa, XLM saja |
+
+**Langkah dan hasilnya:**
+
+| # | Langkah | Hasil |
+| --- | --- | --- |
+| 1 | `POST /participants` dengan PII berantakan (NBSP, TAB, NIK ber-strip, telepon berkurung) | `participant_hash = a8c22e0f…a655`; response tidak memuat satu pun potongan PII |
+| 2 | `enter(runner, 0, 0, hash)` di RaceRecord **live**, ditandatangani runner | `token_id = 3`, `bib_no = 3`, ledger 4480668 — [`6d411b39…`](https://stellar.expert/explorer/testnet/tx/6d411b3921ca4b4e76e4c8498e02cfbff7924244b2f66e96f0c48fd2591eec0b) |
+| 3 | `POST /participants/3/confirm` | baris vault tertaut ke `token_id 3` + tx hash-nya |
+| 4 | `verify(3, a8c22e0f…a655)` di kontrak | **`true`** |
+| 5 | `pnpm indexer poll` (2x, mengejar ~11.000 ledger) | `fetched=3 applied=3`, `last_ledger=4480673` |
+| 6 | `GET /records/3` | `state: "Entered"`, `source: "event"`, `bib_no: 3`, transisi membawa ledger 4480668 + tx hash-nya |
+| 7 | `GET /events/0/roster` sebagai scanner | **200**, `count=1`, `missing_from_index=0` |
+| 8 | Kode TOTP dari `totp_secret` di bundle | scanner menghitung ulang → **cocok**; kode 5 menit lalu → **ditolak** |
+| 9 | `GET /events/0/roster` sebagai keypair acak | **403** dari `is_scanner` yang live |
+
+**Baris yang muncul di index** (`GET /events/0/records`) — perhatikan kolom `source`:
+
+```
+token_id  bib  state       source   last_ledger
+       0    0  Finished    state    4469811
+       1    1  Entered     state    4469811
+       2    2  Entered     state    4480673
+       3    3  Entered     event    4480668     <- enter di langkah 2
+```
+
+Tiga yang pertama datang dari rebuild (`state`); yang keempat datang dari `getEvents`
+(`event`) dan karena itu membawa ledger dan tx hash-nya. Kolom `source` mengatakan mana yang mana,
+tanpa perlu ditebak.
+
+**Isi roster bundle:**
+
+```
+event_id=0  snapshot_ledger=4480673  count=1  missing_from_index=0
+totp = {"digits":6,"step_seconds":30,"tolerance_steps":1}
+token 3  bib 3  Entered  fragment="Ulin N. S."  secret=b927f7a6…
+```
+
+Nama yang masuk di langkah 1 adalah `"  Ulin Nuha\tSidiki "`. Yang keluar di roster
+`"Ulin N. S."` — nama depan utuh, sisanya inisial. Response body-nya dicek tidak memuat
+`"Ulin Nuha"`, `"Sidiki"`, potongan NIK, maupun potongan nomor telepon.
+
+Yang dibuktikan langkah 4 dan tidak bisa dibuktikan test lokal mana pun: normalisasi backend (NFC,
+collapse whitespace, strip separator NIK) menghasilkan **byte yang sama persis** dengan yang di-hash
+`env.crypto().sha256()` di dalam host Soroban. Beda satu byte saja, langkah 4 mengembalikan `false`.
+
+Yang dibuktikan langkah 8: `totp_secret` yang diserahkan ke scanner memang secret yang sama yang
+dipakai device runner, jadi verifikasi check-in benar-benar bisa terjadi **offline** di kedua sisi —
+dan jendela ±1 step-nya benar-benar menolak kode basi.
 
 ---
 
