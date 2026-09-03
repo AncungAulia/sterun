@@ -369,3 +369,6 @@ guard on-chain, allowlist scanner, dan cakupan satu event per request.
   cuma bisa diturunkan dari plaintext saat submit. Roster melaporkannya `null`.
 - **Indexer belum di-deploy sebagai service.** `pnpm indexer follow` masih dijalankan tangan; systemd
   unit + restart otomatis adalah STE-31.
+- **Akun keeper masih akun testnet sekali pakai.** Yang dipakai di bukti (`GCYM7TQB…XV26`) dibuat
+  lewat friendbot dari laptop. Untuk VPS, STE-31 bikin akunnya sendiri dan menaruh secretnya di
+  secret manager — bukan menyalin yang ini.

@@ -65,8 +65,9 @@ SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 **STE-19** JSON Schema + npm publish.
 
 Backend sudah bisa dijalankan: API (`pnpm dev`), poller (`pnpm indexer follow`), dan TTL keeper
-(`pnpm keeper run`) — tiga proses dari satu paket `be/`. Bukti jalannya terhadap testnet yang live
-ada di [`docs/deployments.md`](docs/deployments.md).
+(`pnpm keeper run`) — tiga proses dari satu paket `be/`. Rangkaian penuhnya sudah dijalankan
+terhadap testnet yang live, dari PII masuk sampai roster keluar: bukti langkah demi langkah ada di
+[`docs/deployments.md`](docs/deployments.md) section "Bukti e2e STE-16".
 
 Kontrak v1 **non-upgradeable**: alamat di atas permanen untuk versi ini. Deploy ulang =
 pasangan alamat baru, bukan upgrade.
