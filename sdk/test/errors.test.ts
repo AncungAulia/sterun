@@ -15,11 +15,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { Errors as RegistryBindingErrors } from "event-registry";
+import { Errors as RegistryBindingErrors } from "../vendor-dist/event-registry.js";
 import {
   Errors as RecordBindingErrors,
   NonFungibleTokenError as NonFungibleBindingErrors,
-} from "race-record";
+} from "../vendor-dist/race-record.js";
 import {
   EVENT_REGISTRY_ERRORS,
   NON_FUNGIBLE_TOKEN_ERRORS,

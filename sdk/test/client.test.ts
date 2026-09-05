@@ -10,8 +10,8 @@
  * places at a 200-metre race. Those are one line each here and invisible there.
  */
 import { describe, expect, it } from "vitest";
-import type { Client as EventRegistryClient } from "event-registry";
-import type { Client as RaceRecordClient } from "race-record";
+import type { Client as EventRegistryClient } from "../vendor-dist/event-registry.js";
+import type { Client as RaceRecordClient } from "../vendor-dist/race-record.js";
 import { SterunClient } from "../src/client.js";
 import { SterunContractError } from "../src/errors.js";
 
