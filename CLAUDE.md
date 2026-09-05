@@ -30,6 +30,7 @@ be/            backend (Node/TS, Fastify) — API + helper Stellar + faucet sUSD
 sdk/           @sterun/sdk (Node/TS) — SterunClient di atas bindings (C5)
 fe/            web app (Next.js) — scaffolded
 landing-page/  landing (Next.js) — scaffolded
+deploy/        Caddyfile + verify-deployment.sh (STE-31)
 docs/          SYSTEM_DESIGN.md + deployments.md (bukti deploy) + specs/ (spec BEKU)
 ```
 Ikuti layout `sc/be/sdk/fe/landing-page` ini (bukan `contracts/packages/apps` dari draft tiket).
@@ -67,6 +68,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-15 | `@sterun/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
 | STE-19 | JSON Schema v1.0 + packaging (C6) | kode selesai, 134 test — **`npm publish` menunggu kredensial npm** |
 | STE-20 | results CSV + API hardening (C7/j6) | selesai, backend 586 test + e2e testnet live |
+| STE-31 | deploy backend ke VPS | kode + artefak siap, 600 test — **URL live menunggu VPS James** |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):

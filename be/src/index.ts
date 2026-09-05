@@ -7,6 +7,8 @@
  * migrations run before the socket opens, so the service is never briefly
  * accepting registrations against a schema that does not exist yet.
  */
+import { ChallengeStore } from "./auth.js";
+import { PostgresNonces } from "./auth-postgres.js";
 import { loadEnvFile } from "./env.js";
 import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
@@ -42,9 +44,23 @@ const reader = new ChainReader(
   { eventRegistry: config.addresses.eventRegistry, raceRecord: config.addresses.raceRecord },
 );
 
+/**
+ * STE-31. With Postgres, nonces live there; without it, in this process.
+ *
+ * That is not a performance choice. An in-memory store behind two instances
+ * fails intermittently and reports it as "unknown-nonce", which sends whoever
+ * is debugging it to look at their signing code. Postgres makes spending a
+ * nonce a single `DELETE … RETURNING`, which is atomic across instances.
+ *
+ * A single process with no database keeps the memory store, and that is still
+ * correct — there is no second instance for it to disagree with.
+ */
+const challenges = new ChallengeStore(Date.now, pool ? new PostgresNonces(pool) : undefined);
+
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
   ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
+  challenges,
   reader,
 });
 
@@ -65,6 +81,7 @@ try {
       network: config.network.name,
       addresses: config.addresses,
       vault: config.vault ? { activeKeyId: config.vault.keyring.activeKeyId } : "disabled",
+      nonces: pool ? "postgres" : "in-memory (single process only)",
     },
     "sterun backend ready",
   );

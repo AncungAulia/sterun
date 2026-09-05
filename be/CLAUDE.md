@@ -168,8 +168,12 @@ nama terenkripsi orang A ke baris orang B dan decrypt-nya tetap sukses.
 Baca sebelum menyalakan ini di mana pun selain laptop sendiri.
 
 Auth: signature wallet Stellar (challenge → sign → spend). Nonce sekali pakai, kedaluwarsa 2 menit,
-terikat ke satu address. **Store-nya masih in-memory** — aman untuk satu proses, tidak aman untuk
-dua; STE-31 wajib memindahkannya sebelum ada instance kedua.
+terikat ke satu address.
+
+**Store-nya sekarang bisa dua-duanya** (STE-31): `MemoryNonces` untuk satu proses, `PostgresNonces`
+untuk lebih. Entry point memilih berdasarkan ada-tidaknya pool. Sifat sekali-pakai lintas instance
+dijaga `DELETE … RETURNING` — satu statement atomik; read-then-delete meninggalkan celah, dan di
+belakang load balancer dua statement itu ada di mesin berbeda.
 
 > Jebakan yang pasti kena client: `Keypair.sign()` mengembalikan `Uint8Array`, dan
 > `Uint8Array.toString("base64")` **mengabaikan argumennya** — hasilnya `"12,34,56,…"`. Bungkus:
@@ -307,8 +311,28 @@ validasi dan serialisasi — jadi dia tidak bisa mendeskripsikan endpoint yang p
 > `onRoute`-nya. Akibatnya `/health` dan `/config` tidak terlihat oleh swagger. Semua route sekarang
 > lewat `register`.
 
+## Deploy (STE-31)
+
+`compose.prod.yml` di root: Postgres + API + poller + keeper + Caddy (TLS otomatis lewat ACME, tanpa
+cron renewal yang bisa diam-diam berhenti bekerja). Tiga service Node-nya **image yang sama dengan
+perintah berbeda** — memang begitu bentuknya.
+
+Dua hal yang layak diingat:
+
+- **`/health` vs `/ready`.** `/health` sengaja tidak menyentuh apa pun (liveness probe yang memanggil
+  dependency melaporkan outage orang lain sebagai outage kita). `/ready` mengecek database dan
+  menjawab 503 kalau tidak bisa. Caddy mengawasi yang kedua, Docker yang pertama.
+- **Postgres tidak punya `ports:`.** Satu baris yang menahan kesalahan firewall menaruh database PII
+  di internet publik.
+
+`docs/deployments.md` **ikut masuk image**: `src/deployments.ts` mem-parse-nya untuk alamat kontrak,
+jadi aturan "alamat tidak pernah di-hardcode" tetap berlaku di dalam container.
+
+Verifikasi dari luar tanpa SSH: `./deploy/verify-deployment.sh https://…` — 13 cek, termasuk bahwa
+endpoint sensitif tetap 401. Prosedur lengkap: [`OPERATIONS.md`](OPERATIONS.md) bagian "Deploy ke VPS".
+
 ## Yang belum ada (jangan diasumsikan sudah)
 
-Job re-encrypt untuk rotasi kunci, nonce store yang tahan multi-instance, alert kalau keeper tidak
-jalan, dan deploy ke VPS (STE-31). Daftar lengkapnya di bagian akhir
+Job re-encrypt untuk rotasi kunci, alert kalau keeper berhenti, replica API kedua (mungkin sekarang,
+belum diuji di bawah load nyata), dan backup Postgres terjadwal. Daftar lengkapnya di bagian akhir
 [`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah satunya mendarat.

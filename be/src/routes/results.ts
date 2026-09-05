@@ -211,7 +211,7 @@ export async function resultsRoutes(
       },
     },
     async (request: FastifyRequest<{ Params: { eventId: number } }>, reply: FastifyReply) => {
-      const caller = challenges.verify(
+      const caller = await challenges.verify(
         request.headers["x-sterun-address"] as string | undefined,
         request.headers["x-sterun-nonce"] as string | undefined,
         request.headers["x-sterun-signature"] as string | undefined,
