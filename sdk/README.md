@@ -8,8 +8,11 @@ the runner who registered. This package is the client for the two contracts that
 do it, frozen at [`docs/specs/INTERFACE.md`](../docs/specs/INTERFACE.md) v1.0.0.
 
 ```bash
-pnpm add @sterun/sdk
+npm install @sterun/sdk
 ```
+
+Ships with **RaceRecord JSON Schema v1.0** — the public format a runner profile
+renders and a third party verifies.
 
 ## Quickstart
 
@@ -140,6 +143,60 @@ ledger entry — is a `SterunNetworkError` instead. The two demand opposite
 responses: a revert is an answer and retrying gives the same one; a network
 failure is the absence of an answer, and retrying is exactly right.
 
+## The public document format
+
+`raceRecordDocument` joins a record to its event and its category so the result
+stands alone. A stranger reading it does not have to ask what `event_id 2,
+category_id 1` was.
+
+```ts
+import { parseRaceRecordDocument } from "@sterun/sdk";
+
+const doc = await sterun.raceRecordDocument(tokenId);   // no wallet needed
+```
+
+```json
+{
+  "schema_version": "1.0.0",
+  "network": { "passphrase": "Test SDF Network ; September 2015", "…": "…" },
+  "token_id": 0,
+  "owner": "GAJVXTF5…CUPWVR",
+  "bib_no": 0,
+  "participant_hash": "feb3cea9…3fe29",
+  "state": "Finished",
+  "event": { "event_id": 0, "name": "Sterun Testnet Rehearsal 2026", "…": "…" },
+  "category": { "code": "10K", "distance_m": 10000, "price_stroops": "50000000" },
+  "timings": { "entered_at": "1788252277", "finish_time_s": 3161, "…": "…" },
+  "links": { "record_contract": "https://stellar.expert/…", "…": "…" }
+}
+```
+
+Validate anything that arrived from outside your process — a file, an API
+response, a copy somebody emailed you:
+
+```ts
+const record = parseRaceRecordDocument(untrusted);   // throws ZodError, listing every problem
+```
+
+The JSON Schema itself ships in the package at
+`node_modules/@sterun/sdk/schema/race-record-v1.0.json`, so you can hand it to
+any validator in any language. `raceRecordJsonSchema()` returns the same
+document.
+
+Three things about it are worth knowing before you write a consumer:
+
+1. **Every 64- and 128-bit value is a decimal string** — `price_stroops`,
+   `starts_at`, `entered_at`, `claimed_at`, `result_at`. `JSON.parse` produces
+   doubles, integers above 2^53 lose precision silently, and `price_stroops` is
+   an `i128`. Parse them with `BigInt`, never `Number`.
+2. **The version is inside the document.** If you stored one, you have the file
+   and not the URL it came from; `schema_version` is how you know how to read it.
+3. **It carries no personal data and cannot be made to.** Only
+   `participant_hash`, which is a commitment: whoever holds the off-chain data
+   plus the salt can recompute it and prove the record is that person, and
+   nobody can work backwards from it. The schema is closed at every level, so a
+   document carrying a name or a national ID is *invalid*, not tolerated.
+
 ## Method reference
 
 | Method | Contract | Authorized by |
@@ -174,16 +231,22 @@ display; there is deliberately no parser going the other way.
 - **TOTP / QR check-in codes.** Specified in `docs/specs/HASH_AND_TOTP.md` and
   implemented by the backend and the scanner PWA.
 
+## Versioning
+
+The **package** is `0.x` while the client surface settles. The **schema** is
+`1.0.0` and frozen — third parties store documents and re-read them later, and a
+format that keeps moving is not a format. The two move independently;
+[`CHANGELOG.md`](CHANGELOG.md) has the compatibility rules.
+
 ## Development
 
 ```bash
-pnpm bindings                    # from the repo root — REQUIRED before install
 pnpm install
-pnpm --filter @sterun/sdk test   # 84 tests, no network
+pnpm --filter @sterun/sdk test   # 134 tests, no network
 pnpm --filter @sterun/sdk e2e    # the full flow against live testnet
 ```
 
-`pnpm bindings` before `pnpm install` is not a suggestion: pnpm copies `file:`
-dependencies into its store, so installing before the bindings are built
-captures a copy with no `dist/` and no amount of rebuilding fixes it. See
-[`CLAUDE.md`](CLAUDE.md).
+The generated contract bindings are vendored into `vendor/` and compiled by a
+`prebuild` hook, so a fresh clone needs no extra step. `pnpm --filter
+@sterun/sdk vendor` refreshes them after the contracts are regenerated; a test
+fails if the copies drift. See [`CLAUDE.md`](CLAUDE.md).

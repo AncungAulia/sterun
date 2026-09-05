@@ -1,7 +1,7 @@
 # `sdk/` — `@sterun/sdk` (CLAUDE.md)
 
-Client TypeScript untuk kedua kontrak. Komponen **C5** (STE-15); packaging + JSON
-Schema v1.0 + publish npm menyusul di **C6** (STE-19). Owner: **James**.
+Client TypeScript untuk kedua kontrak. Komponen **C5** (STE-15) + **C6** (STE-19:
+RaceRecord JSON Schema v1.0, packaging, publish npm). Owner: **James**.
 
 Ini seam yang dilewati **semua** client D3 — organiser console, entry flow, scanner
 PWA, public profile — sesuai aturan design "clients never talk to contracts raw"
@@ -9,31 +9,40 @@ PWA, public profile — sesuai aturan design "clients never talk to contracts ra
 [`docs/specs/INTERFACE.md`](../docs/specs/INTERFACE.md) v1.0.0.
 
 ```bash
-pnpm bindings                    # dari root — WAJIB sebelum install
 pnpm install
-pnpm --filter @sterun/sdk test        # 84 test, nol network
+pnpm --filter @sterun/sdk test        # 134 test, nol network
 pnpm --filter @sterun/sdk typecheck
 pnpm --filter @sterun/sdk lint
+pnpm --filter @sterun/sdk vendor      # refresh salinan bindings setelah regenerate
 pnpm --filter @sterun/sdk e2e         # flow penuh melawan testnet live
 ```
 
-## Jebakan nomor satu: `pnpm bindings` sebelum `pnpm install`
+## Bindings di-vendor, bukan di-`file:`
 
-Urutannya **wajib**, dan kalau terbalik gejalanya menyesatkan.
+`@sterun/sdk` di-publish ke npm, dan **`file:` dependency tidak bisa di-publish**.
+Jadi kode bindings ikut masuk ke dalam paket: `vendor/` berisi salinan
+**byte-identical** dari `sc/bindings/*/src/index.ts`, di-compile
+`tsconfig.vendor.json` dengan setelan milik generator.
 
-`sdk/` memakai `sc/bindings/*` lewat `file:` dependency. pnpm menyelesaikan
-`file:` ke sebuah direktori dengan cara **menyalinnya** ke store — snapshot,
-bukan symlink. `dist/` bindings di-gitignore (itu output generator), jadi kalau
-`pnpm install` jalan duluan, yang tersalin adalah copy **tanpa `dist/`**. Build
-ulang bindings setelah itu tidak memperbaiki apa pun: yang kamu build adalah
-source-nya, sementara yang dibaca `tsc` adalah snapshot di store.
+Kenapa tsconfig sendiri: di bawah `tsconfig.json` paket ini, kedua file itu
+memunculkan 12 error yang semuanya soal gaya, bukan substansi — type-only import
+di bawah `verbatimModuleSyntax`, `override` yang hilang, dan `window` tanpa lib
+DOM. Melonggarkan aturan seluruh paket demi dua file hasil generate itu
+pertukaran yang salah.
 
-Gejalanya: `Cannot find module 'race-record'` yang tidak hilang walau sudah
-di-build tiga kali. Obatnya: `pnpm bindings && pnpm install` — install ulang
-setelah build, bukan build ulang setelah install.
+Kenapa salinannya wajib byte-identical: `sc/bindings/README.md` melarang edit
+tangan, dan salinan yang "disesuaikan" diam-diam berhenti menjadi apa yang
+dihasilkan wasm. `test/vendor.test.ts` membandingkan byte per byte, jadi
+"regenerate bindings lalu lupa SDK-nya" jadi test merah — bukan client
+ter-publish yang diam-diam bicara interface lama.
 
-Sudah diverifikasi dua arah di clone bersih, dan `.github/workflows/typescript.yml`
-menjalankan `pnpm bindings` **sebelum** `pnpm install` karena alasan itu.
+Refresh: `node scripts/vendor-bindings.mjs` (atau `--check` untuk memverifikasi).
+
+> **Jebakan `file:` dari STE-15 sudah HILANG.** Dulu urutan `pnpm bindings`
+> sebelum `pnpm install` itu wajib karena pnpm menyalin `file:` dependency ke
+> store-nya sebagai snapshot. Sekarang tidak ada `file:` dependency sama sekali,
+> jadi clone bersih langsung jalan dan langkah CI yang khusus mengakali itu sudah
+> dicabut. Build vendor jadi pre-hook di `build`/`typecheck`/`test`.
 
 ## Satu versi `@stellar/stellar-sdk` untuk seluruh workspace
 
@@ -125,12 +134,34 @@ sesuatu yang berbeda dari yang disimulasikan.
 berlaku: CI tidak boleh merah gara-gara testnet lagi jelek. E2E dijalankan tangan,
 hasilnya jadi bukti tertulis — pola yang sama dengan faucet (STE-6) dan STE-16.
 
-## Yang belum, dan memang bukan porsi STE-15
+## JSON Schema: satu definisi, dua artefak
 
-- **Publish npm** — `file:` dependency tidak bisa di-publish. STE-19 harus
-  membundel bindings ke `dist/` sebelum `npm publish`. Tiketnya memang menyerahkan
-  keputusan bundling ke owner.
-- **RaceRecord JSON Schema v1.0** — STE-19.
+zod di `src/schema.ts` adalah **sumber kebenaran**.
+`schema/race-record-v1.0.json` di-*generate* darinya lewat `z.toJSONSchema`, dan
+`test/schema.test.ts` gagal kalau file yang ter-commit dan hasil generate
+berbeda. Jangan pernah mengedit JSON-nya tangan.
+
+**Semua object pakai `strictObject`, bukan `object`.** Default zod adalah
+**membuang** key asing lalu melaporkan sukses — yang membuat validator runtime
+dan JSON Schema yang di-publish (`additionalProperties: false`) diam-diam
+berbeda perilaku: validator luar akan menolak dokumen yang baru saja dinyatakan
+valid oleh SDK ini. Dan untuk properti yang paling penting, diam adalah jawaban
+yang salah: dokumen yang datang membawa `national_id` bukan dokumen valid dengan
+field nyasar — itu bukti ada yang membocorkan PII ke format yang memang dibuat
+untuk diserahkan ke orang asing.
+
+**Angka besar selalu decimal string** (`price_stroops`, `starts_at`,
+`entered_at`, `claimed_at`, `result_at`). `JSON.parse` menghasilkan double
+IEEE-754; di atas 2^53 presisinya hilang diam-diam, dan `price_stroops` itu
+`i128`. Field `u32` tetap number.
+
+## Yang belum
+
+- **`npm publish`** — butuh kredensial npm milik James. Runbook-nya di
+  `README.md` bagian Development + `docs/deployments.md`. Semua langkah
+  sebelumnya sudah diverifikasi lewat `npm pack` + install tarball di project
+  TypeScript kosong di luar repo (typecheck bersih, quickstart jalan ke testnet,
+  dokumen valid terhadap schema).
 - **Leg `enter` berbayar di e2e** — butuh `SUSD_DISTRIBUTOR_SECRET` di `be/.env`.
   Script-nya sudah menangani, dan kalau secret tidak ada dia **bilang** dia
   melewatinya, bukan diam-diam lulus dengan test yang lebih lemah.
