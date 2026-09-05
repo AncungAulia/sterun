@@ -875,7 +875,7 @@ dan jendela ±1 step-nya benar-benar menolak kode basi.
 
 | Tiket | Butuh apa |
 | --- | --- |
-| **STE-15** `SterunClient` (James) | `EVENT_REGISTRY` + `RACE_RECORD` + `SUSD_SAC`; bindings-nya sudah ada di `sc/bindings/` (di-generate dari wasm yang sama dengan yang live di atas) |
+| **STE-15** `SterunClient` (James) | **SELESAI** — `EVENT_REGISTRY` + `RACE_RECORD` + `SUSD_SAC`; bindings-nya di `sc/bindings/` (di-generate dari wasm yang sama dengan yang live di atas). Bukti live di section "Bukti e2e STE-15" |
 | **STE-16** indexer (James) | **SELESAI** — contract id kedua kontrak untuk filter `getEvents`; bentuk topic/data beku di `INTERFACE.md` §1.3 & §2.3. Bukti live di section di atas |
 | **STE-11** PII vault (James) | `participant_hash` dari `HASH_AND_TOTP.md`; contoh nyata tersimpan di `record_of(0)` |
 | **STE-17/18/21/22** apps (Ancung) | contract id + SAC untuk flow entry, QR pass, dan scanner |
@@ -902,3 +902,85 @@ Kontrak v1 **non-upgradeable**. Menjalankan ulang `deploy-testnet.sh` tidak meng
 dia menghasilkan **pasangan contract address baru** (deploy memakai salt acak), dan alamat lama
 tetap hidup dengan datanya sendiri. Kalau itu memang yang diinginkan, ganti tabel di section ini
 dan beri tahu semua konsumen di tabel handoff; jangan biarkan dua pasang alamat beredar diam-diam.
+
+---
+
+## Bukti e2e STE-15 — seluruh flow lewat `@sterun/sdk`, nol Rust
+
+Dijalankan **2026-09-05** dengan `pnpm --filter @sterun/sdk e2e` terhadap testnet yang live, memakai
+`EVENT_REGISTRY` dan `RACE_RECORD` di tabel paling atas file ini (dibaca dari dokumen ini, bukan
+di-hardcode). Semua aktor adalah akun Friendbot baru yang dibuat saat itu juga dan dibuang setelahnya —
+jadi run ini tidak memakai secret siapa pun dan **tidak** menumpang event rehearsal STE-33 (kategori
+event itu tinggal 1 slot; menghabiskannya berarti mengambil jatah mock race STE-25).
+
+Yang dibuktikan: seluruh rantai `createEvent → addCategory → setEventStatus(Open) → enter →
+recordsOf → addScanner → claimRacepack → recordFinish → verify` bisa dijalankan **hanya** lewat
+`SterunClient` — tanpa Rust, tanpa Stellar CLI, tanpa merakit XDR sendiri.
+
+### Aktor
+
+| Peran | Address |
+| --- | --- |
+| organiser | [`GB2V3PI26Y57G2BHK5QRDPELZTKKHSMNA26LRHLAZOXFKVVFTOBYQA5X`](https://stellar.expert/explorer/testnet/account/GB2V3PI26Y57G2BHK5QRDPELZTKKHSMNA26LRHLAZOXFKVVFTOBYQA5X) |
+| runner | [`GDIN3Z63PDERDBZMCOTSPRHWUMR5FLRBUOPY3OLYVAMHPSSXGE2PO6JB`](https://stellar.expert/explorer/testnet/account/GDIN3Z63PDERDBZMCOTSPRHWUMR5FLRBUOPY3OLYVAMHPSSXGE2PO6JB) |
+| scanner | [`GCQ6S5LVQDMMQHNG3FDLPR7IUZ4MKD6UKGR5Y3EJKFF5Z7QUNHWMCYQR`](https://stellar.expert/explorer/testnet/account/GCQ6S5LVQDMMQHNG3FDLPR7IUZ4MKD6UKGR5Y3EJKFF5Z7QUNHWMCYQR) |
+
+### Transaksi (klik = explorer)
+
+`event_id 1`, `token_id 4`, bib `0`, selesai `3161` detik, state akhir **`Finished`**.
+
+| Langkah | Tx hash |
+| --- | --- |
+| `createEvent` | [`d099ced765c315b852edb799f5cdf76b5d600bf983b6e9d141d4c2dd4f756120`](https://stellar.expert/explorer/testnet/tx/d099ced765c315b852edb799f5cdf76b5d600bf983b6e9d141d4c2dd4f756120) |
+| `setEventStatus(Open)` | [`40c07a20a7760fc601ad4d137be5291f2ed3a206afdc3660bb46b75031c9ee2a`](https://stellar.expert/explorer/testnet/tx/40c07a20a7760fc601ad4d137be5291f2ed3a206afdc3660bb46b75031c9ee2a) |
+| `enter` | [`21fd47cd4a4434c96f2011c7bd265b9cd3cebf368552bbd864afc5542bf66f89`](https://stellar.expert/explorer/testnet/tx/21fd47cd4a4434c96f2011c7bd265b9cd3cebf368552bbd864afc5542bf66f89) |
+| `claimRacepack` | [`93dd8c71c773b3bb4498c1a719c532aae3d776f76001b2e807a0ff3bec408488`](https://stellar.expert/explorer/testnet/tx/93dd8c71c773b3bb4498c1a719c532aae3d776f76001b2e807a0ff3bec408488) |
+| `recordFinish` | [`1551d85420a4ab16285243a9732d4d61a2f8affd6f1c5a1245478499b156c647`](https://stellar.expert/explorer/testnet/tx/1551d85420a4ab16285243a9732d4d61a2f8affd6f1c5a1245478499b156c647) |
+
+### Negative case — dan yang penting, **band**-nya benar
+
+Tiap baris ini bukan sekadar "gagal": SDK menyebut varian **dan** kontrak asalnya. Itu aturan band
+`INTERFACE.md` §3 yang terbukti terhadap kontrak yang benar-benar ter-deploy, bukan terhadap fake.
+
+| Yang dicoba | Hasil |
+| --- | --- |
+| `enter` saat event masih `Draft` | `EventNotOpen` **#4** (event-registry) |
+| `setEventStatus(Open)` padahal sudah `Open` | `InvalidStatus` **#11** (event-registry) |
+| `enter` ke kategori yang kuotanya habis | `QuotaFull` **#5** (event-registry) |
+| `recordFinish` sebelum race pack diambil | `InvalidState` **#103** (race-record) |
+| `claimRacepack` dari device yang belum di-allowlist | `NotAuthorized` **#104** (race-record) |
+| `claimRacepack` kedua kali | `AlreadyClaimed` **#102** (race-record) |
+| `recordDnf` setelah `Finished` | `InvalidState` **#103** (race-record) |
+
+Perhatikan tiga baris pertama: itu revert milik **EventRegistry** yang merambat keluar lewat
+`enter`/`set_event_status` di RaceRecord. Tanpa band disjoint, `#4` bisa saja dikira `InvalidState`
+milik RaceRecord.
+
+### `verify` dan pembacaan tanpa wallet
+
+`participant_hash` dihitung dengan implementasi referensi beku
+(`docs/specs/reference/node/`), jadi hash yang dikirim SDK adalah hash yang sama dengan yang
+dipatok test kontrak.
+
+- `verify(token_id, hash_benar)` → **`true`**
+- `verify(token_id, hash_salah)` → **`false`**
+- `verify(999999, hash)` → **`false`** (token tidak dikenal tidak revert)
+
+Seluruh pembacaan diulang lewat client **tanpa `publicKey` dan tanpa signer sama sekali**
+(`sterun.readOnly()`): `recordsOfDetailed`, `verify`, dan `getCategory` semuanya jalan. Ini yang
+membuat public profile page (STE-24) bisa benar-benar publik.
+
+### Satu leg yang BELUM tercakup
+
+`enter` **berbayar** (kategori 5 sUSD) tidak dijalankan di run ini: memindahkan sUSD butuh
+`SUSD_DISTRIBUTOR_SECRET`, yang hidup di `be/.env` dan tidak ada di mesin tempat e2e ini
+dijalankan. Script-nya sudah menangani leg itu — dia membuka trustline, mendanai runner, `enter`,
+lalu memastikan saldo organiser naik **persis** sebesar biaya pendaftaran, yang membuktikan
+`transfer` SEP-41 benar-benar terjadi di dalam invocation yang sama dengan mint-nya.
+
+Kalau secret-nya ada, jalankan ulang `pnpm --filter @sterun/sdk e2e` dan tambahkan hasilnya ke
+tabel di atas. Script **tidak** diam-diam lulus tanpa leg ini: dia mencetak bahwa dia melewatinya.
+
+> Kategori **gratis** (`price_usdc == 0`) melewatkan `transfer` sepenuhnya, jadi leg yang sudah
+> jalan di atas memang tidak menyentuh SAC — itu perilaku yang benar sesuai `INTERFACE.md` §2.1,
+> bukan jalan pintas.

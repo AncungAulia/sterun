@@ -1,0 +1,44 @@
+{
+  "name": "@sterun/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Sterun SDK — call the Stellar race-record contracts from TypeScript, no Rust required (component C5)",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "tsx scripts/e2e.ts"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^17.0.1",
+    "event-registry": "file:../sc/bindings/event-registry",
+    "race-record": "file:../sc/bindings/race-record"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.9.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^3.2.7"
+  }
+}

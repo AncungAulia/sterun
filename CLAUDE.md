@@ -15,6 +15,7 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 | [`docs/`](docs/CLAUDE.md) | SYSTEM_DESIGN + `deployments.md` (bukti deploy) |
 | [`docs/specs/`](docs/specs/CLAUDE.md) | spec BEKU C4: aturan mengubahnya, cara memverifikasinya |
 | [`be/`](be/CLAUDE.md) | backend Node/TS (James) — API + PII vault + indexer + TTL keeper |
+| [`sdk/`](sdk/CLAUDE.md) | `@sterun/sdk` (James) — C5 `SterunClient`, typed errors, e2e testnet |
 | [`fe/`](fe/CLAUDE.md) | web app Next.js (Ancung) — scaffolded |
 | [`landing-page/`](landing-page/CLAUDE.md) | landing (Nabil) — scaffolded |
 
@@ -26,18 +27,32 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 ```
 sc/            smart contracts (Soroban Rust) + bindings TS hasil generate — cargo workspace
 be/            backend (Node/TS, Fastify) — API + helper Stellar + faucet sUSD
+sdk/           @sterun/sdk (Node/TS) — SterunClient di atas bindings (C5)
 fe/            web app (Next.js) — scaffolded
 landing-page/  landing (Next.js) — scaffolded
 docs/          SYSTEM_DESIGN.md + deployments.md (bukti deploy) + specs/ (spec BEKU)
 ```
-Ikuti layout `sc/be/fe/landing-page` ini (bukan `contracts/packages/apps` dari draft tiket).
+Ikuti layout `sc/be/sdk/fe/landing-page` ini (bukan `contracts/packages/apps` dari draft tiket).
+`sdk/` ditambahkan di STE-15 karena C5 harus bisa di-`import` browser (`fe/`, scanner PWA) —
+tidak bisa hidup di dalam `be/`, yang menyeret Fastify dan `pg`.
 
-`be/` + `fe/` + `landing-page/` adalah **satu pnpm workspace** (root `pnpm-workspace.yaml`);
-`sc/` cargo workspace terpisah. `sc/bindings/*` **tidak** masuk pnpm workspace — itu output
-generator, dikonsumsi lewat `file:` dependency. Dari root: `pnpm install`, `pnpm dev`,
-`pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm faucet`, `pnpm indexer`, `pnpm keeper`.
+`be/` + `sdk/` + `fe/` + `landing-page/` adalah **satu pnpm workspace** (root
+`pnpm-workspace.yaml`); `sc/` cargo workspace terpisah. `sc/bindings/*` **tidak** masuk pnpm
+workspace — itu output generator, dikonsumsi lewat `file:` dependency. Dari root:
+`pnpm install`, `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+`pnpm faucet`, `pnpm indexer`, `pnpm keeper`.
 
-## Status sekarang (per 2026-09-03)
+> **`pnpm bindings` WAJIB dijalankan sebelum `pnpm install`, bukan sesudah.** pnpm menyalin
+> `file:` dependency ke store-nya (snapshot, bukan symlink) dan `dist/` bindings di-gitignore,
+> jadi install duluan = copy tanpa `dist/`, dan build ulang **tidak** memperbaikinya. Gejalanya
+> `Cannot find module 'race-record'` yang tidak hilang walau sudah di-build berkali-kali.
+> Urutan benar: `pnpm bindings && pnpm install`. Alasan lengkap: [`sdk/CLAUDE.md`](sdk/CLAUDE.md).
+
+Versi `@stellar/stellar-sdk` dipaksa satu (`^17.0.1`) lewat `pnpm.overrides` di `package.json`
+root: generator bindings menuliskan `^14.5.0`, dan dua copy SDK dalam satu graph berarti dua RPC
+client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
+
+## Status sekarang (per 2026-09-05)
 
 | Tiket | Komponen | Status |
 | --- | --- | --- |
@@ -50,6 +65,7 @@ generator, dikonsumsi lewat `file:` dependency. Dari root: `pnpm install`, `pnpm
 | STE-6 | monorepo pnpm + CI TS + backend skeleton + faucet sUSD | selesai |
 | STE-11 | PII vault + hash/TOTP backend (C7) | selesai |
 | STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 479 test |
+| STE-15 | `@sterun/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
@@ -61,7 +77,7 @@ SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 ```
 
 **M1 (D1 — kontrak) SELESAI.** Sekarang M2 (D2 — `@sterun/sdk` + backend), urut:
-~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → **STE-15** SterunClient →
+~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → ~~**STE-15** SterunClient~~ →
 **STE-19** JSON Schema + npm publish.
 
 Backend sudah bisa dijalankan: API (`pnpm dev`), poller (`pnpm indexer follow`), dan TTL keeper

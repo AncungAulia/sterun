@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter be dev",
+    "bindings": "npm --prefix sc/bindings/event-registry install && npm --prefix sc/bindings/event-registry run build && npm --prefix sc/bindings/race-record install && npm --prefix sc/bindings/race-record run build",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "test": "pnpm --recursive test",
@@ -16,5 +17,10 @@
     "faucet": "pnpm --filter be faucet",
     "indexer": "pnpm --filter be indexer",
     "keeper": "pnpm --filter be keeper"
+  },
+  "pnpm": {
+    "overrides": {
+      "@stellar/stellar-sdk": "^17.0.1"
+    }
   }
 }
