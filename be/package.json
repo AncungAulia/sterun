@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "faucet": "tsx src/cli/faucet.ts",
     "indexer": "tsx src/cli/indexer.ts",
-    "keeper": "tsx src/cli/keeper.ts"
+    "keeper": "tsx src/cli/keeper.ts",
+    "e2e:results": "tsx scripts/e2e-results.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
@@ -32,6 +33,7 @@
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "@sterun/sdk": "workspace:*"
   }
 }

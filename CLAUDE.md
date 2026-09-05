@@ -66,6 +66,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 479 test |
 | STE-15 | `@sterun/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
 | STE-19 | JSON Schema v1.0 + packaging (C6) | kode selesai, 134 test — **`npm publish` menunggu kredensial npm** |
+| STE-20 | results CSV + API hardening (C7/j6) | selesai, backend 586 test + e2e testnet live |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
