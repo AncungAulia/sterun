@@ -1122,3 +1122,76 @@ pelari lain, dan `Finished` itu terminal.
 - **Response tidak membawa address pelari** — dicek eksplisit terhadap payload mentah.
 - **Auth-nya organiser, dibaca dari chain.** Scanner yang ter-allowlist pun ditolak 403: dia boleh
   meng-check-in orang, bukan mem-publish hasil.
+
+---
+
+## STE-31 — deploy backend: artefak SIAP, URL live BELUM ADA
+
+> **Status jujur: tiket ini belum selesai.** Yang diminta STE-31 adalah **base URL live ber-TLS**
+> yang bisa dibuka siapa pun. Itu butuh VPS, akses SSH, dan domain — tidak ada satu pun di mesin
+> tempat pekerjaan ini dilakukan. Semua yang bisa dibuktikan tanpa itu, dibuktikan; sisanya menunggu
+> satu langkah manual yang cuma bisa dijalankan pemilik VPS.
+
+### Yang SUDAH dibuktikan (2026-09-05, container sungguhan di mesin dev)
+
+Image produksi (`be/Dockerfile`) di-build lalu dijalankan terhadap Postgres nyata:
+
+| Cek | Hasil |
+| --- | --- |
+| `docker build -f be/Dockerfile` | sukses, multi-stage, tanpa compiler/test di image akhir |
+| user di runtime | `uid=1000(node)` — **bukan root** |
+| `GET /health` | `{"status":"ok","uptimeSeconds":5}` |
+| `GET /ready` | `{"status":"ready","checks":{"database":"ok"}}` |
+| `GET /config` | alamat kontrak ter-parse **dari `docs/deployments.md` di dalam image** |
+| `GET /openapi.json` | 15 route terdokumentasi, termasuk `/ready` dan `/events/{eventId}/results/preview` |
+| rate limit | request ke-245 → **429** (aktif di produksi, mati di test) |
+
+`deploy/verify-deployment.sh` dijalankan terhadap instance yang benar-benar hidup: **12 lolos, 1
+gagal** — dan yang gagal adalah pemeriksaan TLS, karena instance lokalnya memang HTTP polos. Itu
+perilaku yang benar: skrip menolak URL yang tidak ber-TLS, bukan meloloskannya.
+
+```
+✓ /health -> {"status":"ok","uptimeSeconds":3}
+✓ /ready -> database reachable
+✓ EventRegistry CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+✓ RaceRecord    CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+✓ vault mounted · indexer mounted · results mounted
+✓ GET /events/0/roster -> 401 without a signature
+✓ GET /participants/… -> 401 without a signature
+✓ POST /events/0/results/preview -> 401 without a signature
+✓ /openapi.json describes the API
+✗ not an https:// URL — STE-31 requires TLS
+```
+
+### Yang BELUM ada, dan siapa yang bisa melakukannya
+
+**Base URL live.** Butuh VPS + domain milik James. Prosedurnya lengkap di
+[`be/OPERATIONS.md`](../be/OPERATIONS.md) bagian "Deploy ke VPS":
+
+```bash
+git clone https://github.com/AncungAulia/sterun.git && cd sterun
+cp be/.env.production.example be/.env.production
+$EDITOR be/.env.production          # STERUN_DOMAIN, POSTGRES_PASSWORD, PII_KEYS, TTL_KEEPER_SECRET
+ln -s be/.env.production .env
+docker compose -f compose.prod.yml up -d --build
+
+./deploy/verify-deployment.sh https://api.sterun.example
+```
+
+Prasyarat yang tidak bisa dilewati: **DNS domain harus sudah menunjuk ke VPS sebelum start pertama**,
+dan port 80 harus terbuka (ACME memakainya, bukan cuma untuk redirect).
+
+### Isi tabel ini setelah deploy
+
+Salin output `verify-deployment.sh` (ada timestamp UTC) ke sini, plus:
+
+| Item | Nilai |
+| --- | --- |
+| Base URL | `https://…` |
+| `GET /health` | *(respon + timestamp)* |
+| `GET /ready` | *(respon)* |
+| Sertifikat TLS | *(issuer + masa berlaku)* |
+| Tanggal deploy | |
+
+Setelah itu STE-31 baru boleh ditandai Done, dan STE-21 / STE-25 / STE-32 punya URL yang bisa
+mereka pakai.
