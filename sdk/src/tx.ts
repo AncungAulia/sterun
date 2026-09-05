@@ -144,16 +144,6 @@ export async function runRead<T>(
   return unwrapValue(method, tx.result);
 }
 
-export interface WriteOptions {
-  /**
-   * Anything the SDK accepts as a signer: a `Keypair`, a `KeypairSigner`, a
-   * `Signer`, or a SEP-43 wallet's own `signTransaction` — which is what
-   * Stellar Wallets Kit hands you in the browser. Optional here because it can
-   * equally have been supplied once when the client was constructed.
-   */
-  signTransaction?: unknown;
-}
-
 /**
  * A mutating call: simulate, sign, submit, wait for a ledger.
  *
@@ -170,7 +160,6 @@ export interface WriteOptions {
 export async function runWrite<T>(
   method: string,
   assemble: () => Promise<AssembledLike<T | ResultLike<T>>>,
-  options: WriteOptions = {},
 ): Promise<SentResult<T>> {
   let tx: AssembledLike<T | ResultLike<T>>;
   try {
@@ -185,9 +174,11 @@ export async function runWrite<T>(
 
   let sent: SentLike<T | ResultLike<T>>;
   try {
-    sent = await tx.signAndSend(
-      options.signTransaction === undefined ? {} : { signTransaction: options.signTransaction },
-    );
+    // The signer is not passed here: it was supplied when the transaction was
+    // assembled, which is also what made the simulation run as the right
+    // account. Handing a different one in at send time would sign something
+    // other than what was simulated.
+    sent = await tx.signAndSend();
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (/NoSigner|no signer|signTransaction/i.test(message) && !/Error\(Contract/.test(message)) {

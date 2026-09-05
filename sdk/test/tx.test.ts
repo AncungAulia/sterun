@@ -207,25 +207,17 @@ describe("runWrite", () => {
     await expect(promise).rejects.toMatchObject({ variant: "AlreadyClaimed" });
   });
 
-  it("passes a per-call signer through to signAndSend", async () => {
-    const signAndSend = vi.fn(async () => ({
-      result: ok(1),
-      getTransactionResponse: { txHash: "h", ledger: 1 },
-    }));
-    const signer = { address: "G…", signTransaction: async () => ({ signedTxXdr: "" }) };
-    await runWrite("enter", async () => assembled({ result: ok(1), signAndSend }), {
-      signTransaction: signer,
-    });
-    expect(signAndSend).toHaveBeenCalledWith({ signTransaction: signer });
-  });
-
-  it("passes no signer option at all when none was given, so the client's own is used", async () => {
+  it("sends what it simulated, without swapping the signer in at the last moment", async () => {
+    // The signer is supplied when the transaction is assembled, which is also
+    // what makes the simulation run as the right account and record that
+    // account's auth entries. Handing a different signer to signAndSend would
+    // sign something other than what was simulated, so nothing is passed here.
     const signAndSend = vi.fn(async () => ({
       result: ok(1),
       getTransactionResponse: { txHash: "h", ledger: 1 },
     }));
     await runWrite("enter", async () => assembled({ result: ok(1), signAndSend }));
-    expect(signAndSend).toHaveBeenCalledWith({});
+    expect(signAndSend).toHaveBeenCalledWith();
   });
 
   it("refuses to report success without a transaction hash to point at", async () => {

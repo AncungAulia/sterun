@@ -9,7 +9,7 @@
  * on testnet, and `addCategory` swapping quota and distance would sell 10,000
  * places at a 200-metre race. Those are one line each here and invisible there.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Client as EventRegistryClient } from "event-registry";
 import type { Client as RaceRecordClient } from "race-record";
 import { SterunClient } from "../src/client.js";
@@ -47,14 +47,14 @@ const reverting = (code: number) => ({
  * whatever that method was told to answer.
  */
 function recorder(replies: Record<string, unknown>) {
-  const calls: Array<{ method: string; args: unknown }> = [];
+  const calls: Array<{ method: string; args: unknown; options?: unknown }> = [];
   const target = new Proxy(
     {},
     {
       get: (_t, method: string) => {
         if (method === "then") return undefined;
-        return async (args?: unknown) => {
-          calls.push({ method, args });
+        return async (args?: unknown, options?: unknown) => {
+          calls.push({ method, args, options });
           const reply = replies[method];
           if (reply === undefined) throw new Error(`fake has no reply for ${method}`);
           return reply;
@@ -159,7 +159,7 @@ describe("organiser flow maps onto EventRegistry", () => {
     });
     await client.addScanner(3, SCANNER);
     await client.removeScanner(3, SCANNER);
-    expect(registry.calls).toEqual([
+    expect(registry.calls.map(({ method, args }) => ({ method, args }))).toEqual([
       { method: "add_scanner", args: { event_id: 3, scanner: SCANNER } },
       { method: "remove_scanner", args: { event_id: 3, scanner: SCANNER } },
     ]);
@@ -322,48 +322,63 @@ describe("race flow maps onto RaceRecord", () => {
     );
     await client.recordDnf(5);
     await client.extendRecordTtl(5);
-    expect(record.calls).toEqual([
+    expect(record.calls.map(({ method, args }) => ({ method, args }))).toEqual([
       { method: "record_dnf", args: { token_id: 5 } },
       { method: "extend_record_ttl", args: { token_id: 5 } },
     ]);
   });
 });
 
-describe("signers", () => {
+describe("actors", () => {
   const signer = { address: RUNNER, signTransaction: async () => ({ signedTxXdr: "" }) };
   const other = { address: ORGANISER, signTransaction: async () => ({ signedTxXdr: "" }) };
 
-  it("uses the client's signer when a call does not name one", async () => {
-    const signAndSend = vi.fn(async () => ({
-      result: ok(1),
-      getTransactionResponse: { txHash: "h", ledger: 1 },
-    }));
-    const { client } = clientWith(
+  it("uses the client's signer and public key when a call does not name one", async () => {
+    const { client, record } = clientWith(
       {},
-      { enter: { simulation: {}, result: ok(1), signAndSend } },
-      { signTransaction: signer },
+      { enter: good(ok(1)) },
+      { signTransaction: signer, publicKey: RUNNER },
     );
     await client.enter({ runner: RUNNER, eventId: 0, categoryId: 0, participantHash: HASH });
-    expect(signAndSend).toHaveBeenCalledWith({ signTransaction: signer });
+    expect(record.calls[0]?.options).toEqual({ publicKey: RUNNER, signTransaction: signer });
   });
 
-  it("lets a per-call signer override the client's", async () => {
-    // The organiser console does this: one client, but results are signed by
-    // the organiser while a check-in is signed by the scanner device.
-    const signAndSend = vi.fn(async () => ({
-      result: ok(1),
-      getTransactionResponse: { txHash: "h", ledger: 1 },
-    }));
-    const { client } = clientWith(
+  it("lets a per-call actor override both fields", async () => {
+    // The organiser console does exactly this: one client, but a check-in is
+    // signed by the scanner device while the result is signed by the organiser.
+    const { client, record } = clientWith(
       {},
-      { enter: { simulation: {}, result: ok(1), signAndSend } },
-      { signTransaction: signer },
+      { claim_racepack: good(ok(undefined)) },
+      { signTransaction: signer, publicKey: RUNNER },
     );
-    await client.enter(
-      { runner: RUNNER, eventId: 0, categoryId: 0, participantHash: HASH },
-      other,
-    );
-    expect(signAndSend).toHaveBeenCalledWith({ signTransaction: other });
+    await client.claimRacepack(0, SCANNER, { publicKey: ORGANISER, signTransaction: other });
+    expect(record.calls[0]?.options).toEqual({
+      publicKey: ORGANISER,
+      signTransaction: other,
+    });
+  });
+
+  it("sends the source account to the contract call, not only the signer", async () => {
+    // publicKey is what the transaction is simulated for, and the simulation is
+    // what records the auth entries. Passing only the signer would simulate as
+    // the client's default account and produce an auth tree the signature
+    // cannot satisfy.
+    const { client, record } = clientWith({}, { record_dnf: good(ok(undefined)) });
+    await client.recordDnf(1, { publicKey: ORGANISER, signTransaction: other });
+    expect(record.calls[0]?.options).toMatchObject({ publicKey: ORGANISER });
+  });
+
+  it("omits both fields entirely when there are none, rather than sending undefined", async () => {
+    // exactOptionalPropertyTypes is on, and an explicit `publicKey: undefined`
+    // is not the same thing as an absent one to the SDK's option merging.
+    const { client, record } = clientWith({}, { record_dnf: good(ok(undefined)) });
+    await client.recordDnf(1);
+    expect(record.calls[0]?.options).toEqual({});
+  });
+
+  it("SterunClient.as() turns a keypair into both fields at once", () => {
+    const keypair = { publicKey: () => RUNNER };
+    expect(SterunClient.as(keypair)).toEqual({ publicKey: RUNNER, signTransaction: keypair });
   });
 
   it("readOnly() drops the signer and the public key", async () => {

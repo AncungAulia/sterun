@@ -26,6 +26,7 @@ export {
   type SterunClientOptions,
   type SterunContracts,
   type SterunSigner,
+  type CallOptions,
   type CreateEventArgs,
   type AddCategoryArgs,
   type EnterArgs,

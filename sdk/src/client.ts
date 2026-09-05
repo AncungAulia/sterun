@@ -120,6 +120,28 @@ export interface EnterArgs {
   participantHash: string;
 }
 
+/**
+ * Who a single call acts as.
+ *
+ * One Sterun flow involves several different signers, often within seconds of
+ * each other: the organiser opens the event, the runner pays and enters, an
+ * allowlisted scanner device checks them in, the organiser publishes the
+ * result. Rebuilding a client per actor would mean four RPC clients and four
+ * places to keep the network config in step, so the actor is a per-call
+ * argument instead.
+ *
+ * `publicKey` is not decoration next to `signTransaction`: it is the source
+ * account the transaction is built and simulated for, and the simulation is
+ * what records the auth entries. Simulate as the wrong address and the auth
+ * tree comes back for that address, so the right signature will not satisfy it.
+ */
+export interface CallOptions {
+  /** Source account for this call. Defaults to the client's `publicKey`. */
+  publicKey?: string;
+  /** Signer for this call. Defaults to the client's `signTransaction`. */
+  signTransaction?: SterunSigner;
+}
+
 export class SterunClient {
   private readonly registry: EventRegistryClient;
   private readonly record: RaceRecordClient;
@@ -154,9 +176,43 @@ export class SterunClient {
     return new SterunClient(rest);
   }
 
-  private signerFor(signer: SterunSigner | undefined): { signTransaction?: unknown } {
-    const chosen = signer ?? this.options.signTransaction;
-    return chosen === undefined ? {} : { signTransaction: chosen };
+  /**
+   * The actor arguments for a local `Keypair`, ready to spread into any call.
+   *
+   * ```ts
+   * await sterun.enter(args, SterunClient.as(runnerKeypair));
+   * ```
+   *
+   * Node-side convenience only. A browser passes the wallet's own address and
+   * `signTransaction` instead, which is the same two fields by hand.
+   */
+  static as(keypair: { publicKey(): string }): CallOptions {
+    return {
+      publicKey: keypair.publicKey(),
+      signTransaction: keypair as unknown as SterunSigner,
+    };
+  }
+
+  /**
+   * Per-call `MethodOptions` for the generated clients.
+   *
+   * Both fields matter and for different reasons. `signTransaction` is who
+   * signs; `publicKey` is the source account the transaction is *built and
+   * simulated* for, which decides the auth entries the simulation records. Get
+   * the second one wrong and the call is simulated as somebody else — the auth
+   * tree comes back for the wrong address and the signature will not satisfy
+   * it.
+   */
+  private callOptions(options: CallOptions = {}): {
+    publicKey?: string;
+    signTransaction?: SterunSigner;
+  } {
+    const publicKey = options.publicKey ?? this.options.publicKey;
+    const signTransaction = options.signTransaction ?? this.options.signTransaction;
+    return {
+      ...(publicKey === undefined ? {} : { publicKey }),
+      ...(signTransaction === undefined ? {} : { signTransaction }),
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -169,18 +225,20 @@ export class SterunClient {
    *
    * Events start in `Draft`: nobody can enter until `setEventStatus(…, "Open")`.
    */
-  async createEvent(args: CreateEventArgs, signer?: SterunSigner): Promise<SentResult<number>> {
+  async createEvent(args: CreateEventArgs, options?: CallOptions): Promise<SentResult<number>> {
     return runWrite(
       "createEvent",
       () =>
-        this.registry.create_event({
-          organiser: args.organiser,
-          name: args.name,
-          metadata_hash: fromHex32(args.metadataHash, "metadataHash"),
-          uri: args.uri,
-          starts_at: BigInt(args.startsAt),
-        }),
-      this.signerFor(signer),
+        this.registry.create_event(
+          {
+            organiser: args.organiser,
+            name: args.name,
+            metadata_hash: fromHex32(args.metadataHash, "metadataHash"),
+            uri: args.uri,
+            starts_at: BigInt(args.startsAt),
+          },
+          this.callOptions(options),
+        ),
     );
   }
 
@@ -188,18 +246,20 @@ export class SterunClient {
    * Add a distance category. Reverts `InvalidQuota(8)` on a zero quota,
    * `InvalidPrice(9)` on a negative price, `InvalidDistance(10)` on zero metres.
    */
-  async addCategory(args: AddCategoryArgs, signer?: SterunSigner): Promise<SentResult<number>> {
+  async addCategory(args: AddCategoryArgs, options?: CallOptions): Promise<SentResult<number>> {
     return runWrite(
       "addCategory",
       () =>
-        this.registry.add_category({
-          event_id: args.eventId,
-          code: args.code,
-          distance_m: args.distanceM,
-          quota: args.quota,
-          price_usdc: args.priceStroops,
-        }),
-      this.signerFor(signer),
+        this.registry.add_category(
+          {
+            event_id: args.eventId,
+            code: args.code,
+            distance_m: args.distanceM,
+            quota: args.quota,
+            price_usdc: args.priceStroops,
+          },
+          this.callOptions(options),
+        ),
     );
   }
 
@@ -210,12 +270,15 @@ export class SterunClient {
   async setEventStatus(
     eventId: number,
     status: EventStatus,
-    signer?: SterunSigner,
+    options?: CallOptions,
   ): Promise<SentResult<void>> {
     return runWrite(
       "setEventStatus",
-      () => this.registry.set_event_status({ event_id: eventId, status: fromEventStatus(status) }),
-      this.signerFor(signer),
+      () =>
+        this.registry.set_event_status(
+          { event_id: eventId, status: fromEventStatus(status) },
+          this.callOptions(options),
+        ),
     );
   }
 
@@ -223,24 +286,22 @@ export class SterunClient {
   async addScanner(
     eventId: number,
     scanner: string,
-    signer?: SterunSigner,
+    options?: CallOptions,
   ): Promise<SentResult<void>> {
     return runWrite(
       "addScanner",
-      () => this.registry.add_scanner({ event_id: eventId, scanner }),
-      this.signerFor(signer),
+      () => this.registry.add_scanner({ event_id: eventId, scanner }, this.callOptions(options)),
     );
   }
 
   async removeScanner(
     eventId: number,
     scanner: string,
-    signer?: SterunSigner,
+    options?: CallOptions,
   ): Promise<SentResult<void>> {
     return runWrite(
       "removeScanner",
-      () => this.registry.remove_scanner({ event_id: eventId, scanner }),
-      this.signerFor(signer),
+      () => this.registry.remove_scanner({ event_id: eventId, scanner }, this.callOptions(options)),
     );
   }
 
@@ -316,17 +377,19 @@ export class SterunClient {
    * produced them: `QuotaFull(5)`, `EventNotOpen(4)`, `CategoryNotFound(3)` all
    * come from EventRegistry propagating through `enter`, not from RaceRecord.
    */
-  async enter(args: EnterArgs, signer?: SterunSigner): Promise<SentResult<number>> {
+  async enter(args: EnterArgs, options?: CallOptions): Promise<SentResult<number>> {
     return runWrite(
       "enter",
       () =>
-        this.record.enter({
-          runner: args.runner,
-          event_id: args.eventId,
-          category_id: args.categoryId,
-          participant_hash: fromHex32(args.participantHash, "participantHash"),
-        }),
-      this.signerFor(signer),
+        this.record.enter(
+          {
+            runner: args.runner,
+            event_id: args.eventId,
+            category_id: args.categoryId,
+            participant_hash: fromHex32(args.participantHash, "participantHash"),
+          },
+          this.callOptions(options),
+        ),
     );
   }
 
@@ -342,12 +405,11 @@ export class SterunClient {
   async claimRacepack(
     tokenId: number,
     operator: string,
-    signer?: SterunSigner,
+    options?: CallOptions,
   ): Promise<SentResult<void>> {
     return runWrite(
       "claimRacepack",
-      () => this.record.claim_racepack({ token_id: tokenId, operator }),
-      this.signerFor(signer),
+      () => this.record.claim_racepack({ token_id: tokenId, operator }, this.callOptions(options)),
     );
   }
 
@@ -360,21 +422,23 @@ export class SterunClient {
   async recordFinish(
     tokenId: number,
     finishTimeS: number,
-    signer?: SterunSigner,
+    options?: CallOptions,
   ): Promise<SentResult<void>> {
     return runWrite(
       "recordFinish",
-      () => this.record.record_finish({ token_id: tokenId, finish_time_s: finishTimeS }),
-      this.signerFor(signer),
+      () =>
+        this.record.record_finish(
+          { token_id: tokenId, finish_time_s: finishTimeS },
+          this.callOptions(options),
+        ),
     );
   }
 
   /** Mark a no-show or a did-not-finish. Organiser only; terminal. */
-  async recordDnf(tokenId: number, signer?: SterunSigner): Promise<SentResult<void>> {
+  async recordDnf(tokenId: number, options?: CallOptions): Promise<SentResult<void>> {
     return runWrite(
       "recordDnf",
-      () => this.record.record_dnf({ token_id: tokenId }),
-      this.signerFor(signer),
+      () => this.record.record_dnf({ token_id: tokenId }, this.callOptions(options)),
     );
   }
 
@@ -383,11 +447,10 @@ export class SterunClient {
    * call it for anyone's record, and the caller pays the fee — but it still
    * needs a signer, because somebody has to pay that fee.
    */
-  async extendRecordTtl(tokenId: number, signer?: SterunSigner): Promise<SentResult<void>> {
+  async extendRecordTtl(tokenId: number, options?: CallOptions): Promise<SentResult<void>> {
     return runWrite(
       "extendRecordTtl",
-      () => this.record.extend_record_ttl({ token_id: tokenId }),
-      this.signerFor(signer),
+      () => this.record.extend_record_ttl({ token_id: tokenId }, this.callOptions(options)),
     );
   }
 
