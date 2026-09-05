@@ -54,7 +54,7 @@ export async function authRoutes(
       },
     },
     async (request: FastifyRequest<{ Body: { address: string } }>) => {
-      const challenge = challenges.issue(request.body.address);
+      const challenge = await challenges.issue(request.body.address);
       return { nonce: challenge.nonce, expires_at: challenge.expiresAt.toISOString() };
     },
   );

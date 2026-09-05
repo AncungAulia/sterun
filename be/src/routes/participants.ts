@@ -70,7 +70,7 @@ export async function participantRoutes(
   { vault, challenges }: VaultRouteDeps,
 ): Promise<void> {
   /** Prove control of a Stellar account before touching the vault. */
-  const authenticate = (request: FastifyRequest): string =>
+  const authenticate = (request: FastifyRequest): Promise<string> =>
     challenges.verify(
       request.headers["x-sterun-address"] as string | undefined,
       request.headers["x-sterun-nonce"] as string | undefined,
@@ -120,7 +120,7 @@ export async function participantRoutes(
       }>,
       reply: FastifyReply,
     ) => {
-      const caller = authenticate(request);
+      const caller = await authenticate(request);
       const body = request.body;
       if (caller !== body.runner_address) {
         // Submitting someone else's identity documents under your own signature
@@ -189,9 +189,9 @@ export async function participantRoutes(
       }>,
       reply: FastifyReply,
     ) => {
-      const caller = authenticate(request);
+      const caller = await authenticate(request);
       const summary = await vault.summary(request.params.id);
-      if (!summary) return reply.code(404).send({ error: "not_found", message: "no such participant" });
+      if (!summary) return reply.code(404).send({ error: "not-found", message: "no such participant" });
       if (summary.runnerAddress !== caller) {
         // Deliberately 403 and not 404: the id is a UUID the caller already
         // had, so hiding existence buys nothing, and a clear answer beats a
@@ -228,9 +228,9 @@ export async function participantRoutes(
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const caller = authenticate(request);
+      const caller = await authenticate(request);
       const summary = await vault.summary(request.params.id);
-      if (!summary) return reply.code(404).send({ error: "not_found", message: "no such participant" });
+      if (!summary) return reply.code(404).send({ error: "not-found", message: "no such participant" });
       if (summary.runnerAddress !== caller) {
         return reply
           .code(403)
