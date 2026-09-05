@@ -55,6 +55,22 @@ export interface ServerDeps {
   reader?: ChainReader;
 }
 
+/** Shared by 200 and 503: the shape does not change, only the verdict does. */
+const readyResponse = {
+  type: "object",
+  additionalProperties: false,
+  required: ["status", "checks"],
+  properties: {
+    status: { type: "string" },
+    checks: {
+      type: "object",
+      additionalProperties: false,
+      required: ["database"],
+      properties: { database: { type: "string" } },
+    },
+  },
+} as const;
+
 export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInstance {
   // `logger: false` in tests silences request logging on its own — Fastify 5
   // deprecated the separate `disableRequestLogging` flag, and setting both
@@ -139,6 +155,55 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
         activeKeyId: config.vault?.keyring.activeKeyId ?? null,
       },
     }));
+  });
+
+  /**
+   * Readiness, as distinct from liveness.
+   *
+   * `/health` deliberately touches nothing: a liveness probe that calls a
+   * dependency reports somebody else's outage as our own and gets the container
+   * restarted for it. But a deployment also needs the opposite question —
+   * "should traffic go here yet?" — and answering that without checking the
+   * database would let a fresh instance take requests it cannot serve.
+   *
+   * So: two endpoints, two questions. `/health` says the process is alive;
+   * `/ready` says its dependencies answered. A reverse proxy watches the
+   * second; a restart policy watches the first.
+   *
+   * Only the database is checked. RPC is deliberately not: the indexer and the
+   * roster degrade without it, but the vault and the results review do not, and
+   * a testnet RPC hiccup should not take the whole service out of rotation.
+   */
+  void app.register(async (instance) => {
+    instance.get(
+      "/ready",
+      {
+        schema: {
+          response: {
+            200: readyResponse,
+            // Declared as well as 200 so the not-ready body is serialised from a
+            // schema too — the same control every other response gets.
+            503: readyResponse,
+          },
+        },
+      },
+      async (_request, reply) => {
+        if (!deps.pool) {
+          // No database configured is a legitimate deployment (health + config
+          // only), and it is ready the moment it is alive.
+          return { status: "ready", checks: { database: "not-configured" } };
+        }
+        try {
+          await deps.pool.query("SELECT 1");
+          return { status: "ready", checks: { database: "ok" } };
+        } catch {
+          // 503, so a proxy takes this instance out of rotation rather than
+          // sending it requests it will fail. No error text: the reason is in
+          // the log, and this endpoint is public.
+          return reply.code(503).send({ status: "not-ready", checks: { database: "unreachable" } });
+        }
+      },
+    );
   });
 
   // One ChallengeStore for the whole process: a nonce issued at

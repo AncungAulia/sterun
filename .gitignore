@@ -7,11 +7,17 @@ dist/
 out/
 *.tsbuildinfo
 
-# Local environment. `.env.example` IS committed; `.env` never is — it holds
-# the distributor secret key that can move real testnet sUSD.
+# Local environment. The *.example files ARE committed; the filled-in ones never
+# are — they hold the distributor secret and PII_KEYS, which open the entire
+# vault.
+#
+# Two negations, not one. `.env.production.example` (STE-31) does not match
+# `.env.example`, so the single original exception silently ignored it — which
+# is how a file documenting the whole deploy goes missing from the repo.
 .env
 .env.*
 !.env.example
+!.env.*.example
 
 # Editor / OS
 .DS_Store

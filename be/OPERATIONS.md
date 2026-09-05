@@ -348,6 +348,115 @@ guard on-chain, allowlist scanner, dan cakupan satu event per request.
 
 ---
 
+---
+
+## Deploy ke VPS (STE-31)
+
+Lima container: Postgres, API, poller, TTL keeper, dan Caddy di depan mengurus TLS. Tiga service
+Node-nya adalah **image yang sama dengan perintah berbeda** — memang begitu bentuknya, dan satu
+image berarti satu build, satu versi, dan tidak mungkin poller menjalankan kode yang tidak dimiliki
+API.
+
+Deploy-nya **manual dan terdokumentasi**, bukan CD. Itu keputusan tiket ("deploy manual
+terdokumentasi cukup untuk v1"), dan setiap bagian pipeline otomatis akan menambah komponen yang
+butuh runbook-nya sendiri.
+
+### Sebelum mulai
+
+| Kebutuhan | Kenapa |
+| --- | --- |
+| VPS, Docker + compose plugin | tempat semuanya jalan |
+| Domain yang **DNS-nya sudah menunjuk ke VPS** | Caddy mengambil sertifikat lewat ACME HTTP challenge; tanpa DNS yang benar, challenge-nya gagal dan Caddy retry dengan backoff |
+| Port 80 dan 443 terbuka | 80 dipakai ACME, bukan cuma redirect |
+| Akun keeper testnet yang **baru** | jangan menyalin akun dari bukti STE-16; itu akun laptop sekali pakai |
+
+### Langkah
+
+```bash
+git clone https://github.com/AncungAulia/sterun.git && cd sterun
+
+cp be/.env.production.example be/.env.production
+$EDITOR be/.env.production      # STERUN_DOMAIN, POSTGRES_PASSWORD, PII_KEYS, TTL_KEEPER_SECRET
+
+# compose membaca STERUN_DOMAIN dan POSTGRES_PASSWORD dari .env di root
+ln -s be/.env.production .env
+
+docker compose -f compose.prod.yml up -d --build
+docker compose -f compose.prod.yml ps
+```
+
+Migrasi jalan sendiri saat API start, **sebelum** socket-nya dibuka — jadi service tidak pernah
+sempat menerima pendaftaran terhadap schema yang belum ada. Container `indexer` dan `keeper` menunggu
+API start persis karena itu.
+
+### Verifikasi — dari luar, tanpa SSH
+
+```bash
+./deploy/verify-deployment.sh https://api.sterun.example
+```
+
+13 pemeriksaan. Yang penting bukan cuma `/health`:
+
+- **TLS** benar-benar terminasi, dan `--proto '=https'` menolak redirect dari plaintext — URL yang
+  diam-diam turun ke HTTP akan lolos semua cek lain sambil mengirim signature wallet telanjang.
+- **`/ready`** membuktikan database-nya kebaca. `/health` sengaja **tidak** menyentuh apa pun:
+  liveness probe yang memanggil dependency melaporkan outage orang lain sebagai outage kita, dan
+  container-nya di-restart karena itu. Caddy mengawasi `/ready`; Docker mengawasi `/health`.
+- **Endpoint sensitif tetap 401** tanpa signature. Deploy yang salah di sini akan menyajikan data
+  yang bersinggungan dengan identitas ke internet — dan kelihatan sehat sempurna dari semua cek lain.
+
+Simpan output-nya (ada timestamp UTC) ke `docs/deployments.md` sebagai bukti Working agreement
+poin 8.
+
+### Yang bikin dia bertahan reboot
+
+`restart: unless-stopped` di semua service. Bukan `always`: container yang **sengaja** dimatikan
+operator harus tetap mati setelah reboot, kalau tidak, mematikan sesuatu untuk maintenance akan
+dibatalkan oleh mati listrik berikutnya.
+
+### Postgres tidak punya `ports:`
+
+Disengaja, dan ini satu baris yang menahan kesalahan firewall menaruh database PII di internet
+publik. Postgres cuma bisa dicapai dari network compose. Untuk `psql` dari VPS:
+
+```bash
+docker compose -f compose.prod.yml exec postgres psql -U sterun sterun
+```
+
+### Setelah deploy
+
+```bash
+# Index-nya kosong sampai poller menyusul. Ini normal, bukan bug.
+docker compose -f compose.prod.yml logs -f indexer
+
+# Kalau RPC sudah melewati jendela getEvents-nya, bangun ulang dari state kontrak:
+docker compose -f compose.prod.yml run --rm indexer node dist/cli/indexer.js rebuild
+```
+
+### Nonce sekarang di Postgres
+
+Sejak STE-31, nonce auth hidup di tabel `auth_nonces`, bukan di memori proses. Itu yang membuat
+**instance kedua mungkin**: nonce yang diterbitkan instance A dan dibelanjakan di instance B dulu
+gagal dengan `unknown-nonce` — kebohongan yang cuma muncul saat ramai, cuma kadang-kadang, dan
+menyuruh orang memeriksa kode signing-nya.
+
+Sifat sekali-pakainya dijaga `DELETE … RETURNING`, satu statement yang atomik. Dua instance yang
+menyodorkan nonce sama pada saat bersamaan menghasilkan **satu** baris di antara mereka.
+
+Menambah replica API sekarang jadi perubahan config, bukan penulisan ulang — tapi tetap belum
+dilakukan dan belum diuji di bawah load nyata.
+
+### Rollback
+
+```bash
+git checkout <commit sebelumnya>
+docker compose -f compose.prod.yml up -d --build
+```
+
+Migrasi **maju saja** — tidak ada `down`. Rollback ke commit yang schema-nya lebih tua akan jalan
+selama migrasi barunya aditif (sampai sekarang semuanya begitu). Migrasi yang menghapus kolom akan
+memutus ini, dan itu harus dibahas sebelum ditulis, bukan sesudah.
+
 ## Yang belum ada (jangan diasumsikan sudah)
 
 - **Nonce auth masih in-memory.** Aman untuk satu proses; **tidak** aman untuk dua. STE-31 wajib
@@ -360,15 +469,16 @@ guard on-chain, allowlist scanner, dan cakupan satu event per request.
 - **Belum ada penghapusan data** (right to erasure). Baris vault bisa dihapus; `participant_hash`
   di chain tidak bisa.
 - **Belum ada alert otomatis** kalau keeper tidak jalan atau `missing_keys > 0`. Sekarang caranya
-  membaca `ttl_keeper_runs` (`pnpm keeper report`). STE-31 yang memasang cron + notifikasinya.
+  membaca `ttl_keeper_runs` (`pnpm keeper report`). STE-31 menjalankan keeper sebagai container yang
+  restart sendiri; **notifikasi kalau dia berhenti masih belum ada**.
 - **Keeper memindai per record.** Biayanya `2 x jumlah record + jumlah runner` simulasi per run.
   Cukup untuk skala MVP (satu event, ratusan entry, mingguan) dan tidak cukup untuk puluhan ribu.
   Perbaikan yang jujur saat itu tiba adalah memperpanjang **per kategori**, dan itu butuh perubahan
   kontrak — bukan sekadar batch size yang lebih besar.
 - **Backfill `name_fragment` tidak mungkin** untuk baris yang dibuat sebelum migrasi 003: fragmennya
   cuma bisa diturunkan dari plaintext saat submit. Roster melaporkannya `null`.
-- **Indexer belum di-deploy sebagai service.** `pnpm indexer follow` masih dijalankan tangan; systemd
-  unit + restart otomatis adalah STE-31.
+- ~~**Indexer belum di-deploy sebagai service.**~~ STE-31: container `indexer` di
+  `compose.prod.yml`, `restart: unless-stopped`.
 - **Akun keeper masih akun testnet sekali pakai.** Yang dipakai di bukti (`GCYM7TQB…XV26`) dibuat
   lewat friendbot dari laptop. Untuk VPS, STE-31 bikin akunnya sendiri dan menaruh secretnya di
   secret manager — bukan menyalin yang ini.
