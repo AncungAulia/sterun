@@ -79,6 +79,16 @@ export interface SterunClientOptions {
   timeoutInSeconds?: number;
   /** Only for a local RPC served over plain HTTP. */
   allowHttp?: boolean;
+  /**
+   * The two generated clients, supplied instead of constructed.
+   *
+   * This is the network seam, and it exists for the same reason
+   * `ContractCaller` exists in be/src/chain/reader.ts: the interesting
+   * behaviour of this class is which contract method it calls and with which
+   * arguments, and that is worth asserting without a testnet in the loop. Tests
+   * pass fakes here; nothing in production does.
+   */
+  bindings?: { registry: EventRegistryClient; record: RaceRecordClient };
 }
 
 /** Arguments for a new event. `metadataHash` commits to the document at `uri`. */
@@ -130,11 +140,12 @@ export class SterunClient {
       ...(options.allowHttp === undefined ? {} : { allowHttp: options.allowHttp }),
     };
 
-    this.registry = new EventRegistryClient({
-      ...shared,
-      contractId: options.contracts.eventRegistry,
-    });
-    this.record = new RaceRecordClient({ ...shared, contractId: options.contracts.raceRecord });
+    this.registry =
+      options.bindings?.registry ??
+      new EventRegistryClient({ ...shared, contractId: options.contracts.eventRegistry });
+    this.record =
+      options.bindings?.record ??
+      new RaceRecordClient({ ...shared, contractId: options.contracts.raceRecord });
   }
 
   /** A read-only twin of this client — useful to prove a path needs no wallet. */
