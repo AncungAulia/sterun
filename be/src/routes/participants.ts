@@ -22,6 +22,7 @@ import {
   type Vault,
 } from "../vault.js";
 
+// STELLAR_ADDRESS is still used by the /participants body schema below.
 const STELLAR_ADDRESS = "^G[A-Z2-7]{55}$";
 const HEX_64 = "^[0-9a-f]{64}$";
 const UUID = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
@@ -81,32 +82,6 @@ export async function participantRoutes(
       request.headers["x-sterun-nonce"] as string | undefined,
       request.headers["x-sterun-signature"] as string | undefined,
     );
-
-  app.post(
-    "/auth/challenge",
-    {
-      schema: {
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["address"],
-          properties: { address: { type: "string", pattern: STELLAR_ADDRESS } },
-        },
-        response: {
-          200: {
-            type: "object",
-            additionalProperties: false,
-            required: ["nonce", "expires_at"],
-            properties: { nonce: { type: "string" }, expires_at: { type: "string" } },
-          },
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Body: { address: string } }>) => {
-      const challenge = challenges.issue(request.body.address);
-      return { nonce: challenge.nonce, expires_at: challenge.expiresAt.toISOString() };
-    },
-  );
 
   app.post(
     "/participants",

@@ -25,8 +25,10 @@ import type { Pool } from "pg";
 import { ChallengeStore } from "./auth.js";
 import type { ChainReader } from "./chain/reader.js";
 import type { Config } from "./config.js";
+import { authRoutes } from "./routes/auth.js";
 import { directoryRoutes } from "./routes/directory.js";
 import { participantRoutes } from "./routes/participants.js";
+import { resultsRoutes } from "./routes/results.js";
 import { rosterRoutes } from "./routes/roster.js";
 import type { Vault } from "./vault.js";
 
@@ -110,6 +112,9 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
     roster: {
       enabled: deps.pool !== undefined && deps.vault !== undefined && deps.reader !== undefined,
     },
+    results: {
+      enabled: deps.pool !== undefined && deps.reader !== undefined,
+    },
     vault: {
       enabled: deps.vault !== undefined,
       // The key IDS, never the keys. Which key is active is what you need to
@@ -124,6 +129,13 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   // endpoint, and two stores would make that depend on which router answered.
   const challenges = deps.challenges ?? new ChallengeStore();
 
+  // STE-20. Mounted once, next to whatever needs it — never inside one router.
+  // The results upload authenticates but needs no vault, so a deployment with
+  // Postgres and RPC and no PII_KEYS must still be able to issue a nonce.
+  if (deps.vault || (deps.pool && deps.reader)) {
+    void app.register(async (instance) => authRoutes(instance, challenges));
+  }
+
   if (deps.vault) {
     const vault = deps.vault;
     void app.register(async (instance) => participantRoutes(instance, { vault, challenges }));
@@ -137,6 +149,14 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   if (deps.pool && deps.vault && deps.reader) {
     const roster = { pool: deps.pool, vault: deps.vault, reader: deps.reader, challenges };
     void app.register(async (instance) => rosterRoutes(instance, roster));
+  }
+
+  // STE-20. Needs the index (to resolve bib -> token_id) and the chain (to ask
+  // who the organiser is). No vault: a results file contains bib numbers and
+  // times, and nothing that identifies a person.
+  if (deps.pool && deps.reader) {
+    const results = { pool: deps.pool, reader: deps.reader, challenges };
+    void app.register(async (instance) => resultsRoutes(instance, results));
   }
 
   return app;
