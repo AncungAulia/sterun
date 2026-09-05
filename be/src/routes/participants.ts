@@ -13,15 +13,10 @@
  * contact number, with or without authentication.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { AuthError, type ChallengeStore } from "../auth.js";
-import { NormalizationError } from "../spec/normalize.js";
-import {
-  AlreadyConfirmedError,
-  ParticipantExistsError,
-  ParticipantNotFoundError,
-  type Vault,
-} from "../vault.js";
+import type { ChallengeStore } from "../auth.js";
+import type { Vault } from "../vault.js";
 
+// STELLAR_ADDRESS is still used by the /participants body schema below.
 const STELLAR_ADDRESS = "^G[A-Z2-7]{55}$";
 const HEX_64 = "^[0-9a-f]{64}$";
 const UUID = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
@@ -81,32 +76,6 @@ export async function participantRoutes(
       request.headers["x-sterun-nonce"] as string | undefined,
       request.headers["x-sterun-signature"] as string | undefined,
     );
-
-  app.post(
-    "/auth/challenge",
-    {
-      schema: {
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["address"],
-          properties: { address: { type: "string", pattern: STELLAR_ADDRESS } },
-        },
-        response: {
-          200: {
-            type: "object",
-            additionalProperties: false,
-            required: ["nonce", "expires_at"],
-            properties: { nonce: { type: "string" }, expires_at: { type: "string" } },
-          },
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Body: { address: string } }>) => {
-      const challenge = challenges.issue(request.body.address);
-      return { nonce: challenge.nonce, expires_at: challenge.expiresAt.toISOString() };
-    },
-  );
 
   app.post(
     "/participants",
@@ -281,35 +250,6 @@ export async function participantRoutes(
   );
 
   /** Every failure mode of this router, mapped once. */
-  app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof AuthError) {
-      return reply.code(401).send({ error: error.reason, message: error.message });
-    }
-    if (error instanceof NormalizationError) {
-      // The spec refused to hash this input. 400 with the frozen field/code so
-      // the client can point at the right form field.
-      return reply
-        .code(400)
-        .send({ error: error.code, field: error.field, message: error.message });
-    }
-    if (error instanceof ParticipantNotFoundError) {
-      return reply.code(404).send({ error: "not_found", message: error.message });
-    }
-    if (error instanceof AlreadyConfirmedError || error instanceof ParticipantExistsError) {
-      return reply.code(409).send({ error: "conflict", message: error.message });
-    }
-    // Fastify's schema validation failures arrive as an error carrying
-    // `validation`; narrowed rather than cast because the handler's parameter
-    // is `unknown` under this tsconfig.
-    if (typeof error === "object" && error !== null && "validation" in error) {
-      const message = error instanceof Error ? error.message : "request failed schema validation";
-      return reply.code(400).send({ error: "invalid_request", message });
-    }
-    // Anything unrecognised is logged in full and answered with nothing: an
-    // unexpected error in this router may well have PII in its message.
-    reply.log.error({ err: error }, "unhandled error in participant routes");
-    return reply.code(500).send({ error: "internal_error" });
-  });
 }
 
 /** Exported so a test can assert no schema can express a PII field. */

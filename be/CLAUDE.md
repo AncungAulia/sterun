@@ -1,13 +1,14 @@
 # `be/` — backend Node/TS (CLAUDE.md)
 
-API + helper Stellar + **PII vault** + **indexer** + **TTL keeper**. Owner: **James**.
-Komponen **C7** (PII vault + API, STE-11) dan **C8** (indexer, TTL keeper, roster bundle, STE-16).
+API + helper Stellar + **PII vault** + **indexer** + **TTL keeper** + **results review**.
+Owner: **James**. Komponen **C7** (PII vault + API, STE-11; results CSV + hardening, STE-20) dan
+**C8** (indexer, TTL keeper, roster bundle, STE-16).
 
 Tiga proses, satu paket. Yang mana yang jalan ditentukan oleh perintah yang kamu ketik, bukan flag:
 
 | Proses | Perintah | Tugasnya |
 | --- | --- | --- |
-| API | `pnpm dev` | melayani vault, directory/history, roster bundle |
+| API | `pnpm dev` | melayani vault, directory/history, roster bundle, review hasil |
 | Poller | `pnpm indexer follow` | `getEvents` → Postgres |
 | Keeper | `pnpm keeper run` | bayar sewa record supaya tidak ter-archive (cron mingguan) |
 
@@ -217,7 +218,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-479 test (`pnpm --filter be test`; 138 di antaranya butuh Postgres), dan sebagian besar kasus
+586 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -233,8 +234,81 @@ run, dan suite begitu berhenti dibaca orang.
 
 Tiap tiket berikutnya: **e2e + edge + positive + negative**, sama seperti sisi kontrak.
 
+## Results CSV (STE-20, C7)
+
+`POST /events/:eventId/results/preview` — organiser upload CSV, dapat preview + anomali per baris.
+Service ini **tidak menandatangani apa pun**: yang boleh mem-publish hasil adalah organiser, dan
+kuncinya harus tetap di perangkat organiser, bukan jadi kunci yang dipegang server ini.
+
+Alasan seluruh langkah review ini ada: `record_finish` memindahkan record ke `Finished` yang
+**terminal**. Waktu yang salah dan terlanjur ter-publish tidak bisa dikoreksi oleh siapa pun.
+
+**Bib TIDAK unik dalam satu event.** `reserve_slot` mengembalikan `entered_count` milik
+**kategori**, jadi 5K dan 10K di event yang sama sama-sama mulai dari bib 0. CSV `(bib_no,
+finish_time)` — persis bentuk yang disebut tiket — jadi ambigu begitu event punya dua kategori.
+Karena itu ada kolom opsional `category_id`, bib telanjang cuma di-resolve kalau **tepat satu**
+kategori mengklaimnya, sisanya jadi anomali `ambiguous_bib`. Menebak di sini berarti mem-publish
+waktu pelari lain ke record seseorang, permanen.
+
+Tujuh anomali, dan `severity`-nya lebih penting daripada jumlahnya:
+
+| severity | artinya |
+| --- | --- |
+| `reverts` | chain menolak baris itu; biayanya satu transaksi gagal (`unknown_bib`, `not_claimed`, `already_final`) |
+| `wrong` | chain **menerimanya** dan hasilnya bohong selamanya (`ambiguous_bib`, `impossible_time`, `duplicate_bib`, `malformed_row`) |
+
+Parser-nya longgar soal **bentuk**, ketat soal **makna**: `52:41`, `1:02:41`, `3161`, `3161.4`
+semuanya diterima, header `Bib No`/`chip_time`/`;` sebagai delimiter juga. Membaca `52:41` sebagai
+5241 detik = hasil meleset 35 menit yang tidak bisa ditarik. Pecahan detik di-**truncate**, bukan
+dibulatkan — membulatkan berarti mengarang waktu yang tidak pernah dicatat.
+
+`source_sha256` di response adalah hash byte yang **persis** diunggah, dihitung sebelum parsing.
+Itu yang dicatat di event metadata supaya hasil yang ter-publish tetap tamper-evident
+(SYSTEM_DESIGN §11 risiko 4).
+
+```bash
+pnpm --filter be e2e:results   # butuh DATABASE_URL + PII_KEYS; bikin event baru di testnet
+```
+
+## Hardening (STE-20)
+
+**Satu bentuk error untuk seluruh API**, dari satu root handler di `src/http/errors.ts`:
+
+```json
+{ "error": "<kode kebab stabil>", "message": "<kalimat>", "details": [...] }
+```
+
+`error` milik mesin dan tidak pernah berubah untuk kondisi yang sama; `message` milik manusia dan
+boleh ditulis ulang. Handler per-router sudah **dihapus** — dulu ada tiga bentuk beredar, salah
+satunya `{"error": "Bad Request"}` bawaan Fastify yang isinya reason phrase HTTP, jadi client yang
+mem-branch ke situ mem-branch ke string yang berubah mengikuti status code.
+
+Kode error sekarang **kebab-case semua**. `AuthError` memang sudah kebab (`unknown-nonce`),
+router-nya snake (`not_found`) — client harus tahu dua konvensi.
+
+**500 tidak membocorkan apa pun.** Teks exception membawa path file, potongan SQL, dan kadang nilai
+yang menyebabkan kegagalan — di service yang memegang dokumen identitas, itu persis yang tidak boleh
+sampai ke response body. Isinya kalimat tetap + `x-request-id` untuk dikutip; error aslinya masuk log.
+
+**Rate limit** per-endpoint sesuai biayanya: 240/menit global, 30 untuk `/auth/challenge`, 10 untuk
+upload hasil. Key-nya hop pertama `x-forwarded-for` — di belakang reverse proxy (STE-31) semua
+request datang dari satu socket, dan tanpa itu satu client berisik akan mengunci seluruh event.
+**Mati saat `NODE_ENV=test`** supaya suite tidak gagal di request ke-241 karena alasan yang tidak
+ada hubungannya.
+
+**Log me-redact** `x-sterun-signature` dan `x-sterun-nonce`, dan membuang query string (bisa membawa
+address).
+
+**OpenAPI di `/openapi.json`**, di-generate dari schema yang sama yang dipakai Fastify untuk
+validasi dan serialisasi — jadi dia tidak bisa mendeskripsikan endpoint yang perilakunya berbeda.
+
+> Jebakan Fastify yang menghabiskan waktu dan sudah ada komentarnya di `src/server.ts`: route yang
+> didaftarkan **sinkron** ter-mount sebelum plugin yang di-`register` sempat memasang hook
+> `onRoute`-nya. Akibatnya `/health` dan `/config` tidak terlihat oleh swagger. Semua route sekarang
+> lewat `register`.
+
 ## Yang belum ada (jangan diasumsikan sudah)
 
-Rate limit, job re-encrypt untuk rotasi kunci, nonce store yang tahan multi-instance, alert kalau
-keeper tidak jalan, dan deploy ke VPS (STE-31). Daftar lengkapnya di bagian akhir
+Job re-encrypt untuk rotasi kunci, nonce store yang tahan multi-instance, alert kalau keeper tidak
+jalan, dan deploy ke VPS (STE-31). Daftar lengkapnya di bagian akhir
 [`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah satunya mendarat.

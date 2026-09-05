@@ -1070,3 +1070,55 @@ node -e "import('@sterun/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VERSIO
 > Scope `@sterun` di npm belum ada saat catatan ini ditulis (`npm view @sterun/sdk` → 404), jadi
 > publish pertama sekaligus membuat scope-nya. Kepemilikan org npm ada di owner tiket, sesuai
 > "Left to the owner" di STE-19.
+
+---
+
+## Bukti e2e STE-20 — review hasil CSV terhadap testnet yang live
+
+Dijalankan **2026-09-05** dengan `pnpm --filter be e2e:results`. Bukan simulasi: event-nya dibuat
+sungguhan di testnet lewat `@sterun/sdk`, di-index oleh indexer STE-16 dari **state kontrak**, lalu
+dibaca ulang lewat route yang sama yang dilayani `pnpm dev`. Semua akun adalah akun Friendbot sekali
+pakai, jadi tidak butuh secret siapa pun; kategorinya gratis, jadi jalur `transfer` SEP-41 memang
+tidak tersentuh.
+
+```
+event_id        2
+organiser       GBMAOPRWUEX3DKNESZ2SVQLP2UIZ4A66NQHEOAK6EQCZQ45P5BY75E4S
+categories      0 (10km), 1 (5km)   ← dua-duanya menomori bib mulai dari 0
+token_ids       5, 6, 7             ← dua RacepackClaimed, satu masih Entered
+source_sha256   2d09063479983e69160f269e2164ce48fe91a7f2791aeb592364bdfab3167c27
+publishable     2 dari 8 baris
+```
+
+### CSV yang diunggah, dan jawabannya per baris
+
+| Baris | Isi | Hasil |
+| --- | --- | --- |
+| 2 | `0,0,52:41` | **ok** — dan `52:41` dibaca **3161 detik**, bukan 5241 |
+| 3 | `1,0,3200` | **ok** |
+| 4 | `1,0,3300` | `duplicate_bib` (*wrong*) — "bib 1 already appears on line 3 of this file" |
+| 5 | `99,0,3161` | `unknown_bib` (*reverts*) — "no entry with bib 99 in category 0 for this event" |
+| 6 | `0,,3161` | `ambiguous_bib` (*wrong*) — "bib 0 exists in categories 0, 1 …" |
+| 7 | `2,0,3161` | `unknown_bib` (*reverts*) — terdaftar di kategori 1, bukan 0 |
+| 8 | `0,1,120` | `not_claimed` (*reverts*) **dan** `impossible_time` (*wrong*) — "120s over 5000m is 41.7 m/s" |
+| 9 | `xx,0,3161` | `malformed_row` (*wrong*) — "bib number \"xx\" is not a whole number" |
+
+Tiap anomali datang dengan **alasan yang bisa ditindaklanjuti**, bukan kode yang harus dicari
+artinya. Baris 8 membuktikan satu baris bisa gagal karena lebih dari satu hal sekaligus — organiser
+yang cuma diberi tahu masalah pertama akan mengunggah ulang dan diberi tahu masalah berikutnya.
+
+### `ambiguous_bib` terbukti nyata, bukan teoretis
+
+Baris 6 adalah temuan yang tidak ada di daftar anomali tiket. `reserve_slot` mengembalikan
+`entered_count` milik **kategori**, jadi di event ini bib 0 benar-benar ada dua: satu di kategori 0
+(10km) dan satu di kategori 1 (5km). CSV `(bib_no, finish_time)` polos — persis bentuk yang diminta
+tiket — tidak bisa menyebut yang mana. Menebak berarti mem-publish waktu satu pelari ke record
+pelari lain, dan `Finished` itu terminal.
+
+### Yang juga dibuktikan
+
+- **`source_sha256`** dihitung dari byte yang persis diunggah, sebelum parsing. Itu nilai yang
+  dicatat di event metadata supaya hasil ter-publish tetap tamper-evident (SYSTEM_DESIGN §11 risiko 4).
+- **Response tidak membawa address pelari** — dicek eksplisit terhadap payload mentah.
+- **Auth-nya organiser, dibaca dari chain.** Scanner yang ter-allowlist pun ditolak 403: dia boleh
+  meng-check-in orang, bukan mem-publish hasil.
