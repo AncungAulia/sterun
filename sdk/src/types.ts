@@ -25,8 +25,8 @@
  * enough to make `enter` fail with an error the caller cannot act on. The names
  * carry the unit so nobody has to guess.
  */
-import type { EventData, CategoryData, EventStatus as BindingEventStatus } from "event-registry";
-import type { RecordData, RecordState as BindingRecordState } from "race-record";
+import type { EventData, CategoryData, EventStatus as BindingEventStatus } from "../vendor-dist/event-registry.js";
+import type { RecordData, RecordState as BindingRecordState } from "../vendor-dist/race-record.js";
 
 /**
  * Event lifecycle. Legal transitions (INTERFACE.md §1.2; anything else reverts

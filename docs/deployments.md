@@ -876,6 +876,7 @@ dan jendela ±1 step-nya benar-benar menolak kode basi.
 | Tiket | Butuh apa |
 | --- | --- |
 | **STE-15** `SterunClient` (James) | **SELESAI** — `EVENT_REGISTRY` + `RACE_RECORD` + `SUSD_SAC`; bindings-nya di `sc/bindings/` (di-generate dari wasm yang sama dengan yang live di atas). Bukti live di section "Bukti e2e STE-15" |
+| **STE-19** JSON Schema + publish (James) | **kode SELESAI**, `npm publish` menunggu kredensial npm. Bukti packaging di section "Bukti STE-19" |
 | **STE-16** indexer (James) | **SELESAI** — contract id kedua kontrak untuk filter `getEvents`; bentuk topic/data beku di `INTERFACE.md` §1.3 & §2.3. Bukti live di section di atas |
 | **STE-11** PII vault (James) | `participant_hash` dari `HASH_AND_TOTP.md`; contoh nyata tersimpan di `record_of(0)` |
 | **STE-17/18/21/22** apps (Ancung) | contract id + SAC untuk flow entry, QR pass, dan scanner |
@@ -984,3 +985,88 @@ tabel di atas. Script **tidak** diam-diam lulus tanpa leg ini: dia mencetak bahw
 > Kategori **gratis** (`price_usdc == 0`) melewatkan `transfer` sepenuhnya, jadi leg yang sudah
 > jalan di atas memang tidak menyentuh SAC — itu perilaku yang benar sesuai `INTERFACE.md` §2.1,
 > bukan jalan pintas.
+
+---
+
+## Bukti STE-19 — `@sterun/sdk` dipasang dari tarball di project kosong
+
+Dijalankan **2026-09-05**. Yang dibuktikan: paket yang akan di-`npm publish` benar-benar bisa
+dipakai orang di luar tim, tanpa akses ke repo ini.
+
+`npm publish` sendiri **belum** dijalankan — butuh kredensial npm milik James (lihat runbook di
+bawah). Semua langkah sebelum upload sudah diverifikasi dengan `npm pack`, yang menghasilkan
+tarball **persis** seperti yang akan diunggah.
+
+### Isi tarball
+
+```
+$ npm pack
+sterun-sdk-0.1.0.tgz    33 files, 55 KB
+
+package/dist/*.js + *.d.ts          SterunClient, errors, schema, document
+package/vendor-dist/*.js + *.d.ts   bindings kontrak, ikut dibundel
+package/schema/race-record-v1.0.json
+package/README.md
+package/package.json
+```
+
+`dependencies` di tarball: `@stellar/stellar-sdk ^17.0.1` dan `zod ^4.1.13` — **tidak ada `file:`
+dependency**, yang memang tidak bisa di-publish. Itu alasan bindings di-vendor ke `sdk/vendor/`.
+
+### Project pihak ketiga
+
+Project TypeScript kosong **di luar repo** (`/tmp/…/thirdparty`), cuma `package.json` +
+`tsconfig.json`, lalu:
+
+```bash
+npm install ./sterun-sdk-0.1.0.tgz
+npx tsc --noEmit     # bersih — nol error dari @sterun/sdk
+npx tsx quickstart.ts
+```
+
+Quickstart-nya adalah isi README apa adanya; tidak ada satu pun import relatif ke repo ini.
+
+```
+getEvent(0)      : Sterun Testnet Rehearsal 2026 | Open
+recordsOf        : #0 Finished
+verify           : true for the real hash, false for a wrong one
+document         : valid against RaceRecord JSON Schema v1.0.0
+  event          : Sterun Testnet Rehearsal 2026
+  category       : 10K 10000m 50000000 stroops
+  state          : Finished | finish 3161s
+  link           : https://stellar.expert/explorer/testnet/contract/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+schema $id       : https://sterun.xyz/schemas/race-record/v1.0.json
+typed error      : EventNotFound #2 (event-registry)
+
+✅ third-party quickstart passed from a clean project
+```
+
+Empat hal yang dibuktikan sekaligus:
+
+1. **Baca tanpa wallet** — nol `publicKey`, nol signer, dan datanya keluar.
+2. **Dokumen valid terhadap schema-nya sendiri** — di-`JSON.stringify` lalu di-`parse` ulang lewat
+   `parseRaceRecordDocument`, jadi yang divalidasi adalah JSON sungguhan, bukan object di memori.
+3. **Typed error selamat melewati packaging** — `EventNotFound #2` masih membawa band
+   `event-registry`, bukan sekadar string.
+4. **`price_stroops` tetap string** (`"50000000"`), jadi `i128` tidak pernah lewat double.
+
+### Runbook publish (tinggal dijalankan James)
+
+```bash
+npm login                                   # akun yang memiliki scope @sterun
+cd sdk
+pnpm --filter @sterun/sdk test              # 134 test harus hijau
+npm publish --access public                 # prepack menjalankan build otomatis
+```
+
+Setelah itu, verifikasi dari mesin bersih:
+
+```bash
+mkdir /tmp/verify && cd /tmp/verify && npm init -y
+npm install @sterun/sdk
+node -e "import('@sterun/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VERSION))"   # 1.0.0
+```
+
+> Scope `@sterun` di npm belum ada saat catatan ini ditulis (`npm view @sterun/sdk` → 404), jadi
+> publish pertama sekaligus membuat scope-nya. Kepemilikan org npm ada di owner tiket, sesuai
+> "Left to the owner" di STE-19.

@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sterun.xyz/schemas/race-record/v1.0.json",
+  "title": "Sterun RaceRecord",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "network": {
+      "type": "object",
+      "properties": {
+        "passphrase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_registry": {
+          "type": "string",
+          "pattern": "^C[A-Z2-7]{55}$"
+        },
+        "race_record": {
+          "type": "string",
+          "pattern": "^C[A-Z2-7]{55}$"
+        }
+      },
+      "required": [
+        "passphrase",
+        "event_registry",
+        "race_record"
+      ],
+      "additionalProperties": false,
+      "description": "Which chain and which deployment this record was read from. v1 contracts are non-upgradeable, so the pair of addresses identifies the deployment exactly."
+    },
+    "token_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^G[A-Z2-7]{55}$",
+      "description": "The runner. No exported contract path can ever change it."
+    },
+    "bib_no": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "participant_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256(name || national_id || emergency_contact || salt) — a commitment to off-chain personal data, never the data itself."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "Entered",
+        "RacepackClaimed",
+        "Finished",
+        "Dnf"
+      ]
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "name": {
+          "type": "string"
+        },
+        "organiser": {
+          "type": "string",
+          "pattern": "^G[A-Z2-7]{55}$"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "metadata_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "starts_at": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "description": "Unix seconds."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "Draft",
+            "Open",
+            "Closed",
+            "Completed"
+          ]
+        }
+      },
+      "required": [
+        "event_id",
+        "name",
+        "organiser",
+        "uri",
+        "metadata_hash",
+        "starts_at",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "category": {
+      "type": "object",
+      "properties": {
+        "category_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "code": {
+          "type": "string"
+        },
+        "distance_m": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "quota": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "entered_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "price_stroops": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "description": "Entry fee in token stroops, 7 decimals. \"0\" means a free category."
+        }
+      },
+      "required": [
+        "category_id",
+        "code",
+        "distance_m",
+        "quota",
+        "entered_count",
+        "price_stroops"
+      ],
+      "additionalProperties": false
+    },
+    "timings": {
+      "type": "object",
+      "properties": {
+        "entered_at": {
+          "type": "string",
+          "pattern": "^\\d+$"
+        },
+        "claimed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finish_time_s": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Net finish time in seconds."
+        },
+        "result_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "entered_at",
+        "claimed_at",
+        "finish_time_s",
+        "result_at"
+      ],
+      "additionalProperties": false
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "record_contract": {
+          "type": "string",
+          "format": "uri"
+        },
+        "owner_account": {
+          "type": "string",
+          "format": "uri"
+        },
+        "transactions": {
+          "type": "object",
+          "properties": {
+            "entered": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "claimed": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "entered",
+            "claimed",
+            "result"
+          ],
+          "additionalProperties": false,
+          "description": "Provenance, when the caller has it. Chain state alone does not say which transaction produced it — that comes from the indexer (STE-16) — so all three are nullable and a document without them is still valid."
+        }
+      },
+      "required": [
+        "record_contract",
+        "owner_account",
+        "transactions"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "network",
+    "token_id",
+    "owner",
+    "bib_no",
+    "participant_hash",
+    "state",
+    "event",
+    "category",
+    "timings",
+    "links"
+  ],
+  "additionalProperties": false,
+  "description": "One Sterun race record, in the public form a profile page renders and a third party verifies."
+}

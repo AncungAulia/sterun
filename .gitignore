@@ -16,3 +16,6 @@ out/
 # Editor / OS
 .DS_Store
 *.swp
+
+# STE-19 — compiled vendored bindings (sdk/vendor/ is the committed source).
+vendor-dist/

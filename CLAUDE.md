@@ -15,7 +15,7 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 | [`docs/`](docs/CLAUDE.md) | SYSTEM_DESIGN + `deployments.md` (bukti deploy) |
 | [`docs/specs/`](docs/specs/CLAUDE.md) | spec BEKU C4: aturan mengubahnya, cara memverifikasinya |
 | [`be/`](be/CLAUDE.md) | backend Node/TS (James) — API + PII vault + indexer + TTL keeper |
-| [`sdk/`](sdk/CLAUDE.md) | `@sterun/sdk` (James) — C5 `SterunClient`, typed errors, e2e testnet |
+| [`sdk/`](sdk/CLAUDE.md) | `@sterun/sdk` (James) — C5 `SterunClient` + C6 JSON Schema v1.0, packaging |
 | [`fe/`](fe/CLAUDE.md) | web app Next.js (Ancung) — scaffolded |
 | [`landing-page/`](landing-page/CLAUDE.md) | landing (Nabil) — scaffolded |
 
@@ -42,11 +42,10 @@ workspace — itu output generator, dikonsumsi lewat `file:` dependency. Dari ro
 `pnpm install`, `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 `pnpm faucet`, `pnpm indexer`, `pnpm keeper`.
 
-> **`pnpm bindings` WAJIB dijalankan sebelum `pnpm install`, bukan sesudah.** pnpm menyalin
-> `file:` dependency ke store-nya (snapshot, bukan symlink) dan `dist/` bindings di-gitignore,
-> jadi install duluan = copy tanpa `dist/`, dan build ulang **tidak** memperbaikinya. Gejalanya
-> `Cannot find module 'race-record'` yang tidak hilang walau sudah di-build berkali-kali.
-> Urutan benar: `pnpm bindings && pnpm install`. Alasan lengkap: [`sdk/CLAUDE.md`](sdk/CLAUDE.md).
+`sdk/` **tidak** memakai `file:` dependency: `sc/bindings/*/src/index.ts` di-*vendor* ke
+`sdk/vendor/` sebagai salinan byte-identical (paket yang di-publish ke npm tidak bisa membawa
+`file:` dep). `sdk/test/vendor.test.ts` gagal kalau salinannya melenceng, jadi regenerate bindings
+tanpa me-refresh SDK = test merah. Refresh: `pnpm --filter @sterun/sdk vendor`.
 
 Versi `@stellar/stellar-sdk` dipaksa satu (`^17.0.1`) lewat `pnpm.overrides` di `package.json`
 root: generator bindings menuliskan `^14.5.0`, dan dua copy SDK dalam satu graph berarti dua RPC
@@ -66,6 +65,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-11 | PII vault + hash/TOTP backend (C7) | selesai |
 | STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 479 test |
 | STE-15 | `@sterun/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
+| STE-19 | JSON Schema v1.0 + packaging (C6) | kode selesai, 134 test — **`npm publish` menunggu kredensial npm** |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
@@ -76,9 +76,14 @@ RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
 SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 ```
 
-**M1 (D1 — kontrak) SELESAI.** Sekarang M2 (D2 — `@sterun/sdk` + backend), urut:
+**M1 (D1 — kontrak) SELESAI.** M2 (D2 — `@sterun/sdk` + backend) tinggal satu langkah manual:
 ~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → ~~**STE-15** SterunClient~~ →
-**STE-19** JSON Schema + npm publish.
+~~**STE-19** JSON Schema + packaging~~ → **`npm publish @sterun/sdk`** (butuh akun npm James).
+
+Seluruh rantai publish sudah diverifikasi tanpa registry: `npm pack` menghasilkan tarball yang
+dipasang di project TypeScript kosong di luar repo, typecheck bersih, quickstart jalan ke testnet
+live, dan dokumen hasilnya valid terhadap RaceRecord JSON Schema v1.0. Yang tersisa cuma
+meng-upload-nya.
 
 Backend sudah bisa dijalankan: API (`pnpm dev`), poller (`pnpm indexer follow`), dan TTL keeper
 (`pnpm keeper run`) — tiga proses dari satu paket `be/`. Rangkaian penuhnya sudah dijalankan

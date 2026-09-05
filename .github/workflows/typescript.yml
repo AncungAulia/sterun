@@ -26,7 +26,8 @@ on:
       - "sdk/**"
       - "fe/**"
       - "landing-page/**"
-      # sdk/ compiles against these, so a regenerate has to re-run this job.
+      # sdk/ vendors these (sdk/vendor/), and test/vendor.test.ts fails if the
+      # copies drift, so a regenerate has to re-run this job.
       - "sc/bindings/**"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -105,17 +106,6 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-
-
-      # STE-15. This has to run BEFORE pnpm install, and the order is not
-      # arbitrary. sdk/ depends on the two generated binding packages with
-      # `file:`, and pnpm resolves a file: directory by *copying* it into the
-      # store — a snapshot, not a link. Their dist/ is gitignored (it is build
-      # output of a generator), so installing first captures a copy with no
-      # dist, and every later build of them leaves that copy untouched: `tsc`
-      # then fails with "Cannot find module 'race-record'" no matter how many
-      # times you rebuild. Verified both ways in a clean clone.
-      - name: Build the contract bindings
-        run: pnpm bindings
 
       # --frozen-lockfile: a dependency change that was not committed fails
       # here rather than silently resolving to something nobody reviewed.

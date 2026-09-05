@@ -38,10 +38,12 @@
  * cannot read a file in this repo, and a redeploy must not require a release.
  * Same rule as the backend's: no hardcoded address, anywhere, ever.
  */
-import { Client as EventRegistryClient } from "event-registry";
-import { Client as RaceRecordClient } from "race-record";
+import { Client as EventRegistryClient } from "../vendor-dist/event-registry.js";
+import { Client as RaceRecordClient } from "../vendor-dist/race-record.js";
 import type { ClientOptions as BindingClientOptions } from "@stellar/stellar-sdk/contract";
 import { runRead, runWrite, type SentResult } from "./tx.js";
+import { buildRaceRecordDocument, type RecordProvenance } from "./document.js";
+import type { RaceRecordDocument } from "./schema.js";
 import {
   fromEventStatus,
   fromHex32,
@@ -518,5 +520,51 @@ export class SterunClient {
   /** The EventRegistry this RaceRecord is wired to — check it matches yours. */
   async wiredRegistry(): Promise<string> {
     return runRead("wiredRegistry", () => this.record.get_registry());
+  }
+
+  // ---------------------------------------------------------------------------
+  // The public verification format (C6)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * One record in the public JSON form: the record joined to its event and its
+   * category, validated against RaceRecord JSON Schema v1.0.
+   *
+   * This is what a profile page renders and what a third party verifies, and it
+   * needs no wallet. `transactions` is optional provenance the caller may have
+   * from the indexer — chain state alone cannot say which transaction produced
+   * it.
+   */
+  async raceRecordDocument(
+    tokenId: number,
+    transactions?: RecordProvenance,
+  ): Promise<RaceRecordDocument> {
+    const record = await this.recordOf(tokenId);
+    const [event, category, owner] = await Promise.all([
+      this.getEvent(record.eventId),
+      this.getCategory(record.eventId, record.categoryId),
+      this.ownerOf(tokenId),
+    ]);
+
+    return buildRaceRecordDocument({
+      record,
+      event,
+      category,
+      owner,
+      network: {
+        passphrase: this.options.networkPassphrase,
+        eventRegistry: this.contracts.eventRegistry,
+        raceRecord: this.contracts.raceRecord,
+      },
+      ...(transactions === undefined ? {} : { transactions }),
+    });
+  }
+
+  /** Every record a runner owns, in the public JSON form. */
+  async raceRecordDocumentsOf(runner: string): Promise<RaceRecordDocument[]> {
+    const ids = await this.recordsOf(runner);
+    const documents: RaceRecordDocument[] = [];
+    for (const id of ids) documents.push(await this.raceRecordDocument(id));
+    return documents;
   }
 }

@@ -64,4 +64,23 @@ export {
 
 export { type SentResult } from "./tx.js";
 
+export {
+  RACE_RECORD_SCHEMA_VERSION,
+  SCHEMA_ID,
+  eventStatusSchema,
+  parseRaceRecordDocument,
+  raceRecordDocumentSchema,
+  raceRecordJsonSchema,
+  recordStateSchema,
+  safeParseRaceRecordDocument,
+  type RaceRecordDocument,
+} from "./schema.js";
+
+export {
+  buildRaceRecordDocument,
+  explorerBase,
+  type BuildDocumentInput,
+  type RecordProvenance,
+} from "./document.js";
+
 export { FUTURENET, MAINNET, TESTNET, type SterunNetwork } from "./network.js";
