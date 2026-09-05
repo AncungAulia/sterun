@@ -1,4 +1,4 @@
-# STE-6 (infra) — CI for the TypeScript side: be/, fe/, landing-page/.
+# STE-6 (infra) — CI for the TypeScript side: be/, sdk/, fe/, landing-page/.
 #
 # Companion to contracts.yml, which owns everything under sc/. Split rather
 # than merged because the two have nothing in common: different toolchains,
@@ -7,10 +7,11 @@
 #
 # What this proves on every push: the workspace installs from the committed
 # lockfile exactly, every package lints, every package's types check, every
-# package builds, and the backend's tests pass. Nothing here touches the
-# network, so it cannot go red because testnet had a bad afternoon — the
-# faucet's live behaviour is exercised by hand and written up in
-# docs/deployments.md instead.
+# package builds, and the backend's and SDK's tests pass. Nothing here touches
+# the network, so it cannot go red because testnet had a bad afternoon — the
+# faucet's and the SDK's live behaviour is exercised by hand
+# (`pnpm --filter @sterun/sdk e2e`) and written up in docs/deployments.md
+# instead.
 name: typescript
 
 # docs/deployments.md is in this list on purpose and is easy to miss: the
@@ -22,8 +23,11 @@ on:
     branches: ["**"]
     paths: &ts_paths
       - "be/**"
+      - "sdk/**"
       - "fe/**"
       - "landing-page/**"
+      # sdk/ compiles against these, so a regenerate has to re-run this job.
+      - "sc/bindings/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -101,6 +105,17 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-${{ env.PNPM_VERSION }}-
+
+      # STE-15. This has to run BEFORE pnpm install, and the order is not
+      # arbitrary. sdk/ depends on the two generated binding packages with
+      # `file:`, and pnpm resolves a file: directory by *copying* it into the
+      # store — a snapshot, not a link. Their dist/ is gitignored (it is build
+      # output of a generator), so installing first captures a copy with no
+      # dist, and every later build of them leaves that copy untouched: `tsc`
+      # then fails with "Cannot find module 'race-record'" no matter how many
+      # times you rebuild. Verified both ways in a clean clone.
+      - name: Build the contract bindings
+        run: pnpm bindings
 
       # --frozen-lockfile: a dependency change that was not committed fails
       # here rather than silently resolving to something nobody reviewed.
