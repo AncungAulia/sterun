@@ -14,23 +14,31 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "vendor-dist",
+    "schema",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
+    "vendor": "node scripts/vendor-bindings.mjs",
+    "vendor:check": "node scripts/vendor-bindings.mjs --check",
+    "prebuild": "tsc -p tsconfig.vendor.json",
     "build": "tsc -p tsconfig.json",
+    "pretypecheck": "tsc -p tsconfig.vendor.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "lint": "eslint .",
+    "pretest": "tsc -p tsconfig.vendor.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "tsx scripts/e2e.ts"
+    "lint": "eslint .",
+    "e2e": "tsx scripts/e2e.ts",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^17.0.1",
-    "event-registry": "file:../sc/bindings/event-registry",
-    "race-record": "file:../sc/bindings/race-record"
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -40,5 +48,23 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.69.0",
     "vitest": "^3.2.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AncungAulia/sterun.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/AncungAulia/sterun/tree/main/sdk#readme",
+  "keywords": [
+    "stellar",
+    "soroban",
+    "race",
+    "running",
+    "sdk",
+    "non-transferable",
+    "sterun"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
