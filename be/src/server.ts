@@ -26,6 +26,8 @@ import { ChallengeStore } from "./auth.js";
 import type { ChainReader } from "./chain/reader.js";
 import type { Config } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
+import { registerErrorHandler } from "./http/errors.js";
+import { loggerOptions, registerHardening } from "./http/hardening.js";
 import { directoryRoutes } from "./routes/directory.js";
 import { participantRoutes } from "./routes/participants.js";
 import { resultsRoutes } from "./routes/results.js";
@@ -58,7 +60,7 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   // deprecated the separate `disableRequestLogging` flag, and setting both
   // would print a deprecation warning on every buildServer call.
   const app = Fastify({
-    logger: config.env !== "test" && { level: process.env.LOG_LEVEL ?? "info" },
+    logger: loggerOptions(config),
     ajv: {
       customOptions: {
         // Fastify defaults to removeAdditional: true, which silently STRIPS a
@@ -75,54 +77,69 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
     },
   });
 
-  /**
-   * Liveness. Deliberately does NOT touch the network or the database: a health
-   * check that calls Horizon reports someone else's outage as our own, and gets
-   * a container restarted for it.
-   */
-  app.get("/health", async () => ({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) }));
+  // STE-20. Before the routes: a rate limit registered afterwards would not
+  // cover them, and the OpenAPI document has to see every schema.
+  registerHardening(app, config);
+  registerErrorHandler(app);
 
   /**
-   * What this process believes about the world — the addresses it resolved and
-   * which capabilities are switched on. This is the endpoint you hit first when
-   * a client is talking to the wrong contract, and it answers that in one
-   * request instead of a debugging session.
-   *
-   * Safe to expose: every value here is public on-chain data already published
-   * in docs/deployments.md. No secret is read or reported, only whether one is
-   * configured at all.
+   * The core routes go through `register` like every other router, and that is
+   * not decoration. `app.register` queues a plugin; a route added synchronously
+   * runs before the queue does, which means it is mounted before
+   * @fastify/swagger has installed its onRoute hook and never appears in the
+   * OpenAPI document. Registering them the same way as everything else puts
+   * them in the same queue, after swagger.
    */
-  app.get("/config", async () => ({
-    network: {
-      name: config.network.name,
-      passphrase: config.network.passphrase,
-      rpcUrl: config.network.rpcUrl,
-      horizonUrl: config.network.horizonUrl,
-    },
-    addresses: config.addresses,
-    faucet: {
-      amountStroops: config.faucetAmount.toString(),
-      payoutConfigured: config.distributorSecret !== undefined,
-    },
-    indexer: {
-      // Whether the read endpoints are mounted, not whether a poller is running
-      // — those are different processes, and /indexer/status answers the second.
-      enabled: deps.pool !== undefined,
-    },
-    roster: {
-      enabled: deps.pool !== undefined && deps.vault !== undefined && deps.reader !== undefined,
-    },
-    results: {
-      enabled: deps.pool !== undefined && deps.reader !== undefined,
-    },
-    vault: {
-      enabled: deps.vault !== undefined,
-      // The key IDS, never the keys. Which key is active is what you need to
-      // know when a decrypt fails after a rotation, and it is not a secret.
-      keyIds: config.vault?.keyring.keyIds ?? [],
-      activeKeyId: config.vault?.keyring.activeKeyId ?? null,
-    },
-  }));
+  void app.register(async (instance) => {
+    /**
+     * Liveness. Deliberately does NOT touch the network or the database: a health
+     * check that calls Horizon reports someone else's outage as our own, and gets
+     * a container restarted for it.
+     */
+    instance.get("/health", async () => ({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) }));
+
+    /**
+     * What this process believes about the world — the addresses it resolved and
+     * which capabilities are switched on. This is the endpoint you hit first when
+     * a client is talking to the wrong contract, and it answers that in one
+     * request instead of a debugging session.
+     *
+     * Safe to expose: every value here is public on-chain data already published
+     * in docs/deployments.md. No secret is read or reported, only whether one is
+     * configured at all.
+     */
+    instance.get("/config", async () => ({
+      network: {
+        name: config.network.name,
+        passphrase: config.network.passphrase,
+        rpcUrl: config.network.rpcUrl,
+        horizonUrl: config.network.horizonUrl,
+      },
+      addresses: config.addresses,
+      faucet: {
+        amountStroops: config.faucetAmount.toString(),
+        payoutConfigured: config.distributorSecret !== undefined,
+      },
+      indexer: {
+        // Whether the read endpoints are mounted, not whether a poller is running
+        // — those are different processes, and /indexer/status answers the second.
+        enabled: deps.pool !== undefined,
+      },
+      roster: {
+        enabled: deps.pool !== undefined && deps.vault !== undefined && deps.reader !== undefined,
+      },
+      results: {
+        enabled: deps.pool !== undefined && deps.reader !== undefined,
+      },
+      vault: {
+        enabled: deps.vault !== undefined,
+        // The key IDS, never the keys. Which key is active is what you need to
+        // know when a decrypt fails after a rotation, and it is not a secret.
+        keyIds: config.vault?.keyring.keyIds ?? [],
+        activeKeyId: config.vault?.keyring.activeKeyId ?? null,
+      },
+    }));
+  });
 
   // One ChallengeStore for the whole process: a nonce issued at
   // /auth/challenge has to be spendable at /participants AND at the roster

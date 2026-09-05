@@ -35,9 +35,8 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
-import { AuthError, type ChallengeStore } from "../auth.js";
+import type { ChallengeStore } from "../auth.js";
 import type { ChainReader } from "../chain/reader.js";
-import { ContractRevertError } from "../chain/errors.js";
 import * as store from "../indexer/store.js";
 import { MAX_FRAGMENT_LENGTH } from "../roster/name-fragment.js";
 import { DIGITS, TIME_STEP_SECONDS, TOLERANCE_STEPS } from "../spec/totp.js";
@@ -192,23 +191,6 @@ export async function rosterRoutes(
     },
   );
 
-  app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof AuthError) {
-      return reply.code(401).send({ error: error.reason, message: error.message });
-    }
-    // An unknown event reverts EventNotFound(2) from get_organiser. That is a
-    // 404, not a 500 — and it is answered the same way to everyone, so probing
-    // this endpoint tells an attacker nothing they could not read on-chain.
-    if (error instanceof ContractRevertError && error.isNotFound) {
-      return reply.code(404).send({ error: "not_found", message: "no such event on-chain" });
-    }
-    if (typeof error === "object" && error !== null && "validation" in error) {
-      const message = error instanceof Error ? error.message : "request failed schema validation";
-      return reply.code(400).send({ error: "invalid_request", message });
-    }
-    reply.log.error({ err: error }, "unhandled error in roster routes");
-    return reply.code(500).send({ error: "internal_error" });
-  });
 }
 
 /**

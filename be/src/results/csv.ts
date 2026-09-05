@@ -69,7 +69,7 @@ const normaliseHeader = (cell: string): string =>
   cell
     .trim()
     .toLowerCase()
-    .replace(/^﻿/, "") // Excel writes a BOM on the first cell.
+    .replace(/^\uFEFF/, "") // Excel writes a BOM on the first cell.
     .replace(/[\s-]+/g, "_")
     .replace(/[^a-z0-9_]/g, "");
 

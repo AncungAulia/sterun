@@ -176,7 +176,10 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       // someone hunting a permissions problem that is not there.
       const res = await fetchRoster(scannerKp, 9);
       expect(res.statusCode).toBe(404);
-      expect(res.json().error).toBe("not_found");
+      // kebab-case since STE-20: AuthError's reasons were already kebab
+      // ("unknown-nonce", "bad-signature") and the routers were snake, so a
+      // client needed two conventions. One handler, one convention now.
+      expect(res.json().error).toBe("not-found");
     });
   });
 

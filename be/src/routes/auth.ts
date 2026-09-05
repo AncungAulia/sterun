@@ -17,6 +17,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ChallengeStore } from "../auth.js";
+import { RATE_LIMITS } from "../http/hardening.js";
 
 const STELLAR_ADDRESS = "^G[A-Z2-7]{55}$";
 
@@ -38,6 +39,10 @@ export async function authRoutes(
   app.post(
     "/auth/challenge",
     {
+      // Tighter than the global ceiling: issuing a nonce is cheap for us and
+      // cheap for an attacker, which makes it the endpoint somebody hammers
+      // while guessing at signatures.
+      config: { rateLimit: { max: RATE_LIMITS.challenge, timeWindow: "1 minute" } },
       schema: {
         body: {
           type: "object",

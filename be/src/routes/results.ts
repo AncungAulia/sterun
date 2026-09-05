@@ -28,10 +28,10 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
-import { AuthError, type ChallengeStore } from "../auth.js";
+import type { ChallengeStore } from "../auth.js";
 import type { ChainReader } from "../chain/reader.js";
-import { ContractRevertError } from "../chain/errors.js";
 import * as store from "../indexer/store.js";
+import { RATE_LIMITS } from "../http/hardening.js";
 import { CsvFormatError, parseResultsCsv } from "../results/csv.js";
 import { reviewResults } from "../results/anomalies.js";
 
@@ -198,6 +198,9 @@ export async function resultsRoutes(
   app.post(
     "/events/:eventId/results/preview",
     {
+      // The most expensive request in the API: up to 5 MB parsed plus a full
+      // read of the event's records.
+      config: { rateLimit: { max: RATE_LIMITS.results, timeWindow: "1 minute" } },
       schema: {
         params: {
           type: "object",
@@ -310,21 +313,4 @@ export async function resultsRoutes(
     },
   );
 
-  app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof AuthError) {
-      return reply.code(401).send({ error: error.reason, message: error.message });
-    }
-    if (error instanceof ContractRevertError && error.isNotFound) {
-      // Answered identically to everyone, so probing for events you are not the
-      // organiser of tells you nothing you could not read off the chain anyway.
-      return reply.code(404).send({ error: "not-found", message: "no such event" });
-    }
-    if ((error as { statusCode?: number }).statusCode === 413) {
-      return reply.code(413).send({
-        error: "payload-too-large",
-        message: `the results file must be at most ${MAX_CSV_BYTES} bytes`,
-      });
-    }
-    reply.send(error);
-  });
 }
