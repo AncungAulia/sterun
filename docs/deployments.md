@@ -1197,8 +1197,10 @@ Dibuktikan, bukan ditebak:
 Yang bikin gejalanya menyesatkan: request-nya **tidak pernah sampai** ke tunnel, jadi log cloudflared
 bersih dan keempat koneksinya sehat. Persis kelihatan seperti tunnel mati.
 
-Aturan ingress untuk nama dua tingkat tetap ada di `deploy/cloudflared-config.yml`, jadi kalau ACM
-diaktifkan nama itu langsung hidup tanpa perubahan.
+Nama dua tingkat itu **tidak lagi terdaftar** di mana pun: CNAME-nya dihapus dari zona, dan
+aturan ingress-nya dihapus dari `deploy/cloudflared-config.yml` di perubahan yang sama. Aturan
+tanpa DNS cuma kode mati yang menyiratkan URL yang sebenarnya NXDOMAIN. Kalau ACM/Total TLS suatu
+saat diaktifkan, keduanya dikembalikan bersamaan.
 
 ### Ingress: Cloudflare Tunnel
 
@@ -1219,22 +1221,16 @@ dipasang di port 80 pve01, lalu WAN IP-nya (`182.253.126.14` — IP publik asli,
 dari internet lewat proxy eksternal. Timeout (522).
 
 Konsekuensinya: **ACME HTTP-01 mustahil**, jadi Caddy di dalam `compose.prod.yml` tidak akan pernah
-mendapat sertifikat di sini. Ingress harus datang dari luar container, dan yang dipakai sekarang
-adalah **Tailscale Funnel** di pve01 — tailnet-nya sudah punya capability itu, jadi tidak perlu
-Cloudflare dan tidak perlu port forward.
+mendapat sertifikat di sini. Profil `caddy` tetap ada untuk host yang mem-forward port; di host ini
+ia tidak pernah dinyalakan.
 
-Untuk `api.sterun.jameshub.fun`, jalurnya **Cloudflare Tunnel**: DNS `jameshub.fun` memang di
-Cloudflare, tunnel dial keluar (jadi tetap tanpa port forward), TLS diurus Cloudflare, dan **record
-DNS-nya dibuat sendiri oleh tunnel** — tidak ada A record yang perlu ditambah manual.
-`cloudflared` sudah terpasang di pve01 tapi **belum ter-autentikasi**.
+Itulah yang memilih **Cloudflare Tunnel** (bagian di atas): tunnel dial **keluar**, jadi router yang
+tidak mem-forward apa pun berhenti jadi masalah, TLS diurus Cloudflare, dan record DNS-nya dibuat
+oleh tunnel sendiri — tidak ada A record yang perlu ditambah manual.
 
-Yang dibutuhkan: satu **token tunnel** dari Cloudflare Zero Trust, lalu
-
-```bash
-# di ct-sterun
-echo "TUNNEL_TOKEN=<token>" >> be/.env.production
-docker compose -f compose.prod.yml --profile tunnel up -d
-```
+**Tailscale Funnel** di pve01 sempat dipakai sebagai ingress sementara sebelum tunnel ter-autentikasi.
+Sudah dimatikan (`tailscale funnel --https=443 off`) begitu tunnel hidup — satu pintu publik, bukan
+dua yang tidak diurus. Prosedur menyalakannya lagi kalau tunnel bermasalah: `be/OPERATIONS.md`.
 
 ### Verifikasi dari luar, tanpa SSH
 
