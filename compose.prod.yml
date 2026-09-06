@@ -119,7 +119,8 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      STERUN_DOMAIN: ${STERUN_DOMAIN:?set STERUN_DOMAIN in .env}
+      # Not `:?` — see the note on TUNNEL_TOKEN below.
+      STERUN_DOMAIN: ${STERUN_DOMAIN:-}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       # The certificate and the ACME account key. Losing this volume means
@@ -140,7 +141,16 @@ services:
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env, from Cloudflare Zero Trust}
+      # `${VAR:-}` rather than `${VAR:?}`, and this is not a style preference.
+      # Compose interpolates every service's variables regardless of profile, so
+      # a required variable on a profiled service breaks EVERY command — even
+      # `docker compose ps` on a host that will never run this profile. Found
+      # the hard way, deploying to a host that uses the other ingress.
+      #
+      # An empty token is not silently tolerated: cloudflared exits immediately
+      # with its own clear message, which is a better error than compose
+      # refusing to parse the file.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on: [api]
 
 volumes:
