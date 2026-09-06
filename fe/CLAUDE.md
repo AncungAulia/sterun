@@ -10,16 +10,19 @@ Owner: **Ancung** (flow) + **Nabil** (design system). Komponen C9/C10/C11/C12. T
 masih scaffold `create-next-app`.
 
 Stack terpasang: **Next.js 16.3.3**, React 19.2.8, Tailwind v4 (`@tailwindcss/postcss`),
-TypeScript 5, ESLint 9. Dua lockfile ada (`package-lock.json` + `pnpm-lock.yaml`) — pilih satu dan
-hapus yang lain saat mulai kerja serius, jangan biarkan dua-duanya hidup.
+TypeScript 5, ESLint 9.
+
+**Tidak ada lockfile di `fe/`.** Folder ini anggota pnpm workspace (`pnpm-workspace.yaml` di root),
+jadi yang berlaku cuma `pnpm-lock.yaml` di root — itu juga yang dipasang CI dengan
+`--frozen-lockfile`. Jangan menjalankan `npm install` atau `pnpm install` dari dalam `fe/`: itu
+menumbuhkan lockfile kedua yang tidak dibaca siapa pun tapi tetap ikut ter-commit.
 
 ```bash
-cd fe
-npm install      # atau pnpm install — konsisten dengan lockfile yang kamu pilih
-npm run dev
-npm run build
-npm run lint
-npm run typecheck
+pnpm install                # dari ROOT repo, bukan dari fe/
+pnpm --filter fe dev
+pnpm --filter fe build
+pnpm --filter fe lint
+pnpm --filter fe typecheck
 ```
 
 `typecheck` = `next typegen && tsc --noEmit`, dan `next typegen`-nya **tidak boleh dilewati**:
