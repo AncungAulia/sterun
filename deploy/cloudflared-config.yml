@@ -19,6 +19,17 @@ credentials-file: /etc/cloudflared/credentials.json
 # hostname yang tidak disebut di atas dapat 404, bukan diteruskan ke suatu
 # tempat. Tanpa itu, sub-domain yang salah ketik bisa mendarat di API ini.
 ingress:
+  # Satu tingkat, dan itu bukan selera. Universal SSL Cloudflare cuma menerbitkan
+  # sertifikat untuk `jameshub.fun` dan `*.jameshub.fun` — SATU tingkat. Nama dua
+  # tingkat seperti `api.sterun.jameshub.fun` butuh `*.sterun.jameshub.fun`, yang
+  # cuma ada lewat Advanced Certificate Manager (berbayar). Tanpa itu, edge
+  # Cloudflare menolak TLS handshake sebelum request pernah sampai ke tunnel —
+  # gejalanya `SSL alert number 40`, bukan 404, jadi kelihatan seperti tunnel-nya
+  # mati padahal keempat koneksinya sehat.
+  - hostname: api-sterun.jameshub.fun
+    service: http://api:3001
+  # Tetap didaftarkan: kalau suatu saat ACM/Total TLS aktif, nama ini langsung
+  # hidup tanpa mengubah apa pun di sini.
   - hostname: api.sterun.jameshub.fun
     # `api` itu nama service di compose network — BUKAN localhost. cloudflared
     # jalan di container-nya sendiri, jadi localhost di sana adalah dirinya.

@@ -1142,21 +1142,20 @@ pelari lain, dan `Finished` itu terminal.
 
 ## STE-31 — backend LIVE di jameserver
 
-Deployment nyata, 2026-09-06. Backend Sterun berjalan di homelab James dan **sudah bisa dijangkau
-publik lewat HTTPS**.
+Deployment nyata, 2026-09-06/07. Backend Sterun berjalan di homelab James, di domain sendiri, lewat
+Cloudflare Tunnel.
 
 ### Base URL
 
 ```
-https://pve01.tail4d50d6.ts.net
+https://api-sterun.jameshub.fun
 ```
 
-Sertifikat **Let's Encrypt** asli (CN `pve01.tail4d50d6.ts.net`, HTTP/2), dan terbukti terjangkau
-dari **luar tailnet** — bukan lewat MagicDNS: diambil oleh layanan eksternal (`r.jina.ai`) dan juga
-dengan memaksa resolusi ke IP ingress Funnel publik (`103.84.155.153`).
+Sertifikat Cloudflare, HTTP/2. Verifikasi eksternal **14 dari 14 lolos**.
 
-> **Ini hostname sementara.** STE-31 meminta `api.sterun.jameshub.fun`. Lihat "Kenapa belum di
-> domain sendiri" di bawah — yang kurang cuma satu token, bukan pekerjaan.
+> **Bukan `api.sterun.jameshub.fun` seperti bunyi tiket**, dan alasannya bukan konfigurasi:
+> Universal SSL Cloudflare cuma menerbitkan sertifikat **satu tingkat**. Detail + buktinya di
+> bawah.
 
 ### Di mana ia berjalan
 
@@ -1182,7 +1181,38 @@ lebih dari satu instance memang aktif di produksi, bukan cuma ada kodenya.
 Poller menelan event dari testnet yang live sejak menit pertama; keeper memindai record dan
 melaporkan `0 due` (benar — belum ada yang mendekati batas TTL).
 
-### Kenapa BUKAN Caddy, dan kenapa belum di domain sendiri
+### Kenapa `api-sterun` dan bukan `api.sterun`
+
+Nama dua tingkat butuh sertifikat `*.sterun.jameshub.fun`. Universal SSL cuma menerbitkan
+`jameshub.fun` dan `*.jameshub.fun` — **satu tingkat**. Yang dua tingkat butuh Advanced Certificate
+Manager (berbayar) atau Total TLS.
+
+Dibuktikan, bukan ditebak:
+
+| Hostname | Hasil |
+| --- | --- |
+| `api.sterun.jameshub.fun` | `SSL alert number 40` — handshake ditolak di edge Cloudflare |
+| `api-sterun.jameshub.fun` | **14/14 lolos** |
+
+Yang bikin gejalanya menyesatkan: request-nya **tidak pernah sampai** ke tunnel, jadi log cloudflared
+bersih dan keempat koneksinya sehat. Persis kelihatan seperti tunnel mati.
+
+Aturan ingress untuk nama dua tingkat tetap ada di `deploy/cloudflared-config.yml`, jadi kalau ACM
+diaktifkan nama itu langsung hidup tanpa perubahan.
+
+### Ingress: Cloudflare Tunnel
+
+Tunnel `sterun-api`, **4 koneksi** (Jakarta ×2, Singapura ×2). Dial keluar, jadi router yang tidak
+mem-forward apa pun tidak lagi jadi masalah; TLS diurus Cloudflare; record DNS dibuat oleh tunnel
+sendiri.
+
+**Locally-managed**: aturan routing di `deploy/cloudflared-config.yml` di dalam repo, bukan di
+dashboard — bisa di-review di PR dan ikut ter-rollback. Credentials-nya di `secrets/`, gitignored.
+
+Tailscale Funnel yang sempat dipakai sebagai ingress sementara sudah **dimatikan** — satu pintu
+publik, bukan dua yang tidak diurus.
+
+### Kenapa BUKAN Caddy
 
 Router homelab ini **tidak mem-forward port 80/443**. Diuji, bukan diasumsikan: listener sementara
 dipasang di port 80 pve01, lalu WAN IP-nya (`182.253.126.14` — IP publik asli, bukan CGNAT) diprobe
@@ -1208,15 +1238,15 @@ docker compose -f compose.prod.yml --profile tunnel up -d
 
 ### Verifikasi dari luar, tanpa SSH
 
-`./deploy/verify-deployment.sh https://pve01.tail4d50d6.ts.net` — **14 dari 14 lolos**,
-2026-09-06T14:30:08Z:
+`./deploy/verify-deployment.sh https://api-sterun.jameshub.fun` — **14 dari 14 lolos**,
+2026-09-06T20:15:11Z:
 
 ```
 ▸ TLS
   ✓ serves over HTTPS with a certificate curl trusts
   ✓ sends HSTS
 ▸ Liveness and readiness
-  ✓ /health -> {"status":"ok","uptimeSeconds":15}
+  ✓ /health -> {"status":"ok","uptimeSeconds":20138}
   ✓ /ready -> database reachable
 ▸ Pointing at the right chain
   ✓ EventRegistry CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
@@ -1262,7 +1292,7 @@ Dua detail yang bagus dari lognya:
 ### Untuk web app (STE-8/13/21/22/24/32)
 
 ```bash
-NEXT_PUBLIC_API_URL=https://pve01.tail4d50d6.ts.net
+NEXT_PUBLIC_API_URL=https://api-sterun.jameshub.fun
 ```
 
 CORS-nya **allow-list**, bukan `*` — request ter-autentikasi membawa signature wallet di header, dan
