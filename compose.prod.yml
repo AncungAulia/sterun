@@ -1,0 +1,120 @@
+# STE-31 — the Sterun backend on a VPS.
+#
+# Five containers: Postgres, the API, the poller, the TTL keeper, and Caddy in
+# front doing TLS. The three Node services are the SAME image with different
+# commands, because that is what they are (be/CLAUDE.md).
+#
+#   cp be/.env.production.example be/.env.production   # then fill it in
+#   docker compose -f compose.prod.yml up -d --build
+#   curl https://<your domain>/health
+#
+# Full procedure, including DNS and the first-run checks: be/OPERATIONS.md,
+# section "Deploy ke VPS".
+#
+# ## What makes this survive a reboot
+#
+# `restart: unless-stopped` on every service. Not `always`: a container the
+# operator deliberately stopped should stay stopped through a reboot, otherwise
+# taking something down for maintenance is undone by the next power cut.
+#
+# ## What is deliberately NOT here
+#
+# No CD pipeline, no replicas, no metrics stack. STE-31 says a documented manual
+# deploy is enough for v1, and every one of those adds a moving part that would
+# need its own runbook. The nonce store is already Postgres-backed (STE-31), so
+# adding a second API replica later is a config change rather than a rewrite.
+
+name: sterun
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sterun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-sterun}
+    volumes:
+      # Named, unlike the development compose file. This one holds encrypted
+      # identity documents and the indexer's materialised tables; losing it
+      # means re-running `pnpm indexer rebuild` and losing the vault outright.
+      - sterun-pgdata:/var/lib/postgresql/data
+    # No `ports:`. Postgres is reachable only on the compose network — the one
+    # line that stops a firewall mistake from putting the PII database on the
+    # public internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sterun} -d ${POSTGRES_DB:-sterun}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: be/Dockerfile
+    image: sterun-backend:latest
+    restart: unless-stopped
+    env_file: [be/.env.production]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-sterun}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterun}
+    depends_on:
+      postgres: { condition: service_healthy }
+    # Also no `ports:`. Caddy is the only thing that reaches it, so there is no
+    # plaintext port on the box for anyone to find.
+    expose: ["3001"]
+
+  # The poller. Fills the index the API serves; the API never fills it itself.
+  indexer:
+    image: sterun-backend:latest
+    restart: unless-stopped
+    env_file: [be/.env.production]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-sterun}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterun}
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_started } # so migrations have run
+    command: ["node", "dist/cli/indexer.js", "follow"]
+
+  # Rent for the race records. Weekly is the cadence; the loop sleeps between
+  # scans, so this is a long-running process rather than a cron entry — one
+  # fewer moving part on the box, and it restarts with everything else.
+  keeper:
+    image: sterun-backend:latest
+    restart: unless-stopped
+    env_file: [be/.env.production]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-sterun}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterun}
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_started }
+    command: ["node", "dist/cli/keeper.js", "run"]
+
+  # TLS, and the only container with published ports.
+  #
+  # Caddy rather than nginx + certbot because it obtains and renews the
+  # certificate itself from Let's Encrypt with no cron entry and no renewal that
+  # can silently stop working — which is the failure mode that takes an API
+  # down 90 days after nobody thought about it again.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      STERUN_DOMAIN: ${STERUN_DOMAIN:?set STERUN_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificate and the ACME account key. Losing this volume means
+      # re-issuing, and Let's Encrypt rate-limits that.
+      - sterun-caddy-data:/data
+      - sterun-caddy-config:/config
+    depends_on: [api]
+
+volumes:
+  sterun-pgdata:
+  sterun-caddy-data:
+  sterun-caddy-config:

@@ -59,3 +59,49 @@ describe("unknown routes", () => {
     await app.close();
   });
 });
+
+describe("readiness is a different question from liveness", () => {
+  it("reports ready with no database, because there is nothing to wait for", async () => {
+    // A deployment with neither Postgres nor keys is a legitimate one — it
+    // serves /health and /config — and it is ready the moment it is alive.
+    const app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/ready" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: "ready", checks: { database: "not-configured" } });
+  });
+
+  it("reports ready when the database answers", async () => {
+    const pool = { query: async () => ({ rows: [{ "?column?": 1 }] }) };
+    const app = buildServer(loadConfig({ NODE_ENV: "test" }), { pool: pool as never });
+    const res = await app.inject({ method: "GET", url: "/ready" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().checks.database).toBe("ok");
+  });
+
+  it("answers 503 when it does not, so a proxy stops sending traffic here", async () => {
+    const pool = {
+      query: async () => {
+        throw new Error("connect ECONNREFUSED 10.0.0.5:5432");
+      },
+    };
+    const app = buildServer(loadConfig({ NODE_ENV: "test" }), { pool: pool as never });
+    const res = await app.inject({ method: "GET", url: "/ready" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ status: "not-ready", checks: { database: "unreachable" } });
+    // The reason belongs in the log. This endpoint is public and unauthenticated.
+    expect(res.payload).not.toContain("ECONNREFUSED");
+    expect(res.payload).not.toContain("10.0.0.5");
+  });
+
+  it("still reports /health as ok when the database is down", async () => {
+    // The distinction that matters: a liveness probe that failed here would
+    // restart a perfectly good process because Postgres hiccuped.
+    const pool = {
+      query: async () => {
+        throw new Error("down");
+      },
+    };
+    const app = buildServer(loadConfig({ NODE_ENV: "test" }), { pool: pool as never });
+    expect((await app.inject({ method: "GET", url: "/health" })).statusCode).toBe(200);
+  });
+});

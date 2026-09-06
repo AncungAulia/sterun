@@ -143,7 +143,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     it("rejects an unknown field rather than ignoring it", async () => {
       const res = await submit(runner, { nickname: "budi" });
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toBe("invalid_request");
+      expect(res.json().error).toBe("invalid-request");
     });
 
     it.each([

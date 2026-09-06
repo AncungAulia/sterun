@@ -12,6 +12,8 @@
 import { Networks } from "@stellar/stellar-sdk";
 import { parseKeyring, type Keyring } from "./crypto/keyring.js";
 import { loadDeployments, type Deployments } from "./deployments.js";
+import { DEFAULT_PAGE_LIMIT } from "./indexer/indexer.js";
+import { DEFAULT_EXTEND_TO_LEDGERS, DEFAULT_THRESHOLD_LEDGERS } from "./keeper/ttl.js";
 
 export interface Config {
   readonly env: "development" | "production" | "test";
@@ -33,6 +35,39 @@ export interface Config {
   readonly distributorSecret: string | undefined;
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
+  /**
+   * STE-16. The indexer and the TTL keeper. Always present — running them is
+   * decided by which process you start, not by whether they are configured,
+   * and a status endpoint that cannot say what the poll interval is is worse
+   * than one that always can.
+   */
+  readonly indexer: {
+    /**
+     * Any account that exists on the network. It signs nothing: view calls are
+     * simulated, and a simulation still needs a source account to build an
+     * envelope around. Defaults to the sUSD distributor, which
+     * docs/deployments.md proves exists.
+     */
+    readonly simulationSource: string;
+    /** 5-10s is the ticket's recommendation; 7s sits in the middle of it. */
+    readonly pollIntervalMs: number;
+    readonly pageLimit: number;
+    /**
+     * Where a first-ever poll starts. Undefined means "as far back as RPC still
+     * retains", which is the most complete answer available and the right
+     * default for a chain that is days old.
+     */
+    readonly startLedger: number | undefined;
+  };
+  /**
+   * STE-16. Rent for the TTL keeper. Absent in the API process, which never
+   * submits anything — the same split as the faucet's distributor secret.
+   */
+  readonly keeper: {
+    readonly secret: string | undefined;
+    readonly thresholdLedgers: number;
+    readonly extendToLedgers: number;
+  };
   /**
    * The PII vault, or `undefined` when this process is not running one.
    *
@@ -81,6 +116,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     distributorSecret: env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    indexer: {
+      simulationSource:
+        env.INDEXER_SOURCE_ACCOUNT ?? env.SUSD_DISTRIBUTOR ?? fromDoc.susdDistributor,
+      pollIntervalMs: num(env.INDEXER_POLL_INTERVAL_MS, 7_000),
+      pageLimit: num(env.INDEXER_PAGE_LIMIT, DEFAULT_PAGE_LIMIT),
+      startLedger: env.INDEXER_START_LEDGER ? num(env.INDEXER_START_LEDGER, 0) : undefined,
+    },
+    keeper: {
+      secret: env.TTL_KEEPER_SECRET,
+      thresholdLedgers: num(env.TTL_THRESHOLD_LEDGERS, DEFAULT_THRESHOLD_LEDGERS),
+      extendToLedgers: num(env.TTL_EXTEND_TO_LEDGERS, DEFAULT_EXTEND_TO_LEDGERS),
+    },
     vault: loadVaultConfig(env),
   };
 }

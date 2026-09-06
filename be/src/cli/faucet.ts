@@ -14,9 +14,14 @@
  * committed.
  */
 import { Keypair } from "@stellar/stellar-sdk";
+import { loadEnvFile } from "../env.js";
 import { loadConfig } from "../config.js";
 import { runFaucet } from "../faucet.js";
 import { parseFaucetArgs, USAGE } from "./args.js";
+
+// The documented setup is "copy .env.example to be/.env"; config reads
+// process.env. Real environment variables still win — see src/env.ts.
+loadEnvFile();
 
 let args;
 try {

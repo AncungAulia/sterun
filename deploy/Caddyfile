@@ -1,0 +1,64 @@
+# STE-31 — TLS in front of the Sterun API.
+#
+# Caddy obtains and renews the Let's Encrypt certificate itself, with no cron
+# entry to forget. That is the whole reason it is here rather than nginx: a
+# renewal that quietly stops working takes the API down ninety days after
+# anybody last thought about it, and STE-31's done-criterion is a health check a
+# stranger can open over TLS.
+#
+# DNS has to point at this box before the first start, or the ACME challenge
+# fails and Caddy retries with backoff. See be/OPERATIONS.md.
+
+{$STERUN_DOMAIN} {
+	encode zstd gzip
+
+	# The backend is not published to the host at all (compose.prod.yml), so
+	# this is the only path in.
+	reverse_proxy api:3001 {
+		# The API rate-limits per client, and behind a proxy every request
+		# arrives from the proxy's address. Without this header one noisy
+		# client would rate-limit the entire event.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+
+		# Readiness, not liveness: this decides whether to send traffic here,
+		# and /ready is the endpoint that checks the database. /health would
+		# answer 200 from an instance that cannot reach Postgres.
+		health_uri /ready
+		health_interval 15s
+		health_timeout 5s
+	}
+
+	header {
+		# HSTS. The API is TLS-only and there is no plaintext port to fall back
+		# to, so there is nothing this can break.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# Caddy announces itself by default; a version number is free
+		# reconnaissance.
+		-Server
+	}
+
+	# CORS for the browser clients (STE-21 web app, STE-22 scanner PWA).
+	# Deliberately an allow-list rather than `*`: the authenticated endpoints
+	# carry a wallet signature in a header, and `*` would let any origin ask a
+	# visitor's browser to send one.
+	@cors_preflight method OPTIONS
+	handle @cors_preflight {
+		header {
+			Access-Control-Allow-Origin "{$STERUN_WEB_ORIGIN}"
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Headers "content-type, x-sterun-address, x-sterun-nonce, x-sterun-signature"
+			Access-Control-Max-Age "86400"
+		}
+		respond 204
+	}
+	header Access-Control-Allow-Origin "{$STERUN_WEB_ORIGIN}"
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -73,8 +73,11 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
       // Stronger than checking the three columns we know about: if someone adds
       // a `notes text` column later and writes a name into it, this fails.
       const { rows } = await pool.query<{ column_name: string; data_type: string }>(
+        // current_schema() matters: each test file gets its own schema, and
+        // without it this sees every parallel suite's `participants` too.
         `SELECT column_name, data_type FROM information_schema.columns
-          WHERE table_name = 'participants' AND data_type IN ('text','character varying')`,
+          WHERE table_schema = current_schema() AND table_name = 'participants'
+            AND data_type IN ('text','character varying')`,
       );
       // runner_address and enter_tx_hash are public on-chain values, not PII.
       expect(rows.map((r) => r.column_name).sort()).toEqual(["enter_tx_hash", "runner_address"]);

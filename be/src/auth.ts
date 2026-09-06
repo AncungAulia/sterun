@@ -20,11 +20,20 @@
  *   bound        the nonce is issued for one address and only verifies against
  *                that address's key.
  *
- * The store is in-memory, which is honest for one process on testnet and is
- * NOT honest behind more than one. STE-31 (deploy to a VPS) has to move this
- * to Redis or Postgres before there is a second instance; a nonce issued by
- * instance A and spent at instance B would simply fail, intermittently, which
- * is the worst way to find out.
+ * ## Where the nonces live (STE-31)
+ *
+ * The validation above is the same wherever they are stored, so storage is a
+ * backend: {@link MemoryNonces} for one process, {@link PostgresNonces} for
+ * more than one. The in-memory one was honest for a single process and
+ * dishonest for two — a nonce issued by instance A and presented to instance B
+ * is simply not found, and the client is told "unknown-nonce", which is a lie
+ * that appears only under load, only sometimes, and sends the reader looking at
+ * their signing code.
+ *
+ * The single-use property is the backend's whole job, and it is why
+ * `PostgresNonces` spends a nonce with `DELETE … RETURNING` rather than a read
+ * followed by a delete: that statement is atomic, so two instances presenting
+ * the same nonce at the same moment produce one row between them.
  */
 import { randomBytes } from "node:crypto";
 import { Keypair, StrKey } from "@stellar/stellar-sdk";
@@ -54,27 +63,72 @@ export class AuthError extends Error {
   }
 }
 
-interface Issued {
+export interface Issued {
   address: string;
   expiresAtMs: number;
 }
 
-export class ChallengeStore {
+/**
+ * Where nonces are kept. Three operations, and `take` carries the only property
+ * that matters: it must delete and return in one indivisible step.
+ */
+export interface NonceBackend {
+  put(nonce: string, address: string, expiresAtMs: number): Promise<void>;
+  /** Delete the nonce and return what it was, or null if it was not there. */
+  take(nonce: string): Promise<Issued | null>;
+  /** Drop everything already expired. Called on issue, so it costs with traffic. */
+  sweep(nowMs: number): Promise<void>;
+  /** Only for tests and diagnostics. */
+  size(): Promise<number>;
+}
+
+/** One process. What `pnpm dev` and the test suite use. */
+export class MemoryNonces implements NonceBackend {
   private readonly issued = new Map<string, Issued>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  async put(nonce: string, address: string, expiresAtMs: number): Promise<void> {
+    this.issued.set(nonce, { address, expiresAtMs });
+  }
 
-  issue(address: string): Challenge {
+  async take(nonce: string): Promise<Issued | null> {
+    const record = this.issued.get(nonce);
+    if (!record) return null;
+    this.issued.delete(nonce);
+    return record;
+  }
+
+  async sweep(nowMs: number): Promise<void> {
+    for (const [nonce, record] of this.issued) {
+      if (record.expiresAtMs <= nowMs) this.issued.delete(nonce);
+    }
+  }
+
+  async size(): Promise<number> {
+    return this.issued.size;
+  }
+}
+
+export class ChallengeStore {
+  private readonly backend: NonceBackend;
+
+  constructor(
+    private readonly now: () => number = Date.now,
+    backend: NonceBackend = new MemoryNonces(),
+  ) {
+    this.backend = backend;
+  }
+
+  async issue(address: string): Promise<Challenge> {
     if (!StrKey.isValidEd25519PublicKey(address)) {
       throw new AuthError("malformed-address", "address must be a Stellar public key (G…)");
     }
-    // Sweeping on issue keeps the map bounded without a timer, and the cost is
-    // proportional to traffic rather than to wall-clock time.
-    this.sweep();
+    // Sweeping on issue keeps the store bounded without a timer, and the cost
+    // is proportional to traffic rather than to wall-clock time.
+    await this.backend.sweep(this.now());
 
     const nonce = randomBytes(32).toString("hex");
     const expiresAtMs = this.now() + NONCE_TTL_MS;
-    this.issued.set(nonce, { address, expiresAtMs });
+    await this.backend.put(nonce, address, expiresAtMs);
     return { nonce, expiresAt: new Date(expiresAtMs) };
   }
 
@@ -83,21 +137,26 @@ export class ChallengeStore {
    * way that can fail — the caller never gets a boolean it might forget to
    * check.
    */
-  verify(address: string | undefined, nonce: string | undefined, signatureB64: string | undefined): string {
+  async verify(
+    address: string | undefined,
+    nonce: string | undefined,
+    signatureB64: string | undefined,
+  ): Promise<string> {
     if (!address || !nonce || !signatureB64) {
       throw new AuthError(
         "missing-credentials",
         "x-sterun-address, x-sterun-nonce and x-sterun-signature are all required",
       );
     }
-    const record = this.issued.get(nonce);
+    // Taken — that is, deleted and returned in one step — before any further
+    // check. A nonce presented once is spent even if the signature turns out to
+    // be wrong; otherwise an attacker holding a captured nonce could brute-force
+    // signatures against it. Doing it atomically is also what stops two
+    // instances from both accepting the same nonce.
+    const record = await this.backend.take(nonce);
     if (!record) {
       throw new AuthError("unknown-nonce", "nonce was never issued, or has already been used");
     }
-    // Deleted before any further check: a nonce presented once is spent, even
-    // if the signature turns out to be wrong. Otherwise an attacker with a
-    // captured nonce could brute-force signatures against it.
-    this.issued.delete(nonce);
 
     if (record.expiresAtMs <= this.now()) {
       throw new AuthError("expired-nonce", "nonce has expired; request a new challenge");
@@ -138,14 +197,7 @@ export class ChallengeStore {
   }
 
   /** Only for tests and diagnostics. */
-  get size(): number {
-    return this.issued.size;
-  }
-
-  private sweep(): void {
-    const now = this.now();
-    for (const [nonce, record] of this.issued) {
-      if (record.expiresAtMs <= now) this.issued.delete(nonce);
-    }
+  size(): Promise<number> {
+    return this.backend.size();
   }
 }

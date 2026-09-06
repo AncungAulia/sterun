@@ -1,0 +1,28 @@
+{
+  // The vendored bindings, compiled under the generator's own settings.
+  //
+  // They are byte-identical copies of generator output (scripts/vendor-bindings.mjs
+  // enforces that), so they cannot be edited to satisfy this package's stricter
+  // rules — under tsconfig.json they raise 12 errors that are all style, not
+  // substance: type-only imports under verbatimModuleSyntax, missing `override`
+  // modifiers, and `window` with no DOM lib.
+  //
+  // Relaxing those rules for the whole package to accommodate two generated
+  // files would be the wrong trade. Compiling them separately keeps our own code
+  // as strict as it was, and `skipLibCheck` means the .d.ts this emits is
+  // consumed without being re-checked.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "vendor",
+    "outDir": "vendor-dist",
+    "strict": false,
+    "strictNullChecks": true,
+    "declaration": true,
+    "sourceMap": true,
+    "skipLibCheck": true
+  },
+  "include": ["vendor/**/*.ts"]
+}
