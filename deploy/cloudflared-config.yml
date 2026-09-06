@@ -1,0 +1,31 @@
+# STE-31 — aturan ingress Cloudflare Tunnel untuk backend Sterun.
+#
+# Tunnel-nya **locally-managed**: dibuat lewat `cloudflared tunnel create`, jadi
+# aturan di bawah inilah yang menentukan ke mana trafik pergi. Bukan dashboard.
+# Itu disengaja — aturan routing yang hidup di UI orang lain tidak bisa di-review
+# di PR, tidak ikut ter-rollback, dan tidak bisa dijawab dengan `git log`.
+#
+# Alternatifnya (`--token`) memindahkan aturan ini ke dashboard Cloudflare. Kalau
+# suatu saat itu yang dipilih, hapus file ini supaya tidak ada dua sumber
+# kebenaran yang diam-diam berbeda.
+#
+# UUID di bawah **bukan rahasia** — dia ada di record DNS publik. Yang rahasia
+# adalah credentials JSON-nya, yang tidak pernah masuk repo (lihat .gitignore).
+
+tunnel: 75461846-7dba-45ee-a5ad-2a82b3a39091
+credentials-file: /etc/cloudflared/credentials.json
+
+# Tunnel tidak boleh punya default terbuka. Aturan terakhir menutup semuanya:
+# hostname yang tidak disebut di atas dapat 404, bukan diteruskan ke suatu
+# tempat. Tanpa itu, sub-domain yang salah ketik bisa mendarat di API ini.
+ingress:
+  - hostname: api.sterun.jameshub.fun
+    # `api` itu nama service di compose network — BUKAN localhost. cloudflared
+    # jalan di container-nya sendiri, jadi localhost di sana adalah dirinya.
+    service: http://api:3001
+  - service: http_status:404
+
+# Tanpa ini cloudflared menulis satu baris per request. API-nya sudah punya log
+# terstruktur sendiri dengan request id; dua salinan cuma bikin yang satu
+# berhenti dibaca.
+loglevel: info
