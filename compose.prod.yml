@@ -92,9 +92,23 @@ services:
       api: { condition: service_started } # so migrations have run
     command: ["node", "dist/cli/indexer.js", "follow"]
 
-  # Rent for the race records. Weekly is the cadence; the loop sleeps between
-  # scans, so this is a long-running process rather than a cron entry — one
-  # fewer moving part on the box, and it restarts with everything else.
+  # Rent for the race records.
+  #
+  # `keeper run` is ONE-SHOT by design — its own header says "intended as a
+  # weekly cron" — so it exits 0 the moment it finishes. This service used to
+  # run it bare with `restart: unless-stopped`, which meant Docker restarted it
+  # instantly, forever. Observed on the live box: 37 restarts, run #1766, a full
+  # 42-key scan every few seconds, all of it hitting the PUBLIC testnet RPC. A
+  # weekly job was running roughly a hundred thousand times a week.
+  #
+  # So the scheduling lives here, where the cadence is a deployment decision,
+  # and the CLI stays the single-purpose thing it was written to be. The first
+  # run happens immediately, so a deploy proves the keeper works instead of
+  # proving it in seven days.
+  #
+  # A failed run does not kill the loop: rent that could not be paid this week
+  # can be paid next week, and a container that exits here would go straight
+  # back to the restart storm this comment exists to prevent.
   keeper:
     image: sterun-backend:latest
     restart: unless-stopped
@@ -105,7 +119,15 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       api: { condition: service_started }
-    command: ["node", "dist/cli/keeper.js", "run"]
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          node dist/cli/keeper.js run || echo "keeper run failed; retrying after the interval"
+          echo "keeper sleeping ${TTL_KEEPER_INTERVAL_SECONDS:-604800}s until the next run"
+          sleep "${TTL_KEEPER_INTERVAL_SECONDS:-604800}"
+        done
 
   # ---------------------------------------------------------------------------
   # Ingress. Pick ONE, by profile. Which one is right depends on the host, not
