@@ -31,7 +31,7 @@ fe/app/
     events/[eventId]/                /events/:id
     events/[eventId]/enter/          /events/:id/enter
     runner/[address]/                /runner/G...
-    me/                              /me
+    profile/                         /profile
 
   (organiser)/                       wallet-gated, online
     org/                             /org
@@ -186,6 +186,50 @@ bukan meng-upload file. Karena `EventData` menyimpan `metadata_hash` **dan** `ur
 mengunduh dokumennya, menghitung ulang hash-nya, dan bisa menunjukkan bahwa poster, lokasi, jadwal,
 dan rute belum diubah sejak event dibuat.
 
+### 3.2 Isi halaman profile
+
+`/runner/[address]` dan `/profile` adalah halaman yang sama; yang membedakan cuma address-nya
+datang dari URL atau dari wallet yang tersambung. Keduanya sengaja tidak disatukan penamaannya:
+`/runner/G...` dikirim ke orang lain dan URL-nya sendiri sudah menjelaskan isinya, sedangkan
+`/profile` terbaca sebagai milik sendiri.
+
+**Identicon, bukan foto.** Runner tidak punya foto profil (tidak ada endpoint upload, dan menyimpan
+foto orang berarti kelas PII baru — §2.1). Yang dipakai adalah **identicon deterministik yang
+dihitung dari address**: pola unik per address, konsisten di semua halaman, dihitung di browser
+sehingga tetap muncul offline, nol storage dan nol backend. Jangan memakai layanan avatar jarak
+jauh (gravatar dan sejenisnya) — itu membocorkan siapa melihat profile siapa ke pihak ketiga, dan
+mati begitu sinyal hilang.
+
+**Statistik, semuanya turunan data yang sudah ada.** `GET /runners/:address/records` mengembalikan
+`state`, `finish_time_s`, `category_id`, dan `event_id` per record; data kategori (`distance_m`)
+memang sudah diambil untuk menampilkan nama event. Dari situ:
+
+| Angka | Dihitung dari |
+| --- | --- |
+| jumlah race | banyaknya record |
+| total jarak | jumlah `distance_m` kategori tiap record |
+| jumlah selesai | record ber-state `Finished` |
+| PB per jarak | `finish_time_s` terkecil per `distance_m` |
+
+```
+[identicon]  GABC…7XQ2
+
+   4 race        42.2 km        3 selesai
+
+   PB 5K  22:41        PB 10K  48:03
+```
+
+Yang membedakan ini dari aplikasi lari biasa: **tiap angka bisa diklik ke transaksinya.** "42.2 km"
+bukan angka yang kita catat sendiri di database kita, melainkan jumlah dari empat record yang
+masing-masing bisa dicek orang lain di explorer. Itu kalimat SOW — *"a race history that belongs to
+the runner and that anyone can verify against the chain"* — dalam bentuk yang enak dilihat.
+
+Thumbnail poster event di tiap baris riwayat juga gratis: poster sudah ada di dokumen metadata yang
+tetap diunduh untuk halaman event.
+
+**Urutan kerjanya:** tabel riwayat yang benar dan blok verify yang jalan dulu. Identicon, statistik,
+dan thumbnail adalah lapisan di atasnya — bukan fondasinya, dan STE-24 adalah tiket paling akhir.
+
 ---
 
 ## 4. Halaman peserta — wallet tersambung
@@ -195,7 +239,7 @@ dan rute belum diubah sejak event dibuat.
 | `/events/[id]/enter` | Stepper: pilih kategori → form PII → review → **satu tanda tangan** (`enter`, fee sUSD tercakup di auth tree) | STE-21 |
 | ↳ layar sukses | Bib, `token_id`, link transaksi testnet, dan **salt receipt** | STE-21 |
 | `/pass/[tokenId]` | QR regenerate tiap 30 detik + kode 6 digit untuk fallback manual, bib, nama event, state. Installable. Jalan penuh di airplane mode. | STE-21 |
-| `/me` | Race saya + shortcut ke pass masing-masing. Tipis: isinya `/runner/[address-ku]` | STE-21 |
+| `/profile` | Race saya + shortcut ke pass masing-masing. Tipis: isinya `/runner/[address-ku]` (§3.2) | STE-21 |
 
 **Layar sukses halaman sendiri, bukan modal.** Salt receipt cuma muncul sekali seumur hidup; kalau
 hilang, identity check di `/runner/[address]` mati selamanya untuk record itu. Layar ini tidak boleh
@@ -314,4 +358,6 @@ Due date (per Linear): STE-13 17 Sep · STE-17 25 Sep · STE-21 dan STE-22 29 Se
 | Avatar peserta, daftar nama, export peserta | Datanya tidak pernah ada (§2.1) |
 | Tombol edit / hapus event dan kategori | Fungsinya tidak ada di kontrak (§2.2) |
 | Peta rute | Bisa dan murah (Leaflet + OSM, §6), tapi tidak ada di tiket mana pun dan tidak dinilai reviewer grant. Kerjakan setelah STE-24, atau serahkan ke Nabil sebagai polish. Kalau sempat, ia jadi bintang di video demo 3 menit. |
+| Username / display name runner | Bukan cuma soal ongkos (tabel baru, endpoint baru, bukti kepemilikan address, duplikat dan squatting tanpa admin yang bisa menengahi). Alasan utamanya: username adalah **klaim identitas yang tidak diverifikasi siapa pun, ditempel di halaman yang seluruh gunanya adalah membuktikan sesuatu** — tidak ada yang menghalangi orang menamai dirinya "Eliud Kipchoge". Begitu satu baris di halaman itu tidak bisa dibuktikan, keraguan menular ke baris lain yang sebenarnya benar. Identitas terverifikasinya sudah ada di blok identity check: anonim secara default, bisa dibuktikan atas izin runner. |
+| Foto profil | Tidak ada endpoint upload, dan menyimpan foto orang berarti kelas PII baru. Diganti identicon deterministik (§3.2) |
 | Profile handle / klaim profil | v2; routing memakai address mentah `/runner/G...` |
