@@ -1235,6 +1235,30 @@ Baris yang paling penting bukan `/health`, tapi tiga baris terakhir sebelum doku
 sensitif **tetap menolak** pemanggil tanpa tanda tangan. Deploy yang salah di situ akan menyajikan
 data bersinggungan-identitas ke internet sambil terlihat sehat sempurna di semua cek lain.
 
+### Selamat dari reboot — diuji, bukan diklaim
+
+STE-31 mensyaratkan restart otomatis saat crash/reboot. Container LXC-nya di-`pct reboot`, lalu
+didiamkan:
+
+```
+sebelum : {"status":"ok","uptimeSeconds":556}
+[pct reboot 203]
+sesudah : {"status":"ok","uptimeSeconds":14}      ← proses baru
+          {"status":"ready","checks":{"database":"ok"}}
+          api|Up 19s (healthy)  indexer|Up 20s  keeper|Up 19s  postgres|Up 19s (healthy)
+```
+
+**Tanpa satu perintah pun** setelah reboot. `onboot=1` di LXC menyalakan container, dan
+`restart: unless-stopped` menyalakan keempat service.
+
+Dua detail yang bagus dari lognya:
+
+- Indexer menerima SIGTERM dan **berhenti dengan rapi** — `finishing the current page, then
+  stopping` — bukan dibunuh di tengah halaman.
+- Setelah hidup lagi dia **melanjutkan dari cursor**, bukan mengulang dari nol: hitungannya tetap
+  4 event / 10 record / 56 chain event, dan `last_ledger` maju. Kalau dia meng-ingest ulang,
+  angkanya akan naik.
+
 ### Untuk web app (STE-8/13/21/22/24/32)
 
 ```bash
