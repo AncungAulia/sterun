@@ -34,6 +34,10 @@ on:
       - "pnpm-workspace.yaml"
       - "docs/deployments.md"
       - "docs/specs/vectors/**"
+      # The deployment files are validated by this job too — see the step at the
+      # bottom, and the bug that put it there.
+      - "compose*.yml"
+      - "be/Dockerfile"
       - ".github/workflows/typescript.yml"
   pull_request:
     paths: *ts_paths
@@ -125,3 +129,31 @@ jobs:
         run: pnpm test
         env:
           DATABASE_URL: postgres://sterun:sterun@127.0.0.1:5432/sterun
+
+      # STE-31. `docker compose ps` on the deployed host once failed outright
+      # with "required variable TUNNEL_TOKEN is missing a value" — for a service
+      # behind a profile that host would never start. Compose interpolates every
+      # service regardless of profile, so a `${VAR:?}` on a profiled service is a
+      # hard error for completely unrelated commands. Nothing caught it until it
+      # was run on a real box.
+      #
+      # Each ingress profile is checked separately for exactly that reason: the
+      # failure only appears when the file is parsed with that profile selected.
+      - name: Validate the deployment compose files
+        env:
+          # A value, not the value. This step parses; it never starts anything.
+          POSTGRES_PASSWORD: ci-validation-only
+        run: |
+          # env_file must exist to be parsed. Its contents are irrelevant here,
+          # and it is gitignored, so this cannot leak into a commit.
+          : > be/.env.production
+          for args in \
+            "-f compose.prod.yml" \
+            "-f compose.prod.yml -f compose.homelab.yml" \
+            "-f compose.prod.yml --profile caddy" \
+            "-f compose.prod.yml --profile tunnel"; do
+            echo "::group::docker compose $args config"
+            docker compose $args config > /dev/null
+            echo "::endgroup::"
+          done
+          rm -f be/.env.production
