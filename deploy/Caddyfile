@@ -41,21 +41,10 @@
 		-Server
 	}
 
-	# CORS for the browser clients (STE-21 web app, STE-22 scanner PWA).
-	# Deliberately an allow-list rather than `*`: the authenticated endpoints
-	# carry a wallet signature in a header, and `*` would let any origin ask a
-	# visitor's browser to send one.
-	@cors_preflight method OPTIONS
-	handle @cors_preflight {
-		header {
-			Access-Control-Allow-Origin "{$STERUN_WEB_ORIGIN}"
-			Access-Control-Allow-Methods "GET, POST, OPTIONS"
-			Access-Control-Allow-Headers "content-type, x-sterun-address, x-sterun-nonce, x-sterun-signature"
-			Access-Control-Max-Age "86400"
-		}
-		respond 204
-	}
-	header Access-Control-Allow-Origin "{$STERUN_WEB_ORIGIN}"
+	# CORS is set by the API itself (be/src/http/hardening.ts), for the same
+	# reason the security headers are: this deployment can be fronted by Caddy,
+	# a Cloudflare Tunnel or Tailscale Funnel, and a policy configured in one
+	# proxy is simply absent under another.
 
 	log {
 		output stdout

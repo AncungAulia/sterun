@@ -6,6 +6,7 @@
  * to sit on a public VPS (STE-31) needs alongside it.
  */
 import type { FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import type { Config } from "../config.js";
@@ -106,6 +107,36 @@ export function registerHardening(app: FastifyInstance, config: Config): void {
       }),
     });
   }
+
+  /**
+   * CORS, and it lives here for the same reason the security headers do.
+   *
+   * It was in deploy/Caddyfile, which meant the deployed API sent no CORS
+   * headers at all — the homelab's ingress is Tailscale Funnel, not Caddy. The
+   * web app would have been blocked by the browser with an error that looks
+   * like a frontend bug and is not one.
+   *
+   * An allow-list, never `*`. Authenticated requests carry a wallet signature
+   * in `x-sterun-signature`, and `*` would let any page a runner visits ask
+   * their browser to send one. The list comes from STERUN_WEB_ORIGIN
+   * (comma-separated, so production and a preview deployment can both be in it)
+   * and is empty by default — a deployment that has not been told about its web
+   * app refuses every browser, which is the safe way round.
+   */
+  void app.register(cors, {
+    origin: config.webOrigins.length > 0 ? [...config.webOrigins] : false,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: [
+      "content-type",
+      "x-sterun-address",
+      "x-sterun-nonce",
+      "x-sterun-signature",
+    ],
+    // The request id is the thing a client quotes when reporting a failure, so
+    // it has to be readable from a browser rather than merely present.
+    exposedHeaders: ["x-request-id"],
+    maxAge: 86_400,
+  });
 
   app.addHook("onSend", async (request, reply) => {
     // Echoed so a client can quote it. The 500 body says nothing else.

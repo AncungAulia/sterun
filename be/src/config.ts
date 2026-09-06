@@ -36,6 +36,16 @@ export interface Config {
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
   /**
+   * Browser origins allowed to call this API.
+   *
+   * An allow-list, never `*`. Authenticated requests carry a wallet signature
+   * in a header, and `*` would let any page a runner happens to visit ask their
+   * browser to send one. Empty means no browser may call it at all, which is
+   * the right default for a deployment that has not been told about its web
+   * app yet.
+   */
+  readonly webOrigins: readonly string[];
+  /**
    * STE-16. The indexer and the TTL keeper. Always present — running them is
    * decided by which process you start, not by whether they are configured,
    * and a status endpoint that cannot say what the poll interval is is worse
@@ -122,6 +132,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // the prefixed one wins where both are set.
     distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    webOrigins: (env.STERUN_WEB_ORIGIN ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
     indexer: {
       simulationSource:
         env.INDEXER_SOURCE_ACCOUNT ?? env.SUSD_DISTRIBUTOR ?? fromDoc.susdDistributor,

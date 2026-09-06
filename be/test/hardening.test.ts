@@ -207,3 +207,79 @@ describe("security headers travel with the code, not with the proxy", () => {
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
   });
 });
+
+describe("CORS is an allow-list, and it is the API's job", () => {
+  const withOrigins = (origins: string) =>
+    buildServer(loadConfig({ NODE_ENV: "test", STERUN_WEB_ORIGIN: origins }));
+
+  it("lets a listed origin through", async () => {
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://sterun.jameshub.fun" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBe("https://sterun.jameshub.fun");
+  });
+
+  it("answers a preflight with the wallet-signature headers", async () => {
+    // Without these three named, the browser blocks the real request and the
+    // failure looks like a frontend bug.
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/events/0/roster",
+      headers: {
+        origin: "https://sterun.jameshub.fun",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "x-sterun-signature",
+      },
+    });
+    expect(res.statusCode).toBeLessThan(400);
+    const allowed = String(res.headers["access-control-allow-headers"] ?? "").toLowerCase();
+    for (const header of ["x-sterun-address", "x-sterun-nonce", "x-sterun-signature"]) {
+      expect(allowed).toContain(header);
+    }
+  });
+
+  it("refuses an origin that is not on the list", async () => {
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://evil.example" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("accepts several origins, so a preview deployment can be listed too", async () => {
+    app = withOrigins("https://sterun.jameshub.fun, http://localhost:3000");
+    for (const origin of ["https://sterun.jameshub.fun", "http://localhost:3000"]) {
+      const res = await app.inject({ method: "GET", url: "/health", headers: { origin } });
+      expect(res.headers["access-control-allow-origin"]).toBe(origin);
+    }
+  });
+
+  it("allows no browser at all when nothing is configured", async () => {
+    // A deployment that has not been told about its web app should refuse every
+    // browser rather than guess. Never `*`: authenticated requests carry a
+    // wallet signature in a header.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://anything.example" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("exposes x-request-id so a browser client can quote it", async () => {
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://sterun.jameshub.fun" },
+    });
+    expect(String(res.headers["access-control-expose-headers"] ?? "")).toContain("x-request-id");
+  });
+});
