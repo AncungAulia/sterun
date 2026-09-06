@@ -475,11 +475,12 @@ bersih dan keempat koneksinya sehat. Gejalanya persis seperti tunnel mati, padah
 menolak sebelum meneruskan. Kalau suatu saat gejala ini muncul lagi untuk nama baru, cek dulu
 berapa tingkat sub-domainnya sebelum membongkar tunnel.
 
-> CNAME `api.sterun.jameshub.fun` **masih ada** di zona: `cloudflared` tidak punya perintah untuk
-> menghapus route DNS, itu butuh dashboard atau API token. Aturan ingress-nya sengaja dipertahankan
-> supaya nama itu langsung hidup kalau ACM diaktifkan. Kalau mau zona-nya bersih, hapus CNAME-nya
-> dari dashboard **dan** hapus aturannya dari `deploy/cloudflared-config.yml` — jangan salah satu
-> saja.
+> CNAME `api.sterun.jameshub.fun` sudah **dihapus** dari zona (lewat dashboard — `cloudflared`
+> tidak punya perintah untuk menghapus route DNS), dan aturan ingress-nya ikut dihapus dari
+> `deploy/cloudflared-config.yml`. Dua-duanya, sengaja: aturan tanpa DNS adalah kode mati yang
+> menyiratkan URL yang sebenarnya NXDOMAIN, dan DNS tanpa aturan adalah URL yang gagal dengan cara
+> yang membingungkan. Kalau ACM/Total TLS diaktifkan nanti, kembalikan keduanya dalam satu
+> perubahan — jangan salah satu saja.
 
 #### Tailscale Funnel: cadangan, sekarang mati
 

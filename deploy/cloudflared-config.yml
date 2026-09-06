@@ -26,11 +26,13 @@ ingress:
   # Cloudflare menolak TLS handshake sebelum request pernah sampai ke tunnel —
   # gejalanya `SSL alert number 40`, bukan 404, jadi kelihatan seperti tunnel-nya
   # mati padahal keempat koneksinya sehat.
+  #
+  # `api.sterun.jameshub.fun` sempat terdaftar di sini menunggu ACM. Record
+  # DNS-nya sudah dihapus dari dashboard, jadi aturannya ikut dihapus: aturan
+  # tanpa DNS adalah kode mati yang menyiratkan sebuah URL yang sebenarnya
+  # NXDOMAIN. Kalau ACM/Total TLS suatu saat aktif, keduanya dikembalikan dalam
+  # satu perubahan — bukan salah satu saja.
   - hostname: api-sterun.jameshub.fun
-    service: http://api:3001
-  # Tetap didaftarkan: kalau suatu saat ACM/Total TLS aktif, nama ini langsung
-  # hidup tanpa mengubah apa pun di sini.
-  - hostname: api.sterun.jameshub.fun
     # `api` itu nama service di compose network — BUKAN localhost. cloudflared
     # jalan di container-nya sendiri, jadi localhost di sana adalah dirinya.
     service: http://api:3001
