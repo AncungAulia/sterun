@@ -73,6 +73,26 @@ const valid = (): Record<string, any> => ({
 });
 
 describe("the committed JSON Schema is the one the validator enforces", () => {
+  it("is checked out with LF endings, whatever the operating system", () => {
+    // Checked BEFORE the byte comparison below, because it is the failure that
+    // does not explain itself. Git for Windows defaults to core.autocrlf=true;
+    // without the repo's .gitattributes it rewrites this file to CRLF on
+    // checkout while src/schema.ts keeps generating LF, and the comparison
+    // fails with two strings that look identical in the diff. `git status`
+    // stays clean, so it reads as a code bug and is not one. Reported by
+    // Ancung, who lost an afternoon to exactly this.
+    const committed = readFileSync(
+      resolve(HERE, "..", "schema", "race-record-v1.0.json"),
+      "utf8",
+    );
+    expect(
+      committed.includes("\r\n"),
+      "race-record-v1.0.json was checked out with CRLF line endings. The repo's " +
+        ".gitattributes pins it to LF — if this fails, that file is missing or was " +
+        "overridden locally. Re-clone, or run: git add --renormalize .",
+    ).toBe(false);
+  });
+
   it("matches what src/schema.ts generates, byte for byte", () => {
     // Two artefacts, one definition. A hand-edit to the JSON — or a change to
     // the zod schema without regenerating — fails here rather than shipping a
