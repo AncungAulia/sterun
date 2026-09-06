@@ -389,6 +389,88 @@ Migrasi jalan sendiri saat API start, **sebelum** socket-nya dibuka — jadi ser
 sempat menerima pendaftaran terhadap schema yang belum ada. Container `indexer` dan `keeper` menunggu
 API start persis karena itu.
 
+### Deployment nyata: jameserver (pve02 / ct-sterun)
+
+Ini deployment yang benar-benar berjalan, dan bentuknya **berbeda** dari langkah generik di atas
+karena satu fakta yang baru ketahuan setelah masuk ke servernya.
+
+| Item | Nilai |
+| --- | --- |
+| Node Proxmox | `pve02` (cluster `homelab`, 2 node) |
+| Container | LXC **203**, hostname `ct-sterun`, Debian 13 |
+| Sumber daya | 2 core, 2 GiB RAM, 512 MiB swap, 20 GiB rootfs (`local-lvm`) |
+| IP LAN | `192.168.18.42/24`, gw `192.168.18.1` |
+| Fitur LXC | `unprivileged=1`, `nesting=1,keyctl=1` (Docker butuh nesting), `onboot=1` |
+| Path repo | `/opt/sterun` |
+
+Konvensi diikuti dari container yang sudah ada di cluster ini: vmid `2xx` untuk pve02, prefix
+hostname `ct-`, IP `192.168.18.4x`, bridge `vmbr0`, nameserver `1.1.1.1`.
+
+#### Kenapa ingress-nya BUKAN Caddy di sini
+
+Router homelab ini **tidak mem-forward port 80/443**. Ini diuji, bukan diasumsikan: sebuah listener
+sementara dipasang di port 80 pve01, lalu WAN IP-nya (`182.253.126.14` — IP publik asli, bukan
+CGNAT) diprobe dari internet lewat proxy eksternal. Hasilnya timeout (522). Artinya:
+
+- **ACME HTTP-01 tidak mungkin.** Caddy di dalam `compose.prod.yml` tidak akan pernah dapat
+  sertifikat, dan membiarkannya mencoba hanya membakar rate limit Let's Encrypt.
+- Ingress harus datang dari **luar** container.
+
+#### Ingress sekarang: Tailscale Funnel (sementara)
+
+pve01 sudah ada di tailnet dan tailnet-nya **sudah punya capability Funnel** (port 443 diizinkan),
+jadi tidak perlu Cloudflare, tidak perlu port forward:
+
+```bash
+# di pve01
+tailscale funnel --bg http://192.168.18.42:3001
+tailscale funnel status
+tailscale funnel --https=443 off   # untuk mematikannya
+```
+
+Hasilnya URL publik ber-TLS sungguhan (sertifikat Let's Encrypt, HTTP/2), terbukti terjangkau dari
+luar tailnet. Yang **belum** dipenuhi cuma hostname-nya: STE-31 minta
+`api.sterun.jameshub.fun`, dan Funnel hanya bisa menyajikan nama `*.ts.net` miliknya sendiri.
+
+#### Ingress tujuan: Cloudflare Tunnel
+
+`jameshub.fun` DNS-nya di Cloudflare. Tunnel menyelesaikan ketiganya sekaligus — tanpa port
+forward, TLS diurus Cloudflare, dan **record DNS-nya dibuat sendiri oleh tunnel**, jadi tidak ada A
+record yang perlu ditambah manual.
+
+`cloudflared` sudah terpasang di pve01 tapi **belum ter-autentikasi** (tidak ada `cert.pem`, tidak
+ada tunnel). Yang dibutuhkan cuma satu hal: token tunnel dari Cloudflare Zero Trust.
+
+```bash
+# di ct-sterun, setelah TUNNEL_TOKEN dimasukkan ke be/.env.production
+docker compose -f compose.prod.yml --profile tunnel up -d
+```
+
+#### Operasional harian
+
+```bash
+ssh root@192.168.18.42
+cd /opt/sterun
+docker compose -f compose.prod.yml -f compose.homelab.yml ps
+docker compose -f compose.prod.yml -f compose.homelab.yml logs -f api
+```
+
+`compose.homelab.yml` cuma menambahkan satu hal: mem-publish port API **ke IP LAN saja**
+(`192.168.18.42:3001`), bukan `0.0.0.0`. Itu perlu karena ingress-nya ada di host lain (pve01);
+Postgres tetap tanpa `ports:` sama sekali.
+
+#### Yang berbeda dari `be/.env` laptop
+
+- `PII_KEYS` produksi **berbeda** dari yang di laptop. Deployment baru, vault kosong, tidak ada yang
+  perlu didekripsi dengan kunci lama — dan satu kunci di dua tempat berarti bocornya laptop =
+  bocornya produksi.
+- `TTL_KEEPER_SECRET` adalah akun **baru** yang dibuat khusus untuk VPS ini
+  ([`GD3MSYCLECUOUQNFFXJLGB7ZKCUANIRNYM7QGKS2YUVRDLWY4IDAABL4`](https://stellar.expert/explorer/testnet/account/GD3MSYCLECUOUQNFFXJLGB7ZKCUANIRNYM7QGKS2YUVRDLWY4IDAABL4)),
+  bukan akun dari bukti STE-16. Cuma butuh XLM: memperpanjang TTL tidak butuh otorisasi siapa pun.
+- `SUSD_DISTRIBUTOR_SECRET` sengaja **tidak diisi**. API tidak pernah memakainya — faucet itu CLI,
+  bukan endpoint — dan kunci yang bisa memindahkan seluruh supply test tidak punya alasan berada di
+  host publik.
+
 ### Verifikasi — dari luar, tanpa SSH
 
 ```bash

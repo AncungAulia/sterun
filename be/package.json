@@ -19,6 +19,7 @@
     "e2e:results": "tsx scripts/e2e-results.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/swagger": "^9.8.1",
     "@stellar/stellar-sdk": "^17.0.1",
@@ -27,13 +28,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@sterun/sdk": "workspace:*",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "eslint": "^10.9.1",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^3.2.7",
-    "@sterun/sdk": "workspace:*"
+    "vitest": "^3.2.7"
   }
 }

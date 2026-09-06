@@ -63,6 +63,21 @@ services:
     # Also no `ports:`. Caddy is the only thing that reaches it, so there is no
     # plaintext port on the box for anyone to find.
     expose: ["3001"]
+    # Liveness, and only on the service that serves HTTP. It restarts a wedged
+    # process; whether traffic should be routed here is /ready, which is the
+    # proxy's question. Not in the Dockerfile: the poller and the keeper share
+    # this image and serve nothing, so an image-level check marks them unhealthy
+    # forever.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   # The poller. Fills the index the API serves; the API never fills it itself.
   indexer:
@@ -92,26 +107,65 @@ services:
       api: { condition: service_started }
     command: ["node", "dist/cli/keeper.js", "run"]
 
-  # TLS, and the only container with published ports.
+  # ---------------------------------------------------------------------------
+  # Ingress. Pick ONE, by profile. Which one is right depends on the host, not
+  # on preference:
   #
-  # Caddy rather than nginx + certbot because it obtains and renews the
-  # certificate itself from Let's Encrypt with no cron entry and no renewal that
-  # can silently stop working — which is the failure mode that takes an API
-  # down 90 days after nobody thought about it again.
+  #   caddy       the host's router forwards 80 and 443. Caddy gets a Let's
+  #               Encrypt certificate over HTTP-01 and renews it itself.
+  #                 docker compose -f compose.prod.yml --profile caddy up -d
+  #
+  #   cloudflared the host has NO port forwarding — a residential line, CGNAT,
+  #               or an ISP that blocks 80/443. The tunnel dials OUT to
+  #               Cloudflare, so nothing has to be reachable inbound, and
+  #               Cloudflare terminates TLS and creates the DNS record.
+  #                 docker compose -f compose.prod.yml --profile tunnel up -d
+  #
+  # The jameserver homelab is the second case: verified from the internet, port
+  # 80 does not reach it even with something listening. Until the tunnel is
+  # authenticated there, ingress is Tailscale Funnel on the Proxmox host —
+  # see be/OPERATIONS.md.
+  # ---------------------------------------------------------------------------
   caddy:
+    profiles: ["caddy"]
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     environment:
-      STERUN_DOMAIN: ${STERUN_DOMAIN:?set STERUN_DOMAIN in .env}
+      # Not `:?` — see the note on TUNNEL_TOKEN below.
+      STERUN_DOMAIN: ${STERUN_DOMAIN:-}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       # The certificate and the ACME account key. Losing this volume means
       # re-issuing, and Let's Encrypt rate-limits that.
       - sterun-caddy-data:/data
       - sterun-caddy-config:/config
+    depends_on: [api]
+
+  # Cloudflare Tunnel. No published ports, by design: it makes an outbound
+  # connection and Cloudflare routes api.<domain> down it.
+  #
+  # TUNNEL_TOKEN comes from the Cloudflare dashboard (Zero Trust > Networks >
+  # Tunnels) and is the ONLY thing needed — the tunnel creates its own DNS
+  # record, so there is no separate A record to add and no certificate to renew.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      # `${VAR:-}` rather than `${VAR:?}`, and this is not a style preference.
+      # Compose interpolates every service's variables regardless of profile, so
+      # a required variable on a profiled service breaks EVERY command — even
+      # `docker compose ps` on a host that will never run this profile. Found
+      # the hard way, deploying to a host that uses the other ingress.
+      #
+      # An empty token is not silently tolerated: cloudflared exits immediately
+      # with its own clear message, which is a better error than compose
+      # refusing to parse the file.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on: [api]
 
 volumes:

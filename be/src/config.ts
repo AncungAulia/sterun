@@ -36,6 +36,16 @@ export interface Config {
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
   /**
+   * Browser origins allowed to call this API.
+   *
+   * An allow-list, never `*`. Authenticated requests carry a wallet signature
+   * in a header, and `*` would let any page a runner happens to visit ask their
+   * browser to send one. Empty means no browser may call it at all, which is
+   * the right default for a deployment that has not been told about its web
+   * app yet.
+   */
+  readonly webOrigins: readonly string[];
+  /**
    * STE-16. The indexer and the TTL keeper. Always present — running them is
    * decided by which process you start, not by whether they are configured,
    * and a status endpoint that cannot say what the poll interval is is worse
@@ -114,8 +124,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       eventRegistry: env.EVENT_REGISTRY ?? fromDoc.eventRegistry,
       raceRecord: env.RACE_RECORD ?? fromDoc.raceRecord,
     },
-    distributorSecret: env.SUSD_DISTRIBUTOR_SECRET,
+    // Two names accepted, and the reason is worth a line. be/.env carries the
+    // whole Sterun identity set under a STERUN_ prefix — issuer, distributor,
+    // admin, organiser, runners — which is a better scheme than the bare name
+    // this file originally read, because it namespaces them away from anything
+    // else in the environment. Rather than making that file wrong, both work;
+    // the prefixed one wins where both are set.
+    distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    webOrigins: (env.STERUN_WEB_ORIGIN ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
     indexer: {
       simulationSource:
         env.INDEXER_SOURCE_ACCOUNT ?? env.SUSD_DISTRIBUTOR ?? fromDoc.susdDistributor,
@@ -124,7 +144,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       startLedger: env.INDEXER_START_LEDGER ? num(env.INDEXER_START_LEDGER, 0) : undefined,
     },
     keeper: {
-      secret: env.TTL_KEEPER_SECRET,
+      secret: env.STERUN_TTL_KEEPER_SECRET ?? env.TTL_KEEPER_SECRET,
       thresholdLedgers: num(env.TTL_THRESHOLD_LEDGERS, DEFAULT_THRESHOLD_LEDGERS),
       extendToLedgers: num(env.TTL_EXTEND_TO_LEDGERS, DEFAULT_EXTEND_TO_LEDGERS),
     },

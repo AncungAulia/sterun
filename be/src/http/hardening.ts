@@ -6,6 +6,7 @@
  * to sit on a public VPS (STE-31) needs alongside it.
  */
 import type { FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import type { Config } from "../config.js";
@@ -107,9 +108,58 @@ export function registerHardening(app: FastifyInstance, config: Config): void {
     });
   }
 
+  /**
+   * CORS, and it lives here for the same reason the security headers do.
+   *
+   * It was in deploy/Caddyfile, which meant the deployed API sent no CORS
+   * headers at all — the homelab's ingress is Tailscale Funnel, not Caddy. The
+   * web app would have been blocked by the browser with an error that looks
+   * like a frontend bug and is not one.
+   *
+   * An allow-list, never `*`. Authenticated requests carry a wallet signature
+   * in `x-sterun-signature`, and `*` would let any page a runner visits ask
+   * their browser to send one. The list comes from STERUN_WEB_ORIGIN
+   * (comma-separated, so production and a preview deployment can both be in it)
+   * and is empty by default — a deployment that has not been told about its web
+   * app refuses every browser, which is the safe way round.
+   */
+  void app.register(cors, {
+    origin: config.webOrigins.length > 0 ? [...config.webOrigins] : false,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: [
+      "content-type",
+      "x-sterun-address",
+      "x-sterun-nonce",
+      "x-sterun-signature",
+    ],
+    // The request id is the thing a client quotes when reporting a failure, so
+    // it has to be readable from a browser rather than merely present.
+    exposedHeaders: ["x-request-id"],
+    maxAge: 86_400,
+  });
+
   app.addHook("onSend", async (request, reply) => {
     // Echoed so a client can quote it. The 500 body says nothing else.
     void reply.header("x-request-id", request.id);
+
+    // Security headers belong HERE, not in the reverse proxy's config.
+    //
+    // They were in deploy/Caddyfile first, which was wrong in a way that only
+    // showed up on the real deployment: this API sits behind whatever ingress
+    // the host happens to have — Caddy, a Cloudflare Tunnel, or (as on the
+    // jameserver homelab, where the router forwards no ports) Tailscale Funnel.
+    // Headers configured in one proxy silently vanish under another, and
+    // "does the deployment send HSTS" then depends on infrastructure trivia
+    // rather than on this codebase. Setting them at the application means the
+    // answer travels with the code.
+    void reply.header("x-content-type-options", "nosniff");
+    void reply.header("x-frame-options", "DENY");
+    void reply.header("referrer-policy", "no-referrer");
+    if (config.env === "production") {
+      // Only in production: HSTS on a plain-HTTP dev server is a promise the
+      // developer's browser would hold on to long after they moved on.
+      void reply.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+    }
   });
 
   void app.register(swagger, {

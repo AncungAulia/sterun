@@ -1,0 +1,40 @@
+# Line endings, settled once for the whole repo.
+#
+# Reported by Ancung: `pnpm test` could not go green on Windows at all. Git for
+# Windows defaults to core.autocrlf=true, so checkout rewrote
+# sdk/schema/race-record-v1.0.json to CRLF while src/schema.ts kept generating
+# LF — and that test compares the two BYTE FOR BYTE on purpose, because the
+# published JSON Schema has to be exactly what the validator generates. `git
+# status` stayed clean, so it looked like a code bug and was not one. CI is
+# Ubuntu, so it never showed there.
+#
+# The fix is repo-wide rather than one line for that one file, because this repo
+# has several places where bytes are the contract:
+#
+#   sdk/schema/*.json      compared byte-for-byte against generated output, and
+#                          shipped in the npm tarball
+#   sdk/vendor/*.ts        must stay byte-identical to sc/bindings/*/src/index.ts
+#   docs/specs/**          frozen artefacts; the vectors are the spec
+#   *.sh                   a shell script with CRLF fails on Linux with
+#                          "bad interpreter: /usr/bin/env bash^M", which is a
+#                          genuinely baffling error the first time
+#   Dockerfile, *.yml      built and run on Linux
+#
+# `text=auto eol=lf` means: Git decides what is text, normalises it to LF in the
+# repository, and checks it out as LF everywhere — including Windows. Nothing
+# here is Windows-specific, so nothing wants CRLF.
+* text=auto eol=lf
+
+# Declared rather than left to auto-detection. Auto-detection is good and these
+# are unambiguous, but a corrupted PNG from a line-ending conversion is an
+# expensive thing to debug, and the cost of being explicit is four lines.
+*.png binary
+*.ico binary
+*.jpg binary
+*.woff2 binary
+
+# Generator output, and the lockfiles. Marked so `git diff` stops offering to
+# show a thousand-line change nobody reads.
+pnpm-lock.yaml       -diff linguist-generated
+sc/bindings/*/package-lock.json -diff linguist-generated
+sdk/vendor/*.ts      linguist-generated
