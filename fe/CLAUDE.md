@@ -19,7 +19,13 @@ npm install      # atau pnpm install — konsisten dengan lockfile yang kamu pil
 npm run dev
 npm run build
 npm run lint
+npm run typecheck
 ```
+
+`typecheck` = `next typegen && tsc --noEmit`, dan `next typegen`-nya **tidak boleh dilewati**:
+`app/layout.tsx` memakai `LayoutProps<"/">`, tipe global yang di-generate Next 16 ke `.next/types/`
+dan tidak ikut ke repo (`.next/` di-gitignore). `tsc` polos di mesin yang belum pernah build gagal
+dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-generate, bukan bug.
 
 ## Yang WAJIB dibaca sebelum bikin flow
 
