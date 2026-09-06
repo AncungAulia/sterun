@@ -34,6 +34,7 @@ dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-gener
 
 | Dokumen | Untuk apa |
 | --- | --- |
+| `fe/guides/ARCHITECTURE.md` | **baca duluan**: struktur folder, aturan per lapisan, akses data, aturan UI, checklist |
 | `docs/WEB_APP_IA.md` | **peta halaman app ini**: URL apa saja, isinya apa, datanya dari mana, urutan bangun |
 | `docs/SYSTEM_DESIGN.md` §6 | user flow lengkap: entry, race day, finish, verify |
 | `docs/SYSTEM_DESIGN.md` §7 | desain rotating QR / anti-fraud |
@@ -74,6 +75,15 @@ output generator, edit tangan hilang tanpa jejak pada regenerate berikutnya.
 
 ## Konvensi
 
+- **Semua teks UI Bahasa Inggris.** Label tombol, judul, pesan error, empty state, placeholder —
+  semuanya. Dokumen `.md` tetap Bahasa Indonesia, komentar kode tetap Inggris; aturan ini menambah
+  satu hal saja, yaitu teks yang tampil di layar.
+- **Jangan pernah memakai em dash (`—`) atau en dash (`–`) di teks UI.** Pecah jadi dua kalimat,
+  pakai koma, atau tanda kurung. Kalau benar-benar perlu pemisah, pakai tanda hubung biasa.
+  Larangan ini khusus teks UI; komentar kode dan `.md` tidak terpengaruh.
+- **Tidak ada hex, nama font, atau px mentah di komponen** — semua dari token `app/tokens.css`
+  (milik Nabil, STE-7). Token itu punya dua salinan (`fe/` dan `landing-page/`); kalau diubah,
+  ubah keduanya dalam satu commit.
 - Contract address dari `docs/deployments.md`, lewat env var, bukan hardcode tersebar.
 - Testnet RPC `https://soroban-testnet.stellar.org`, passphrase `Test SDF Network ; September 2015`.
 - Test: e2e + edge + positive + negative (`CLAUDE.md` root). Untuk flow bayar dan scan, kasus
