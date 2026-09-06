@@ -1140,73 +1140,109 @@ pelari lain, dan `Finished` itu terminal.
 
 ---
 
-## STE-31 — deploy backend: artefak SIAP, URL live BELUM ADA
+## STE-31 — backend LIVE di jameserver
 
-> **Status jujur: tiket ini belum selesai.** Yang diminta STE-31 adalah **base URL live ber-TLS**
-> yang bisa dibuka siapa pun. Itu butuh VPS, akses SSH, dan domain — tidak ada satu pun di mesin
-> tempat pekerjaan ini dilakukan. Semua yang bisa dibuktikan tanpa itu, dibuktikan; sisanya menunggu
-> satu langkah manual yang cuma bisa dijalankan pemilik VPS.
+Deployment nyata, 2026-09-06. Backend Sterun berjalan di homelab James dan **sudah bisa dijangkau
+publik lewat HTTPS**.
 
-### Yang SUDAH dibuktikan (2026-09-05, container sungguhan di mesin dev)
-
-Image produksi (`be/Dockerfile`) di-build lalu dijalankan terhadap Postgres nyata:
-
-| Cek | Hasil |
-| --- | --- |
-| `docker build -f be/Dockerfile` | sukses, multi-stage, tanpa compiler/test di image akhir |
-| user di runtime | `uid=1000(node)` — **bukan root** |
-| `GET /health` | `{"status":"ok","uptimeSeconds":5}` |
-| `GET /ready` | `{"status":"ready","checks":{"database":"ok"}}` |
-| `GET /config` | alamat kontrak ter-parse **dari `docs/deployments.md` di dalam image** |
-| `GET /openapi.json` | 15 route terdokumentasi, termasuk `/ready` dan `/events/{eventId}/results/preview` |
-| rate limit | request ke-245 → **429** (aktif di produksi, mati di test) |
-
-`deploy/verify-deployment.sh` dijalankan terhadap instance yang benar-benar hidup: **12 lolos, 1
-gagal** — dan yang gagal adalah pemeriksaan TLS, karena instance lokalnya memang HTTP polos. Itu
-perilaku yang benar: skrip menolak URL yang tidak ber-TLS, bukan meloloskannya.
+### Base URL
 
 ```
-✓ /health -> {"status":"ok","uptimeSeconds":3}
-✓ /ready -> database reachable
-✓ EventRegistry CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
-✓ RaceRecord    CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
-✓ vault mounted · indexer mounted · results mounted
-✓ GET /events/0/roster -> 401 without a signature
-✓ GET /participants/… -> 401 without a signature
-✓ POST /events/0/results/preview -> 401 without a signature
-✓ /openapi.json describes the API
-✗ not an https:// URL — STE-31 requires TLS
+https://pve01.tail4d50d6.ts.net
 ```
 
-### Yang BELUM ada, dan siapa yang bisa melakukannya
+Sertifikat **Let's Encrypt** asli (CN `pve01.tail4d50d6.ts.net`, HTTP/2), dan terbukti terjangkau
+dari **luar tailnet** — bukan lewat MagicDNS: diambil oleh layanan eksternal (`r.jina.ai`) dan juga
+dengan memaksa resolusi ke IP ingress Funnel publik (`103.84.155.153`).
 
-**Base URL live.** Butuh VPS + domain milik James. Prosedurnya lengkap di
-[`be/OPERATIONS.md`](../be/OPERATIONS.md) bagian "Deploy ke VPS":
+> **Ini hostname sementara.** STE-31 meminta `api.sterun.jameshub.fun`. Lihat "Kenapa belum di
+> domain sendiri" di bawah — yang kurang cuma satu token, bukan pekerjaan.
 
-```bash
-git clone https://github.com/AncungAulia/sterun.git && cd sterun
-cp be/.env.production.example be/.env.production
-$EDITOR be/.env.production          # STERUN_DOMAIN, POSTGRES_PASSWORD, PII_KEYS, TTL_KEEPER_SECRET
-ln -s be/.env.production .env
-docker compose -f compose.prod.yml up -d --build
-
-./deploy/verify-deployment.sh https://api.sterun.example
-```
-
-Prasyarat yang tidak bisa dilewati: **DNS domain harus sudah menunjuk ke VPS sebelum start pertama**,
-dan port 80 harus terbuka (ACME memakainya, bukan cuma untuk redirect).
-
-### Isi tabel ini setelah deploy
-
-Salin output `verify-deployment.sh` (ada timestamp UTC) ke sini, plus:
+### Di mana ia berjalan
 
 | Item | Nilai |
 | --- | --- |
-| Base URL | `https://…` |
-| `GET /health` | *(respon + timestamp)* |
-| `GET /ready` | *(respon)* |
-| Sertifikat TLS | *(issuer + masa berlaku)* |
-| Tanggal deploy | |
+| Node Proxmox | `pve02` (cluster `homelab`) |
+| Container | LXC **203** `ct-sterun`, Debian 13, unprivileged + `nesting=1` |
+| IP LAN | `192.168.18.42` |
+| Path | `/opt/sterun` |
+| Proses | Postgres 17, API, poller (`indexer follow`), TTL keeper (`keeper run`) |
+| Restart | `unless-stopped` + `onboot=1` di LXC — selamat dari reboot dan mati listrik |
+| TTL keeper | [`GD3MSYCLECUOUQNFFXJLGB7ZKCUANIRNYM7QGKS2YUVRDLWY4IDAABL4`](https://stellar.expert/explorer/testnet/account/GD3MSYCLECUOUQNFFXJLGB7ZKCUANIRNYM7QGKS2YUVRDLWY4IDAABL4) — akun baru khusus VPS ini |
 
-Setelah itu STE-31 baru boleh ditandai Done, dan STE-21 / STE-25 / STE-32 punya URL yang bisa
-mereka pakai.
+Konvensi diikuti dari cluster yang sudah ada: vmid `2xx` untuk pve02, prefix `ct-`, IP
+`192.168.18.4x`, bridge `vmbr0`.
+
+### Bahwa ia hidup dan benar
+
+Migrasi jalan sendiri sebelum socket dibuka — `001_pii_vault`, `002_indexer`, `003_name_fragment`,
+`004_auth_nonces`. Log startup melaporkan `"nonces":"postgres"`, artinya jalur nonce yang aman untuk
+lebih dari satu instance memang aktif di produksi, bukan cuma ada kodenya.
+
+Poller menelan event dari testnet yang live sejak menit pertama; keeper memindai record dan
+melaporkan `0 due` (benar — belum ada yang mendekati batas TTL).
+
+### Kenapa BUKAN Caddy, dan kenapa belum di domain sendiri
+
+Router homelab ini **tidak mem-forward port 80/443**. Diuji, bukan diasumsikan: listener sementara
+dipasang di port 80 pve01, lalu WAN IP-nya (`182.253.126.14` — IP publik asli, bukan CGNAT) diprobe
+dari internet lewat proxy eksternal. Timeout (522).
+
+Konsekuensinya: **ACME HTTP-01 mustahil**, jadi Caddy di dalam `compose.prod.yml` tidak akan pernah
+mendapat sertifikat di sini. Ingress harus datang dari luar container, dan yang dipakai sekarang
+adalah **Tailscale Funnel** di pve01 — tailnet-nya sudah punya capability itu, jadi tidak perlu
+Cloudflare dan tidak perlu port forward.
+
+Untuk `api.sterun.jameshub.fun`, jalurnya **Cloudflare Tunnel**: DNS `jameshub.fun` memang di
+Cloudflare, tunnel dial keluar (jadi tetap tanpa port forward), TLS diurus Cloudflare, dan **record
+DNS-nya dibuat sendiri oleh tunnel** — tidak ada A record yang perlu ditambah manual.
+`cloudflared` sudah terpasang di pve01 tapi **belum ter-autentikasi**.
+
+Yang dibutuhkan: satu **token tunnel** dari Cloudflare Zero Trust, lalu
+
+```bash
+# di ct-sterun
+echo "TUNNEL_TOKEN=<token>" >> be/.env.production
+docker compose -f compose.prod.yml --profile tunnel up -d
+```
+
+### Verifikasi dari luar, tanpa SSH
+
+`./deploy/verify-deployment.sh https://pve01.tail4d50d6.ts.net` — **14 dari 14 lolos**,
+2026-09-06T14:30:08Z:
+
+```
+▸ TLS
+  ✓ serves over HTTPS with a certificate curl trusts
+  ✓ sends HSTS
+▸ Liveness and readiness
+  ✓ /health -> {"status":"ok","uptimeSeconds":15}
+  ✓ /ready -> database reachable
+▸ Pointing at the right chain
+  ✓ EventRegistry CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+  ✓ RaceRecord    CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+  ✓ network       testnet
+  ✓ vault mounted · indexer mounted · results mounted
+▸ The sensitive endpoints still say no
+  ✓ GET /events/0/roster -> 401 without a signature
+  ✓ GET /participants/… -> 401 without a signature
+  ✓ POST /events/0/results/preview -> 401 without a signature
+▸ Documentation
+  ✓ /openapi.json describes the API
+```
+
+Baris yang paling penting bukan `/health`, tapi tiga baris terakhir sebelum dokumentasi: endpoint
+sensitif **tetap menolak** pemanggil tanpa tanda tangan. Deploy yang salah di situ akan menyajikan
+data bersinggungan-identitas ke internet sambil terlihat sehat sempurna di semua cek lain.
+
+### Untuk web app (STE-8/13/21/22/24/32)
+
+```bash
+NEXT_PUBLIC_API_URL=https://pve01.tail4d50d6.ts.net
+```
+
+CORS-nya **allow-list**, bukan `*` — request ter-autentikasi membawa signature wallet di header, dan
+`*` akan membiarkan halaman mana pun yang dikunjungi runner meminta browser-nya mengirimkan itu.
+Origin yang sudah diizinkan: `https://sterun.jameshub.fun` dan `http://localhost:3000` (untuk dev).
+Tambah origin baru = tambahkan ke `STERUN_WEB_ORIGIN` di `be/.env.production`, dipisah koma.
+
