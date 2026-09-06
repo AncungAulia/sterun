@@ -18,7 +18,7 @@ const CONTRACT_ID = /^C[A-Z2-7]{55}$/;
 function required(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
-      `Missing ${name}. Copy fe/.env.example to fe/.env.local and fill it in from docs/deployments.md.`,
+      `Missing ${name}. It ships in fe/.env; check that file, or your fe/.env.local override, against docs/deployments.md.`,
     );
   }
   return value;

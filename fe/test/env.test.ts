@@ -60,8 +60,8 @@ describe("negative", () => {
     await expect(loadEnv({ [key]: undefined })).rejects.toThrow(key);
   });
 
-  it("names the file to copy, so the fix does not need a maintainer", async () => {
-    await expect(loadEnv({ NEXT_PUBLIC_RPC_URL: undefined })).rejects.toThrow(/\.env\.example/);
+  it("names the file to look in, so the fix does not need a maintainer", async () => {
+    await expect(loadEnv({ NEXT_PUBLIC_RPC_URL: undefined })).rejects.toThrow(/fe\/\.env/);
   });
 
   it.each([

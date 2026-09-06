@@ -13,9 +13,10 @@ punya lockfile sendiri.
 
 ```bash
 pnpm install                     # sekali, dari root
-cp fe/.env.example fe/.env.local # isi sudah benar untuk testnet
 pnpm --filter fe dev             # http://localhost:3000
 ```
+
+Tidak ada langkah konfigurasi: nilai testnet-nya sudah ter-commit di `fe/.env`.
 
 Perintah lain:
 
@@ -31,7 +32,9 @@ yang belum pernah build akan gagal dengan `TS2304: Cannot find name 'LayoutProps
 
 ## Konfigurasi
 
-`.env.local` (salin dari `.env.example`). Alamat kontrak **tidak** di-hardcode di kode — sumbernya
+Nilai default ada di `fe/.env` dan **ikut ter-commit**: semuanya publik, sama dengan yang ada di
+`docs/deployments.md`. Untuk mengubahnya di mesin sendiri, bikin `fe/.env.local` yang menimpanya
+(file itu tidak masuk git). Alamat kontrak **tidak** di-hardcode di kode — sumbernya
 [`../docs/deployments.md`](../docs/deployments.md), dan divalidasi saat boot di `src/lib/env.ts`.
 
 | Variabel | Isi |
