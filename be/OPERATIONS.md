@@ -416,35 +416,82 @@ CGNAT) diprobe dari internet lewat proxy eksternal. Hasilnya timeout (522). Arti
   sertifikat, dan membiarkannya mencoba hanya membakar rate limit Let's Encrypt.
 - Ingress harus datang dari **luar** container.
 
-#### Ingress sekarang: Tailscale Funnel (sementara)
-
-pve01 sudah ada di tailnet dan tailnet-nya **sudah punya capability Funnel** (port 443 diizinkan),
-jadi tidak perlu Cloudflare, tidak perlu port forward:
-
-```bash
-# di pve01
-tailscale funnel --bg http://192.168.18.42:3001
-tailscale funnel status
-tailscale funnel --https=443 off   # untuk mematikannya
-```
-
-Hasilnya URL publik ber-TLS sungguhan (sertifikat Let's Encrypt, HTTP/2), terbukti terjangkau dari
-luar tailnet. Yang **belum** dipenuhi cuma hostname-nya: STE-31 minta
-`api.sterun.jameshub.fun`, dan Funnel hanya bisa menyajikan nama `*.ts.net` miliknya sendiri.
-
-#### Ingress tujuan: Cloudflare Tunnel
+#### Ingress: Cloudflare Tunnel (yang dipakai sekarang)
 
 `jameshub.fun` DNS-nya di Cloudflare. Tunnel menyelesaikan ketiganya sekaligus — tanpa port
-forward, TLS diurus Cloudflare, dan **record DNS-nya dibuat sendiri oleh tunnel**, jadi tidak ada A
-record yang perlu ditambah manual.
+forward, TLS diurus Cloudflare, dan record DNS-nya dibuat sendiri oleh tunnel.
 
-`cloudflared` sudah terpasang di pve01 tapi **belum ter-autentikasi** (tidak ada `cert.pem`, tidak
-ada tunnel). Yang dibutuhkan cuma satu hal: token tunnel dari Cloudflare Zero Trust.
+**Locally-managed, bukan token.** Aturan routing ada di `deploy/cloudflared-config.yml` di dalam
+repo, bukan di dashboard. Alasannya: aturan yang hidup di UI tidak bisa di-review di PR, tidak ikut
+ter-rollback, dan `git log` tidak bisa menjawab pertanyaan tentangnya.
+
+Prosedur (sekali seumur deployment):
 
 ```bash
-# di ct-sterun, setelah TUNNEL_TOKEN dimasukkan ke be/.env.production
-docker compose -f compose.prod.yml --profile tunnel up -d
+# 1. di pve01 — satu login browser, pilih zona jameshub.fun
+cloudflared tunnel login
+
+# 2. bikin tunnel + record DNS-nya
+cloudflared tunnel create sterun-api
+cloudflared tunnel route dns sterun-api api-sterun.jameshub.fun
+
+# 3. pindahkan credentials ke host deployment TANPA melewati clipboard/chat
+ssh root@100.111.186.114 "cat ~/.cloudflared/<TUNNEL_ID>.json" \
+  | ssh root@192.168.18.42 "mkdir -p /opt/sterun/secrets \
+      && cat > /opt/sterun/secrets/cloudflared-credentials.json \
+      && chmod 600 /opt/sterun/secrets/cloudflared-credentials.json"
+
+# 4. image cloudflared jalan sebagai uid 65532, bukan root. File 600 milik root
+#    TIDAK terbaca olehnya — gejalanya `permission denied` yang berulang tiap
+#    detik. Perbaikannya chown, BUKAN chmod 644: rahasianya tetap 600.
+ssh root@192.168.18.42 "chown 65532:65532 /opt/sterun/secrets/cloudflared-credentials.json"
+
+# 5. nyalakan
+ssh root@192.168.18.42 "cd /opt/sterun && \
+  docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel up -d cloudflared"
 ```
+
+Sehat kalau lognya menunjukkan **empat** `Registered tunnel connection` (Cloudflare menyambung ke
+dua region, dua koneksi masing-masing).
+
+#### Kenapa `api-sterun` dan BUKAN `api.sterun`
+
+Nama yang diminta tiket awalnya `api.sterun.jameshub.fun`. Itu **tidak bisa dilayani** di plan
+Cloudflare sekarang, dan alasannya bukan konfigurasi:
+
+**Universal SSL cuma menerbitkan sertifikat satu tingkat** — `jameshub.fun` dan `*.jameshub.fun`.
+Nama dua tingkat butuh `*.sterun.jameshub.fun`, yang cuma ada lewat **Advanced Certificate
+Manager** (berbayar) atau Total TLS.
+
+Dibuktikan, bukan ditebak:
+
+| Hostname | Hasil |
+| --- | --- |
+| `api.sterun.jameshub.fun` | `SSL alert number 40` — handshake ditolak di edge |
+| `api-sterun.jameshub.fun` | **14/14 lolos** |
+
+Yang bikin ini menyesatkan: request-nya **tidak pernah sampai** ke tunnel, jadi log cloudflared
+bersih dan keempat koneksinya sehat. Gejalanya persis seperti tunnel mati, padahal Cloudflare
+menolak sebelum meneruskan. Kalau suatu saat gejala ini muncul lagi untuk nama baru, cek dulu
+berapa tingkat sub-domainnya sebelum membongkar tunnel.
+
+> CNAME `api.sterun.jameshub.fun` **masih ada** di zona: `cloudflared` tidak punya perintah untuk
+> menghapus route DNS, itu butuh dashboard atau API token. Aturan ingress-nya sengaja dipertahankan
+> supaya nama itu langsung hidup kalau ACM diaktifkan. Kalau mau zona-nya bersih, hapus CNAME-nya
+> dari dashboard **dan** hapus aturannya dari `deploy/cloudflared-config.yml` — jangan salah satu
+> saja.
+
+#### Tailscale Funnel: cadangan, sekarang mati
+
+Sebelum tunnel ada, ingress-nya Tailscale Funnel di pve01. Sudah dimatikan
+(`tailscale funnel --https=443 off`) supaya tidak ada dua pintu publik yang tidak diurus. Kalau
+tunnel bermasalah dan butuh jalan cepat:
+
+```bash
+ssh root@100.111.186.114 "tailscale funnel --bg http://192.168.18.42:3001"
+```
+
+Itu memberi URL publik ber-TLS di `pve01.<tailnet>.ts.net` dalam hitungan detik, tanpa Cloudflare.
 
 #### Keeper: cadence-nya urusan compose, bukan CLI
 

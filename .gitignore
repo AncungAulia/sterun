@@ -19,6 +19,12 @@ out/
 !.env.example
 !.env.*.example
 
+# STE-31 — tunnel credentials. `cloudflared tunnel create` writes a JSON holding
+# TunnelSecret; whoever has it can attach a tunnel to the Cloudflare account.
+# The tunnel UUID is NOT secret (it is in public DNS) and lives in
+# deploy/cloudflared-config.yml; this is the half that is.
+secrets/
+
 # Editor / OS
 .DS_Store
 *.swp

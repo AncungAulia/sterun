@@ -166,28 +166,30 @@ services:
       - sterun-caddy-config:/config
     depends_on: [api]
 
-  # Cloudflare Tunnel. No published ports, by design: it makes an outbound
-  # connection and Cloudflare routes api.<domain> down it.
+  # Cloudflare Tunnel. No published ports, by design: it dials OUT to Cloudflare
+  # and traffic for the hostname comes back down that connection. That is what
+  # makes it the right ingress for a host whose router forwards nothing.
   #
-  # TUNNEL_TOKEN comes from the Cloudflare dashboard (Zero Trust > Networks >
-  # Tunnels) and is the ONLY thing needed — the tunnel creates its own DNS
-  # record, so there is no separate A record to add and no certificate to renew.
+  # Locally-managed, not token-managed. The routing rules live in
+  # deploy/cloudflared-config.yml, in this repository, where they can be
+  # reviewed in a PR and rolled back with everything else — rather than in a
+  # dashboard that `git log` cannot answer questions about.
+  #
+  # The credentials file is the secret and is NOT in the repo. It is written by
+  # `cloudflared tunnel create` and its path is TUNNEL_CREDENTIALS_FILE.
+  # Procedure: be/OPERATIONS.md, "Cloudflare Tunnel".
   cloudflared:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: ["tunnel", "--no-autoupdate", "run"]
-    environment:
-      # `${VAR:-}` rather than `${VAR:?}`, and this is not a style preference.
-      # Compose interpolates every service's variables regardless of profile, so
-      # a required variable on a profiled service breaks EVERY command — even
-      # `docker compose ps` on a host that will never run this profile. Found
-      # the hard way, deploying to a host that uses the other ingress.
-      #
-      # An empty token is not silently tolerated: cloudflared exits immediately
-      # with its own clear message, which is a better error than compose
-      # refusing to parse the file.
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    volumes:
+      - ./deploy/cloudflared-config.yml:/etc/cloudflared/config.yml:ro
+      # `${VAR:-default}` rather than `${VAR:?}`: compose interpolates every
+      # service regardless of profile, so a required variable on a profiled
+      # service breaks EVERY command — even `docker compose ps` on a host that
+      # will never run this profile. Learned by deploying it.
+      - ${TUNNEL_CREDENTIALS_FILE:-./secrets/cloudflared-credentials.json}:/etc/cloudflared/credentials.json:ro
     depends_on: [api]
 
 volumes:

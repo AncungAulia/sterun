@@ -68,7 +68,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-15 | `@sterun/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
 | STE-19 | JSON Schema v1.0 + packaging (C6) | kode selesai, 134 test — **`npm publish` menunggu kredensial npm** |
 | STE-20 | results CSV + API hardening (C7/j6) | selesai, backend 586 test + e2e testnet live |
-| STE-31 | deploy backend ke VPS | **LIVE** di jameserver (pve02 / ct-sterun), 610 test, verifikasi 14/14 — hostname masih `*.ts.net`, domain sendiri menunggu token Cloudflare |
+| STE-31 | deploy backend ke VPS | **SELESAI** — live di `https://api-sterun.jameshub.fun` (jameserver / pve02 / ct-sterun), Cloudflare Tunnel, verifikasi 14/14 |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
