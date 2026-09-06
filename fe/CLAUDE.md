@@ -34,6 +34,7 @@ dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-gener
 
 | Dokumen | Untuk apa |
 | --- | --- |
+| `docs/WEB_APP_IA.md` | **peta halaman app ini**: URL apa saja, isinya apa, datanya dari mana, urutan bangun |
 | `docs/SYSTEM_DESIGN.md` §6 | user flow lengkap: entry, race day, finish, verify |
 | `docs/SYSTEM_DESIGN.md` §7 | desain rotating QR / anti-fraud |
 | `docs/specs/HASH_AND_TOTP.md` §4–§5 | payload QR + derivasi kode TOTP, **byte-exact** |

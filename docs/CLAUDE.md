@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | `SYSTEM_DESIGN.md` | desain otoritatif C1–C14: arsitektur, storage model, lifecycle, TOTP, user flow, 30-day plan | ya, tapi lihat di bawah |
 | `deployments.md` | **bukti** deploy: contract address, link stellar.expert, wasm hash, tanggal | append-only |
+| `WEB_APP_IA.md` | information architecture `fe/`: peta halaman, batasan data per halaman, bentuk dokumen metadata event, urutan bangun | ya, sama aturannya dengan `SYSTEM_DESIGN.md` |
 | `specs/` | handoff contract **BEKU** (C4) | punya aturannya sendiri → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
 
 ## `SYSTEM_DESIGN.md`
