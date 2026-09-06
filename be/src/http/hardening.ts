@@ -110,6 +110,25 @@ export function registerHardening(app: FastifyInstance, config: Config): void {
   app.addHook("onSend", async (request, reply) => {
     // Echoed so a client can quote it. The 500 body says nothing else.
     void reply.header("x-request-id", request.id);
+
+    // Security headers belong HERE, not in the reverse proxy's config.
+    //
+    // They were in deploy/Caddyfile first, which was wrong in a way that only
+    // showed up on the real deployment: this API sits behind whatever ingress
+    // the host happens to have — Caddy, a Cloudflare Tunnel, or (as on the
+    // jameserver homelab, where the router forwards no ports) Tailscale Funnel.
+    // Headers configured in one proxy silently vanish under another, and
+    // "does the deployment send HSTS" then depends on infrastructure trivia
+    // rather than on this codebase. Setting them at the application means the
+    // answer travels with the code.
+    void reply.header("x-content-type-options", "nosniff");
+    void reply.header("x-frame-options", "DENY");
+    void reply.header("referrer-policy", "no-referrer");
+    if (config.env === "production") {
+      // Only in production: HSTS on a plain-HTTP dev server is a promise the
+      // developer's browser would hold on to long after they moved on.
+      void reply.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+    }
   });
 
   void app.register(swagger, {

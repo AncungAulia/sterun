@@ -169,3 +169,41 @@ describe("the OpenAPI document", () => {
     expect(Object.keys(spec.paths)).not.toContain("/openapi.json");
   });
 });
+
+describe("security headers travel with the code, not with the proxy", () => {
+  it("sets nosniff, frame-deny and referrer-policy on every response", async () => {
+    // These were in deploy/Caddyfile until the real deployment showed why that
+    // was wrong: the jameserver homelab forwards no ports, so the ingress there
+    // is Tailscale Funnel rather than Caddy, and every header configured in
+    // Caddy simply was not sent. "Does this API send HSTS" must not depend on
+    // which proxy somebody put in front of it.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["x-frame-options"]).toBe("DENY");
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+  });
+
+  it("sends HSTS in production", async () => {
+    app = await liveServer();
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.headers["strict-transport-security"]).toBe("max-age=31536000; includeSubDomains");
+  });
+
+  it("does NOT send HSTS outside production", async () => {
+    // A year-long HSTS pin picked up from a developer's plain-HTTP server is a
+    // promise their browser keeps long after they have moved on.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.headers["strict-transport-security"]).toBeUndefined();
+  });
+
+  it("sets them on an error response too", async () => {
+    // The 404 path goes through a different handler; a header set only on the
+    // happy path is a header an attacker simply avoids.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/nope" });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+  });
+});

@@ -114,7 +114,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       eventRegistry: env.EVENT_REGISTRY ?? fromDoc.eventRegistry,
       raceRecord: env.RACE_RECORD ?? fromDoc.raceRecord,
     },
-    distributorSecret: env.SUSD_DISTRIBUTOR_SECRET,
+    // Two names accepted, and the reason is worth a line. be/.env carries the
+    // whole Sterun identity set under a STERUN_ prefix — issuer, distributor,
+    // admin, organiser, runners — which is a better scheme than the bare name
+    // this file originally read, because it namespaces them away from anything
+    // else in the environment. Rather than making that file wrong, both work;
+    // the prefixed one wins where both are set.
+    distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
     indexer: {
       simulationSource:
@@ -124,7 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       startLedger: env.INDEXER_START_LEDGER ? num(env.INDEXER_START_LEDGER, 0) : undefined,
     },
     keeper: {
-      secret: env.TTL_KEEPER_SECRET,
+      secret: env.STERUN_TTL_KEEPER_SECRET ?? env.TTL_KEEPER_SECRET,
       thresholdLedgers: num(env.TTL_THRESHOLD_LEDGERS, DEFAULT_THRESHOLD_LEDGERS),
       extendToLedgers: num(env.TTL_EXTEND_TO_LEDGERS, DEFAULT_EXTEND_TO_LEDGERS),
     },

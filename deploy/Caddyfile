@@ -30,12 +30,12 @@
 	}
 
 	header {
-		# HSTS. The API is TLS-only and there is no plaintext port to fall back
-		# to, so there is nothing this can break.
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "no-referrer"
+		# HSTS, nosniff, frame-deny and referrer-policy are set by the API
+		# itself (be/src/http/hardening.ts). They used to be here, which was
+		# wrong: this deployment can be fronted by Caddy, a Cloudflare Tunnel or
+		# Tailscale Funnel, and headers configured in one proxy vanish under
+		# another. Only the thing that is genuinely Caddy's stays here.
+		#
 		# Caddy announces itself by default; a version number is free
 		# reconnaissance.
 		-Server
