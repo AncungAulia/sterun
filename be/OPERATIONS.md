@@ -446,6 +446,21 @@ ada tunnel). Yang dibutuhkan cuma satu hal: token tunnel dari Cloudflare Zero Tr
 docker compose -f compose.prod.yml --profile tunnel up -d
 ```
 
+#### Keeper: cadence-nya urusan compose, bukan CLI
+
+`keeper run` **one-shot** — headernya sendiri bilang "intended as a weekly cron" — jadi dia exit 0
+begitu selesai. Menjalankannya telanjang dengan `restart: unless-stopped` berarti Docker
+menyalakannya lagi seketika, selamanya. Itu benar-benar terjadi di box ini: **37 restart, run
+#1766**, scan 42 key tiap beberapa detik, semuanya ke RPC testnet **publik**.
+
+Sekarang loop-nya ada di `command:` service keeper, dan intervalnya
+`TTL_KEEPER_INTERVAL_SECONDS` (default 604800 = seminggu). Run pertama tetap langsung, supaya
+deploy membuktikan keeper-nya jalan — bukan membuktikannya tujuh hari lagi.
+
+Cara memastikan dia sehat: `docker inspect sterun-keeper-1 --format "{{.RestartCount}}"` harus
+**0**, dan lognya berakhir di `keeper sleeping 604800s until the next run`. Kalau angkanya naik
+terus, dia balik ke restart storm.
+
 #### Operasional harian
 
 ```bash
