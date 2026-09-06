@@ -73,9 +73,14 @@ USER node
 
 EXPOSE 3001
 
-# Liveness, not readiness: this restarts a wedged process. Whether traffic
-# should be routed here is /ready, and that is the proxy's question.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-
+# No HEALTHCHECK here, deliberately.
+#
+# One image runs three different processes, and only one of them serves HTTP. An
+# image-level health check is inherited by all three, so the poller and the TTL
+# keeper — which are working perfectly — report "unhealthy" forever, and any
+# `depends_on: condition: service_healthy` pointing at them deadlocks. Observed
+# on the first real deployment.
+#
+# The check belongs to the service that can answer it: see the `api` service in
+# compose.prod.yml.
 CMD ["node", "dist/index.js"]

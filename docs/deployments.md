@@ -971,16 +971,31 @@ Seluruh pembacaan diulang lewat client **tanpa `publicKey` dan tanpa signer sama
 (`sterun.readOnly()`): `recordsOfDetailed`, `verify`, dan `getCategory` semuanya jalan. Ini yang
 membuat public profile page (STE-24) bisa benar-benar publik.
 
-### Satu leg yang BELUM tercakup
+### Leg berbayar — SUDAH dijalankan (2026-09-06)
 
-`enter` **berbayar** (kategori 5 sUSD) tidak dijalankan di run ini: memindahkan sUSD butuh
-`SUSD_DISTRIBUTOR_SECRET`, yang hidup di `be/.env` dan tidak ada di mesin tempat e2e ini
-dijalankan. Script-nya sudah menangani leg itu — dia membuka trustline, mendanai runner, `enter`,
-lalu memastikan saldo organiser naik **persis** sebesar biaya pendaftaran, yang membuktikan
-`transfer` SEP-41 benar-benar terjadi di dalam invocation yang sama dengan mint-nya.
+Run pertama melewatkan `enter` berbayar karena `SUSD_DISTRIBUTOR_SECRET` tidak ada di mesin itu.
+Secret-nya kemudian tersedia, dan leg-nya dijalankan:
 
-Kalau secret-nya ada, jalankan ulang `pnpm --filter @sterun/sdk e2e` dan tambahkan hasilnya ke
-tabel di atas. Script **tidak** diam-diam lulus tanpa leg ini: dia mencetak bahwa dia melewatinya.
+```
+▸ Paid entry (5 sUSD), fee moving runner → organiser inside `enter`
+  runner-p  GBG2UYH2XOGQ76FLCH4U3FCYMZKXD7GQ4SMMXLUWFCNZGGTNJOLDCCYC
+  funded GBG2UYH2XOGQ76FLCH4U3FCYMZKXD7GQ4SMMXLUWFCNZGGTNJOLDCCYC with 10 sUSD
+  ✓ token_id 9, organiser received exactly 5 sUSD
+  ✓ one transaction did quota + fee + mint
+```
+
+| Item | Nilai |
+| --- | --- |
+| event_id | 3 |
+| organiser | [`GCROPABZJK5KDTUYMQAVSCYX5V25ZSQ5MVPGORB5UNEUQ4K6C3IEQ6XH`](https://stellar.expert/explorer/testnet/account/GCROPABZJK5KDTUYMQAVSCYX5V25ZSQ5MVPGORB5UNEUQ4K6C3IEQ6XH) |
+| token_id (gratis) | 8 — bib 0, `Finished` 3161s |
+| token_id (berbayar) | 9 |
+| `enter` (5 sUSD) | [`d379b26958a981a304701c958606f1fa5cb4e4e1c8fcc698b15bd11046058c97`](https://stellar.expert/explorer/testnet/tx/d379b26958a981a304701c958606f1fa5cb4e4e1c8fcc698b15bd11046058c97) |
+| fee diterima organiser | **persis 5 sUSD** |
+
+Ini yang membuktikan klaim atomicity `enter` sampai ujung: **satu transaksi**, **satu tanda tangan
+runner**, dan di dalamnya ada `transfer` SEP-41 yang tidak pernah ditandatangani terpisah. Saldo
+organiser diperiksa sebelum dan sesudah, dan selisihnya persis biaya pendaftaran — bukan kira-kira.
 
 > Kategori **gratis** (`price_usdc == 0`) melewatkan `transfer` sepenuhnya, jadi leg yang sudah
 > jalan di atas memang tidak menyentuh SAC — itu perilaku yang benar sesuai `INTERFACE.md` §2.1,

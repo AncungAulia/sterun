@@ -63,6 +63,21 @@ services:
     # Also no `ports:`. Caddy is the only thing that reaches it, so there is no
     # plaintext port on the box for anyone to find.
     expose: ["3001"]
+    # Liveness, and only on the service that serves HTTP. It restarts a wedged
+    # process; whether traffic should be routed here is /ready, which is the
+    # proxy's question. Not in the Dockerfile: the poller and the keeper share
+    # this image and serve nothing, so an image-level check marks them unhealthy
+    # forever.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   # The poller. Fills the index the API serves; the API never fills it itself.
   indexer:
