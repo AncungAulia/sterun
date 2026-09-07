@@ -208,6 +208,7 @@ fe/
     │
     ├── lib/
     │   ├── sterun.ts                 ← factory SterunClient (read-only + bertanda tangan)
+    │   ├── events.ts                 ← daftar event dari event_count + get_event per id
     │   ├── env.ts                    ← contract address dari env, divalidasi saat boot
     │   ├── wallet.ts                 ← setup Wallets Kit
     │   ├── api.ts                    ← fetch ke backend be/
@@ -290,6 +291,7 @@ Semua yang tahu soal Stellar, backend, atau storage. Komponen tidak boleh tahu d
 | File | Isi |
 | --- | --- |
 | `sterun.ts` | factory `SterunClient` — read-only dan bertanda tangan |
+| `events.ts` | `listEvents` / `getEventSummary`, plus urutan directory |
 | `env.ts` | `EVENT_REGISTRY`, `RACE_RECORD`, `API_URL` dari env, divalidasi saat boot |
 | `wallet.ts` | setup Wallets Kit, adapter `signTransaction` |
 | `api.ts` | `apiFetch()` ke backend `be/` |
@@ -307,6 +309,24 @@ Fungsi tanpa state dan tanpa kopling ke chain. `shortAddress()`, `formatPrice()`
 ---
 
 ## 5. Aturan akses data
+
+### 5.0 Tidak ada "list events" di kontrak, dan itu disengaja
+
+`EventRegistry` cuma punya `event_count` + `get_event(id)`. View yang mengembalikan vector tak
+terbatas akan makin lambat dan makin mahal justru waktu protokolnya laku, sampai suatu hari
+melewati batas resource dan directory berhenti memuat untuk semua orang. Jadi daftarnya disusun
+di klien (`lib/events.ts`): baca `event_count`, lalu `get_event` tiap id secara paralel.
+
+Dua kegagalan di situ **tidak sama**, dan bedanya kelihatan di layar:
+
+| Yang gagal | Yang dilakukan |
+| --- | --- |
+| satu id yang dihitung registry tapi tidak bisa dibaca | masuk `unreadable`, sisanya tetap tampil (entry ledger bisa kedaluwarsa di Soroban) |
+| kategori satu event | event tetap tampil tanpa kategori |
+| `event_count` sendiri (RPC mati) | **throw** — RPC mati dan registry kosong tidak boleh kelihatan sama |
+
+Yang terakhir itu aturannya, bukan preferensi: menggambar "no events yet" di atas jaringan yang
+mati memberi tahu tiap pengunjung bahwa protokolnya tidak dipakai siapa-siapa.
 
 ### 5.1 Empat sumber, dan mana yang benar
 
