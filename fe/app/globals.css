@@ -57,6 +57,24 @@
    went square. Nothing warned, because an unresolvable custom property is not
    an error in CSS, it is an empty value. */
 
+/* Tailwind v4 changed what a bare `border` means: the colour is `currentColor`
+   now, where v3 defaulted it to a grey. Every border in the app therefore took
+   the text colour, which here is ink, and the whole UI came out outlined in
+   near-black.
+
+   shadcn normally writes this rule into globals.css during `init`. This project
+   skipped `init` on purpose, so the CLI could not overwrite the token mapping
+   above, and this came with it.
+
+   Only the border is defaulted. shadcn's version also sets `outline-ring/50` on
+   every element, and Nabil's focus ring in tokens.css is deliberate ("Keyboard
+   focus is a product requirement, not a default"), so it keeps that job. */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+}
+
 /* Tailwind v4 drops the browser's default `cursor: pointer` on buttons, so a
    button looks unclickable unless every component remembers to add it back.
    Restore it once here. Disabled controls keep whatever the component sets,
