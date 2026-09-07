@@ -151,7 +151,15 @@ Tombol Daftar diganti keterangan status.
 
 Harga di chain adalah `i128` 7 desimal; halaman menampilkannya dalam bentuk manusiawi.
 
-**Tab:**
+**Tab: belum dibangun di STE-13.** Halaman detail v1 adalah satu kolom, bukan tab. Alasannya
+dua-duanya soal isi, bukan soal layout: **People** perlu halaman `/runner/G...` untuk dituju dan itu
+STE-24, sedangkan **Timeline** perlu tanggal fase yang hidup di dokumen metadata — dan tidak ada satu
+pun event di testnet yang benar-benar menyajikan dokumennya (semua `uri` menunjuk `sterun.xyz` yang
+belum melayani file itu). Tiga tab dengan dua di antaranya kosong lebih buruk daripada satu halaman
+yang menyebutkan apa yang dia tahu. Tab dipasang di STE-24, waktu People punya isi.
+
+Rancangan tab-nya tetap berlaku dan ditulis di bawah ini supaya tidak dirancang ulang:
+
 
 - **Overview** — deskripsi dari dokumen metadata. Tempat peta rute nanti (§6).
 - **Timeline** — tiga fase, masing-masing membawa hitungan hidup dari chain karena fase-fase itu
@@ -316,6 +324,14 @@ jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_ev
 }
 ```
 
+- **`metadata_hash` = sha256 dari byte persis yang disajikan di `uri`.** Tanpa kanonikalisasi,
+  tanpa aturan urutan key, tanpa re-serialisasi. Siapa pun bisa mengeceknya dengan `curl` +
+  `sha256sum`, dan tidak ada "bentuk kanonik" yang bisa dibaca beda oleh dua implementasi.
+  Ongkosnya nyata dan disengaja: meng-upload ulang dokumen yang sama dengan whitespace berbeda
+  merusak pengecekannya selamanya, karena event beku (§2.2). Ditetapkan di STE-13 (`fe/src/lib/
+  metadata.ts`) dan dipakai STE-17 waktu menulis dokumennya.
+- Dokumen yang gagal pengecekan hash **tidak ditampilkan sama sekali**, bukan ditampilkan dengan
+  peringatan. Konten yang tidak bisa dibuktikan tetap tidak bisa dibuktikan walau diberi label.
 - `gun_start` **harus sama** dengan `starts_at` di chain. Kalau berbeda, halaman menampilkan
   peringatan — salah satunya pasti salah.
 - `route_geojson` sudah disediakan tempatnya walau petanya dikerjakan belakangan, supaya panitia
