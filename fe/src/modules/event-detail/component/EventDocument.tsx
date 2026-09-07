@@ -86,7 +86,10 @@ export function EventDocument({ result, isPending, startsAt }: EventDocumentProp
           width={1200}
           height={630}
           unoptimized
-          className="w-full rounded-lg border border-n-200 object-cover"
+          // Capped and contained rather than cover: the poster is whatever the
+          // organiser linked to, at whatever aspect ratio they had, and a
+          // portrait one at full width pushes the entry options off the screen.
+          className="max-h-96 w-full rounded-lg border border-n-200 object-contain"
         />
       ) : null}
 
