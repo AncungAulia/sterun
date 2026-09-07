@@ -22,9 +22,9 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Badge } from "@/components/elements/Badge";
-import { Button } from "@/components/elements/Button";
-import { Card } from "@/components/elements/Card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { WalletGate } from "@/components/layouts/WalletGate";
 import { useCreateEvent, useSetEventStatus } from "@/hooks/useOrganiser";
@@ -156,7 +156,7 @@ function Wizard() {
       <ol className="flex flex-wrap gap-2">
         {STEPS.map((name, index) => (
           <li key={name}>
-            <Badge tone={name === step ? "neutral" : "muted"}>
+            <Badge variant={name === step ? "accent" : "secondary"}>
               <span className="numeric mr-2">{index + 1}</span>
               {STEP_LABELS[name]}
             </Badge>
@@ -164,7 +164,7 @@ function Wizard() {
         ))}
       </ol>
 
-      <Card className="p-6">
+      <Card className="px-6">
         {step === "details" ? (
           <>
             <StepDetails details={details} onChange={setDetails} />

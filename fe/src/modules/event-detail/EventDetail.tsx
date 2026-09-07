@@ -21,7 +21,7 @@
  */
 import Link from "next/link";
 
-import { Card } from "@/components/elements/Card";
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
@@ -98,7 +98,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
         </p>
       </div>
 
-      <Card className="px-6 py-2">
+      <Card className="gap-0 px-6 py-2">
         <div className="flex items-baseline justify-between gap-4 border-b border-n-200 py-4">
           <h2 className="heading text-xl text-n-700">Categories</h2>
           {!openForEntry ? (

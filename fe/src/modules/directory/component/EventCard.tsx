@@ -9,8 +9,8 @@
  */
 import Link from "next/link";
 
-import { Badge } from "@/components/elements/Badge";
-import { Card } from "@/components/elements/Card";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
 import type { EventSummary } from "@/lib/events";
 import { formatEventDate, formatPrice } from "@/utils/format";
@@ -21,7 +21,7 @@ export function EventCard({ summary }: { summary: EventSummary }) {
   const slotsLeft = categories.reduce((total, category) => total + category.slotsLeft, 0);
 
   return (
-    <Card className="transition-shadow hover:shadow-lifted">
+    <Card className="gap-0 py-0 transition-shadow hover:shadow-lifted">
       <Link href={`/events/${event.eventId}`} className="block rounded-lg p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -37,7 +37,7 @@ export function EventCard({ summary }: { summary: EventSummary }) {
           <ul className="mt-5 flex flex-wrap gap-2">
             {categories.map((category) => (
               <li key={category.categoryId}>
-                <Badge tone={category.slotsLeft > 0 ? "neutral" : "muted"}>
+                <Badge variant={category.slotsLeft > 0 ? "accent" : "secondary"}>
                   <span className="numeric">{category.code}</span>
                   <span className="ml-2 text-n-500">{formatPrice(category.priceStroops)}</span>
                 </Badge>

@@ -16,8 +16,8 @@
  */
 import { useState } from "react";
 
-import { Badge } from "@/components/elements/Badge";
-import { Button } from "@/components/elements/Button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Field } from "@/components/elements/Field";
 import { fetchEventMetadata } from "@/lib/metadata";
 
@@ -105,7 +105,7 @@ export function StepDocument({ text, hash, published, onPublished }: StepDocumen
           <Button onClick={() => void verify()} disabled={!uri.trim() || check.kind === "checking"}>
             {check.kind === "checking" ? "Checking" : "Check the published file"}
           </Button>
-          {published ? <Badge tone="positive">Document verified</Badge> : null}
+          {published ? <Badge variant="success">Document verified</Badge> : null}
         </div>
       </div>
 

@@ -15,7 +15,7 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@/components/elements/Button";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { ChainSource } from "@/components/layouts/ChainSource";

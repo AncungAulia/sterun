@@ -17,7 +17,7 @@
  */
 import Image from "next/image";
 
-import { Badge } from "@/components/elements/Badge";
+import { Badge } from "@/components/ui/badge";
 import { gunStartConflict, type MetadataResult } from "@/lib/metadata";
 import { mapsLink } from "@/utils/geo";
 import { formatEventDateTime } from "@/utils/format";
@@ -74,7 +74,7 @@ export function EventDocument({ result, isPending, startsAt }: EventDocumentProp
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <Badge tone="positive">Document verified</Badge>
+        <Badge variant="success">Document verified</Badge>
         <p className="text-sm text-n-500">
           The document served at this event&apos;s uri matches the hash stored on chain.
         </p>

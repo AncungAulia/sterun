@@ -30,6 +30,9 @@
 import { useState } from "react";
 import { DayPicker } from "react-day-picker";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatEventDateTimeLong } from "@/utils/format";
 
 interface DateTimeFieldProps {
@@ -105,40 +108,38 @@ export function DateTimeField({
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-n-700">
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
 
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="2026-10-04T06:00"
-          className="numeric h-10 w-52 rounded-md border border-n-300 bg-paper px-3 text-base text-ink placeholder:text-n-400"
+          className="numeric w-52"
         />
-        <button
+        <Button
           type="button"
+          variant="secondary"
           aria-expanded={open}
           aria-controls={`${id}-calendar`}
           onClick={() => setOpen((was) => !was)}
-          className="h-10 rounded-md border border-n-300 bg-n-100 px-3 text-base text-n-700 hover:bg-n-200"
         >
           {open ? "Close calendar" : "Pick a date"}
-        </button>
-        <input
+        </Button>
+        <Input
           aria-label={`${label} time`}
           type="time"
           value={time}
           onChange={(e) => onChange(`${date || toDateValue(new Date())}T${e.target.value}`)}
-          className="numeric h-10 rounded-md border border-n-300 bg-paper px-3 text-base text-ink"
+          className="numeric w-32"
         />
       </div>
 
       {open ? (
         <div
           id={`${id}-calendar`}
-          className="mt-2 w-fit rounded-lg border border-n-200 bg-paper p-3 shadow-lifted"
+          className="mt-2 w-fit rounded-lg border border-border bg-popover p-3 shadow-lifted"
         >
           <DayPicker
             mode="single"
@@ -152,7 +153,7 @@ export function DateTimeField({
       ) : null}
 
       {valid ? (
-        <p className="text-sm text-n-600">
+        <p className="text-sm text-muted-foreground">
           {formatEventDateTimeLong(BigInt(Math.floor(asDate.getTime() / 1000)))}
         </p>
       ) : null}
@@ -164,7 +165,7 @@ export function DateTimeField({
         </p>
       ) : null}
 
-      {hint ? <p className="text-sm text-n-500">{hint}</p> : null}
+      {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

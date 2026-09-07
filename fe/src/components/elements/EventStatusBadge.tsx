@@ -12,19 +12,19 @@
  * Colour alone never carries that, which is why the status word is written out
  * and repeated in `data-status`.
  */
-import { Badge, type BadgeTone } from "./Badge";
+import { Badge } from "@/components/ui/badge";
 import type { EventStatus } from "@sterun/sdk";
 
-const TONES: Record<EventStatus, BadgeTone> = {
-  Open: "positive",
-  Draft: "muted",
-  Closed: "caution",
-  Completed: "neutral",
-};
+const VARIANTS = {
+  Open: "success",
+  Draft: "secondary",
+  Closed: "warning",
+  Completed: "accent",
+} as const satisfies Record<EventStatus, string>;
 
 export function EventStatusBadge({ status }: { status: EventStatus }) {
   return (
-    <Badge tone={TONES[status]} dataStatus={status}>
+    <Badge variant={VARIANTS[status]} data-status={status}>
       {status}
     </Badge>
   );

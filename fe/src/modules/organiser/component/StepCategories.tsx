@@ -15,8 +15,8 @@
  */
 import { useState } from "react";
 
-import { Badge } from "@/components/elements/Badge";
-import { Button } from "@/components/elements/Button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Field } from "@/components/elements/Field";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { useAddCategory } from "@/hooks/useOrganiser";
@@ -113,7 +113,7 @@ export function StepCategories({ eventId, added, onAdded }: StepCategoriesProps)
               <span className="numeric text-sm text-n-600">
                 {formatPrice(category.priceStroops)}
               </span>
-              <Badge tone="positive">On chain</Badge>
+              <Badge variant="success">On chain</Badge>
             </li>
           ))}
         </ul>

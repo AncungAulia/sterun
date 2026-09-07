@@ -1,5 +1,58 @@
 @import "tailwindcss";
 @import "./tokens.css";
+@import "tw-animate-css";
+
+/* ============================================================================
+   shadcn/ui, wired to Nabil's tokens
+   ----------------------------------------------------------------------------
+   shadcn components are written against a fixed set of semantic names:
+   bg-background, text-muted-foreground, border-border, ring-ring, and so on.
+   This block is the only place those names exist, and every one of them points
+   at a token from tokens.css.
+
+   Why here and not in tokens.css: that file is Nabil's (STE-7), and it is the
+   single source of truth for the design language. shadcn's vocabulary is an
+   implementation detail of the component library we happen to use, and it does
+   not belong in the design system. Mapping it here means a change to a brand
+   colour still happens in exactly one place, and swapping the component
+   library later touches this file and nothing else.
+
+   The rule for everyone stays what it was: no raw hex, font name or pixel value
+   in a component. These names are aliases for tokens, not new values.
+   ========================================================================= */
+@theme inline {
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+
+  --color-card: var(--color-paper);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-paper);
+  --color-popover-foreground: var(--color-ink);
+
+  /* Teal means actionable. That is the whole rule, so it is the primary. */
+  --color-primary: var(--color-teal-500);
+  --color-primary-foreground: var(--color-paper);
+  --color-secondary: var(--color-n-100);
+  --color-secondary-foreground: var(--color-n-800);
+
+  --color-muted: var(--color-n-100);
+  --color-muted-foreground: var(--color-n-500);
+  --color-accent: var(--color-teal-50);
+  --color-accent-foreground: var(--color-teal-700);
+
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--color-paper);
+
+  --color-border: var(--color-n-200);
+  --color-input: var(--color-n-300);
+  /* The focus ring is a product requirement (tokens.css), not a default. */
+  --color-ring: var(--color-teal-400);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+}
 
 /* Tailwind v4 drops the browser's default `cursor: pointer` on buttons, so a
    button looks unclickable unless every component remembers to add it back.

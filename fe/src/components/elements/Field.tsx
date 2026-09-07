@@ -1,11 +1,20 @@
 /**
- * A labelled input. Every value from a token in app/tokens.css.
+ * A labelled input, built on the shadcn primitives.
  *
- * The label is a real `<label>` bound by id rather than a styled span: the
- * organiser console is a form-heavy surface, and a label you can click to focus
- * is the difference between a form that feels built and one that feels drawn.
+ * shadcn ships `Input` and `Label` and deliberately does not ship the pairing:
+ * where the label sits, how a hint reads, whether an error appears under or
+ * beside the field are product decisions, not library ones. This is that
+ * decision, made once, so the console does not answer it differently on every
+ * screen.
+ *
+ * `htmlFor` is not optional. The organiser console is form-heavy, and a label
+ * you can click to focus is the difference between a form that feels built and
+ * one that feels drawn.
  */
 import type { InputHTMLAttributes, ReactNode } from "react";
+
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   id: string;
@@ -14,18 +23,12 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: ReactNode;
 }
 
-export function Field({ id, label, hint, className = "", ...props }: FieldProps) {
+export function Field({ id, label, hint, ...props }: FieldProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-n-700">
-        {label}
-      </label>
-      <input
-        id={id}
-        className={`h-10 rounded-md border border-n-300 bg-paper px-3 text-base text-ink placeholder:text-n-400 ${className}`}
-        {...props}
-      />
-      {hint ? <p className="text-sm text-n-500">{hint}</p> : null}
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} {...props} />
+      {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
@@ -50,19 +53,17 @@ export function TextAreaField({
   onChange,
 }: TextAreaFieldProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-n-700">
-        {label}
-      </label>
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
       <textarea
         id={id}
         rows={rows}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-n-300 bg-paper px-3 py-2 text-base text-ink placeholder:text-n-400"
+        className="rounded-md border border-input bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       />
-      {hint ? <p className="text-sm text-n-500">{hint}</p> : null}
+      {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

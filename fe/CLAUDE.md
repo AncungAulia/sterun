@@ -32,6 +32,46 @@ pnpm --filter fe typecheck
 dan tidak ikut ke repo (`.next/` di-gitignore). `tsc` polos di mesin yang belum pernah build gagal
 dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-generate, bukan bug.
 
+## UI: shadcn/ui di atas token Nabil (STE-17)
+
+```
+src/components/ui/        <- shadcn. Di-generate, tapi milik kita: boleh diedit.
+src/components/elements/  <- komponen produk kita, dibangun DI ATAS ui/
+src/components/layouts/   <- struktur halaman
+```
+
+**`app/tokens.css` TIDAK disentuh.** Itu punya Nabil (STE-7) dan tetap satu-satunya sumber nilai
+warna, huruf, radius. shadcn menulis komponennya terhadap nama semantik sendiri (`bg-background`,
+`text-muted-foreground`, `border-border`, `ring-ring`); pemetaan nama-nama itu ke token Nabil ada di
+**`app/globals.css`** dalam satu blok `@theme inline`, dan cuma di situ. Konsekuensinya: ganti satu
+warna brand tetap cukup di satu tempat, dan ganti library komponen nanti cuma menyentuh file itu.
+
+Aturan lama tetap berlaku dan tidak berubah artinya: **tidak ada hex, nama font, atau px mentah di
+komponen.** Nama-nama shadcn itu alias untuk token, bukan nilai baru.
+
+### Menambah komponen shadcn
+
+```bash
+cd fe && pnpm dlx shadcn@latest add <nama> --yes
+sed -i 's|from "cn"|from "@/utils/cn"|' src/components/ui/*.tsx   # WAJIB, lihat di bawah
+```
+
+Tiga hal yang bikin bingung kalau tidak tahu:
+
+- **CLI-nya menulis `import { cn } from "cn"`**, yang tidak resolve. Itu bug interaksi dengan alias
+  `utils` di `components.json`. Perbaiki tiap habis `add`; typecheck akan menangkapnya kalau lupa.
+- **Radix masuk lewat paket gabungan `radix-ui`**, bukan `@radix-ui/react-*` satu-satu. Jangan
+  pasang yang individual: dua salinan Radix dalam satu graph itu masalah yang sama bentuknya dengan
+  dua salinan `@stellar/stellar-sdk` (`CLAUDE.md` root).
+- **Class `dark:` di komponen generate itu mati**, karena v1 light-only (keputusan STE-7). Dibiarkan
+  apa adanya supaya file-nya tetap mudah dibandingkan dengan upstream waktu di-update.
+
+### Varian yang kita tambahkan sendiri
+
+`ui/badge.tsx` dapat `success`, `warning`, dan `accent` — shadcn tidak mengirim ketiganya, dan app
+ini butuh: event itu `Open` atau bukan, dokumen itu cocok hash-nya atau tidak terbaca. Ketiganya
+dibangun dari token Nabil seperti varian lain, jadi tetap satu palet.
+
 ## Yang WAJIB dibaca sebelum bikin flow
 
 | Dokumen | Untuk apa |

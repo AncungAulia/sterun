@@ -12,7 +12,7 @@
  */
 import Link from "next/link";
 
-import { Badge } from "@/components/elements/Badge";
+import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterun/sdk";
 
@@ -51,7 +51,7 @@ export function CategoryRow({ category, openForEntry }: CategoryRowProps) {
       ) : full ? (
         // Only said when it is the category that is closed. An event that is
         // not open says so once, above the list, rather than on every row.
-        <Badge tone="muted">Full</Badge>
+        <Badge variant="secondary">Full</Badge>
       ) : null}
     </li>
   );
