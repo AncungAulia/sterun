@@ -66,13 +66,16 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jak
   // Dates come from the calendar now, the way an organiser sets them. The clock
   // is frozen in beforeEach so the calendar always opens on the month these
   // clicks expect.
-  for (const field of [
-    "Race date date",
-    "Registration opens date",
-    "Registration closes date",
-  ]) {
+  // Distinct days, because the form now refuses a schedule that cannot happen:
+  // entries open, then close, then the race is run.
+  const days: [string, RegExp][] = [
+    ["Registration opens date", /September 7th, 2026/],
+    ["Registration closes date", /September 27th, 2026/],
+    ["Race date date", /September 28th, 2026/],
+  ];
+  for (const [field, day] of days) {
     await user.click(screen.getByRole("button", { name: field }));
-    await user.click(screen.getByRole("button", { name: /September 28th, 2026/ }));
+    await user.click(screen.getByRole("button", { name: day }));
   }
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
@@ -84,7 +87,7 @@ async function fillDistances(
 ) {
   await user.type(screen.getByLabelText(/^Code/), code);
   await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
-  await user.type(screen.getByLabelText(/^Places/), "300");
+  await user.type(screen.getByLabelText(/Maximum entries/), "300");
   if (price) await user.type(screen.getByLabelText(/Entry fee in sUSD/), price);
   await user.clear(screen.getByLabelText(/Start time/));
   await user.type(screen.getByLabelText(/Start time/), "06:00");
@@ -241,14 +244,14 @@ describe("CreateEvent", () => {
       // for: clicking twice in a row races the render and lands both clicks on
       // the same button.
       await user.click(screen.getByRole("button", { name: "Back" }));
-      await screen.findByRole("heading", { name: "Distances" });
+      await screen.findByRole("heading", { name: "Distance categories" });
       await user.click(screen.getByRole("button", { name: "Back" }));
       await screen.findByRole("heading", { name: "The race" });
 
       await user.type(screen.getByLabelText("Venue"), "Somewhere else");
 
       await user.click(screen.getByRole("button", { name: "Continue" }));
-      await screen.findByRole("heading", { name: "Distances" });
+      await screen.findByRole("heading", { name: "Distance categories" });
       await user.click(screen.getByRole("button", { name: "Continue" }));
       await screen.findByRole("heading", { name: /publish the event details/i });
 
@@ -293,7 +296,7 @@ describe("CreateEvent", () => {
 
       await user.type(screen.getByLabelText(/^Code/), "10 K!");
       await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
-      await user.type(screen.getByLabelText(/^Places/), "300");
+      await user.type(screen.getByLabelText(/Maximum entries/), "300");
       await user.type(screen.getByLabelText(/Start time/), "06:00");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
@@ -312,14 +315,14 @@ describe("CreateEvent", () => {
       await fillDetails(user);
       await user.type(screen.getByLabelText(/^Code/), "10K");
       await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
-      await user.type(screen.getByLabelText(/^Places/), "300");
+      await user.type(screen.getByLabelText(/Maximum entries/), "300");
       await user.type(screen.getByLabelText(/Start time/), "06:00");
       await user.click(screen.getByRole("button", { name: /add another distance/i }));
 
       const codes = screen.getAllByLabelText(/^Code/);
       await user.type(codes[1]!, "FUN5K");
       await user.type(screen.getAllByLabelText(/Distance in kilometres/)[1]!, "5");
-      await user.type(screen.getAllByLabelText(/^Places/)[1]!, "100");
+      await user.type(screen.getAllByLabelText(/Maximum entries/)[1]!, "100");
       await user.type(screen.getAllByLabelText(/Start time/)[1]!, "07:00");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 

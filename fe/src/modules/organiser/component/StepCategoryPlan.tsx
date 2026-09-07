@@ -93,7 +93,7 @@ export function StepCategoryPlan({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="heading-strong text-lg text-foreground">Distances</h2>
+        <h2 className="heading-strong text-lg text-foreground">Distance categories</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           One per distance people can enter. Nothing is signed yet: you are writing the race down,
           and the wallet comes later. A distance cannot be changed or removed once it is on chain,
@@ -137,8 +137,8 @@ export function StepCategoryPlan({
                 required
                 value={category.code}
                 onChange={(e) => set(index, { code: e.target.value })}
-                placeholder="10K"
-                hint="Letters, digits and underscores only."
+                placeholder="5K, 10K, HALF"
+                hint="What runners pick between. Letters, digits and underscores only."
               />
               <Field
                 id={`km-${index}`}
@@ -150,7 +150,7 @@ export function StepCategoryPlan({
               />
               <Field
                 id={`quota-${index}`}
-                label="Places"
+                label="Maximum entries"
                 required
                 value={category.quota}
                 onChange={(e) => set(index, { quota: e.target.value })}
@@ -163,7 +163,7 @@ export function StepCategoryPlan({
                 value={category.price}
                 onChange={(e) => set(index, { price: e.target.value })}
                 placeholder="25"
-                hint="Leave empty for a free distance."
+                hint="Enter 0 if this category is free."
               />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`start-${index}`}>

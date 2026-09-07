@@ -179,6 +179,7 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
         <DateRangeField
           id="racepack"
           label="Collection days and hours"
+          error={errors.racepack}
           value={details.racepack}
           onChange={(racepack) => set({ racepack })}
         />

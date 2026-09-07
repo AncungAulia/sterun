@@ -77,7 +77,66 @@ export function missingDetails(details: EventDetails): Missing[] {
     });
   }
 
-  return missing;
+  return [...missing, ...incoherentDates(details)];
+}
+
+/**
+ * Dates that are each fine on their own and impossible together.
+ *
+ * Worth catching here rather than on the event page, because the file is
+ * published and frozen before anybody else reads it. Nothing here is enforced
+ * by the contract: it will happily store a race that starts before its own
+ * entries close. That is exactly why the console has to.
+ */
+function incoherentDates(details: EventDetails): Missing[] {
+  const problems: Missing[] = [];
+
+  const opens = at(details.registrationOpens);
+  const closes = at(details.registrationCloses);
+  const raceDay = at(details.raceDate);
+  const collectionEnds = at(details.racepack.to || details.racepack.from);
+
+  if (opens !== null && closes !== null && closes <= opens) {
+    problems.push({
+      field: "registrationCloses",
+      focusId: "reg-closes-date",
+      message: "Entries cannot close before they open.",
+    });
+  }
+
+  if (closes !== null && raceDay !== null && closes > endOfDay(raceDay)) {
+    problems.push({
+      field: "registrationCloses",
+      focusId: "reg-closes-date",
+      message: "Entries close after the race has already been run.",
+    });
+  }
+
+  if (collectionEnds !== null && raceDay !== null && collectionEnds > raceDay) {
+    problems.push({
+      field: "racepack",
+      focusId: "racepack-days",
+      // Collecting a race pack the day after the race is not a schedule, it is
+      // a typo. The race day itself is allowed: plenty of small races hand
+      // packs out that morning.
+      message: "Race pack collection has to finish on race day at the latest.",
+    });
+  }
+
+  return problems;
+}
+
+/** Milliseconds for a `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`, or null. */
+function at(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return null;
+  const ms = new Date(value.length === 10 ? `${value}T00:00` : value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function endOfDay(ms: number): number {
+  const date = new Date(ms);
+  date.setHours(23, 59, 59, 999);
+  return date.getTime();
 }
 
 /** Sends the organiser to a field rather than making them hunt for it. */
