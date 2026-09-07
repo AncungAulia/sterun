@@ -159,12 +159,15 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect(body.scanners.map((s: { address: string }) => s.address)).not.toContain(STRANGER);
     });
 
-    it("says how fresh the answer is", async () => {
-      // Same reason every other row here carries it: this is a cache, and a
-      // caller deciding whether to trust it needs to know how far behind it is.
+    it("says how fresh the answer is, in the same terms the indexer does", async () => {
+      // Asserted against /indexer/status rather than a literal, because the
+      // number is not "the last ledger that touched a scanner" — it is how far
+      // the index has READ. The two differ whenever nothing happened for a
+      // while, which is most of the time.
+      const status = (await app.inject({ url: "/indexer/status" })).json();
       const body = (await app.inject({ url: "/events/0/scanners" })).json();
 
-      expect(body.last_ledger).toBe(152);
+      expect(body.last_ledger).toBe(status.last_ledger);
     });
 
     it("returns an empty list for an event nobody has been added to", async () => {
@@ -178,9 +181,10 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       ).pollOnce();
 
       const res = await app.inject({ url: "/events/1/scanners" });
+      const status = (await app.inject({ url: "/indexer/status" })).json();
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ scanners: [], last_ledger: 200 });
+      expect(res.json()).toEqual({ scanners: [], last_ledger: status.last_ledger });
     });
 
     it("says not_indexed for an event the index has never seen", async () => {
