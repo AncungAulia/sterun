@@ -47,9 +47,21 @@ function renderWizard() {
   return { user: userEvent.setup(), ...render(<CreateEvent />, { wrapper: Wrapper }) };
 }
 
-/** Fill the two required fields and move on to the document step. */
+/** Fill everything step one insists on, then move to the document step. */
 async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jakarta Sunrise 10K") {
   await user.type(screen.getByLabelText(/Event name/), name);
+
+  // Country already defaults to Indonesia, so the cascade starts at province.
+  await user.click(screen.getByRole("combobox", { name: "Province" }));
+  await user.click(await screen.findByRole("option", { name: "DKI Jakarta" }));
+  await user.click(screen.getByRole("combobox", { name: "City" }));
+  await user.click((await screen.findAllByRole("option"))[0]!);
+
+  await user.type(
+    screen.getByLabelText(/Google Maps link/),
+    "https://www.google.com/maps/@-6.2185,106.8026,17z",
+  );
+  await user.type(screen.getByLabelText(/Description/), "Two laps of the park.");
   // Dates come from the calendar now, the way an organiser sets them. The clock
   // is frozen in beforeEach so the calendar always opens on the month these
   // clicks expect.
@@ -145,13 +157,27 @@ describe("CreateEvent", () => {
       expect(screen.queryByLabelText(/Event name/)).not.toBeInTheDocument();
     });
 
-    it("will not move on without a name and a start time", async () => {
+    it("says what is missing instead of disabling Continue", async () => {
+      // A greyed out button with no reason is a dead end: you can see it, you
+      // cannot tell what is wrong, and there is nothing to press to find out.
       const { user } = renderWizard();
 
-      expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+      expect(screen.queryByText(/give the race a name/i)).not.toBeInTheDocument();
 
-      await user.type(screen.getByLabelText(/Event name/), "Only a name");
-      expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(await screen.findByText(/give the race a name/i)).toBeInTheDocument();
+      // Still on step one.
+      expect(screen.getByLabelText(/Event name/)).toBeInTheDocument();
+    });
+
+    it("insists on a maps link with a pin, because that is what places the race", async () => {
+      const { user } = renderWizard();
+      await user.type(screen.getByLabelText(/Event name/), "A race");
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(await screen.findByText(/paste a google maps link/i)).toBeInTheDocument();
     });
 
     it("will not create an event with an unverified document", async () => {

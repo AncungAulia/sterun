@@ -21,34 +21,62 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   /** Shown under the input. Say what the value is for, not what it looks like. */
   hint?: ReactNode;
+  /** Shown instead of the hint, in red, once the field has been asked for. */
+  error?: string;
 }
 
-export function Field({ id, label, hint, required, ...props }: FieldProps) {
+export function Field({ id, label, hint, error, required, ...props }: FieldProps) {
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>
-        {label}
-        {required ? <RequiredMark /> : null}
+        <LabelText label={label} required={required} />
       </Label>
-      <Input id={id} required={required} {...props} />
-      {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
+      <Input id={id} required={required} aria-invalid={error ? true : undefined} {...props} />
+      <FieldMessage hint={hint} error={error} />
     </div>
   );
 }
 
 /**
- * The star is decoration; the word next to it is the part that works. A screen
+ * One line under a field: the error if there is one, otherwise the hint.
+ *
+ * Never both. A field that is wrong needs one sentence about what to do, and
+ * stacking the original advice under it buries the part that changed.
+ */
+export function FieldMessage({ hint, error }: { hint?: ReactNode; error?: string }) {
+  if (error) {
+    return (
+      <p role="alert" className="text-sm text-danger">
+        {error}
+      </p>
+    );
+  }
+  return hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null;
+}
+
+/**
+ * A label and its required star, as one element.
+ *
+ * One element on purpose: shadcn's Label is a flex row with `gap-2`, so a star
+ * passed as a second child sits eight pixels away from the word it belongs to.
+ *
+ * The star is decoration; the word beside it is the part that works. A screen
  * reader saying "asterisk" tells nobody anything, and `required` on the input
  * alone is silent until somebody tries to submit.
  */
-export function RequiredMark() {
+export function LabelText({ label, required }: { label: string; required?: boolean }) {
   return (
-    <>
-      <span aria-hidden="true" className="text-danger">
-        *
-      </span>
-      <span className="sr-only">required</span>
-    </>
+    <span>
+      {label}
+      {required ? (
+        <>
+          <span aria-hidden="true" className="text-danger">
+            *
+          </span>
+          <span className="sr-only">required</span>
+        </>
+      ) : null}
+    </span>
   );
 }
 
@@ -56,6 +84,8 @@ interface TextAreaFieldProps {
   id: string;
   label: string;
   hint?: ReactNode;
+  error?: string;
+  required?: boolean;
   value: string;
   rows?: number;
   placeholder?: string;
@@ -66,6 +96,8 @@ export function TextAreaField({
   id,
   label,
   hint,
+  error,
+  required,
   value,
   rows = 4,
   placeholder,
@@ -73,7 +105,9 @@ export function TextAreaField({
 }: TextAreaFieldProps) {
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        <LabelText label={label} required={required} />
+      </Label>
       <textarea
         id={id}
         rows={rows}
@@ -82,7 +116,7 @@ export function TextAreaField({
         onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-input bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       />
-      {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
+      <FieldMessage hint={hint} error={error} />
     </div>
   );
 }

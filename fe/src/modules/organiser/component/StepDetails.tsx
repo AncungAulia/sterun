@@ -29,14 +29,12 @@ import { parseCoordinates } from "@/utils/geo";
  * is already frozen.
  */
 function PinHint({ link, missing }: { link: string; missing: string }) {
-  if (!link.trim()) return <>Optional. Paste a link and the coordinates are read out of it.</>;
-  const pin = parseCoordinates(link);
-  if (!pin) return <span className="text-warning">{missing}</span>;
-  return (
-    <span className="numeric">
-      Pin found: {pin.lat}, {pin.lng}
-    </span>
-  );
+  // Nothing while the field is empty, and no coordinates when it works. Nobody
+  // reads a latitude to check their own address, and a line that always says
+  // something trains people to stop reading the one that matters.
+  if (!link.trim()) return null;
+  if (!parseCoordinates(link)) return <span className="text-warning">{missing}</span>;
+  return <>Pin found.</>;
 }
 
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
@@ -94,9 +92,11 @@ export const EMPTY_DETAILS: EventDetails = {
 interface StepDetailsProps {
   details: EventDetails;
   onChange: (details: EventDetails) => void;
+  /** Field keys to mark, shown only after somebody has pressed Continue. */
+  errors?: Record<string, string>;
 }
 
-export function StepDetails({ details, onChange }: StepDetailsProps) {
+export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps) {
   const set = (patch: Partial<EventDetails>) => onChange({ ...details, ...patch });
 
   return (
@@ -106,6 +106,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           id="name"
           label="Event name"
           required
+          error={errors.name}
           value={details.name}
           onChange={(e) => set({ name: e.target.value })}
           placeholder="Jakarta Sunrise 10K"
@@ -114,6 +115,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           id="starts-at"
           label="Start"
           required
+          error={errors.startsAtLocal}
           warnIfPast
           value={details.startsAtLocal}
           onChange={(startsAtLocal) => set({ startsAtLocal })}
@@ -132,10 +134,17 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             The last moment a finish counts, on the race day.
           </p>
         </div>
-        <PlaceFields place={details.place} onChange={(place) => set({ place })} />
+        <PlaceFields
+          required
+          place={details.place}
+          errors={errors}
+          onChange={(place) => set({ place })}
+        />
         <Field
           id="location-link"
           label="Google Maps link"
+          required
+          error={errors.locationLink}
           value={details.locationLink}
           onChange={(e) => set({ locationLink: e.target.value })}
           placeholder="https://www.google.com/maps/@-6.2185,106.8026,17z"
@@ -149,6 +158,8 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
         <TextAreaField
           id="description"
           label="Description"
+          required
+          error={errors.description}
           value={details.description}
           onChange={(description) => set({ description })}
           placeholder="Two laps of the park, flat, water at every 2 km."
@@ -164,6 +175,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             id="reg-opens"
             label="Registration opens"
             required
+            error={errors.registrationOpens}
             value={details.registrationOpens}
             onChange={(registrationOpens) => set({ registrationOpens })}
           />
@@ -171,6 +183,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             id="reg-closes"
             label="Registration closes"
             required
+            error={errors.registrationCloses}
             value={details.registrationCloses}
             onChange={(registrationCloses) => set({ registrationCloses })}
           />
@@ -232,7 +245,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           value={details.instagram}
           onChange={(e) => set({ instagram: e.target.value })}
           placeholder="@jakartarun"
-          hint="The handle, or paste the profile link and we will take the handle out of it."
+          hint="Or paste the profile link and we will take the handle out of it."
         />
         <Field
           id="website"

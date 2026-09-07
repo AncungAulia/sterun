@@ -36,6 +36,7 @@ import { formatEventDateTime } from "@/utils/format";
 import { StepCategories, type AddedCategory } from "./component/StepCategories";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepDocument, type PublishedDocument } from "./component/StepDocument";
+import { focusField, missingDetails } from "./missing";
 
 /**
  * `metadata_hash` is a required `BytesN<32>`, so an event without a document
@@ -76,14 +77,27 @@ function Wizard() {
   const setStatus = useSetEventStatus();
 
   const startsAt = useMemo(() => toUnixSeconds(details.startsAtLocal), [details.startsAtLocal]);
-  const detailsComplete =
-    details.name.trim().length > 0 &&
-    startsAt !== null &&
-    // Both ends of the registration window. A race that never says when entries
-    // open is a race nobody can plan around, and the file is frozen once the
-    // event exists, so "add it later" is not available.
-    details.registrationOpens.length > 0 &&
-    details.registrationCloses.length > 0;
+  /**
+   * Continue is never disabled. A greyed out button with no reason is a dead
+   * end: you can see it, you cannot tell what is wrong, and there is nothing to
+   * press to find out. Pressing it and landing on the empty field answers the
+   * question in one action, and the messages appear only once somebody has
+   * asked, so a form nobody has touched yet is not already covered in red.
+   */
+  const missing = useMemo(() => missingDetails(details), [details]);
+  const [askedToContinue, setAskedToContinue] = useState(false);
+  const errors = askedToContinue
+    ? Object.fromEntries(missing.map((item) => [item.field, item.message]))
+    : {};
+
+  function continueFromDetails() {
+    if (missing.length === 0) {
+      setStep("document");
+      return;
+    }
+    setAskedToContinue(true);
+    focusField(missing[0]!.focusId);
+  }
 
   // Derived, not stored. The text on screen is always the text its hash covers,
   // with no effect in between that could leave the two out of step for a render.
@@ -174,16 +188,9 @@ function Wizard() {
       <Card className="px-6">
         {step === "details" ? (
           <>
-            <StepDetails details={details} onChange={setDetails} />
-            <div className="mt-8 flex items-center gap-3">
-              <Button onClick={() => setStep("document")} disabled={!detailsComplete}>
-                Continue
-              </Button>
-              {!detailsComplete ? (
-                <p className="text-sm text-muted-foreground">
-                  A name, a start, and both ends of the registration window are required.
-                </p>
-              ) : null}
+            <StepDetails details={details} onChange={setDetails} errors={errors} />
+            <div className="mt-8 flex justify-end">
+              <Button onClick={continueFromDetails}>Continue</Button>
             </div>
           </>
         ) : null}
@@ -199,7 +206,7 @@ function Wizard() {
                 if (doc) setSkipDocument(false);
               }}
             />
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-wrap justify-end gap-3">
               <Button variant="secondary" onClick={() => setStep("details")}>
                 Back
               </Button>
@@ -251,7 +258,7 @@ function Wizard() {
               <ErrorNotice title="The event was not created" detail={createEvent.error.message} />
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap justify-end gap-3">
               <Button variant="secondary" onClick={() => setStep("document")}>
                 Back
               </Button>
@@ -274,15 +281,17 @@ function Wizard() {
               added={categories}
               onAdded={(category) => setCategories((all) => [...all, category])}
             />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3">
+              {categories.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Add at least one category. Nobody can enter a race with no distances.
+                </p>
+              ) : (
+                <span />
+              )}
               <Button onClick={() => setStep("open")} disabled={categories.length === 0}>
                 Continue
               </Button>
-              {categories.length === 0 ? (
-                <p className="text-sm text-n-500">
-                  Add at least one category. Nobody can enter a race with no distances.
-                </p>
-              ) : null}
             </div>
           </div>
         ) : null}

@@ -73,13 +73,21 @@ export function StepCategories({ eventId, added, onAdded }: StepCategoriesProps)
       return;
     }
 
-    const sent = await addCategory.write({
-      eventId,
-      code,
-      distanceM,
-      quota: quotaValue,
-      priceStroops,
-    });
+    let sent;
+    try {
+      sent = await addCategory.write({
+        eventId,
+        code,
+        distanceM,
+        quota: quotaValue,
+        priceStroops,
+      });
+    } catch {
+      // Declining in the wallet is a normal answer, not a crash. The mutation
+      // holds the message and ErrorNotice below shows it; rethrowing here would
+      // only produce an unhandled rejection nobody sees.
+      return;
+    }
 
     onAdded({ code, distanceM, quota: quotaValue, priceStroops, txHash: sent.txHash });
     setCode("");
