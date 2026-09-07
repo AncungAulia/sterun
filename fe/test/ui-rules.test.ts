@@ -97,3 +97,24 @@ describe("no raw design values in components", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("no custom property points at itself", () => {
+  /**
+   * `--radius-md: var(--radius-md)` inside `@theme inline` is a cycle. CSS does
+   * not call it an error; it resolves to an empty value, so every rounded
+   * corner in the app quietly went square and nothing anywhere complained.
+   *
+   * Found by looking at the page, which is why it is a test now.
+   */
+  it("finds none in globals.css", () => {
+    const css = readFileSync(join(ROOT, "app/globals.css"), "utf8");
+    const offenders: string[] = [];
+
+    for (const line of css.split(/\r?\n/)) {
+      const match = /^\s*(--[\w-]+)\s*:\s*var\(\s*(--[\w-]+)\s*\)/.exec(line);
+      if (match && match[1] === match[2]) offenders.push(line.trim());
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});

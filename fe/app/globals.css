@@ -47,12 +47,15 @@
   --color-input: var(--color-n-300);
   /* The focus ring is a product requirement (tokens.css), not a default. */
   --color-ring: var(--color-teal-400);
-
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius-md);
-  --radius-lg: var(--radius-lg);
-  --radius-xl: var(--radius-xl);
 }
+
+/* Radius is deliberately absent from the block above. tokens.css already
+   declares --radius-sm/md/lg/xl inside its own @theme, so `rounded-md` has
+   always come from Nabil's scale and needed no alias. Re-declaring them here as
+   `--radius-md: var(--radius-md)` made each one point at itself, which inside
+   @theme inline is a cycle that resolves to nothing: every corner in the app
+   went square. Nothing warned, because an unresolvable custom property is not
+   an error in CSS, it is an empty value. */
 
 /* Tailwind v4 drops the browser's default `cursor: pointer` on buttons, so a
    button looks unclickable unless every component remembers to add it back.
