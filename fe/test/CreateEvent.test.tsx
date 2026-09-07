@@ -29,6 +29,14 @@ vi.mock("@/lib/wallet", () => ({
   walletErrorMessage: (e: unknown) => String(e),
 }));
 
+/**
+ * These drive the whole wizard through real clicks, and filling the details
+ * step alone now opens and closes three calendars. That is comfortably over
+ * vitest's five second default once the suite runs files in parallel, and a
+ * timeout there says nothing about the code.
+ */
+vi.setConfig({ testTimeout: 20_000 });
+
 const ORGANISER = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
 
 function renderWizard() {

@@ -324,6 +324,13 @@ jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_ev
 }
 ```
 
+- **`links`**: `{ instagram, website }`. Lomba beneran hidup di Instagram — pengumuman rute
+  berubah, cuaca, hasil — jadi halaman event tanpa link ke situ kehilangan link keluar yang paling
+  sering diklik. Yang disimpan **handle**-nya, bukan URL: Instagram pernah mengubah bentuk URL-nya,
+  dan dokumen ini tidak bisa diedit selamanya. Console tetap menerima URL profil yang ditempel dan
+  mengambil handle-nya sendiri.
+  Efek samping yang berguna: link ini ikut ter-hash, jadi **akun yang dicantumkan waktu event dibuat
+  tidak bisa diam-diam ditukar** jadi akun lain setelah orang mendaftar.
 - **Koordinat masuk lewat link Google Maps yang ditempel, bukan lewat dropdown negara/provinsi/kota.**
   Console mengekstrak `lat`/`lng` dari URL-nya (`@-6.2185,106.8026` atau `?q=`) — tanpa API, tanpa
   key, tanpa rate limit. Cascade tiga dropdown tidak menjawab pertanyaan siapa pun (yang orang mau

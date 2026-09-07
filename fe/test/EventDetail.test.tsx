@@ -149,6 +149,32 @@ describe("EventDetail", () => {
       expect(screen.queryByRole("link", { name: /open in maps/i })).not.toBeInTheDocument();
     });
 
+    it("links the race's own Instagram, built from the handle", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { links: { instagram: "jakartarun" } },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      const link = await screen.findByRole("link", { name: "@jakartarun" });
+      expect(link).toHaveAttribute("href", "https://www.instagram.com/jakartarun");
+    });
+
+    it("shows no social links when the document carries none", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { description: "A road race." },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      await screen.findByText("A road race.");
+      expect(screen.queryByRole("link", { name: /race website/i })).not.toBeInTheDocument();
+    });
+
     it("shows the verified document once it checks out", async () => {
       getEventSummary.mockResolvedValue(summary());
       fetchEventMetadata.mockResolvedValue({

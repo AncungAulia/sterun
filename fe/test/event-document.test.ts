@@ -16,6 +16,8 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     locationLink: "https://www.google.com/maps/@-6.2185,106.8026,17z",
     posterUrl: "https://cdn.example.test/poster.png",
     waiverUrl: "",
+    instagram: "",
+    website: "",
     registrationOpens: "",
     registrationCloses: "",
     racepackStarts: "",
@@ -116,6 +118,8 @@ describe("buildEventDocument", () => {
           locationLink: "",
           posterUrl: "",
           waiverUrl: "",
+          instagram: "",
+          website: "",
           registrationOpens: "",
           registrationCloses: "",
           racepackStarts: "",
@@ -148,6 +152,54 @@ describe("buildEventDocument", () => {
         "registration",
         "race_day",
       ]);
+    });
+  });
+});
+
+describe("links", () => {
+  describe("positive", () => {
+    it("stores an Instagram handle, not a url", () => {
+      // A handle is the durable thing. Instagram has changed its url shape
+      // before, and this document can never be edited once the event exists.
+      const document = JSON.parse(buildEventDocument(draft({ instagram: "jakartarun" })));
+
+      expect(document.links).toEqual({ instagram: "jakartarun" });
+    });
+
+    it("keeps a website as given", () => {
+      const document = JSON.parse(buildEventDocument(draft({ website: "https://race.example" })));
+
+      expect(document.links).toEqual({ website: "https://race.example" });
+    });
+  });
+
+  describe("edge", () => {
+    it("takes the handle out of a pasted profile url", () => {
+      // Pasting the address bar is what people do, and the alternative is an
+      // event page linking to instagram.com/https://instagram.com/jakartarun.
+      const document = JSON.parse(
+        buildEventDocument(draft({ instagram: "https://www.instagram.com/jakartarun/" })),
+      );
+
+      expect(document.links.instagram).toBe("jakartarun");
+    });
+
+    it("takes the at sign off a handle", () => {
+      const document = JSON.parse(buildEventDocument(draft({ instagram: "@jakartarun" })));
+
+      expect(document.links.instagram).toBe("jakartarun");
+    });
+
+    it("leaves links out entirely when there are none", () => {
+      const document = JSON.parse(buildEventDocument(draft()));
+
+      expect(document).not.toHaveProperty("links");
+    });
+
+    it("ignores a handle that could not be a handle", () => {
+      const document = JSON.parse(buildEventDocument(draft({ instagram: "not a handle!" })));
+
+      expect(document).not.toHaveProperty("links");
     });
   });
 });

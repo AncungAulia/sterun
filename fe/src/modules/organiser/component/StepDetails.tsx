@@ -59,6 +59,8 @@ export interface EventDetails {
   locationLink: string;
   posterUrl: string;
   waiverUrl: string;
+  instagram: string;
+  website: string;
   registrationOpens: string;
   registrationCloses: string;
   racepackStarts: string;
@@ -77,6 +79,8 @@ export const EMPTY_DETAILS: EventDetails = {
   locationLink: "",
   posterUrl: "",
   waiverUrl: "",
+  instagram: "",
+  website: "",
   registrationOpens: "",
   registrationCloses: "",
   racepackStarts: "",
@@ -215,7 +219,10 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
         </div>
       </Section>
 
-      <Section title="Poster and waiver">
+      <Section
+        title="Poster and links"
+        note="Where runners go for updates. These are part of the details file, so the account you name here cannot be swapped for another one after people have entered."
+      >
         <Field
           id="poster"
           label="Poster image URL"
@@ -223,6 +230,21 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           onChange={(e) => set({ posterUrl: e.target.value })}
           placeholder="https://..."
           hint="A link to an image you already host somewhere. There is no upload here yet."
+        />
+        <Field
+          id="instagram"
+          label="Instagram"
+          value={details.instagram}
+          onChange={(e) => set({ instagram: e.target.value })}
+          placeholder="@jakartarun"
+          hint="The handle, or paste the profile link and we will take the handle out of it."
+        />
+        <Field
+          id="website"
+          label="Website"
+          value={details.website}
+          onChange={(e) => set({ website: e.target.value })}
+          placeholder="https://..."
         />
         <Field
           id="waiver"

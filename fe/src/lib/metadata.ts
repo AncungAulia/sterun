@@ -29,6 +29,8 @@ export interface EventMetadata {
   location?: { name?: string; lat?: number; lng?: number };
   description?: string;
   waiverUrl?: string;
+  /** Where the race talks to people. Covered by the hash like everything else. */
+  links?: { instagram?: string; website?: string };
   /** ISO 8601 from the `race_day` schedule entry, if the document has one. */
   gunStart?: string;
   schedule?: MetadataPhase[];
@@ -132,6 +134,7 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
     ...str(raw.waiver_url, "waiverUrl"),
     ...(isRecord(raw.location) ? { location: parseLocation(raw.location) } : {}),
     ...(schedule ? { schedule } : {}),
+    ...(isRecord(raw.links) ? { links: parseLinks(raw.links) } : {}),
     ...(schedule?.find((phase) => phase.gunStart)?.gunStart
       ? { gunStart: schedule.find((phase) => phase.gunStart)!.gunStart }
       : {}),
@@ -146,6 +149,13 @@ function parsePhase(raw: Record<string, unknown>): MetadataPhase {
     ...str(raw.gun_start, "gunStart"),
     ...str(raw.cut_off, "cutOff"),
     ...str(raw.venue, "venue"),
+  };
+}
+
+function parseLinks(raw: Record<string, unknown>): NonNullable<EventMetadata["links"]> {
+  return {
+    ...str(raw.instagram, "instagram"),
+    ...str(raw.website, "website"),
   };
 }
 

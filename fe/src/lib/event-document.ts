@@ -38,6 +38,9 @@ export interface EventDocumentDraft {
   locationLink: string;
   posterUrl: string;
   waiverUrl: string;
+  /** Handle or profile url as pasted; only the handle is stored. */
+  instagram: string;
+  website: string;
   /** ISO 8601 strings, or empty. */
   registrationOpens: string;
   registrationCloses: string;
@@ -125,6 +128,18 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
   if (draft.description) document.description = draft.description;
   if (draft.waiverUrl) document.waiver_url = draft.waiverUrl;
 
+  /**
+   * Where the race actually talks to people. Worth having for its own sake,
+   * and worth having *here*: these links are covered by the hash, so the
+   * account an organiser named when the event was created cannot quietly
+   * become a different one after people have entered.
+   */
+  const instagram = instagramHandle(draft.instagram);
+  const links: Record<string, string> = {};
+  if (instagram) links.instagram = instagram;
+  if (draft.website) links.website = draft.website;
+  if (Object.keys(links).length > 0) document.links = links;
+
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
@@ -132,6 +147,26 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
 export async function documentHash(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * The handle out of whatever was pasted.
+ *
+ * The handle is stored rather than a url, because it is the durable half:
+ * Instagram has changed its url shape before and this document can never be
+ * edited. Accepting a pasted profile url anyway, because pasting the address
+ * bar is what people do, and the alternative is an event page linking to
+ * instagram.com/https://instagram.com/jakartarun.
+ */
+function instagramHandle(input: string): string | null {
+  const text = input.trim().replace(/\/+$/, "");
+  if (!text) return null;
+
+  const fromUrl = /(?:instagram\.com|instagr\.am)\/([^/?#]+)/i.exec(text);
+  const handle = (fromUrl ? fromUrl[1]! : text).replace(/^@/, "");
+
+  // Instagram's own rule: letters, digits, dots and underscores, up to 30.
+  return /^[A-Za-z0-9._]{1,30}$/.test(handle) ? handle : null;
 }
 
 function toIso(unixSeconds: bigint): string {

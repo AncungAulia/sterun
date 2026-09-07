@@ -117,6 +117,31 @@ export function EventDocument({ result, isPending, startsAt }: EventDocumentProp
         </p>
       ) : null}
 
+      {document.links?.instagram || document.links?.website ? (
+        <div className="flex flex-wrap items-center gap-4">
+          {document.links.instagram ? (
+            <a
+              href={`https://www.instagram.com/${document.links.instagram}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-base text-teal-500 underline underline-offset-4"
+            >
+              @{document.links.instagram}
+            </a>
+          ) : null}
+          {document.links.website ? (
+            <a
+              href={document.links.website}
+              target="_blank"
+              rel="noreferrer"
+              className="text-base text-teal-500 underline underline-offset-4"
+            >
+              Race website
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
       {conflict && document.gunStart ? (
         <div className="rounded-lg border border-warning-border bg-warning-surface px-5 py-4">
           <p className="heading-strong text-base text-warning">

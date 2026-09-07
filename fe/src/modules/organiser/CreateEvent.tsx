@@ -97,6 +97,8 @@ function Wizard() {
             locationLink: details.locationLink,
             posterUrl: details.posterUrl,
             waiverUrl: details.waiverUrl,
+            instagram: details.instagram,
+            website: details.website,
             registrationOpens: toIso(details.registrationOpens),
             registrationCloses: toIso(details.registrationCloses),
             racepackStarts: toIso(details.racepackStarts),
