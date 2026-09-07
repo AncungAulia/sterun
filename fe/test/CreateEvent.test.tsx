@@ -170,8 +170,12 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
       await screen.findByText(/write that number down/i);
-      const startsAt = createEvent.mock.calls[0]![0].startsAt as bigint;
-      expect(new Date(Number(startsAt) * 1000).getHours()).toBe(6);
+      // The race date from fillDetails, at the one distance's start time.
+      const expected = BigInt(Math.floor(new Date("2026-09-28T06:00").getTime() / 1000));
+      expect(createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ startsAt: expected }),
+        expect.anything(),
+      );
     });
   });
 

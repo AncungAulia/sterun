@@ -324,6 +324,19 @@ jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_ev
 }
 ```
 
+- **Fase `racepack` menyimpan rentang hari + jam harian**, bukan satu jendela waktu menerus.
+  `starts_at` / `ends_at` tetap ada (hari pertama jam buka, hari terakhir jam tutup) supaya pembaca
+  lama tidak berubah artinya, plus `daily_opens` / `daily_closes`.
+  Alasannya: "buka 1 Agustus 09:00, tutup 9 Agustus 21:00" secara harfiah berarti mejanya dijaga
+  semalaman tanggal 2 sampai 8. Pengambilan race pack itu manusia duduk di meja, dan mereka pulang.
+  **Registrasi sengaja tetap satu jendela menerus** — form online memang tidak tutup semalam. Bentuk
+  keduanya beda karena barangnya beda.
+- **Start time dan cut off ada di tiap kategori**, bukan di event. Satu pagi bisa punya 5K start
+  06:00 dan half marathon start 05:00; kontrak tidak punya kolom untuk itu, jadi tempatnya di
+  dokumen (`categories[].start_time` / `.cut_off`). Yang masuk chain sebagai `starts_at` adalah
+  **wave paling awal**, karena event cuma punya satu timestamp sedangkan lomba punya beberapa.
+  Konsekuensi urutan di console: kategori harus diisi **sebelum** dokumen dibuat, karena dokumen
+  di-hash oleh `create_event` yang jalan sebelum `add_category`.
 - **`links`**: `{ instagram, website }`. Lomba beneran hidup di Instagram — pengumuman rute
   berubah, cuaca, hasil — jadi halaman event tanpa link ke situ kehilangan link keluar yang paling
   sering diklik. Yang disimpan **handle**-nya, bukan URL: Instagram pernah mengubah bentuk URL-nya,

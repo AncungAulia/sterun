@@ -66,8 +66,15 @@ export interface EventDocumentDraft {
   /** ISO 8601 strings, or empty. */
   registrationOpens: string;
   registrationCloses: string;
-  racepackStarts: string;
-  racepackEnds: string;
+  /**
+   * A range of days and the hours a desk is open on each of them, rather than
+   * one continuous window. "1 August 09:00 to 9 August 21:00" claims the
+   * collection desk is staffed overnight, and volunteers go home.
+   */
+  racepackFrom: string;
+  racepackTo: string;
+  racepackOpens: string;
+  racepackCloses: string;
   racepackVenue: string;
   racepackVenueLink: string;
 }
@@ -76,6 +83,9 @@ interface Phase {
   phase: string;
   starts_at?: string;
   ends_at?: string;
+  /** `HH:mm`, and only on a phase whose days are not continuous. */
+  daily_opens?: string;
+  daily_closes?: string;
   venue?: string;
   venue_lat?: number;
   venue_lng?: number;
@@ -117,11 +127,17 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
       ends_at: draft.registrationCloses,
     });
   }
-  if (draft.racepackStarts && draft.racepackEnds) {
+  const racepackStart = dayAt(draft.racepackFrom, draft.racepackOpens);
+  const racepackEnd = dayAt(draft.racepackTo || draft.racepackFrom, draft.racepackCloses);
+  if (racepackStart && racepackEnd) {
     const racepack: Phase = {
       phase: "racepack",
-      starts_at: draft.racepackStarts,
-      ends_at: draft.racepackEnds,
+      // Kept, so a reader that knows nothing about daily hours still gets a
+      // window covering the whole collection period.
+      starts_at: racepackStart,
+      ends_at: racepackEnd,
+      daily_opens: draft.racepackOpens,
+      daily_closes: draft.racepackCloses,
     };
     if (draft.racepackVenue) racepack.venue = draft.racepackVenue;
     const venuePin = parseCoordinates(draft.racepackVenueLink);
@@ -231,6 +247,13 @@ function toIso(unixSeconds: bigint): string {
  * is an overnight distance, not one that ended before it began, so it rolls to
  * the next day. A start time has nothing to be after and is taken as given.
  */
+/** A `YYYY-MM-DD` and an `HH:mm` as one instant, or null if either is missing. */
+function dayAt(day: string, time: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const moment = new Date(`${day}T${time}`);
+  return Number.isNaN(moment.getTime()) ? null : moment.toISOString();
+}
+
 function instantOn(raceDate: string, time: string, after: string | null): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raceDate)) return null;
   if (!/^\d{2}:\d{2}$/.test(time)) return null;

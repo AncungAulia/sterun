@@ -16,6 +16,7 @@
  */
 import type { ReactNode } from "react";
 
+import { DateRangeField, EMPTY_RANGE, type DayRange } from "@/components/elements/DateRangeField";
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
@@ -60,8 +61,7 @@ export interface EventDetails {
   website: string;
   registrationOpens: string;
   registrationCloses: string;
-  racepackStarts: string;
-  racepackEnds: string;
+  racepack: DayRange;
   racepackVenue: string;
   racepackVenueLink: string;
 }
@@ -78,8 +78,7 @@ export const EMPTY_DETAILS: EventDetails = {
   website: "",
   registrationOpens: "",
   registrationCloses: "",
-  racepackStarts: "",
-  racepackEnds: "",
+  racepack: EMPTY_RANGE,
   racepackVenue: "",
   racepackVenueLink: "",
 };
@@ -177,19 +176,13 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
         title="Race pack collection"
         note="Leave empty if there is no collection day and packs are handed out at the start."
       >
+        <DateRangeField
+          id="racepack"
+          label="Collection days and hours"
+          value={details.racepack}
+          onChange={(racepack) => set({ racepack })}
+        />
         <div className="grid gap-5 sm:grid-cols-2">
-          <DateTimeField
-            id="pack-starts"
-            label="Collection opens"
-            value={details.racepackStarts}
-            onChange={(racepackStarts) => set({ racepackStarts })}
-          />
-          <DateTimeField
-            id="pack-ends"
-            label="Collection closes"
-            value={details.racepackEnds}
-            onChange={(racepackEnds) => set({ racepackEnds })}
-          />
           <Field
             id="pack-venue"
             label="Collection venue"

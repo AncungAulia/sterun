@@ -24,8 +24,10 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     website: "",
     registrationOpens: "",
     registrationCloses: "",
-    racepackStarts: "",
-    racepackEnds: "",
+    racepackFrom: "",
+    racepackTo: "",
+    racepackOpens: "",
+    racepackCloses: "",
     racepackVenue: "",
     racepackVenueLink: "",
     raceDate: "2026-10-04",
@@ -110,8 +112,10 @@ describe("buildEventDocument", () => {
       const document = JSON.parse(
         buildEventDocument(
           draft({
-            racepackStarts: "2026-10-03T02:00:00Z",
-            racepackEnds: "2026-10-03T10:00:00Z",
+            racepackFrom: "2026-10-03",
+            racepackTo: "2026-10-03",
+            racepackOpens: "09:00",
+            racepackCloses: "17:00",
             racepackVenue: "Hall A",
             racepackVenueLink: "https://www.google.com/maps/@-6.2000,106.8000,17z",
           }),
@@ -120,6 +124,55 @@ describe("buildEventDocument", () => {
       const racepack = document.schedule.find((p: { phase: string }) => p.phase === "racepack");
 
       expect(racepack).toMatchObject({ venue: "Hall A", venue_lat: -6.2, venue_lng: 106.8 });
+    });
+
+    it("writes collection as a run of days with the same hours on each", () => {
+      // Two datetimes claimed the desk was staffed overnight between them.
+      // Volunteers go home, so the days and the hours are separate facts.
+      const document = JSON.parse(
+        buildEventDocument(
+          draft({
+            racepackFrom: "2026-08-01",
+            racepackTo: "2026-08-09",
+            racepackOpens: "09:00",
+            racepackCloses: "21:00",
+          }),
+        ),
+      );
+      const racepack = document.schedule.find((p: { phase: string }) => p.phase === "racepack");
+
+      expect(racepack).toMatchObject({
+        starts_at: new Date("2026-08-01T09:00").toISOString(),
+        ends_at: new Date("2026-08-09T21:00").toISOString(),
+        daily_opens: "09:00",
+        daily_closes: "21:00",
+      });
+    });
+
+    it("handles a single collection day", () => {
+      const document = JSON.parse(
+        buildEventDocument(
+          draft({ racepackFrom: "2026-08-01", racepackOpens: "09:00", racepackCloses: "17:00" }),
+        ),
+      );
+      const racepack = document.schedule.find((p: { phase: string }) => p.phase === "racepack");
+
+      expect(racepack).toMatchObject({
+        starts_at: new Date("2026-08-01T09:00").toISOString(),
+        ends_at: new Date("2026-08-01T17:00").toISOString(),
+      });
+    });
+
+    it("leaves collection out when the hours are missing", () => {
+      // Days without hours would have to invent a time, and an invented one is
+      // permanent once the file is published.
+      const document = JSON.parse(
+        buildEventDocument(draft({ racepackFrom: "2026-08-01", racepackTo: "2026-08-09" })),
+      );
+
+      expect(
+        document.schedule.find((p: { phase: string }) => p.phase === "racepack"),
+      ).toBeUndefined();
     });
 
     it("is byte-stable, so the same draft hashes to the same value twice", () => {
@@ -163,8 +216,10 @@ describe("buildEventDocument", () => {
           website: "",
           registrationOpens: "",
           registrationCloses: "",
-          racepackStarts: "",
-          racepackEnds: "",
+          racepackFrom: "",
+          racepackTo: "",
+          racepackOpens: "",
+          racepackCloses: "",
           racepackVenue: "",
           racepackVenueLink: "",
           raceDate: "2026-10-04",

@@ -51,6 +51,9 @@ export interface MetadataPhase {
   gunStart?: string;
   cutOff?: string;
   venue?: string;
+  /** `HH:mm` opening hours that apply to each day of the phase. */
+  dailyOpens?: string;
+  dailyCloses?: string;
 }
 
 export type MetadataResult =
@@ -157,6 +160,8 @@ function parsePhase(raw: Record<string, unknown>): MetadataPhase {
     ...str(raw.gun_start, "gunStart"),
     ...str(raw.cut_off, "cutOff"),
     ...str(raw.venue, "venue"),
+    ...str(raw.daily_opens, "dailyOpens"),
+    ...str(raw.daily_closes, "dailyCloses"),
   };
 }
 
