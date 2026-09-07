@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatEventDate, formatEventDateTime, formatPrice, shortAddress } from "@/utils/format";
+import {
+  formatEventDate,
+  formatEventDateTime,
+  formatPrice,
+  parseStroops,
+  shortAddress,
+} from "@/utils/format";
 
 const ADDRESS = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 
@@ -122,6 +128,48 @@ describe("formatEventDateTime", () => {
   describe("edge", () => {
     it("does not crash on a timestamp outside the range a Date can hold", () => {
       expect(formatEventDateTime(99_999_999_999_999n, "UTC")).toBe("Unknown date");
+    });
+  });
+});
+
+describe("parseStroops", () => {
+  describe("positive", () => {
+    it("reads a whole number of sUSD", () => {
+      expect(parseStroops("25")).toBe(250_000_000n);
+    });
+
+    it("reads a decimal without going through a float", () => {
+      // 0.1 + 0.2 arithmetic here would be off by a stroop, and a price that is
+      // off by a stroop is a transfer the runner did not agree to.
+      expect(parseStroops("15.5")).toBe(155_000_000n);
+      expect(parseStroops("0.1")).toBe(1_000_000n);
+    });
+
+    it("reads the smallest expressible amount", () => {
+      expect(parseStroops("0.0000001")).toBe(1n);
+    });
+
+    it("treats a free category as free", () => {
+      expect(parseStroops("0")).toBe(0n);
+      expect(parseStroops("")).toBe(0n);
+    });
+
+    it("survives an amount larger than a JS number can hold exactly", () => {
+      expect(parseStroops("9007199254740993.1234567")).toBe(90_071_992_547_409_931_234_567n);
+    });
+  });
+
+  describe("negative", () => {
+    it("refuses more precision than the asset has", () => {
+      // Silently rounding would take a price the organiser typed and charge a
+      // different one.
+      expect(() => parseStroops("1.12345678")).toThrow(/7 decimal/i);
+    });
+
+    it("refuses anything that is not a number", () => {
+      expect(() => parseStroops("ten")).toThrow();
+      expect(() => parseStroops("1,5")).toThrow();
+      expect(() => parseStroops("-5")).toThrow();
     });
   });
 });

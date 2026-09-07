@@ -1,7 +1,7 @@
 /**
  * Pure formatting helpers. No chain coupling, no React, no side effects.
  */
-import { formatStroops } from "@sterun/sdk";
+import { STROOPS_PER_UNIT, formatStroops } from "@sterun/sdk";
 
 const GROUPED = new Intl.NumberFormat("en-US");
 
@@ -79,4 +79,30 @@ export function formatEventDateTime(startsAt: bigint, timeZone?: string): string
     timeZoneName: "short",
     ...(timeZone ? { timeZone } : {}),
   }).format(date);
+}
+
+/**
+ * A price typed by a person, as the stroops the contract takes.
+ *
+ * Parsed digit by digit rather than through `Number`. An entry fee is money:
+ * `parseFloat("0.1") * 10_000_000` is 1000000.0000000001, and the price a
+ * runner is charged must be the price the organiser typed, exactly. The
+ * fractional part is padded rather than multiplied for the same reason.
+ *
+ * Too much precision is refused instead of rounded. Rounding here would take a
+ * number somebody entered deliberately and quietly charge a different one.
+ */
+export function parseStroops(input: string): bigint {
+  const text = input.trim();
+  if (!text) return 0n;
+  if (!/^\d+(\.\d+)?$/.test(text)) {
+    throw new Error(`"${input}" is not an amount. Use digits and at most one dot, like 25.5`);
+  }
+
+  const [whole, fraction = ""] = text.split(".");
+  if (fraction.length > 7) {
+    throw new Error(`sUSD has 7 decimal places; "${input}" has ${fraction.length}.`);
+  }
+
+  return BigInt(whole) * STROOPS_PER_UNIT + BigInt(fraction.padEnd(7, "0") || "0");
 }
