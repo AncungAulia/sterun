@@ -38,7 +38,11 @@ export interface Place {
   city: string;
 }
 
-export const EMPTY_PLACE: Place = { venue: "", country: "ID", provinceId: "", city: "" };
+/**
+ * Country starts empty rather than at Indonesia. A prefilled country is a field
+ * people scroll past, and the one it prefills is wrong for everybody else.
+ */
+export const EMPTY_PLACE: Place = { venue: "", country: "", provinceId: "", city: "" };
 
 interface PlaceFieldsProps {
   place: Place;
@@ -89,7 +93,7 @@ export function PlaceFields({
             // Changing the country invalidates both, because a province id
             // belongs to one country and a city name to one province.
             onChange={(country) => onChange({ ...place, country, provinceId: "", city: "" })}
-            placeholder="Search countries"
+            placeholder="Select country"
           />
           <FieldMessage error={errors.country} />
         </div>

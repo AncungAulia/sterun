@@ -25,10 +25,25 @@
  */
 import { parseCoordinates } from "@/utils/geo";
 
+/** One distance, as the document records it. Times are `HH:mm` on the race day. */
+export interface DocumentCategory {
+  code: string;
+  startTime: string;
+  cutOff: string;
+}
+
 /** Everything the wizard collects for the document. Empty string means absent. */
 export interface EventDocumentDraft {
   /** Unix seconds, the same value that goes on chain as `starts_at`. */
   startsAt: bigint;
+  /** `YYYY-MM-DD`, the day every category time is placed on. */
+  raceDate: string;
+  /**
+   * The distances, in the order they were planned. They are here rather than
+   * on chain because the contract has no field for a start time, and a 5K and
+   * a half marathon on one morning do not start together.
+   */
+  categories: DocumentCategory[];
   description: string;
   /** The venue's own name, e.g. "Gelora Bung Karno". */
   locationName: string;
@@ -55,11 +70,6 @@ export interface EventDocumentDraft {
   racepackEnds: string;
   racepackVenue: string;
   racepackVenueLink: string;
-  /**
-   * `HH:mm`, not a full date. A cut off is a time on the race day, and asking
-   * for the day again would be asking the same question twice.
-   */
-  cutOff: string;
 }
 
 interface Phase {
@@ -88,8 +98,14 @@ interface Phase {
  */
 export function buildEventDocument(draft: EventDocumentDraft): string {
   const raceDay: Phase = { phase: "race_day", gun_start: toIso(draft.startsAt) };
-  const cutOff = cutOffInstant(draft.startsAt, draft.cutOff);
-  if (cutOff) raceDay.cut_off = cutOff;
+  /**
+   * The race day's own cut off is the last of the categories'. A day is over
+   * for the event when it is over for its slowest distance.
+   */
+  const cutOffs = draft.categories
+    .map((category) => instantOn(draft.raceDate, category.cutOff, category.startTime))
+    .filter((value): value is string => value !== null);
+  if (cutOffs.length > 0) raceDay.cut_off = cutOffs.sort().at(-1)!;
 
   const schedule: Phase[] = [];
   // Both ends or neither: a window with one side missing says less than no
@@ -152,6 +168,23 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
    * account an organiser named when the event was created cannot quietly
    * become a different one after people have entered.
    */
+  /**
+   * Written even though the contract stores the same codes and quotas, because
+   * the times are here and nowhere else, and a client reading this file should
+   * not have to join it against a contract call to know when a wave goes.
+   */
+  const categories = draft.categories
+    .filter((category) => category.code)
+    .map((category) => {
+      const entry: Record<string, string> = { code: category.code };
+      const start = instantOn(draft.raceDate, category.startTime, null);
+      if (start) entry.start_time = start;
+      const cutOff = instantOn(draft.raceDate, category.cutOff, category.startTime);
+      if (cutOff) entry.cut_off = cutOff;
+      return entry;
+    });
+  if (categories.length > 0) document.categories = categories;
+
   const instagram = instagramHandle(draft.instagram);
   const links: Record<string, string> = {};
   if (instagram) links.instagram = instagram;
@@ -192,22 +225,22 @@ function toIso(unixSeconds: bigint): string {
 }
 
 /**
- * A cut off time, placed on the right day.
+ * An `HH:mm` placed on the race day, as an instant.
  *
- * The organiser gives an hour, not a date, because a cut off belongs to the
- * race day by definition. Almost always that is the start's own day. When the
- * hour is earlier than the start, the only reading that makes sense is the
- * following day: a race starting at 22:00 with a 06:00 cut off is an overnight
- * one, not a race that ended sixteen hours before it began.
+ * `after` is the time it must not precede. A cut off earlier than its own start
+ * is an overnight distance, not one that ended before it began, so it rolls to
+ * the next day. A start time has nothing to be after and is taken as given.
  */
-function cutOffInstant(startsAt: bigint, time: string): string | null {
+function instantOn(raceDate: string, time: string, after: string | null): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raceDate)) return null;
   if (!/^\d{2}:\d{2}$/.test(time)) return null;
 
-  const start = new Date(Number(startsAt) * 1000);
-  const [hours, minutes] = time.split(":").map(Number);
-  const cutOff = new Date(start);
-  cutOff.setHours(hours!, minutes!, 0, 0);
-  if (cutOff.getTime() <= start.getTime()) cutOff.setDate(cutOff.getDate() + 1);
+  const moment = new Date(`${raceDate}T${time}`);
+  if (Number.isNaN(moment.getTime())) return null;
 
-  return cutOff.toISOString();
+  if (after && /^\d{2}:\d{2}$/.test(after)) {
+    const reference = new Date(`${raceDate}T${after}`);
+    if (moment.getTime() <= reference.getTime()) moment.setDate(moment.getDate() + 1);
+  }
+  return moment.toISOString();
 }

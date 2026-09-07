@@ -51,7 +51,8 @@ function renderWizard() {
 async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jakarta Sunrise 10K") {
   await user.type(screen.getByLabelText(/Event name/), name);
 
-  // Country already defaults to Indonesia, so the cascade starts at province.
+  await user.click(screen.getByRole("combobox", { name: "Country" }));
+  await user.click(await screen.findByRole("option", { name: "Indonesia" }));
   await user.click(screen.getByRole("combobox", { name: "Province" }));
   await user.click(await screen.findByRole("option", { name: "DKI Jakarta" }));
   await user.click(screen.getByRole("combobox", { name: "City" }));
@@ -65,10 +66,28 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jak
   // Dates come from the calendar now, the way an organiser sets them. The clock
   // is frozen in beforeEach so the calendar always opens on the month these
   // clicks expect.
-  for (const field of ["Start date", "Registration opens date", "Registration closes date"]) {
+  for (const field of [
+    "Race date date",
+    "Registration opens date",
+    "Registration closes date",
+  ]) {
     await user.click(screen.getByRole("button", { name: field }));
     await user.click(screen.getByRole("button", { name: /September 28th, 2026/ }));
   }
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+}
+
+/** Fill the one distance the wizard starts with, then move to the file step. */
+async function fillDistances(
+  user: ReturnType<typeof userEvent.setup>,
+  { code = "10K", price = "25" }: { code?: string; price?: string } = {},
+) {
+  await user.type(screen.getByLabelText(/^Code/), code);
+  await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
+  await user.type(screen.getByLabelText(/^Places/), "300");
+  if (price) await user.type(screen.getByLabelText(/Entry fee in sUSD/), price);
+  await user.clear(screen.getByLabelText(/Start time/));
+  await user.type(screen.getByLabelText(/Start time/), "06:00");
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
@@ -86,6 +105,7 @@ describe("CreateEvent", () => {
     it("creates the event with the document it verified", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user);
 
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
       await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
@@ -107,16 +127,13 @@ describe("CreateEvent", () => {
     it("walks through to an open event", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
       expect(await screen.findByText(/write that number down/i)).toBeInTheDocument();
 
-      await user.type(screen.getByLabelText("Code"), "10K");
-      await user.type(screen.getByLabelText("Distance in kilometres"), "10");
-      await user.type(screen.getByLabelText("Places"), "300");
-      await user.type(screen.getByLabelText("Entry fee in sUSD"), "25");
-      await user.click(screen.getByRole("button", { name: "Add category" }));
+      await user.click(screen.getByRole("button", { name: /add this distance/i }));
       await screen.findByText("Added");
 
       await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -129,21 +146,32 @@ describe("CreateEvent", () => {
     it("passes the price through as stroops, not as a decimal", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user, { code: "FUN5K", price: "15.5" });
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
       await screen.findByText(/write that number down/i);
 
-      await user.type(screen.getByLabelText("Code"), "FUN5K");
-      await user.type(screen.getByLabelText("Distance in kilometres"), "5");
-      await user.type(screen.getByLabelText("Places"), "100");
-      await user.type(screen.getByLabelText("Entry fee in sUSD"), "15.5");
-      await user.click(screen.getByRole("button", { name: "Add category" }));
+      await user.click(screen.getByRole("button", { name: /add this distance/i }));
 
       await screen.findByText("Added");
       expect(addCategory).toHaveBeenCalledWith(
-        expect.objectContaining({ priceStroops: 155_000_000n, distanceM: 5_000 }),
+        expect.objectContaining({ priceStroops: 155_000_000n, distanceM: 10_000 }),
         expect.anything(),
       );
+    });
+
+    it("puts the earliest wave on chain as the event start", async () => {
+      // The event has one timestamp and a race has several. The earliest is the
+      // only one that is true of the whole event.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await user.click(screen.getByRole("button", { name: /create without a document/i }));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      await screen.findByText(/write that number down/i);
+      const startsAt = createEvent.mock.calls[0]![0].startsAt as bigint;
+      expect(new Date(Number(startsAt) * 1000).getHours()).toBe(6);
     });
   });
 
@@ -183,6 +211,7 @@ describe("CreateEvent", () => {
     it("will not create an event with an unverified document", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user);
 
       // The URL is typed but never checked. Continuing here would commit a hash
       // for bytes nobody has fetched, and the hash cannot be changed later.
@@ -197,23 +226,38 @@ describe("CreateEvent", () => {
       // permanently broken event.
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user);
 
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
       await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
       await user.click(screen.getByRole("button", { name: /check the published file/i }));
       await screen.findByText("Checked");
 
+      // Back to the details, which now sit two steps away. Each step is waited
+      // for: clicking twice in a row races the render and lands both clicks on
+      // the same button.
       await user.click(screen.getByRole("button", { name: "Back" }));
+      await screen.findByRole("heading", { name: "Distances" });
+      await user.click(screen.getByRole("button", { name: "Back" }));
+      await screen.findByRole("heading", { name: "The race" });
+
       await user.type(screen.getByLabelText("Venue"), "Somewhere else");
+
       await user.click(screen.getByRole("button", { name: "Continue" }));
+      await screen.findByRole("heading", { name: "Distances" });
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      await screen.findByRole("heading", { name: /publish the event details/i });
 
       expect(screen.queryByText("Checked")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /create without a document/i }),
+      ).toBeInTheDocument();
     });
 
     it("creates an event with no document when told to", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
@@ -223,58 +267,70 @@ describe("CreateEvent", () => {
       );
     });
 
-    it("will not open an event that has no categories", async () => {
+    it("will not open an event whose distances are not all on chain yet", async () => {
+      // The event exists and one signature is still outstanding. Opening now
+      // would put a race in front of people with a distance they cannot enter.
       const { user } = renderWizard();
       await fillDetails(user);
+      await fillDistances(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
       await screen.findByText(/write that number down/i);
 
       expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-      expect(screen.getByText(/add at least one category/i)).toBeInTheDocument();
-    });
-  });
-
-  describe("negative", () => {
-    it("keeps the categories already on chain when the next one fails", async () => {
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/write that number down/i);
-
-      await user.type(screen.getByLabelText("Code"), "10K");
-      await user.type(screen.getByLabelText("Distance in kilometres"), "10");
-      await user.type(screen.getByLabelText("Places"), "300");
-      await user.click(screen.getByRole("button", { name: "Add category" }));
-      await screen.findByText("Added");
-
-      addCategory.mockRejectedValueOnce(new Error("user declined"));
-      await user.type(screen.getByLabelText("Code"), "5K");
-      await user.type(screen.getByLabelText("Distance in kilometres"), "5");
-      await user.type(screen.getByLabelText("Places"), "100");
-      await user.click(screen.getByRole("button", { name: "Add category" }));
-
-      expect(await screen.findByRole("alert")).toHaveTextContent(/not added/i);
-      expect(screen.getByText("10K")).toBeInTheDocument();
+      expect(screen.getByText(/add them all before opening/i)).toBeInTheDocument();
     });
 
-    it("refuses a category code the contract would reject, without spending a signature", async () => {
+    it("refuses a distance code the contract would reject, without spending a signature", async () => {
       // Symbol accepts letters, digits and underscore. A revert would cost a
       // wallet prompt and a wait to learn what a regex answers instantly.
       const { user } = renderWizard();
       await fillDetails(user);
+
+      await user.type(screen.getByLabelText(/^Code/), "10 K!");
+      await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
+      await user.type(screen.getByLabelText(/^Places/), "300");
+      await user.type(screen.getByLabelText(/Start time/), "06:00");
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        /letters, digits and underscores/i,
+      );
+      expect(createEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("negative", () => {
+    it("keeps a distance that is already on chain when the next one fails", async () => {
+      // Those transactions have landed and cannot be undone, so a screen that
+      // reset on failure would be lying about what is on chain.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await user.type(screen.getByLabelText(/^Code/), "10K");
+      await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
+      await user.type(screen.getByLabelText(/^Places/), "300");
+      await user.type(screen.getByLabelText(/Start time/), "06:00");
+      await user.click(screen.getByRole("button", { name: /add another distance/i }));
+
+      const codes = screen.getAllByLabelText(/^Code/);
+      await user.type(codes[1]!, "FUN5K");
+      await user.type(screen.getAllByLabelText(/Distance in kilometres/)[1]!, "5");
+      await user.type(screen.getAllByLabelText(/^Places/)[1]!, "100");
+      await user.type(screen.getAllByLabelText(/Start time/)[1]!, "07:00");
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
       await screen.findByText(/write that number down/i);
 
-      await user.type(screen.getByLabelText("Code"), "10 K!");
-      await user.type(screen.getByLabelText("Distance in kilometres"), "10");
-      await user.type(screen.getByLabelText("Places"), "300");
-      await user.click(screen.getByRole("button", { name: "Add category" }));
+      await user.click(screen.getByRole("button", { name: /add this distance/i }));
+      await screen.findByText("Added");
 
-      expect(await screen.findByRole("alert")).toHaveTextContent(/letters, digits and underscores/i);
-      expect(addCategory).not.toHaveBeenCalled();
+      addCategory.mockRejectedValueOnce(new Error("user declined"));
+      await user.click(screen.getByRole("button", { name: /add this distance/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/not added/i);
+      expect(screen.getByText("Added")).toBeInTheDocument();
     });
   });
 });

@@ -28,11 +28,11 @@ export function missingDetails(details: EventDetails): Missing[] {
   if (!details.name.trim()) {
     missing.push({ field: "name", focusId: "name", message: "Give the race a name." });
   }
-  if (!details.startsAtLocal) {
+  if (!details.raceDate) {
     missing.push({
-      field: "startsAtLocal",
-      focusId: "starts-at-date",
-      message: "Pick the day and time the race starts.",
+      field: "raceDate",
+      focusId: "race-date-date",
+      message: "Pick the day the race is held.",
     });
   }
   if (!details.place.country) {

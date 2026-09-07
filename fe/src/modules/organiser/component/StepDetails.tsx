@@ -19,8 +19,6 @@ import type { ReactNode } from "react";
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { parseCoordinates } from "@/utils/geo";
 
 /**
@@ -51,8 +49,8 @@ function Section({ title, note, children }: { title: string; note?: string; chil
 
 export interface EventDetails {
   name: string;
-  /** `YYYY-MM-DDTHH:mm`, read in the organiser's own timezone. */
-  startsAtLocal: string;
+  /** `YYYY-MM-DD`. The hours belong to the distances, which start in waves. */
+  raceDate: string;
   description: string;
   place: Place;
   locationLink: string;
@@ -66,13 +64,11 @@ export interface EventDetails {
   racepackEnds: string;
   racepackVenue: string;
   racepackVenueLink: string;
-  /** `HH:mm`. The day comes from the start, so it is not asked for twice. */
-  cutOff: string;
 }
 
 export const EMPTY_DETAILS: EventDetails = {
   name: "",
-  startsAtLocal: "",
+  raceDate: "",
   description: "",
   place: EMPTY_PLACE,
   locationLink: "",
@@ -86,7 +82,6 @@ export const EMPTY_DETAILS: EventDetails = {
   racepackEnds: "",
   racepackVenue: "",
   racepackVenueLink: "",
-  cutOff: "",
 };
 
 interface StepDetailsProps {
@@ -112,28 +107,16 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           placeholder="Jakarta Sunrise 10K"
         />
         <DateTimeField
-          id="starts-at"
-          label="Start"
+          id="race-date"
+          label="Race date"
+          dateOnly
           required
-          error={errors.startsAtLocal}
+          error={errors.raceDate}
           warnIfPast
-          value={details.startsAtLocal}
-          onChange={(startsAtLocal) => set({ startsAtLocal })}
-          hint="In your own timezone."
+          value={details.raceDate}
+          onChange={(raceDate) => set({ raceDate })}
+          hint="Start times are set per distance in the next step, since waves do not go together."
         />
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="cut-off">Cut off</Label>
-          <Input
-            id="cut-off"
-            type="time"
-            value={details.cutOff}
-            onChange={(e) => set({ cutOff: e.target.value })}
-            className="numeric w-32"
-          />
-          <p className="text-sm text-muted-foreground">
-            The last moment a finish counts, on the race day.
-          </p>
-        </div>
         <PlaceFields
           required
           place={details.place}

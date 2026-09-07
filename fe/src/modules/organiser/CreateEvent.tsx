@@ -33,7 +33,13 @@ import { buildEventDocument, documentHash } from "@/lib/event-document";
 import { countryName, provinceName } from "@/lib/places";
 import { formatEventDateTime } from "@/utils/format";
 
-import { StepCategories, type AddedCategory } from "./component/StepCategories";
+import { StepAddCategories, type AddedCategory } from "./component/StepAddCategories";
+import {
+  EMPTY_CATEGORY,
+  StepCategoryPlan,
+  categoryProblem,
+  type PlannedCategory,
+} from "./component/StepCategoryPlan";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepDocument, type PublishedDocument } from "./component/StepDocument";
 import { focusField, missingDetails } from "./missing";
@@ -46,11 +52,23 @@ import { focusField, missingDetails } from "./missing";
  */
 const NO_DOCUMENT_HASH = "0".repeat(64);
 
+/**
+ * The distances come before the details file, and that order is forced rather
+ * than chosen. Each distance has its own start time, the contract has no field
+ * for one, so the times live in the details file. That file is hashed and
+ * committed by `create_event`, which runs before any `add_category`. So the
+ * distances must be *known* before the file is built, even though they are
+ * *written* to the chain after it.
+ *
+ * Splitting deciding from signing suits the job anyway: work the race out once,
+ * then sign a run of transactions, rather than alternating between the two.
+ */
 const STEPS = [
   { id: "details", label: "Details" },
+  { id: "distances", label: "Distances" },
   { id: "document", label: "Details file" },
   { id: "create", label: "Create" },
-  { id: "categories", label: "Categories" },
+  { id: "add", label: "Add distances" },
   { id: "open", label: "Open" },
 ] as const;
 type Step = (typeof STEPS)[number]["id"];
@@ -70,13 +88,22 @@ function Wizard() {
   const [skipDocument, setSkipDocument] = useState(false);
   const [eventId, setEventId] = useState<number | null>(null);
   const [createdTx, setCreatedTx] = useState<string | null>(null);
-  const [categories, setCategories] = useState<AddedCategory[]>([]);
+  const [plan, setPlan] = useState<PlannedCategory[]>([{ ...EMPTY_CATEGORY }]);
+  const [showPlanProblems, setShowPlanProblems] = useState(false);
+  const [added, setAdded] = useState<AddedCategory[]>([]);
   const [openedTx, setOpenedTx] = useState<string | null>(null);
 
   const createEvent = useCreateEvent();
   const setStatus = useSetEventStatus();
 
-  const startsAt = useMemo(() => toUnixSeconds(details.startsAtLocal), [details.startsAtLocal]);
+  /**
+   * What goes on chain as `starts_at`: the first wave off the line. The event
+   * has one timestamp and the race has several, so the earliest is the only one
+   * that is true of the event as a whole.
+   */
+  const startsAt = useMemo(() => earliestStart(details.raceDate, plan), [details.raceDate, plan]);
+
+  const planProblems = plan.filter((category) => categoryProblem(category) !== null).length;
   /**
    * Continue is never disabled. A greyed out button with no reason is a dead
    * end: you can see it, you cannot tell what is wrong, and there is nothing to
@@ -92,11 +119,19 @@ function Wizard() {
 
   function continueFromDetails() {
     if (missing.length === 0) {
-      setStep("document");
+      setStep("distances");
       return;
     }
     setAskedToContinue(true);
     focusField(missing[0]!.focusId);
+  }
+
+  function continueFromDistances() {
+    if (planProblems === 0 && plan.length > 0) {
+      setStep("document");
+      return;
+    }
+    setShowPlanProblems(true);
   }
 
   // Derived, not stored. The text on screen is always the text its hash covers,
@@ -128,9 +163,14 @@ function Wizard() {
             racepackEnds: toIso(details.racepackEnds),
             racepackVenue: details.racepackVenue,
             racepackVenueLink: details.racepackVenueLink,
-            cutOff: details.cutOff,
+            raceDate: details.raceDate,
+            categories: plan.map((category) => ({
+              code: category.code,
+              startTime: category.startTime,
+              cutOff: category.cutOff,
+            })),
           }),
-    [details, startsAt],
+    [details, plan, startsAt],
   );
 
   // Hashing is async (crypto.subtle), so it is a query keyed by the exact text
@@ -161,7 +201,7 @@ function Wizard() {
     });
     setEventId(sent.value);
     setCreatedTx(sent.txHash);
-    setStep("categories");
+    setStep("add");
   }
 
   async function open() {
@@ -207,7 +247,7 @@ function Wizard() {
               }}
             />
             <div className="mt-8 flex flex-wrap justify-end gap-3">
-              <Button variant="secondary" onClick={() => setStep("details")}>
+              <Button variant="secondary" onClick={() => setStep("distances")}>
                 Back
               </Button>
               <Button onClick={() => setStep("create")} disabled={!verified && !skipDocument}>
@@ -273,23 +313,40 @@ function Wizard() {
           </div>
         ) : null}
 
-        {step === "categories" && eventId !== null ? (
+        {step === "distances" ? (
+          <>
+            <StepCategoryPlan
+              categories={plan}
+              onChange={setPlan}
+              showProblems={showPlanProblems}
+            />
+            <div className="mt-8 flex flex-wrap justify-end gap-3">
+              <Button variant="secondary" onClick={() => setStep("details")}>
+                Back
+              </Button>
+              <Button onClick={continueFromDistances}>Continue</Button>
+            </div>
+          </>
+        ) : null}
+
+        {step === "add" && eventId !== null ? (
           <div className="flex flex-col gap-6">
             <Created eventId={eventId} txHash={createdTx} />
-            <StepCategories
+            <StepAddCategories
               eventId={eventId}
-              added={categories}
-              onAdded={(category) => setCategories((all) => [...all, category])}
+              plan={plan}
+              added={added}
+              onAdded={(category) => setAdded((all) => [...all, category])}
             />
             <div className="flex items-center justify-between gap-3">
-              {categories.length === 0 ? (
+              {added.length < plan.length ? (
                 <p className="text-sm text-muted-foreground">
-                  Add at least one category. Nobody can enter a race with no distances.
+                  Nobody can enter a race with no distances, so add them all before opening.
                 </p>
               ) : (
                 <span />
               )}
-              <Button onClick={() => setStep("open")} disabled={categories.length === 0}>
+              <Button onClick={() => setStep("open")} disabled={added.length < plan.length}>
                 Continue
               </Button>
             </div>
@@ -302,7 +359,7 @@ function Wizard() {
             <p className="max-w-2xl text-base text-n-600">
               This is the switch that lets people enter. Until you press it the event is a draft,
               visible but closed. You can close it again later, and you can reopen it, but the
-              categories and their quotas are already fixed.
+              distances and their quotas are already fixed.
             </p>
 
             {setStatus.error ? (
@@ -377,11 +434,24 @@ function TxLink({ txHash }: { txHash: string }) {
 }
 
 /** `datetime-local` is wall-clock time with no zone; the browser's own is meant. */
-function toUnixSeconds(local: string): bigint | null {
-  if (!local) return null;
-  const ms = new Date(local).getTime();
-  if (Number.isNaN(ms)) return null;
-  return BigInt(Math.floor(ms / 1000));
+/**
+ * The race date plus the earliest distance's start time, in seconds.
+ *
+ * Null until both halves exist, which is what keeps the document from being
+ * built against a day with no times on it.
+ */
+function earliestStart(raceDate: string, plan: PlannedCategory[]): bigint | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raceDate)) return null;
+
+  const times = plan
+    .map((category) => category.startTime)
+    .filter((time) => /^\d{2}:\d{2}$/.test(time))
+    .sort();
+  const earliest = times[0];
+  if (!earliest) return null;
+
+  const ms = new Date(`${raceDate}T${earliest}`).getTime();
+  return Number.isNaN(ms) ? null : BigInt(Math.floor(ms / 1000));
 }
 
 function toIso(local: string): string {

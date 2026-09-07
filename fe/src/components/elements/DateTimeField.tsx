@@ -29,14 +29,20 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatEventDate, formatEventDateTimeLong } from "@/utils/format";
+import { formatEventDate, formatEventDateTimeLong, formatEventDayLong } from "@/utils/format";
 
 interface DateTimeFieldProps {
   id: string;
   /** Names the pair. The two controls are labelled "<label> date" and "<label> time". */
   label: string;
-  /** `YYYY-MM-DDTHH:mm`. */
+  /** `YYYY-MM-DDTHH:mm`, or `YYYY-MM-DD` when `dateOnly`. */
   value: string;
+  /**
+   * Drops the time control. Used for the race date, whose hours belong to the
+   * categories: a 5K and a half marathon on the same morning start in waves,
+   * and asking for one time up here would make one of them wrong.
+   */
+  dateOnly?: boolean;
   onChange: (value: string) => void;
   hint?: string;
   error?: string;
@@ -52,6 +58,7 @@ export function DateTimeField({
   onChange,
   hint,
   error,
+  dateOnly = false,
   required = false,
   warnIfPast = false,
 }: DateTimeFieldProps) {
@@ -69,8 +76,10 @@ export function DateTimeField({
    * The shape is checked before the value is parsed, because `new Date` is far
    * too forgiving: `new Date("2026-10")` is a perfectly good date in October.
    */
-  const complete = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
-  const asDate = complete ? new Date(value) : null;
+  const complete = dateOnly
+    ? /^\d{4}-\d{2}-\d{2}$/.test(value)
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
+  const asDate = complete ? new Date(dateOnly ? `${value}T00:00` : value) : null;
   const valid = asDate !== null && !Number.isNaN(asDate.getTime());
   const isPast = valid && asDate.getTime() < mountedAt;
 
@@ -82,7 +91,7 @@ export function DateTimeField({
     // The time is kept. Picking a day should not silently reset an hour that
     // was already chosen, and 00:00 would be a plausible wrong answer rather
     // than an obvious one.
-    onChange(`${toDateValue(next)}T${time || "06:00"}`);
+    onChange(dateOnly ? toDateValue(next) : `${toDateValue(next)}T${time || "06:00"}`);
     setOpen(false);
   }
 
@@ -122,24 +131,26 @@ export function DateTimeField({
           </Popover>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={`${id}-time`} className="text-muted-foreground">
-            Time
-          </Label>
-          <Input
-            id={`${id}-time`}
-            aria-label={`${label} time`}
-            type="time"
-            value={time}
-            onChange={(e) => onChange(`${date || toDateValue(new Date())}T${e.target.value}`)}
-            className="numeric w-32"
-          />
-        </div>
+        {dateOnly ? null : (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-time`} className="text-muted-foreground">
+              Time
+            </Label>
+            <Input
+              id={`${id}-time`}
+              aria-label={`${label} time`}
+              type="time"
+              value={time}
+              onChange={(e) => onChange(`${date || toDateValue(new Date())}T${e.target.value}`)}
+              className="numeric w-32"
+            />
+          </div>
+        )}
       </div>
 
       {valid ? (
         <p className="text-sm text-muted-foreground">
-          {formatEventDateTimeLong(toUnix(asDate))}
+          {dateOnly ? formatEventDayLong(toUnix(asDate)) : formatEventDateTimeLong(toUnix(asDate))}
         </p>
       ) : null}
 

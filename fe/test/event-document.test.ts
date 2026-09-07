@@ -28,7 +28,8 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     racepackEnds: "",
     racepackVenue: "",
     racepackVenueLink: "",
-    cutOff: "",
+    raceDate: "2026-10-04",
+    categories: [{ code: "10K", startTime: "06:00", cutOff: "" }],
     ...overrides,
   };
 }
@@ -166,7 +167,8 @@ describe("buildEventDocument", () => {
           racepackEnds: "",
           racepackVenue: "",
           racepackVenueLink: "",
-          cutOff: "",
+          raceDate: "2026-10-04",
+          categories: [],
         }),
       );
 
@@ -244,40 +246,70 @@ describe("links", () => {
   });
 });
 
-describe("cut off", () => {
+describe("categories", () => {
+  const withCategories = (categories: { code: string; startTime: string; cutOff: string }[]) =>
+    JSON.parse(buildEventDocument(draft({ categories })));
+
   describe("positive", () => {
-    it("takes the day from the start, because a cut off is the same race day", () => {
-      // Start 06:00, cut off 11:00. Asking for the date twice is asking the
-      // same question twice.
-      const document = JSON.parse(buildEventDocument(draft({ cutOff: "11:00" })));
+    it("records a start time per distance, because waves do not start together", () => {
+      // The contract has no field for this. A 5K and a half marathon on one
+      // morning go off separately, and the file is the only place that fits.
+      const document = withCategories([
+        { code: "FUN5K", startTime: "06:00", cutOff: "" },
+        { code: "R21K", startTime: "05:00", cutOff: "" },
+      ]);
+
+      expect(document.categories).toEqual([
+        { code: "FUN5K", start_time: new Date("2026-10-04T06:00").toISOString() },
+        { code: "R21K", start_time: new Date("2026-10-04T05:00").toISOString() },
+      ]);
+    });
+
+    it("places a cut off on the same day as its own distance", () => {
+      const document = withCategories([{ code: "R10K", startTime: "06:00", cutOff: "11:00" }]);
+
+      expect(document.categories[0].cut_off).toBe(new Date("2026-10-04T11:00").toISOString());
+    });
+
+    it("takes the race day cut off from the slowest distance", () => {
+      // The day is over for the event when it is over for its last finisher.
+      const document = withCategories([
+        { code: "FUN5K", startTime: "06:00", cutOff: "08:00" },
+        { code: "R21K", startTime: "05:00", cutOff: "12:00" },
+      ]);
       const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
 
-      expect(raceDay.cut_off).toBe(new Date("2026-10-04T11:00:00+07:00").toISOString());
+      expect(raceDay.cut_off).toBe(new Date("2026-10-04T12:00").toISOString());
     });
   });
 
   describe("edge", () => {
-    it("rolls over to the next day when the cut off is earlier than the start", () => {
-      // A race starting at 06:00 with a 02:00 cut off is not a race that ended
-      // four hours before it began. It is an overnight one.
-      const document = JSON.parse(buildEventDocument(draft({ cutOff: "02:00" })));
-      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+    it("rolls a cut off earlier than its start to the next day", () => {
+      // A distance starting at 22:00 and cutting off at 06:00 runs overnight;
+      // it did not end sixteen hours before it began.
+      const document = withCategories([{ code: "ULTRA", startTime: "22:00", cutOff: "06:00" }]);
 
-      expect(raceDay.cut_off).toBe(new Date("2026-10-05T02:00:00+07:00").toISOString());
+      expect(document.categories[0].cut_off).toBe(new Date("2026-10-05T06:00").toISOString());
     });
 
-    it("leaves the cut off out entirely when there is none", () => {
-      const document = JSON.parse(buildEventDocument(draft({ cutOff: "" })));
-      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+    it("keeps a distance that has no cut off", () => {
+      const document = withCategories([{ code: "R10K", startTime: "06:00", cutOff: "" }]);
 
+      expect(document.categories[0]).not.toHaveProperty("cut_off");
+      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
       expect(raceDay).not.toHaveProperty("cut_off");
     });
 
-    it("ignores a cut off that is not a time", () => {
-      const document = JSON.parse(buildEventDocument(draft({ cutOff: "later" })));
-      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+    it("leaves categories out entirely when there are none", () => {
+      const document = withCategories([]);
 
-      expect(raceDay).not.toHaveProperty("cut_off");
+      expect(document).not.toHaveProperty("categories");
+    });
+
+    it("ignores a distance with no code", () => {
+      const document = withCategories([{ code: "", startTime: "06:00", cutOff: "" }]);
+
+      expect(document).not.toHaveProperty("categories");
     });
   });
 });

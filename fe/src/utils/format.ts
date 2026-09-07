@@ -130,3 +130,16 @@ export function formatEventDateTimeLong(startsAt: bigint, timeZone?: string): st
     ...(timeZone ? { timeZone } : {}),
   }).format(date);
 }
+
+/** The same as formatEventDateTimeLong, for a field that has no time in it. */
+export function formatEventDayLong(startsAt: bigint, timeZone?: string): string {
+  const date = toDate(startsAt);
+  if (!date) return "Unknown date";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
