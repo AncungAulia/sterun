@@ -147,6 +147,34 @@ const recordDetailResponse = {
   },
 } as const;
 
+const scannerListResponse = {
+  200: {
+    type: "object",
+    additionalProperties: false,
+    required: ["scanners", "last_ledger"],
+    properties: {
+      scanners: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["address", "added_ledger"],
+          properties: {
+            address: { type: "string" },
+            added_ledger: { type: "integer" },
+          },
+        },
+      },
+      /**
+       * How far the whole index has caught up, not how far this event has.
+       * An empty list is a claim about what is NOT there, and the only honest
+       * measure of that claim's freshness is the ingestion cursor.
+       */
+      last_ledger: { type: "integer" },
+    },
+  },
+} as const;
+
 const indexerStatusResponse = {
   200: {
     type: "object",
@@ -177,6 +205,7 @@ const indexerStatusResponse = {
 export const RESPONSE_SCHEMAS = {
   eventListResponse,
   eventDetailResponse,
+  scannerListResponse,
   recordListResponse,
   recordDetailResponse,
   indexerStatusResponse,
@@ -284,6 +313,54 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
           price_stroops: c.priceStroops.toString(),
           entered_count: c.enteredCount,
         })),
+      };
+    },
+  );
+
+  /**
+   * The scanner allowlist of one event.
+   *
+   * STE-17. This endpoint exists because the contract cannot answer the
+   * question: EventRegistry has `is_scanner(event_id, addr)` and nothing that
+   * enumerates, on purpose, since a view returning an unbounded vector gets
+   * more expensive as an event grows. So the list is reconstructed here from
+   * the scanner_added / scanner_removed events the indexer already ingests.
+   *
+   * It is a fast path and says so. The organiser console uses it to know WHICH
+   * addresses to ask about, then confirms each one against the chain, because
+   * who may check a runner in is an authorization decision and those come from
+   * the authoritative copy (be/CLAUDE.md, and the same rule the results
+   * endpoint follows when it reads the organiser).
+   */
+  app.get(
+    "/events/:eventId/scanners",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["eventId"],
+          properties: { eventId: { type: "integer", minimum: 0 } },
+        },
+        response: scannerListResponse,
+      },
+    },
+    async (request: FastifyRequest<{ Params: { eventId: number } }>, reply: FastifyReply) => {
+      const event = await store.getEvent(pool, request.params.eventId);
+      if (!event) {
+        // Deliberately not an empty list. "No scanners" and "this event has
+        // not been indexed" are different answers, and only one of them is
+        // safe to act on.
+        return reply.code(404).send({
+          error: "not_indexed",
+          message: "no such event in the index; it may exist on-chain and not be indexed yet",
+        });
+      }
+
+      const scanners = await store.listScanners(pool, request.params.eventId);
+      const cursor = await store.getCursor(pool);
+      return {
+        scanners: scanners.map((s) => ({ address: s.address, added_ledger: s.addedLedger })),
+        last_ledger: cursor?.lastLedger ?? 0,
       };
     },
   );

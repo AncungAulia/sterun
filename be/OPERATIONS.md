@@ -293,6 +293,38 @@ Pencegahannya bukan runbook ini, melainkan cron mingguan yang tidak pernah dilew
 
 ---
 
+## Daftar scanner (ditambahkan STE-17, Ancung)
+
+`GET /events/:eventId/scanners` — dikonsumsi organiser console.
+
+**Kenapa endpoint ini ada, dan kenapa di sini:** kontraknya tidak bisa menjawabnya. EventRegistry
+punya `is_scanner(event_id, addr)` dan **tidak punya** cara meng-enumerasi — itu disengaja, karena
+view yang mengembalikan vector tak terbatas makin mahal seiring event membesar. Jadi satu-satunya
+tempat yang bisa menyusun daftarnya adalah index, yang memang sudah mencatat `scanner_added` /
+`scanner_removed` ke tabel `event_scanners`. Datanya sudah ada sejak STE-16; yang belum ada cuma
+pintu keluarnya.
+
+Tanpa auth: yang dikembalikan cuma address yang sudah publik di chain (event `scanner_added`
+terbaca siapa pun), jadi tidak ada yang bocor dengan membukanya.
+
+```jsonc
+{
+  "scanners": [{ "address": "GA…", "added_ledger": 4469750 }],
+  "last_ledger": 4469811   // sejauh mana index sudah mengejar, BUKAN sejauh mana event ini
+}
+```
+
+`last_ledger` sengaja diambil dari cursor ingestion, bukan dari baris event-nya: daftar kosong
+adalah klaim tentang apa yang **tidak** ada, dan ukuran kesegaran yang jujur untuk klaim seperti itu
+cuma seberapa jauh index sudah membaca.
+
+**Ini fast path, bukan otoritas.** Console memakainya untuk tahu address mana yang perlu ditanyakan,
+lalu mengonfirmasi tiap satu ke chain lewat `is_scanner`. Siapa yang boleh nge-scan itu keputusan
+otorisasi, dan keputusan otorisasi dibaca dari salinan yang otoritatif — aturan yang sama dipakai
+route hasil waktu membaca organiser.
+
+---
+
 ## Roster bundle (handoff contract #3)
 
 `GET /events/:eventId/roster` — dikonsumsi scanner PWA (STE-18, Ancung).

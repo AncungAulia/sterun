@@ -14,7 +14,7 @@ import { ChainReader } from "../src/chain/reader.js";
 import { loadConfig } from "../src/config.js";
 import { Indexer } from "../src/indexer/indexer.js";
 import { buildServer } from "../src/server.js";
-import { ADDRESSES, ORGANISER, RUNNER, RUNNER_B, STRANGER } from "./helpers/addresses.js";
+import { ADDRESSES, ORGANISER, RUNNER, RUNNER_B, SCANNER, STRANGER } from "./helpers/addresses.js";
 import { FakeChain } from "./helpers/fake-chain.js";
 import {
   FakeEventSource,
@@ -25,6 +25,8 @@ import {
   racepackClaimed,
   recordEntered,
   recordFinished,
+  scannerAdded,
+  scannerRemoved,
   slotReserved,
   toidCursor,
 } from "./helpers/fake-events.js";
@@ -79,6 +81,13 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       recordEntered({ ...raceRecord, ledger: 103 }, RUNNER_B, 0, 1, 2),
       racepackClaimed({ ...raceRecord, ledger: 120 }, 0, 0, ORGANISER),
       recordFinished({ ...raceRecord, ledger: 140 }, 0, 0, 3_600),
+      // Two volunteers allowlisted, one of them later taken off again. The
+      // second one is the interesting case: the row stays in the table with a
+      // removed_ledger, so "list the scanners" and "list the rows" are not the
+      // same query.
+      scannerAdded({ ...registry, ledger: 150 }, 0, SCANNER),
+      scannerAdded({ ...registry, ledger: 151 }, 0, STRANGER),
+      scannerRemoved({ ...registry, ledger: 152 }, 0, STRANGER),
     ];
     await new Indexer(pool, reader, new FakeEventSource([events]), ADDRESSES).pollOnce();
 
@@ -126,6 +135,69 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect((await app.inject({ url: "/events?limit=1000" })).statusCode).toBe(400);
       expect((await app.inject({ url: "/events?limit=0" })).statusCode).toBe(400);
       expect((await app.inject({ url: "/events?offset=-1" })).statusCode).toBe(400);
+    });
+  });
+
+  describe("GET /events/:eventId/scanners", () => {
+    /**
+     * This endpoint exists because the contract cannot answer the question.
+     * EventRegistry has `is_scanner(event_id, addr)` and no way to enumerate,
+     * so the only place a LIST can come from is the index, which reconstructs
+     * it from scanner_added / scanner_removed events. The organiser console
+     * (STE-17) then re-checks each address against the chain, which is
+     * authoritative; this is the fast path that tells it what to check.
+     */
+    it("lists the scanners still on the allowlist", async () => {
+      const body = (await app.inject({ url: "/events/0/scanners" })).json();
+
+      expect(body.scanners).toEqual([{ address: SCANNER, added_ledger: 150 }]);
+    });
+
+    it("leaves out a scanner that was removed", async () => {
+      const body = (await app.inject({ url: "/events/0/scanners" })).json();
+
+      expect(body.scanners.map((s: { address: string }) => s.address)).not.toContain(STRANGER);
+    });
+
+    it("says how fresh the answer is, in the same terms the indexer does", async () => {
+      // Asserted against /indexer/status rather than a literal, because the
+      // number is not "the last ledger that touched a scanner" — it is how far
+      // the index has READ. The two differ whenever nothing happened for a
+      // while, which is most of the time.
+      const status = (await app.inject({ url: "/indexer/status" })).json();
+      const body = (await app.inject({ url: "/events/0/scanners" })).json();
+
+      expect(body.last_ledger).toBe(status.last_ledger);
+    });
+
+    it("returns an empty list for an event nobody has been added to", async () => {
+      chain.addEvent({ eventId: 1, organiser: ORGANISER, name: "No Scanners" });
+      const reader = new ChainReader(chain, ADDRESSES);
+      await new Indexer(
+        pool,
+        reader,
+        new FakeEventSource([[eventCreated({ ...registry, ledger: 200 }, 1, ORGANISER)]]),
+        ADDRESSES,
+      ).pollOnce();
+
+      const res = await app.inject({ url: "/events/1/scanners" });
+      const status = (await app.inject({ url: "/indexer/status" })).json();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ scanners: [], last_ledger: status.last_ledger });
+    });
+
+    it("says not_indexed for an event the index has never seen", async () => {
+      // Not "no scanners". The index cannot tell an event it has not caught up
+      // to from one that does not exist, and must not answer as though it can.
+      const res = await app.inject({ url: "/events/99/scanners" });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error).toBe("not_indexed");
+    });
+
+    it("rejects an event id that is not a number", async () => {
+      expect((await app.inject({ url: "/events/banana/scanners" })).statusCode).toBe(400);
     });
   });
 
