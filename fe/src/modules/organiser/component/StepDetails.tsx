@@ -80,7 +80,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           value={details.name}
           onChange={(e) => set({ name: e.target.value })}
           placeholder="Jakarta Sunrise 10K"
-          hint="Stored on chain, and permanent. There is no way to rename an event."
+          hint="This cannot be changed later."
         />
         <DateTimeField
           id="starts-at"
@@ -88,7 +88,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           value={details.startsAtLocal}
           onChange={(startsAtLocal) => set({ startsAtLocal })}
           warnIfPast
-          hint="Read in your own timezone, stored on chain as a Unix timestamp."
+          hint="In your own timezone."
         />
         <Field
           id="location"
@@ -127,7 +127,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           value={details.posterUrl}
           onChange={(e) => set({ posterUrl: e.target.value })}
           placeholder="https://..."
-          hint="Hosted by you. There is no upload here, and the image itself is not covered by the hash."
+          hint="A link to an image you already host somewhere. There is no upload here yet."
         />
         <Field
           id="waiver"
@@ -141,8 +141,8 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
       <section className="flex flex-col gap-4">
         <h2 className="heading text-xl text-n-700">Schedule</h2>
         <p className="text-sm text-n-500">
-          Optional, and none of it is enforced by the contract. What actually opens and closes
-          entries is the event status, which you set by hand. These dates are information.
+          Optional. These dates tell runners what to expect. What actually opens and closes
+          entries is the switch at the end of this wizard, not anything written here.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <DateTimeField
@@ -189,7 +189,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             label="Cut off time"
             value={details.cutOff}
             onChange={(cutOff) => set({ cutOff })}
-            hint="The last moment a finish still counts. The contract does not enforce it: record_finish accepts whatever time you publish, so this is information for runners, not a rule."
+            hint="The last moment a finish still counts. This is for runners to read. It does not stop anyone finishing later, and it does not stop you publishing their result."
           />
         </div>
       </section>

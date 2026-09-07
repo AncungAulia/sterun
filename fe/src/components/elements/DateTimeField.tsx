@@ -4,70 +4,47 @@
  * A date and time, picked from a calendar or typed, with the result read back
  * in words.
  *
- * ## Why not the native input alone
+ * ## Why the confirmation line exists
  *
- * `datetime-local` is correct and ugly, and it shows `2026-10-04T06:00` back to
- * you, which is exactly the format a wrong month hides in. `starts_at` cannot
- * be changed after `create_event`, so the confirmation line under this field is
- * not decoration: it names the weekday, and a date entered one month off stops
- * looking plausible the moment it says the wrong day.
+ * A start time cannot be corrected once the event is created, and a date typed
+ * one month off still looks perfectly plausible as digits. It stops looking
+ * plausible the moment it names the wrong day of the week, which is why the
+ * line under the field spells the whole thing out.
  *
  * ## Why the text input stays
  *
  * The calendar is an assist, not the only way in. The input is a real labelled
  * text field, so it can be typed, pasted, tabbed to and read by a screen
- * reader, and the calendar is a button beside it. Replacing the field with a
- * grid of buttons is how date pickers become unusable by keyboard.
+ * reader. Replacing the field with a grid of buttons is how date pickers become
+ * unusable by keyboard.
  *
- * ## Why react-day-picker, and why none of its CSS
+ * ## Composition
  *
- * Keyboard navigation, focus management and the accessible names for a month
- * grid are a lot to get right, and getting them wrong is invisible until
- * somebody who needs them tries. The library brings that. Its stylesheet is not
- * imported: every class here comes from app/tokens.css, so the calendar cannot
- * quietly introduce a colour or a size that is not Nabil's.
+ * shadcn's Calendar (react-day-picker underneath) inside a Popover, which is
+ * the pattern their own date-and-time example uses. Keyboard navigation, focus
+ * handling, escape to close and the accessible name of every day come from
+ * those two, and every colour comes from tokens.css through the mapping in
+ * globals.css.
  */
 import { useState } from "react";
-import { DayPicker } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatEventDateTimeLong } from "@/utils/format";
 
 interface DateTimeFieldProps {
   id: string;
   label: string;
-  /** `YYYY-MM-DDTHH:mm`, the same shape `datetime-local` produces. */
+  /** `YYYY-MM-DDTHH:mm`. */
   value: string;
   onChange: (value: string) => void;
   hint?: string;
-  /** Warn when the moment is already gone. Used for the gun start. */
+  /** Warn when the moment is already gone. Used for the start time. */
   warnIfPast?: boolean;
 }
-
-const CALENDAR_CLASSES = {
-  root: "text-sm text-ink",
-  months: "flex flex-col",
-  month: "flex flex-col gap-2",
-  month_caption: "flex h-8 items-center justify-center",
-  caption_label: "heading-strong text-base text-n-700",
-  nav: "flex items-center justify-between",
-  button_previous: "h-8 rounded-md px-2 text-teal-500 hover:bg-teal-50",
-  button_next: "h-8 rounded-md px-2 text-teal-500 hover:bg-teal-50",
-  month_grid: "w-full border-collapse",
-  weekdays: "text-n-500",
-  weekday: "h-8 w-9 text-xs font-medium",
-  week: "",
-  day: "p-0 text-center",
-  day_button:
-    "numeric h-9 w-9 rounded-md hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-n-300",
-  today: "font-medium text-teal-600",
-  selected: "bg-teal-500 text-paper hover:bg-teal-600",
-  outside: "text-n-400",
-  disabled: "text-n-300",
-  hidden: "invisible",
-};
 
 export function DateTimeField({
   id,
@@ -86,11 +63,12 @@ export function DateTimeField({
    */
   const [mountedAt] = useState(() => Date.now());
   const [date, time] = splitValue(value);
+
   /**
    * The shape is checked before the value is parsed, because `new Date` is far
    * too forgiving: `new Date("2026-10")` is a perfectly good date in October,
    * so a half-typed value would render a confident confirmation line for a day
-   * the organiser never chose.
+   * nobody chose.
    */
   const complete = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
   const asDate = complete ? new Date(value) : null;
@@ -100,14 +78,14 @@ export function DateTimeField({
   function setDate(next: Date | undefined) {
     if (!next) return;
     // The time is kept. Picking a day should not silently reset an hour that
-    // was already chosen, and 00:00 for a race start would be a plausible
-    // wrong answer rather than an obvious one.
+    // was already chosen, and 00:00 would be a plausible wrong answer rather
+    // than an obvious one.
     onChange(`${toDateValue(next)}T${time || "06:00"}`);
     setOpen(false);
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -116,17 +94,24 @@ export function DateTimeField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="2026-10-04T06:00"
-          className="numeric w-52"
+          className="numeric w-48"
         />
-        <Button
-          type="button"
-          variant="secondary"
-          aria-expanded={open}
-          aria-controls={`${id}-calendar`}
-          onClick={() => setOpen((was) => !was)}
-        >
-          {open ? "Close calendar" : "Pick a date"}
-        </Button>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline">
+              Pick a date
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={valid ? (asDate ?? undefined) : undefined}
+              onSelect={setDate}
+              defaultMonth={valid ? (asDate ?? undefined) : undefined}
+              autoFocus
+            />
+          </PopoverContent>
+        </Popover>
         <Input
           aria-label={`${label} time`}
           type="time"
@@ -136,22 +121,6 @@ export function DateTimeField({
         />
       </div>
 
-      {open ? (
-        <div
-          id={`${id}-calendar`}
-          className="mt-2 w-fit rounded-lg border border-border bg-popover p-3 shadow-lifted"
-        >
-          <DayPicker
-            mode="single"
-            selected={valid ? (asDate ?? undefined) : undefined}
-            onSelect={setDate}
-            defaultMonth={valid ? (asDate ?? undefined) : undefined}
-            showOutsideDays
-            classNames={CALENDAR_CLASSES}
-          />
-        </div>
-      ) : null}
-
       {valid ? (
         <p className="text-sm text-muted-foreground">
           {formatEventDateTimeLong(BigInt(Math.floor(asDate.getTime() / 1000)))}
@@ -160,8 +129,8 @@ export function DateTimeField({
 
       {valid && isPast && warnIfPast ? (
         <p className="text-sm text-warning">
-          That is in the past. Nothing stops you, and the contract will store it, but a race that
-          already started reads as a mistake on the directory.
+          That is in the past. Nothing stops you, but a race that already started reads as a
+          mistake to anyone browsing.
         </p>
       ) : null}
 

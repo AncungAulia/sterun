@@ -31,8 +31,8 @@ export function WalletGate({ children }: { children: ReactNode }) {
       <div className="mx-auto w-full max-w-4xl px-4 py-16">
         <h1 className="heading-hero text-4xl text-ink">Organiser console</h1>
         <p className="mt-3 max-w-xl text-lg text-n-600">
-          Connect the wallet that will own your events. That address authorizes every action here,
-          and it is the only address that can change an event once it exists.
+          Connect the wallet you want to organise with. Everything you create here belongs to it,
+          and it is the only one that can change your events later.
         </p>
         <Button className="mt-6" onClick={() => void connect()} disabled={isConnecting}>
           {isConnecting ? "Connecting" : "Connect wallet"}

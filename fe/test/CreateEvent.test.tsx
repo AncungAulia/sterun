@@ -61,7 +61,7 @@ describe("CreateEvent", () => {
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
       await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
       await user.click(screen.getByRole("button", { name: /check the published file/i }));
-      await screen.findByText("Document verified");
+      await screen.findByText("Checked");
       await user.click(screen.getByRole("button", { name: "Continue" }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
@@ -81,14 +81,14 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
-      expect(await screen.findByText(/exists on chain/i)).toBeInTheDocument();
+      expect(await screen.findByText(/write that number down/i)).toBeInTheDocument();
 
       await user.type(screen.getByLabelText("Code"), "10K");
       await user.type(screen.getByLabelText("Distance in kilometres"), "10");
       await user.type(screen.getByLabelText("Places"), "300");
       await user.type(screen.getByLabelText("Entry fee in sUSD"), "25");
       await user.click(screen.getByRole("button", { name: "Add category" }));
-      await screen.findByText("On chain");
+      await screen.findByText("Added");
 
       await user.click(screen.getByRole("button", { name: "Continue" }));
       await user.click(screen.getByRole("button", { name: "Open for entries" }));
@@ -102,7 +102,7 @@ describe("CreateEvent", () => {
       await fillDetails(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/exists on chain/i);
+      await screen.findByText(/write that number down/i);
 
       await user.type(screen.getByLabelText("Code"), "FUN5K");
       await user.type(screen.getByLabelText("Distance in kilometres"), "5");
@@ -110,7 +110,7 @@ describe("CreateEvent", () => {
       await user.type(screen.getByLabelText("Entry fee in sUSD"), "15.5");
       await user.click(screen.getByRole("button", { name: "Add category" }));
 
-      await screen.findByText("On chain");
+      await screen.findByText("Added");
       expect(addCategory).toHaveBeenCalledWith(
         expect.objectContaining({ priceStroops: 155_000_000n, distanceM: 5_000 }),
         expect.anything(),
@@ -158,13 +158,13 @@ describe("CreateEvent", () => {
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
       await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
       await user.click(screen.getByRole("button", { name: /check the published file/i }));
-      await screen.findByText("Document verified");
+      await screen.findByText("Checked");
 
       await user.click(screen.getByRole("button", { name: "Back" }));
       await user.type(screen.getByLabelText("Location"), "Somewhere else");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
-      expect(screen.queryByText("Document verified")).not.toBeInTheDocument();
+      expect(screen.queryByText("Checked")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
     });
 
@@ -185,7 +185,7 @@ describe("CreateEvent", () => {
       await fillDetails(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/exists on chain/i);
+      await screen.findByText(/write that number down/i);
 
       expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
       expect(screen.getByText(/add at least one category/i)).toBeInTheDocument();
@@ -198,13 +198,13 @@ describe("CreateEvent", () => {
       await fillDetails(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/exists on chain/i);
+      await screen.findByText(/write that number down/i);
 
       await user.type(screen.getByLabelText("Code"), "10K");
       await user.type(screen.getByLabelText("Distance in kilometres"), "10");
       await user.type(screen.getByLabelText("Places"), "300");
       await user.click(screen.getByRole("button", { name: "Add category" }));
-      await screen.findByText("On chain");
+      await screen.findByText("Added");
 
       addCategory.mockRejectedValueOnce(new Error("user declined"));
       await user.type(screen.getByLabelText("Code"), "5K");
@@ -223,7 +223,7 @@ describe("CreateEvent", () => {
       await fillDetails(user);
       await user.click(screen.getByRole("button", { name: /create without a document/i }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/exists on chain/i);
+      await screen.findByText(/write that number down/i);
 
       await user.type(screen.getByLabelText("Code"), "10 K!");
       await user.type(screen.getByLabelText("Distance in kilometres"), "10");

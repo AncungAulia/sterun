@@ -148,8 +148,8 @@ function Wizard() {
         </Link>
         <h1 className="heading-hero mt-3 text-4xl text-ink">New event</h1>
         <p className="mt-2 max-w-2xl text-base text-n-600">
-          Four steps, and every one after the first is a transaction you sign. Nothing can be edited
-          or deleted afterwards, so the review comes before the signature.
+          Four steps, and you confirm each one in your wallet. Nothing here can be edited or
+          deleted afterwards, so the review comes first.
         </p>
       </header>
 
@@ -211,8 +211,8 @@ function Wizard() {
             </div>
             {!verified ? (
               <p className="mt-3 max-w-2xl text-sm text-n-500">
-                An event with no document still works. It just has no poster, no location and no
-                schedule on its page, and you cannot add one later.
+                An event with no details file still works. It just has no poster, no location and
+                no schedule on its page, and you cannot add one later.
               </p>
             ) : null}
           </>
@@ -228,11 +228,11 @@ function Wizard() {
               <dd className="numeric text-ink">
                 {startsAt === null ? "" : formatEventDateTime(startsAt)}
               </dd>
-              <dt className="text-n-500">Document</dt>
+              <dt className="text-n-500">Details file</dt>
               <dd className="numeric break-all text-ink">
                 {verified ? verified.uri : "None"}
               </dd>
-              <dt className="text-n-500">Hash</dt>
+              <dt className="text-n-500">Fingerprint</dt>
               <dd className="numeric break-all text-ink">
                 {verified ? verified.hash : "Not applicable"}
               </dd>
@@ -250,7 +250,7 @@ function Wizard() {
                 {createEvent.phase === "signing"
                   ? "Confirm in your wallet"
                   : createEvent.phase === "confirming"
-                    ? "Writing to the chain"
+                    ? "Creating"
                     : "Create event"}
               </Button>
             </div>
@@ -295,7 +295,7 @@ function Wizard() {
               <div className="rounded-lg border border-success-border bg-success-surface px-5 py-4">
                 <p className="heading-strong text-lg text-success">The event is open</p>
                 <p className="mt-1 text-base text-n-700">
-                  It is on the public directory now, read straight from the chain.
+                  It is on the public list of races now.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-4">
                   <Link
@@ -329,11 +329,11 @@ function Created({ eventId, txHash }: { eventId: number; txHash: string | null }
   return (
     <div className="rounded-lg border border-success-border bg-success-surface px-5 py-4">
       <p className="heading-strong text-base text-success">
-        Event <span className="numeric">{eventId}</span> exists on chain
+        Event <span className="numeric">{eventId}</span> created
       </p>
       <p className="mt-1 text-base text-n-700">
-        Write that number down. If this page is closed, the event is still there and the console can
-        pick it up again.
+        Write that number down. If you close this page the event is still there, and the console
+        can pick it up again.
       </p>
       {txHash ? (
         <div className="mt-2">
@@ -353,7 +353,7 @@ function TxLink({ txHash }: { txHash: string }) {
       rel="noreferrer"
       className="numeric text-base text-teal-500 underline underline-offset-4"
     >
-      View the transaction
+      View the receipt
     </a>
   );
 }

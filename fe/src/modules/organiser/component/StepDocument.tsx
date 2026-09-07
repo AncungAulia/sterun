@@ -73,11 +73,11 @@ export function StepDocument({ text, hash, published, onPublished }: StepDocumen
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="heading text-xl text-n-700">Publish the document</h2>
+        <h2 className="heading text-xl text-n-700">Publish the event details</h2>
         <p className="mt-2 max-w-2xl text-base text-n-600">
-          Save this file, put it somewhere public, then paste the URL back here. The hash of these
-          exact bytes goes on chain, so the file has to stay reachable and unchanged. A URL that
-          pins a version, like a commit on GitHub, is safer than one that always serves the latest.
+          Save this file, put it online somewhere, then paste the link back here. We record a
+          fingerprint of it, so the file has to stay where it is and stay exactly as it is. A link
+          that points at one fixed version is safer than one that always shows the latest.
         </p>
       </div>
 
@@ -85,7 +85,7 @@ export function StepDocument({ text, hash, published, onPublished }: StepDocumen
         <Button variant="secondary" onClick={download}>
           Download event.json
         </Button>
-        <span className="numeric text-sm text-n-500">sha256 {hash.slice(0, 16)}...</span>
+        <span className="numeric text-sm text-n-500">Fingerprint {hash.slice(0, 16)}...</span>
       </div>
 
       <pre className="numeric max-h-72 overflow-auto rounded-lg border border-n-200 bg-n-50 p-4 text-sm text-n-700">
@@ -99,29 +99,29 @@ export function StepDocument({ text, hash, published, onPublished }: StepDocumen
           value={uri}
           onChange={(e) => setUri(e.target.value)}
           placeholder="https://raw.githubusercontent.com/..."
-          hint="Fetched from your browser, so it has to allow cross origin reads."
+          hint="It has to be public. We read it straight from your browser."
         />
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => void verify()} disabled={!uri.trim() || check.kind === "checking"}>
             {check.kind === "checking" ? "Checking" : "Check the published file"}
           </Button>
-          {published ? <Badge variant="success">Document verified</Badge> : null}
+          {published ? <Badge variant="success">Checked</Badge> : null}
         </div>
       </div>
 
       {check.kind === "mismatch" ? (
         <div role="alert" className="rounded-lg border border-danger-border bg-danger-surface px-5 py-4">
           <p className="heading-strong text-base text-danger">
-            That URL serves different bytes to the file above
+            That link is showing a different file
           </p>
           <p className="mt-1 text-base text-n-700">
-            Publish the downloaded file exactly as it is. Editing it, even the whitespace, changes
-            the hash.
+            Publish the downloaded file exactly as it is. Even changing one space makes it a
+            different file.
           </p>
           <dl className="mt-3 grid gap-x-4 text-sm sm:grid-cols-[auto_1fr]">
             <dt className="text-n-500">Expected</dt>
             <dd className="numeric break-all text-n-700">{hash}</dd>
-            <dt className="text-n-500">Served</dt>
+            <dt className="text-n-500">Found</dt>
             <dd className="numeric break-all text-n-700">{check.served}</dd>
           </dl>
         </div>
@@ -129,11 +129,11 @@ export function StepDocument({ text, hash, published, onPublished }: StepDocumen
 
       {check.kind === "unreachable" ? (
         <div role="alert" className="rounded-lg border border-warning-border bg-warning-surface px-5 py-4">
-          <p className="heading-strong text-base text-warning">That URL could not be read</p>
+          <p className="heading-strong text-base text-warning">That link could not be read</p>
           <p className="mt-1 text-base text-n-700">{check.reason}</p>
           <p className="mt-1 text-base text-n-700">
-            A host that blocks cross origin reads will fail here and on the public event page too,
-            so it is worth fixing now rather than after the event exists.
+            If we cannot read it, neither can the people looking at your event page. Worth sorting
+            out now rather than after the event exists.
           </p>
         </div>
       ) : null}

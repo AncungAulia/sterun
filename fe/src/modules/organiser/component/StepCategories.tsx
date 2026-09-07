@@ -93,9 +93,8 @@ export function StepCategories({ eventId, added, onAdded }: StepCategoriesProps)
       <div>
         <h2 className="heading text-xl text-n-700">Categories</h2>
         <p className="mt-2 max-w-2xl text-base text-n-600">
-          Each one is its own transaction, so you will be asked to sign once per category. A
-          category cannot be edited or removed afterwards, and its quota is what the contract
-          enforces when people enter.
+          You will be asked to confirm each one in your wallet, one at a time. A category cannot
+          be changed or removed once it is added.
         </p>
       </div>
 
@@ -113,7 +112,7 @@ export function StepCategories({ eventId, added, onAdded }: StepCategoriesProps)
               <span className="numeric text-sm text-n-600">
                 {formatPrice(category.priceStroops)}
               </span>
-              <Badge variant="success">On chain</Badge>
+              <Badge variant="success">Added</Badge>
             </li>
           ))}
         </ul>
@@ -141,7 +140,7 @@ export function StepCategories({ eventId, added, onAdded }: StepCategoriesProps)
           value={quota}
           onChange={(e) => setQuota(e.target.value)}
           placeholder="300"
-          hint="Enforced on chain. Entry number 301 reverts."
+          hint="Entries stop on their own once this many people have joined."
         />
         <Field
           id="category-price"
@@ -168,7 +167,7 @@ export function StepCategories({ eventId, added, onAdded }: StepCategoriesProps)
           {addCategory.phase === "signing"
             ? "Confirm in your wallet"
             : addCategory.phase === "confirming"
-              ? "Adding to the chain"
+              ? "Adding"
               : "Add category"}
         </Button>
       </div>
