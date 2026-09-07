@@ -5,12 +5,14 @@
 Blok `@AGENTS.md` di atas ditulis ulang oleh `next dev` — biarkan, dan commit bersama kerjaanmu.
 Isi di bawah ini punya Sterun.
 
-Owner: **Ancung** (flow) + **Nabil** (design system). Komponen C9/C10/C11/C12. Tiket STE-17
-(organiser console), STE-18/21/22 (QR pass + scanner PWA), dst. **Belum ada kode Sterun di sini** —
-masih scaffold `create-next-app`.
+Owner: **Ancung** (flow) + **Nabil** (design system). Komponen C9/C10/C11/C12. Sudah ada:
+**STE-8** (shell + wallet connect) dan **STE-13** (directory `/` + detail `/events/[id]`).
+Berikutnya STE-17 (organiser console), lalu STE-21/22 (QR pass + scanner PWA), STE-24 (profile).
 
 Stack terpasang: **Next.js 16.3.3**, React 19.2.8, Tailwind v4 (`@tailwindcss/postcss`),
-TypeScript 5, ESLint 9.
+TypeScript 5 (`target: ES2022` — harga kontrak `i128` datang sebagai `bigint`, dan literal
+`bigint` tidak lolos typecheck di bawah ES2020), ESLint 9, **`@tanstack/react-query`** untuk cache
+baca chain, `zustand` untuk state wallet.
 
 **Tidak ada lockfile di `fe/`.** Folder ini anggota pnpm workspace (`pnpm-workspace.yaml` di root),
 jadi yang berlaku cuma `pnpm-lock.yaml` di root — itu juga yang dipasang CI dengan
@@ -42,19 +44,48 @@ dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-gener
 | `docs/specs/INTERFACE.md` | signature fungsi + kode error |
 | `sc/bindings/README.md` | cara memakai client TS hasil generate |
 
-## Kontrak: pakai bindings yang sudah di-generate
+## Kontrak: lewat `@sterun/sdk`, bukan bindings mentah
 
 ```json
-{
-  "dependencies": {
-    "event-registry": "file:../sc/bindings/event-registry",
-    "race-record": "file:../sc/bindings/race-record"
-  }
-}
+{ "dependencies": { "@sterun/sdk": "workspace:*" } }
 ```
+
+Catatan ini dulu menyuruh memakai `file:../sc/bindings/*`; itu ditulis waktu SDK belum ada.
+Sekarang `@sterun/sdk` (STE-15/STE-19) sudah jadi dan sudah diuji ke testnet live, dan
+`fe/guides/ARCHITECTURE.md` §2 menetapkan SDK sebagai **satu-satunya** jalan bicara ke kontrak.
+`workspace:*` karena paketnya belum di-publish ke npm.
+
+**SDK harus di-build dulu** sebelum `fe` bisa typecheck/test/build: `pnpm --filter @sterun/sdk
+build` (menghasilkan `sdk/dist/`). `pnpm -r build` dari root sudah urut topologis, jadi ini cuma
+menggigit kalau kamu menjalankan `fe` sendirian di clone baru.
 
 Jangan mengetik ulang signature kontrak, dan jangan mengedit apa pun di `sc/bindings/*/` — itu
 output generator, edit tangan hilang tanpa jejak pada regenerate berikutnya.
+
+### Baca chain (yang sudah ada dari STE-13)
+
+- `src/lib/sterun.ts` — `readClient`, **read-only**. Semua view SDK itu simulasi, jadi halaman
+  publik jalan tanpa wallet. Ada test yang gagal kalau file ini mengimpor wallet.
+- `src/lib/events.ts` — `listEvents` / `getEventSummary`. Registry tidak punya "list events"
+  (view yang mengembalikan vector tak terbatas akan mati sendiri begitu protokolnya laku), jadi
+  daftar disusun dari `event_count` + `get_event` per id, paralel.
+- `src/lib/metadata.ts` — unduh dokumen di `uri`, hitung sha256 byte-nya, bandingkan dengan
+  `metadata_hash`. **Konvensi: `metadata_hash` = sha256 byte persis yang disajikan**, tanpa
+  kanonikalisasi. STE-17 menulis dokumennya dengan aturan yang sama.
+- `src/hooks/useEvents.ts` + `useEventMetadata.ts` — React Query di atas keduanya.
+
+## Test
+
+```bash
+pnpm --filter fe test                      # unit + komponen, tanpa network
+STERUN_E2E=1 pnpm --filter fe test test/e2e  # e2e ke testnet live, manual
+```
+
+E2E-nya opt-in supaya `typescript.yml` tetap tidak menyentuh network. File e2e jalan di environment
+**node**, bukan jsdom: jsdom memasang `Uint8Array` realm-nya sendiri sebagai global, sehingga
+`Buffer` bikinan stellar-sdk gagal `instanceof Uint8Array` di encoder XDR dan tiap call mati dengan
+`functionName: expected Uint8Array` sebelum menyentuh jaringan. Di browser tidak terjadi (stellar-sdk
+membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
 
 ## Yang bikin salah di sisi frontend
 

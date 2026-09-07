@@ -116,6 +116,16 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # fe/ imports @sterun/sdk, whose package.json points `types` and `exports`
+      # at dist/ — which is generated and gitignored. Without this step every
+      # fe file that touches the SDK fails typecheck with TS2307 "cannot find
+      # module @sterun/sdk", which reads like a missing dependency and is
+      # really a missing build. `pnpm build` further down would produce it, but
+      # it runs after Typecheck, and reordering the whole workflow to fix one
+      # package's input is a bigger change than saying what fe needs.
+      - name: Build @sterun/sdk (fe typechecks against its dist)
+        run: pnpm --filter @sterun/sdk build
+
       - name: Lint
         run: pnpm lint
 

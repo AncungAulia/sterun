@@ -1296,3 +1296,57 @@ CORS-nya **allow-list**, bukan `*` — request ter-autentikasi membawa signature
 Origin yang sudah diizinkan: `https://sterun.jameshub.fun` dan `http://localhost:3000` (untuk dev).
 Tambah origin baru = tambahkan ke `STERUN_WEB_ORIGIN` di `be/.env.production`, dipisah koma.
 
+
+---
+
+## STE-13 — event demo di testnet, dokumennya benar-benar ada
+
+Empat event yang lebih dulu ada di registry semuanya menunjuk `uri` ke `https://sterun.xyz/...`
+yang tidak menyajikan file apa pun, jadi satu-satunya keadaan halaman event yang pernah terlihat
+adalah **"the event document could not be read"**. Event ini dibuat supaya jalur satunya —
+dokumen yang lolos pengecekan hash — bisa dilihat orang, termasuk reviewer grant.
+
+| Apa | Nilai |
+| --- | --- |
+| `event_id` | **4** |
+| Nama | `Sterun Demo Run 2026` |
+| Organiser | `GBQBCEJTUNDAVJ2NQE43AZ7FUBO3OOYJXSYM6RY4WSCXCS3BPZNNO2OR` |
+| `starts_at` | `1791068400` (2026-10-04 06:00 +07:00) |
+| Status | `Open` |
+| `metadata_hash` | `bca56c511de5c61fa5744488a3a6b95a900ba465b040e4cfb9ac6f7a290b96ad` |
+| `uri` | https://raw.githubusercontent.com/AncungAulia/sterun/9505ed0478e04c864be085dc096146504436e2a2/docs/events/sterun-demo-run-2026.json |
+
+Transaksi (testnet, 2026-09-07):
+
+| Langkah | Hash |
+| --- | --- |
+| `create_event` | [`bc40f345…`](https://stellar.expert/explorer/testnet/tx/bc40f3455a66b1973689211ba9ca39e9b07295ebc792ac1de51ae5882af5b87f) |
+| `add_category` FUN5K (5 km, kuota 100, gratis) | [`30d47abc…`](https://stellar.expert/explorer/testnet/tx/30d47abcd1ad4ab7b77e756a51a175ddbe15508a87517ca9acc3c1445afb7eca) |
+| `add_category` R10K (10 km, kuota 50, 25 sUSD) | [`9719ff5d…`](https://stellar.expert/explorer/testnet/tx/9719ff5dc556db5f6be93d40e14b065fc96c278e87594ff39921563bc2084b7f) |
+| `set_event_status` → `Open` | [`bf5ead6d…`](https://stellar.expert/explorer/testnet/tx/bf5ead6d76b22e8cb30843314eee257d912e0f8f7b995ac24a44481d29fb1143) |
+
+### Cara mengeceknya sendiri, tanpa app-nya
+
+```bash
+curl -s https://raw.githubusercontent.com/AncungAulia/sterun/9505ed0478e04c864be085dc096146504436e2a2/docs/events/sterun-demo-run-2026.json | sha256sum
+# bca56c511de5c61fa5744488a3a6b95a900ba465b040e4cfb9ac6f7a290b96ad
+```
+
+Angka itu sama dengan `metadata_hash` yang tersimpan di `EventRegistry` untuk `event_id` 4. Itulah
+seluruh klaimnya: poster, lokasi, dan jadwal event ini tidak bisa diganti diam-diam setelah orang
+mendaftar.
+
+### Kenapa `uri`-nya menunjuk commit SHA, bukan `main`
+
+Event **beku** (`WEB_APP_IA.md` §2.2) dan `metadata_hash` tidak bisa diubah. URL yang isinya bisa
+berubah — mis. `.../main/docs/...` — berarti suatu hari file-nya di-edit, hash-nya berhenti cocok,
+dan **tidak ada cara memperbaikinya**. Commit SHA itu immutable, jadi dokumen ini akan menyajikan
+byte yang sama selama repo-nya publik. `poster_url` di dalam dokumen dipin dengan aturan yang sama.
+
+Batasnya, dan ini disengaja dicatat: `metadata_hash` mengunci **dokumen JSON-nya**, bukan gambarnya.
+Yang ter-hash cuma URL poster, bukan isi poster. Menutup celah itu butuh field `poster_sha256` di
+dokumen dan pengecekan di sisi halaman — belum dikerjakan, kandidat untuk STE-17.
+
+> Kunci rahasia organiser event ini **tidak** disimpan di repo. Ia hanya ada di log sesi
+> pembuatannya. Kalau event ini perlu diubah (mis. `set_event_status`), dan kuncinya sudah hilang,
+> event-nya tidak bisa disentuh siapa pun — termasuk kita. Itu memang bagaimana kontraknya bekerja.
