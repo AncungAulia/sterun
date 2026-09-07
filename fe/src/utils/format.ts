@@ -106,3 +106,27 @@ export function parseStroops(input: string): bigint {
 
   return BigInt(whole) * STROOPS_PER_UNIT + BigInt(fraction.padEnd(7, "0") || "0");
 }
+
+/**
+ * The same instant, spelled out, for confirming what somebody just typed.
+ *
+ * The weekday is the point. A date entered one month off still looks perfectly
+ * plausible as digits, and stops looking plausible the moment it says the wrong
+ * day of the week. `starts_at` cannot be corrected after create_event, so this
+ * is the last chance anybody gets to notice.
+ */
+export function formatEventDateTimeLong(startsAt: bigint, timeZone?: string): string {
+  const date = toDate(startsAt);
+  if (!date) return "Unknown date";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}

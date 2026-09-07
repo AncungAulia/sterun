@@ -7,6 +7,7 @@
  * are not: once `create_event` lands, the name, the start time and the document
  * hash are permanent, so this is the last place any of it can be corrected.
  */
+import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
 import { parseCoordinates } from "@/utils/geo";
 
@@ -81,12 +82,12 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           placeholder="Jakarta Sunrise 10K"
           hint="Stored on chain, and permanent. There is no way to rename an event."
         />
-        <Field
+        <DateTimeField
           id="starts-at"
           label="Gun start"
-          type="datetime-local"
           value={details.startsAtLocal}
-          onChange={(e) => set({ startsAtLocal: e.target.value })}
+          onChange={(startsAtLocal) => set({ startsAtLocal })}
+          warnIfPast
           hint="Read in your own timezone, stored on chain as a Unix timestamp."
         />
         <Field
@@ -144,33 +145,29 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           entries is the event status, which you set by hand. These dates are information.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field
+          <DateTimeField
             id="reg-opens"
             label="Registration opens"
-            type="datetime-local"
             value={details.registrationOpens}
-            onChange={(e) => set({ registrationOpens: e.target.value })}
+            onChange={(registrationOpens) => set({ registrationOpens })}
           />
-          <Field
+          <DateTimeField
             id="reg-closes"
             label="Registration closes"
-            type="datetime-local"
             value={details.registrationCloses}
-            onChange={(e) => set({ registrationCloses: e.target.value })}
+            onChange={(registrationCloses) => set({ registrationCloses })}
           />
-          <Field
+          <DateTimeField
             id="pack-starts"
             label="Race pack collection opens"
-            type="datetime-local"
             value={details.racepackStarts}
-            onChange={(e) => set({ racepackStarts: e.target.value })}
+            onChange={(racepackStarts) => set({ racepackStarts })}
           />
-          <Field
+          <DateTimeField
             id="pack-ends"
             label="Race pack collection closes"
-            type="datetime-local"
             value={details.racepackEnds}
-            onChange={(e) => set({ racepackEnds: e.target.value })}
+            onChange={(racepackEnds) => set({ racepackEnds })}
           />
           <Field
             id="pack-venue"
@@ -187,12 +184,11 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             placeholder="https://www.google.com/maps/@..."
             hint={<PinHint link={details.racepackVenueLink} missing="No pin found in that link yet." />}
           />
-          <Field
+          <DateTimeField
             id="cut-off"
             label="Cut off time"
-            type="datetime-local"
             value={details.cutOff}
-            onChange={(e) => set({ cutOff: e.target.value })}
+            onChange={(cutOff) => set({ cutOff })}
             hint="The last moment a finish still counts. The contract does not enforce it: record_finish accepts whatever time you publish, so this is information for runners, not a rule."
           />
         </div>

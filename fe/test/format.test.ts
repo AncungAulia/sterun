@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatEventDate,
   formatEventDateTime,
+  formatEventDateTimeLong,
   formatPrice,
   parseStroops,
   shortAddress,
@@ -170,6 +171,24 @@ describe("parseStroops", () => {
       expect(() => parseStroops("ten")).toThrow();
       expect(() => parseStroops("1,5")).toThrow();
       expect(() => parseStroops("-5")).toThrow();
+    });
+  });
+});
+
+describe("formatEventDateTimeLong", () => {
+  describe("positive", () => {
+    it("names the weekday, because that is what a wrong month looks like", () => {
+      // A date typed one month off still looks plausible as digits. It stops
+      // looking plausible the moment it says the wrong day of the week.
+      expect(formatEventDateTimeLong(GUN_START, "Asia/Jakarta")).toBe(
+        "Monday, September 28, 2026 at 05:30 GMT+7",
+      );
+    });
+  });
+
+  describe("edge", () => {
+    it("does not crash on a timestamp outside the range a Date can hold", () => {
+      expect(formatEventDateTimeLong(99_999_999_999_999n, "UTC")).toBe("Unknown date");
     });
   });
 });
