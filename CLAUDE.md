@@ -52,7 +52,7 @@ Versi `@stellar/stellar-sdk` dipaksa satu (`^17.0.1`) lewat `pnpm.overrides` di 
 root: generator bindings menuliskan `^14.5.0`, dan dua copy SDK dalam satu graph berarti dua RPC
 client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 
-## Status sekarang (per 2026-09-05)
+## Status sekarang (per 2026-09-07)
 
 | Tiket | Komponen | Status |
 | --- | --- | --- |
@@ -69,6 +69,8 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-19 | JSON Schema v1.0 + packaging (C6) | kode selesai, 134 test — **`npm publish` menunggu kredensial npm** |
 | STE-20 | results CSV + API hardening (C7/j6) | selesai, backend 586 test + e2e testnet live |
 | STE-31 | deploy backend ke VPS | **SELESAI** — live di `https://api-sterun.jameshub.fun` (jameserver / pve02 / ct-sterun), Cloudflare Tunnel, verifikasi 14/14 |
+| STE-8 | web app shell + wallet connect (C9) | selesai |
+| STE-13 | directory + detail event dari chain (C9) | selesai, fe 161 test + e2e testnet live |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):
@@ -87,6 +89,13 @@ Seluruh rantai publish sudah diverifikasi tanpa registry: `npm pack` menghasilka
 dipasang di project TypeScript kosong di luar repo, typecheck bersih, quickstart jalan ke testnet
 live, dan dokumen hasilnya valid terhadap RaceRecord JSON Schema v1.0. Yang tersisa cuma
 meng-upload-nya.
+
+**M3 (D3 — web + scanner + landing) jalan.** Web app-nya hidup: `/` dan `/events/[id]` membaca
+EventRegistry langsung lewat RPC, tanpa database dan tanpa wallet. Event `event_id` 4
+(`Sterun Demo Run 2026`) dibuat di STE-13 sebagai bukti yang bisa diklik: dokumen metadata-nya
+benar-benar disajikan dan lolos pengecekan `metadata_hash`, jadi keadaan "Document verified" bisa
+dilihat, bukan cuma diceritakan. Sisanya: STE-17 console → STE-21 entry+pass → STE-22 scanner →
+STE-24 profile → STE-32 deploy Vercel.
 
 Backend sudah bisa dijalankan: API (`pnpm dev`), poller (`pnpm indexer follow`), dan TTL keeper
 (`pnpm keeper run`) — tiga proses dari satu paket `be/`. Rangkaian penuhnya sudah dijalankan
