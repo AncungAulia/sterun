@@ -78,12 +78,25 @@ async function readEvent(
   client: EventReader,
   eventId: number,
 ): Promise<{ eventId: number; summary: EventSummary | null }> {
-  let event: SterunEvent;
   try {
-    event = await client.getEvent(eventId);
+    return { eventId, summary: await getEventSummary(client, eventId) };
   } catch {
     return { eventId, summary: null };
   }
+}
+
+/**
+ * One event and its categories, for the event page.
+ *
+ * Throws when the event itself cannot be read, because that page has nothing
+ * left to draw and should say so. Categories are treated the same way as in the
+ * directory: their absence costs the entry options, not the race.
+ */
+export async function getEventSummary(
+  client: EventReader,
+  eventId: number,
+): Promise<EventSummary> {
+  const event = await client.getEvent(eventId);
 
   let categories: SterunCategory[] = [];
   try {
@@ -92,7 +105,7 @@ async function readEvent(
     categories = [];
   }
 
-  return { eventId, summary: { event, categories } };
+  return { event, categories };
 }
 
 /**

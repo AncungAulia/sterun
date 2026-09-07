@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { listEvents, sortEvents, type EventSummary } from "@/lib/events";
+import { getEventSummary, listEvents, sortEvents, type EventSummary } from "@/lib/events";
 import type { SterunCategory, SterunEvent } from "@sterun/sdk";
 
 const ORGANISER = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
@@ -193,6 +193,37 @@ describe("sortEvents", () => {
       sortEvents(input, NOW_S);
 
       expect(input.map((e) => e.event.eventId)).toEqual([0, 1]);
+    });
+  });
+});
+
+describe("getEventSummary", () => {
+  describe("positive", () => {
+    it("returns the event with its categories", async () => {
+      const client = reader([event(7)], { 7: [category(7, 0), category(7, 1)] });
+
+      const summary = await getEventSummary(client, 7);
+
+      expect(summary.event.eventId).toBe(7);
+      expect(summary.categories.map((c) => c.categoryId)).toEqual([0, 1]);
+    });
+  });
+
+  describe("negative", () => {
+    it("throws for an event that does not exist, so the page can say so", async () => {
+      const client = reader([event(0)]);
+
+      await expect(getEventSummary(client, 99)).rejects.toThrow();
+    });
+
+    it("still returns the event when its categories cannot be read", async () => {
+      const client = reader([event(0)]);
+      client.listCategories.mockRejectedValueOnce(new Error("entry archived"));
+
+      const summary = await getEventSummary(client, 0);
+
+      expect(summary.event.eventId).toBe(0);
+      expect(summary.categories).toEqual([]);
     });
   });
 });
