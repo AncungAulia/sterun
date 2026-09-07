@@ -23,6 +23,7 @@
  * event page will refuse to show it from then on (WEB_APP_IA.md §2.2). The
  * wizard therefore shows the finished document before anything is signed.
  */
+import { parseCoordinates } from "@/utils/geo";
 
 /** Everything the wizard collects for the document. Empty string means absent. */
 export interface EventDocumentDraft {
@@ -30,6 +31,11 @@ export interface EventDocumentDraft {
   startsAt: bigint;
   description: string;
   locationName: string;
+  /**
+   * A Google Maps URL as pasted. The pin is extracted from it; the URL itself
+   * is not stored, because a link goes stale and two numbers do not.
+   */
+  locationLink: string;
   posterUrl: string;
   waiverUrl: string;
   /** ISO 8601 strings, or empty. */
@@ -38,6 +44,7 @@ export interface EventDocumentDraft {
   racepackStarts: string;
   racepackEnds: string;
   racepackVenue: string;
+  racepackVenueLink: string;
   cutOff: string;
 }
 
@@ -46,6 +53,8 @@ interface Phase {
   starts_at?: string;
   ends_at?: string;
   venue?: string;
+  venue_lat?: number;
+  venue_lng?: number;
   gun_start?: string;
   cut_off?: string;
 }
@@ -84,6 +93,11 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
       ends_at: draft.racepackEnds,
     };
     if (draft.racepackVenue) racepack.venue = draft.racepackVenue;
+    const venuePin = parseCoordinates(draft.racepackVenueLink);
+    if (venuePin) {
+      racepack.venue_lat = venuePin.lat;
+      racepack.venue_lng = venuePin.lng;
+    }
     schedule.push(racepack);
   }
   schedule.push(raceDay);
@@ -93,7 +107,15 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
   // is a broken link that reads as an oversight forever.
   const document: Record<string, unknown> = {};
   if (draft.posterUrl) document.poster_url = draft.posterUrl;
-  if (draft.locationName) document.location = { name: draft.locationName };
+  if (draft.locationName) {
+    // The pin is optional even when the name is not. A link with no
+    // coordinates in it (a shortened maps URL, say) loses the map, and losing
+    // the place name over that would be the worse trade.
+    const pin = parseCoordinates(draft.locationLink);
+    document.location = pin
+      ? { name: draft.locationName, lat: pin.lat, lng: pin.lng }
+      : { name: draft.locationName };
+  }
   document.schedule = schedule;
   if (draft.description) document.description = draft.description;
   if (draft.waiverUrl) document.waiver_url = draft.waiverUrl;

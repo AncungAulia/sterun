@@ -13,6 +13,7 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     startsAt: STARTS_AT,
     description: "A road race around the stadium.",
     locationName: "Gelora Bung Karno, Jakarta",
+    locationLink: "https://www.google.com/maps/@-6.2185,106.8026,17z",
     posterUrl: "https://cdn.example.test/poster.png",
     waiverUrl: "",
     registrationOpens: "",
@@ -20,6 +21,7 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     racepackStarts: "",
     racepackEnds: "",
     racepackVenue: "",
+    racepackVenueLink: "",
     cutOff: "",
     ...overrides,
   };
@@ -43,6 +45,42 @@ describe("buildEventDocument", () => {
       expect(document.description).toBe("A road race around the stadium.");
       expect(document.location.name).toBe("Gelora Bung Karno, Jakarta");
       expect(document.poster_url).toBe("https://cdn.example.test/poster.png");
+    });
+
+    it("puts the pin from a pasted maps link into the document", () => {
+      const document = JSON.parse(buildEventDocument(draft()));
+
+      expect(document.location).toEqual({
+        name: "Gelora Bung Karno, Jakarta",
+        lat: -6.2185,
+        lng: 106.8026,
+      });
+    });
+
+    it("keeps the location name when the link has no pin in it", () => {
+      // A shortened maps link carries no coordinates, and losing the name over
+      // that would be a worse trade than showing a place with no map.
+      const document = JSON.parse(
+        buildEventDocument(draft({ locationLink: "https://maps.app.goo.gl/abc" })),
+      );
+
+      expect(document.location).toEqual({ name: "Gelora Bung Karno, Jakarta" });
+    });
+
+    it("pins the race pack venue the same way", () => {
+      const document = JSON.parse(
+        buildEventDocument(
+          draft({
+            racepackStarts: "2026-10-03T02:00:00Z",
+            racepackEnds: "2026-10-03T10:00:00Z",
+            racepackVenue: "Hall A",
+            racepackVenueLink: "https://www.google.com/maps/@-6.2000,106.8000,17z",
+          }),
+        ),
+      );
+      const racepack = document.schedule.find((p: { phase: string }) => p.phase === "racepack");
+
+      expect(racepack).toMatchObject({ venue: "Hall A", venue_lat: -6.2, venue_lng: 106.8 });
     });
 
     it("is byte-stable, so the same draft hashes to the same value twice", () => {
@@ -75,6 +113,7 @@ describe("buildEventDocument", () => {
           startsAt: STARTS_AT,
           description: "",
           locationName: "",
+          locationLink: "",
           posterUrl: "",
           waiverUrl: "",
           registrationOpens: "",
@@ -82,6 +121,7 @@ describe("buildEventDocument", () => {
           racepackStarts: "",
           racepackEnds: "",
           racepackVenue: "",
+          racepackVenueLink: "",
           cutOff: "",
         }),
       );

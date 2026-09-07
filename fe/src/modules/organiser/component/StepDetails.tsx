@@ -8,6 +8,23 @@
  * hash are permanent, so this is the last place any of it can be corrected.
  */
 import { Field, TextAreaField } from "@/components/elements/Field";
+import { parseCoordinates } from "@/utils/geo";
+
+/**
+ * Says whether a pasted link actually yielded a pin, while it is being pasted.
+ * The alternative is discovering it on the published event page, where the
+ * document is already frozen.
+ */
+function PinHint({ link, missing }: { link: string; missing: string }) {
+  if (!link.trim()) return <>Optional. Paste a link and the coordinates are read out of it.</>;
+  const pin = parseCoordinates(link);
+  if (!pin) return <span className="text-warning">{missing}</span>;
+  return (
+    <span className="numeric">
+      Pin found: {pin.lat}, {pin.lng}
+    </span>
+  );
+}
 
 export interface EventDetails {
   name: string;
@@ -15,6 +32,7 @@ export interface EventDetails {
   startsAtLocal: string;
   description: string;
   locationName: string;
+  locationLink: string;
   posterUrl: string;
   waiverUrl: string;
   registrationOpens: string;
@@ -22,6 +40,7 @@ export interface EventDetails {
   racepackStarts: string;
   racepackEnds: string;
   racepackVenue: string;
+  racepackVenueLink: string;
   cutOff: string;
 }
 
@@ -30,6 +49,7 @@ export const EMPTY_DETAILS: EventDetails = {
   startsAtLocal: "",
   description: "",
   locationName: "",
+  locationLink: "",
   posterUrl: "",
   waiverUrl: "",
   registrationOpens: "",
@@ -37,6 +57,7 @@ export const EMPTY_DETAILS: EventDetails = {
   racepackStarts: "",
   racepackEnds: "",
   racepackVenue: "",
+  racepackVenueLink: "",
   cutOff: "",
 };
 
@@ -74,6 +95,19 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           value={details.locationName}
           onChange={(e) => set({ locationName: e.target.value })}
           placeholder="Gelora Bung Karno, Jakarta"
+        />
+        <Field
+          id="location-link"
+          label="Google Maps link"
+          value={details.locationLink}
+          onChange={(e) => set({ locationLink: e.target.value })}
+          placeholder="https://www.google.com/maps/@-6.2185,106.8026,17z"
+          hint={
+            <PinHint
+              link={details.locationLink}
+              missing="Paste the long link from the address bar. A shortened one (maps.app.goo.gl) carries no coordinates."
+            />
+          }
         />
         <TextAreaField
           id="description"
@@ -146,11 +180,20 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             placeholder="Hall A"
           />
           <Field
+            id="pack-venue-link"
+            label="Race pack venue on Google Maps"
+            value={details.racepackVenueLink}
+            onChange={(e) => set({ racepackVenueLink: e.target.value })}
+            placeholder="https://www.google.com/maps/@..."
+            hint={<PinHint link={details.racepackVenueLink} missing="No pin found in that link yet." />}
+          />
+          <Field
             id="cut-off"
-            label="Cut off"
+            label="Cut off time"
             type="datetime-local"
             value={details.cutOff}
             onChange={(e) => set({ cutOff: e.target.value })}
+            hint="The last moment a finish still counts. The contract does not enforce it: record_finish accepts whatever time you publish, so this is information for runners, not a rule."
           />
         </div>
       </section>

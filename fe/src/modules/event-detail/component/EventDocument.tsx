@@ -19,6 +19,7 @@ import Image from "next/image";
 
 import { Badge } from "@/components/elements/Badge";
 import { gunStartConflict, type MetadataResult } from "@/lib/metadata";
+import { mapsLink } from "@/utils/geo";
 import { formatEventDateTime } from "@/utils/format";
 
 interface EventDocumentProps {
@@ -98,7 +99,22 @@ export function EventDocument({ result, isPending, startsAt }: EventDocumentProp
       ) : null}
 
       {document.location?.name ? (
-        <p className="text-base text-n-600">{document.location.name}</p>
+        <p className="text-base text-n-600">
+          {document.location.name}
+          {typeof document.location.lat === "number" && typeof document.location.lng === "number" ? (
+            <>
+              {" "}
+              <a
+                href={mapsLink({ lat: document.location.lat, lng: document.location.lng })}
+                target="_blank"
+                rel="noreferrer"
+                className="text-teal-500 underline underline-offset-4"
+              >
+                Open in Maps
+              </a>
+            </>
+          ) : null}
+        </p>
       ) : null}
 
       {conflict && document.gunStart ? (

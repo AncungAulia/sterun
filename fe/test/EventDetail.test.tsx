@@ -123,6 +123,32 @@ describe("EventDetail", () => {
       expect(links[1]).toHaveAttribute("href", "/events/2/enter?category=1");
     });
 
+    it("links the location to a map when the document carries a pin", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { location: { name: "Gelora Bung Karno", lat: -6.2185, lng: 106.8026 } },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      const link = await screen.findByRole("link", { name: /open in maps/i });
+      expect(link).toHaveAttribute("href", "https://www.google.com/maps?q=-6.2185,106.8026");
+    });
+
+    it("shows a location with no pin as plain text", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { location: { name: "Somewhere" } },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      expect(await screen.findByText(/somewhere/i)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /open in maps/i })).not.toBeInTheDocument();
+    });
+
     it("shows the verified document once it checks out", async () => {
       getEventSummary.mockResolvedValue(summary());
       fetchEventMetadata.mockResolvedValue({

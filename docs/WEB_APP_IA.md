@@ -324,6 +324,19 @@ jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_ev
 }
 ```
 
+- **Koordinat masuk lewat link Google Maps yang ditempel, bukan lewat dropdown negara/provinsi/kota.**
+  Console mengekstrak `lat`/`lng` dari URL-nya (`@-6.2185,106.8026` atau `?q=`) — tanpa API, tanpa
+  key, tanpa rate limit. Cascade tiga dropdown tidak menjawab pertanyaan siapa pun (yang orang mau
+  itu **pin yang bisa dibuka**), dan geocoding API (Nominatim gratis dan tanpa key) menambah
+  dependency jaringan plus kewajiban atribusi ke sebuah field form. Link pendek
+  (`maps.app.goo.gl`) tidak membawa koordinat sampai diikuti, dan mengikutinya dari browser
+  diblokir cross-origin — console bilang begitu apa adanya waktu ditempel, bukan setelah event beku.
+  Yang disimpan **dua angkanya**, bukan URL-nya: link bisa basi, koordinat tidak.
+- Fase `racepack` boleh membawa `venue_lat` / `venue_lng` dengan aturan yang sama. `venue` tetap
+  string supaya pembaca STE-13 tidak berubah artinya.
+- **`cut_off` itu waktu**, batas terakhir sebuah finish masih dihitung — dan **kontrak tidak
+  menegakkannya sama sekali**. `record_finish` menerima waktu apa pun yang panitia kirim. Halaman
+  dan form wajib menyebutnya sebagai informasi, bukan aturan.
 - **`metadata_hash` = sha256 dari byte persis yang disajikan di `uri`.** Tanpa kanonikalisasi,
   tanpa aturan urutan key, tanpa re-serialisasi. Siapa pun bisa mengeceknya dengan `curl` +
   `sha256sum`, dan tidak ada "bentuk kanonik" yang bisa dibaca beda oleh dua implementasi.
