@@ -41,12 +41,14 @@ function renderWizard() {
 
 /** Fill the two required fields and move on to the document step. */
 async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jakarta Sunrise 10K") {
-  await user.type(screen.getByLabelText("Event name"), name);
-  // The date comes from the calendar now, the way an organiser sets it. The
-  // clock is frozen in beforeEach so the calendar always opens on the month
-  // this click expects.
-  await user.click(screen.getByRole("button", { name: "Start date" }));
-  await user.click(screen.getByRole("button", { name: /September 28th, 2026/ }));
+  await user.type(screen.getByLabelText(/Event name/), name);
+  // Dates come from the calendar now, the way an organiser sets them. The clock
+  // is frozen in beforeEach so the calendar always opens on the month these
+  // clicks expect.
+  for (const field of ["Start date", "Registration opens date", "Registration closes date"]) {
+    await user.click(screen.getByRole("button", { name: field }));
+    await user.click(screen.getByRole("button", { name: /September 28th, 2026/ }));
+  }
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
@@ -132,7 +134,7 @@ describe("CreateEvent", () => {
       renderWizard();
 
       expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
-      expect(screen.queryByLabelText("Event name")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Event name/)).not.toBeInTheDocument();
     });
 
     it("will not move on without a name and a start time", async () => {
@@ -140,7 +142,7 @@ describe("CreateEvent", () => {
 
       expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 
-      await user.type(screen.getByLabelText("Event name"), "Only a name");
+      await user.type(screen.getByLabelText(/Event name/), "Only a name");
       expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
     });
 
@@ -168,7 +170,7 @@ describe("CreateEvent", () => {
       await screen.findByText("Checked");
 
       await user.click(screen.getByRole("button", { name: "Back" }));
-      await user.type(screen.getByLabelText("Location"), "Somewhere else");
+      await user.type(screen.getByLabelText(/^Location$/), "Somewhere else");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
       expect(screen.queryByText("Checked")).not.toBeInTheDocument();

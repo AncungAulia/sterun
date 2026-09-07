@@ -23,6 +23,7 @@
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
+import { RequiredMark } from "@/components/elements/Field";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ interface DateTimeFieldProps {
   value: string;
   onChange: (value: string) => void;
   hint?: string;
+  required?: boolean;
   /** Warn when the moment is already gone. Used for the start time. */
   warnIfPast?: boolean;
 }
@@ -48,6 +50,7 @@ export function DateTimeField({
   value,
   onChange,
   hint,
+  required = false,
   warnIfPast = false,
 }: DateTimeFieldProps) {
   const [open, setOpen] = useState(false);
@@ -83,7 +86,10 @@ export function DateTimeField({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-medium text-foreground">{label}</legend>
+      <legend className="mb-2 text-sm font-medium text-foreground">
+        {label}
+        {required ? <RequiredMark /> : null}
+      </legend>
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-2">

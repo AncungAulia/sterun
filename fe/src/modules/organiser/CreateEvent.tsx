@@ -22,7 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { Stepper } from "@/components/elements/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
@@ -44,16 +44,14 @@ import { StepDocument, type PublishedDocument } from "./component/StepDocument";
  */
 const NO_DOCUMENT_HASH = "0".repeat(64);
 
-const STEPS = ["details", "document", "create", "categories", "open"] as const;
-type Step = (typeof STEPS)[number];
-
-const STEP_LABELS: Record<Step, string> = {
-  details: "Details",
-  document: "Document",
-  create: "Create",
-  categories: "Categories",
-  open: "Open",
-};
+const STEPS = [
+  { id: "details", label: "Details" },
+  { id: "document", label: "Details file" },
+  { id: "create", label: "Create" },
+  { id: "categories", label: "Categories" },
+  { id: "open", label: "Open" },
+] as const;
+type Step = (typeof STEPS)[number]["id"];
 
 export function CreateEvent() {
   return (
@@ -77,7 +75,14 @@ function Wizard() {
   const setStatus = useSetEventStatus();
 
   const startsAt = useMemo(() => toUnixSeconds(details.startsAtLocal), [details.startsAtLocal]);
-  const detailsComplete = details.name.trim().length > 0 && startsAt !== null;
+  const detailsComplete =
+    details.name.trim().length > 0 &&
+    startsAt !== null &&
+    // Both ends of the registration window. A race that never says when entries
+    // open is a race nobody can plan around, and the file is frozen once the
+    // event exists, so "add it later" is not available.
+    details.registrationOpens.length > 0 &&
+    details.registrationCloses.length > 0;
 
   // Derived, not stored. The text on screen is always the text its hash covers,
   // with no effect in between that could leave the two out of step for a render.
@@ -153,16 +158,7 @@ function Wizard() {
         </p>
       </header>
 
-      <ol className="flex flex-wrap gap-2">
-        {STEPS.map((name, index) => (
-          <li key={name}>
-            <Badge variant={name === step ? "accent" : "secondary"}>
-              <span className="numeric mr-2">{index + 1}</span>
-              {STEP_LABELS[name]}
-            </Badge>
-          </li>
-        ))}
-      </ol>
+      <Stepper steps={STEPS} current={step} />
 
       <Card className="px-6">
         {step === "details" ? (
@@ -173,7 +169,9 @@ function Wizard() {
                 Continue
               </Button>
               {!detailsComplete ? (
-                <p className="text-sm text-n-500">A name and a gun start are required.</p>
+                <p className="text-sm text-muted-foreground">
+                  A name, a start, and both ends of the registration window are required.
+                </p>
               ) : null}
             </div>
           </>

@@ -23,13 +23,32 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: ReactNode;
 }
 
-export function Field({ id, label, hint, ...props }: FieldProps) {
+export function Field({ id, label, hint, required, ...props }: FieldProps) {
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} {...props} />
+      <Label htmlFor={id}>
+        {label}
+        {required ? <RequiredMark /> : null}
+      </Label>
+      <Input id={id} required={required} {...props} />
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
+  );
+}
+
+/**
+ * The star is decoration; the word next to it is the part that works. A screen
+ * reader saying "asterisk" tells nobody anything, and `required` on the input
+ * alone is silent until somebody tries to submit.
+ */
+export function RequiredMark() {
+  return (
+    <>
+      <span aria-hidden="true" className="ml-1 text-danger">
+        *
+      </span>
+      <span className="sr-only">required</span>
+    </>
   );
 }
 
