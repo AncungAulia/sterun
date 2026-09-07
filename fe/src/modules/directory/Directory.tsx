@@ -34,7 +34,7 @@ export function Directory() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-12">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
           <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Races</h1>
           <p className="mt-3 text-lg text-n-600">

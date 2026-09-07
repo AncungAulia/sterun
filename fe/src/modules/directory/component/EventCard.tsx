@@ -48,7 +48,9 @@ export function EventCard({ summary }: { summary: EventSummary }) {
 
         {openForEntry && categories.length > 0 ? (
           <p className="numeric mt-4 text-sm text-n-600">
-            {slotsLeft > 0 ? `${slotsLeft} places left` : "Every category is full"}
+            {slotsLeft > 0
+              ? `${slotsLeft} ${slotsLeft === 1 ? "place" : "places"} left`
+              : "Every category is full"}
           </p>
         ) : null}
       </Link>

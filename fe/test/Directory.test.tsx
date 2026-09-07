@@ -118,6 +118,30 @@ describe("Directory", () => {
       expect(screen.getByText("5K")).toBeInTheDocument();
     });
 
+    it("counts the places left across an event's categories", async () => {
+      listEvents.mockResolvedValue({
+        events: [summary(0, {}, [category(0), category(1, { quota: 50, enteredCount: 20 })])],
+        unreadable: [],
+      });
+
+      renderDirectory();
+
+      expect(await screen.findByText("150 places left")).toBeInTheDocument();
+    });
+
+    it("says one place, not one places", async () => {
+      // Seen on the live testnet directory: the rehearsal event has exactly one
+      // slot left, and the card read "1 places left".
+      listEvents.mockResolvedValue({
+        events: [summary(0, {}, [category(0, { quota: 5, enteredCount: 4 })])],
+        unreadable: [],
+      });
+
+      renderDirectory();
+
+      expect(await screen.findByText("1 place left")).toBeInTheDocument();
+    });
+
     it("shows the status of every event", async () => {
       listEvents.mockResolvedValue({
         events: [summary(0, { status: "Open" }), summary(1, { status: "Completed" })],
