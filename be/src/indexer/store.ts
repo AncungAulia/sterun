@@ -587,6 +587,46 @@ export async function listCategories(db: Queryable, eventId: number): Promise<Ca
   }));
 }
 
+/** One address still on an event's scanner allowlist. */
+export interface ScannerRow {
+  eventId: number;
+  address: string;
+  addedLedger: number;
+}
+
+/**
+ * The scanners an event currently allows.
+ *
+ * `removed_ledger IS NULL` rather than deleting the row: the table is the
+ * replay of scanner_added / scanner_removed events, and a removal is a fact
+ * worth keeping. It also makes a re-add cheap, since addScanner clears the
+ * column rather than inserting a second row.
+ *
+ * This is the only place a *list* of scanners can come from. EventRegistry
+ * exposes `is_scanner(event_id, addr)` and nothing that enumerates, so a caller
+ * that needs the set has to reconstruct it from events. Callers who need to act
+ * on the answer should still check each address against the chain: this is an
+ * index, and an index can lag.
+ */
+export async function listScanners(db: Queryable, eventId: number): Promise<ScannerRow[]> {
+  const { rows } = await db.query<{
+    event_id: number;
+    scanner_address: string;
+    added_ledger: number;
+  }>(
+    `SELECT event_id, scanner_address, added_ledger
+       FROM event_scanners
+      WHERE event_id = $1 AND removed_ledger IS NULL
+      ORDER BY added_ledger, scanner_address`,
+    [eventId],
+  );
+  return rows.map((r) => ({
+    eventId: r.event_id,
+    address: r.scanner_address,
+    addedLedger: r.added_ledger,
+  }));
+}
+
 export async function getRecord(db: Queryable, tokenId: number): Promise<RecordRow | null> {
   const { rows } = await db.query<RawRecordRow>(
     `SELECT ${RECORD_COLUMNS} FROM records WHERE token_id = $1`,
