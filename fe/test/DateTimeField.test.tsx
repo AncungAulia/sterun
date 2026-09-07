@@ -12,7 +12,7 @@ function Harness({ initial = "", warnIfPast = false }: { initial?: string; warnI
     <>
       <DateTimeField
         id="starts-at"
-        label="Gun start"
+        label="Start"
         value={value}
         onChange={setValue}
         warnIfPast={warnIfPast}
@@ -22,36 +22,40 @@ function Harness({ initial = "", warnIfPast = false }: { initial?: string; warnI
   );
 }
 
+const openCalendar = (user: ReturnType<typeof userEvent.setup>) =>
+  user.click(screen.getByRole("button", { name: "Start date" }));
+
 describe("DateTimeField", () => {
   describe("positive", () => {
-    it("can still be typed into, calendar or not", async () => {
-      // The calendar is an assist. A date field that can only be clicked is a
-      // date field somebody on a keyboard cannot fill in.
-      const user = userEvent.setup();
+    it("shows the chosen date on the trigger rather than a raw value", () => {
+      render(<Harness initial="2026-10-04T06:00" />);
+
+      expect(screen.getByRole("button", { name: "Start date" })).toHaveTextContent("Oct 4, 2026");
+    });
+
+    it("says Select date when there is nothing chosen yet", () => {
       render(<Harness />);
 
-      await user.type(screen.getByLabelText("Gun start"), "2026-10-04T06:00");
-
-      expect(screen.getByTestId("value")).toHaveTextContent("2026-10-04T06:00");
+      expect(screen.getByRole("button", { name: "Start date" })).toHaveTextContent("Select date");
     });
 
-    it("reads the moment back with its weekday", async () => {
-      // A month typed wrong still looks plausible as digits. It stops looking
-      // plausible when it names the wrong day of the week, and starts_at cannot
-      // be corrected after create_event.
-      render(<Harness initial="2026-10-04T06:00" />);
-
-      expect(screen.getByText(/Sunday, October 4, 2026 at 06:00/)).toBeInTheDocument();
-    });
-
-    it("opens a calendar and takes the day that was clicked", async () => {
+    it("takes the day that was clicked in the calendar", async () => {
       const user = userEvent.setup();
       render(<Harness initial="2026-10-04T06:00" />);
 
-      await user.click(screen.getByRole("button", { name: "Pick a date" }));
+      await openCalendar(user);
       await user.click(screen.getByRole("button", { name: "Thursday, October 15th, 2026" }));
 
       expect(screen.getByTestId("value")).toHaveTextContent("2026-10-15T06:00");
+    });
+
+    it("reads the moment back with its weekday", () => {
+      // A month entered wrong still looks plausible as digits. It stops looking
+      // plausible when it names the wrong day of the week, and the start time
+      // cannot be corrected after the event is created.
+      render(<Harness initial="2026-10-04T06:00" />);
+
+      expect(screen.getByText(/Sunday, October 4, 2026 at 06:00/)).toBeInTheDocument();
     });
 
     it("keeps the time when the day changes", async () => {
@@ -60,7 +64,7 @@ describe("DateTimeField", () => {
       const user = userEvent.setup();
       render(<Harness initial="2026-10-04T05:30" />);
 
-      await user.click(screen.getByRole("button", { name: "Pick a date" }));
+      await openCalendar(user);
       await user.click(screen.getByRole("button", { name: "Tuesday, October 20th, 2026" }));
 
       expect(screen.getByTestId("value")).toHaveTextContent("2026-10-20T05:30");
@@ -70,8 +74,8 @@ describe("DateTimeField", () => {
       const user = userEvent.setup();
       render(<Harness initial="2026-10-04T06:00" />);
 
-      await user.clear(screen.getByLabelText("Gun start time"));
-      await user.type(screen.getByLabelText("Gun start time"), "07:45");
+      await user.clear(screen.getByLabelText("Start time"));
+      await user.type(screen.getByLabelText("Start time"), "07:45");
 
       expect(screen.getByTestId("value")).toHaveTextContent("2026-10-04T07:45");
     });
@@ -80,10 +84,9 @@ describe("DateTimeField", () => {
       const user = userEvent.setup();
       render(<Harness initial="2026-10-04T06:00" />);
 
-      await user.click(screen.getByRole("button", { name: "Pick a date" }));
+      await openCalendar(user);
       await user.click(screen.getByRole("button", { name: "Thursday, October 15th, 2026" }));
 
-      expect(screen.getByRole("button", { name: "Pick a date" })).toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "Thursday, October 15th, 2026" }),
       ).not.toBeInTheDocument();
@@ -95,7 +98,7 @@ describe("DateTimeField", () => {
       const user = userEvent.setup();
       render(<Harness initial="2026-10-04T06:00" />);
 
-      await user.click(screen.getByRole("button", { name: "Pick a date" }));
+      await openCalendar(user);
 
       expect(
         screen.getByRole("button", { name: "Sunday, October 4th, 2026, selected" }),
@@ -107,16 +110,25 @@ describe("DateTimeField", () => {
     it("says nothing at all while it is empty", () => {
       render(<Harness />);
 
-      expect(screen.queryByText(/at \d\d:\d\d/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ at \d\d:\d\d/)).not.toBeInTheDocument();
     });
 
-    it("says nothing for a half-typed value rather than guessing", async () => {
+    it("picking a day before a time gives the race a sensible hour", async () => {
+      // Not midnight. A start time of 00:00 is a plausible wrong answer, and
+      // this field is the last place a wrong one gets caught.
+      //
+      // The clock is frozen because an empty field opens the calendar on the
+      // current month, and a test that clicks "October 15th" would start
+      // failing in November.
+      vi.setSystemTime(new Date("2026-10-01T00:00:00Z"));
       const user = userEvent.setup();
       render(<Harness />);
 
-      await user.type(screen.getByLabelText("Gun start"), "2026-10");
+      await openCalendar(user);
+      await user.click(screen.getByRole("button", { name: /October 15th, 2026/ }));
 
-      expect(screen.queryByText(/ at \d\d:\d\d/)).not.toBeInTheDocument();
+      expect(screen.getByTestId("value")).toHaveTextContent("T06:00");
+      vi.useRealTimers();
     });
 
     it("warns when the moment has already passed", () => {

@@ -1,31 +1,26 @@
 "use client";
 
 /**
- * A date and time, picked from a calendar or typed, with the result read back
- * in words.
+ * A date and a time, side by side, in shadcn's own date-and-time shape: the
+ * date is a button that opens a calendar, the time is a plain time input.
  *
- * ## Why the confirmation line exists
+ * ## Why there is no text field to type into
  *
- * A start time cannot be corrected once the event is created, and a date typed
- * one month off still looks perfectly plausible as digits. It stops looking
- * plausible the moment it names the wrong day of the week, which is why the
- * line under the field spells the whole thing out.
+ * There used to be one, on the grounds that a picker you can only click is
+ * unusable by keyboard. That reasoning does not apply here: the calendar is
+ * Radix and react-day-picker, so the trigger is reachable by tab, the popover
+ * takes focus, arrow keys move by day and week, and every day announces its
+ * full date. Keeping a second way in was costing a `2026-10-04T06:00` box on
+ * screen that nobody wants to look at.
  *
- * ## Why the text input stays
+ * ## Why the sentence underneath stays
  *
- * The calendar is an assist, not the only way in. The input is a real labelled
- * text field, so it can be typed, pasted, tabbed to and read by a screen
- * reader. Replacing the field with a grid of buttons is how date pickers become
- * unusable by keyboard.
- *
- * ## Composition
- *
- * shadcn's Calendar (react-day-picker underneath) inside a Popover, which is
- * the pattern their own date-and-time example uses. Keyboard navigation, focus
- * handling, escape to close and the accessible name of every day come from
- * those two, and every colour comes from tokens.css through the mapping in
- * globals.css.
+ * A start time cannot be corrected once the event exists, and a date entered
+ * one month off still looks plausible as digits. It stops looking plausible the
+ * moment it names the wrong day of the week. That line is the last chance
+ * anybody gets to notice, so it costs one line and keeps it.
  */
+import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -33,10 +28,11 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatEventDateTimeLong } from "@/utils/format";
+import { formatEventDate, formatEventDateTimeLong } from "@/utils/format";
 
 interface DateTimeFieldProps {
   id: string;
+  /** Names the pair. The two controls are labelled "<label> date" and "<label> time". */
   label: string;
   /** `YYYY-MM-DDTHH:mm`. */
   value: string;
@@ -58,22 +54,23 @@ export function DateTimeField({
   /**
    * Read once, when the field mounts. `Date.now()` in the render body is an
    * impure call, and the difference it would make is nothing: this only decides
-   * whether a date somebody is typing has already gone, and a "now" that is a
-   * few minutes stale answers that identically.
+   * whether a date already went by, and a "now" that is a few minutes stale
+   * answers that identically.
    */
   const [mountedAt] = useState(() => Date.now());
   const [date, time] = splitValue(value);
 
   /**
    * The shape is checked before the value is parsed, because `new Date` is far
-   * too forgiving: `new Date("2026-10")` is a perfectly good date in October,
-   * so a half-typed value would render a confident confirmation line for a day
-   * nobody chose.
+   * too forgiving: `new Date("2026-10")` is a perfectly good date in October.
    */
   const complete = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
   const asDate = complete ? new Date(value) : null;
   const valid = asDate !== null && !Number.isNaN(asDate.getTime());
   const isPast = valid && asDate.getTime() < mountedAt;
+
+  const chosen = date ? new Date(`${date}T00:00`) : null;
+  const chosenValid = chosen !== null && !Number.isNaN(chosen.getTime());
 
   function setDate(next: Date | undefined) {
     if (!next) return;
@@ -85,45 +82,57 @@ export function DateTimeField({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-2 text-sm font-medium text-foreground">{label}</legend>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="2026-10-04T06:00"
-          className="numeric w-48"
-        />
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button type="button" variant="outline">
-              Pick a date
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={valid ? (asDate ?? undefined) : undefined}
-              onSelect={setDate}
-              defaultMonth={valid ? (asDate ?? undefined) : undefined}
-              autoFocus
-            />
-          </PopoverContent>
-        </Popover>
-        <Input
-          aria-label={`${label} time`}
-          type="time"
-          value={time}
-          onChange={(e) => onChange(`${date || toDateValue(new Date())}T${e.target.value}`)}
-          className="numeric w-32"
-        />
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={`${id}-date`} className="text-muted-foreground">
+            Date
+          </Label>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                id={`${id}-date`}
+                type="button"
+                variant="outline"
+                aria-label={`${label} date`}
+                className="w-44 justify-between font-normal"
+              >
+                {chosenValid ? formatEventDate(toUnix(chosen)) : "Select date"}
+                <ChevronDownIcon />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={chosenValid ? chosen : undefined}
+                onSelect={setDate}
+                defaultMonth={chosenValid ? chosen : undefined}
+                autoFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={`${id}-time`} className="text-muted-foreground">
+            Time
+          </Label>
+          <Input
+            id={`${id}-time`}
+            aria-label={`${label} time`}
+            type="time"
+            value={time}
+            onChange={(e) => onChange(`${date || toDateValue(new Date())}T${e.target.value}`)}
+            className="numeric w-32"
+          />
+        </div>
       </div>
 
       {valid ? (
         <p className="text-sm text-muted-foreground">
-          {formatEventDateTimeLong(BigInt(Math.floor(asDate.getTime() / 1000)))}
+          {formatEventDateTimeLong(toUnix(asDate))}
         </p>
       ) : null}
 
@@ -135,13 +144,17 @@ export function DateTimeField({
       ) : null}
 
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
-    </div>
+    </fieldset>
   );
 }
 
 function splitValue(value: string): [string, string] {
   const [date = "", time = ""] = value.split("T");
   return [date, time.slice(0, 5)];
+}
+
+function toUnix(date: Date): bigint {
+  return BigInt(Math.floor(date.getTime() / 1000));
 }
 
 /** Local calendar date as `YYYY-MM-DD`, never through toISOString (that is UTC). */

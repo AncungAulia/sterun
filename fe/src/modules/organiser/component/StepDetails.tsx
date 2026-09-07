@@ -84,7 +84,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
         />
         <DateTimeField
           id="starts-at"
-          label="Gun start"
+          label="Start"
           value={details.startsAtLocal}
           onChange={(startsAtLocal) => set({ startsAtLocal })}
           warnIfPast

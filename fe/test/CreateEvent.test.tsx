@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreateEvent } from "@/modules/organiser/CreateEvent";
 import { useWallet } from "@/hooks/useWallet";
@@ -42,15 +42,22 @@ function renderWizard() {
 /** Fill the two required fields and move on to the document step. */
 async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jakarta Sunrise 10K") {
   await user.type(screen.getByLabelText("Event name"), name);
-  await user.type(screen.getByLabelText("Gun start"), "2026-10-04T06:00");
+  // The date comes from the calendar now, the way an organiser sets it. The
+  // clock is frozen in beforeEach so the calendar always opens on the month
+  // this click expects.
+  await user.click(screen.getByRole("button", { name: "Start date" }));
+  await user.click(screen.getByRole("button", { name: /September 28th, 2026/ }));
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
 beforeEach(() => {
+  vi.setSystemTime(new Date("2026-09-07T00:00:00Z"));
   vi.clearAllMocks();
   fetchEventMetadata.mockResolvedValue({ status: "unavailable", reason: "not reachable" });
   useWallet.setState({ address: ORGANISER, isRestoring: false, isConnecting: false, error: null });
 });
+
+afterEach(() => vi.useRealTimers());
 
 describe("CreateEvent", () => {
   describe("positive", () => {
