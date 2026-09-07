@@ -149,6 +149,15 @@ membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
 - **Semua teks UI Bahasa Inggris.** Label tombol, judul, pesan error, empty state, placeholder —
   semuanya. Dokumen `.md` tetap Bahasa Indonesia, komentar kode tetap Inggris; aturan ini menambah
   satu hal saja, yaitu teks yang tampil di layar.
+- **Teks UI menyebut akibatnya, bukan mekanismenya.** Panitia lomba tidak perlu tahu kata "chain",
+  "kontrak", "hash", "transaksi", atau "revert" — mereka perlu tahu apa konsekuensinya buat mereka.
+  "Enforced on chain, entry number 301 reverts" jadi "Entries stop on their own once this many
+  people have joined". Yang **tidak** boleh dilunakkan: peringatan yang ada ongkosnya (nama tidak
+  bisa diganti, kategori tidak bisa dihapus, file detail tidak bisa ditambahkan belakangan) — itu
+  tetap disebut apa adanya.
+  Pengecualian yang disengaja: **halaman event publik** tetap menyebut hash dan chain, karena
+  kalimat "dokumen ini cocok dengan hash di chain" itu justru klaim yang jadi alasan produk ini ada,
+  dan pembacanya memang orang yang sedang mengecek.
 - **Jangan pernah memakai em dash (`—`) atau en dash (`–`) di teks UI.** Pecah jadi dua kalimat,
   pakai koma, atau tanda kurung. Kalau benar-benar perlu pemisah, pakai tanda hubung biasa.
   Larangan ini khusus teks UI; komentar kode dan `.md` tidak terpengaruh.
