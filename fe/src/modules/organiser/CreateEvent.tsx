@@ -98,7 +98,7 @@ function Wizard() {
             racepackEnds: toIso(details.racepackEnds),
             racepackVenue: details.racepackVenue,
             racepackVenueLink: details.racepackVenueLink,
-            cutOff: toIso(details.cutOff),
+            cutOff: details.cutOff,
           }),
     [details, startsAt],
   );

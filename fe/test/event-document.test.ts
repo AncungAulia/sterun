@@ -152,6 +152,44 @@ describe("buildEventDocument", () => {
   });
 });
 
+describe("cut off", () => {
+  describe("positive", () => {
+    it("takes the day from the start, because a cut off is the same race day", () => {
+      // Start 06:00, cut off 11:00. Asking for the date twice is asking the
+      // same question twice.
+      const document = JSON.parse(buildEventDocument(draft({ cutOff: "11:00" })));
+      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+
+      expect(raceDay.cut_off).toBe(new Date("2026-10-04T11:00:00+07:00").toISOString());
+    });
+  });
+
+  describe("edge", () => {
+    it("rolls over to the next day when the cut off is earlier than the start", () => {
+      // A race starting at 06:00 with a 02:00 cut off is not a race that ended
+      // four hours before it began. It is an overnight one.
+      const document = JSON.parse(buildEventDocument(draft({ cutOff: "02:00" })));
+      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+
+      expect(raceDay.cut_off).toBe(new Date("2026-10-05T02:00:00+07:00").toISOString());
+    });
+
+    it("leaves the cut off out entirely when there is none", () => {
+      const document = JSON.parse(buildEventDocument(draft({ cutOff: "" })));
+      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+
+      expect(raceDay).not.toHaveProperty("cut_off");
+    });
+
+    it("ignores a cut off that is not a time", () => {
+      const document = JSON.parse(buildEventDocument(draft({ cutOff: "later" })));
+      const raceDay = document.schedule.find((p: { phase: string }) => p.phase === "race_day");
+
+      expect(raceDay).not.toHaveProperty("cut_off");
+    });
+  });
+});
+
 describe("documentHash", () => {
   it("is the sha256 of the exact bytes, which is what the chain commits to", async () => {
     const text = buildEventDocument(draft());

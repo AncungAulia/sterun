@@ -9,6 +9,8 @@
  */
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { parseCoordinates } from "@/utils/geo";
 
 /**
@@ -42,6 +44,7 @@ export interface EventDetails {
   racepackEnds: string;
   racepackVenue: string;
   racepackVenueLink: string;
+  /** `HH:mm`. The day comes from the start, so it is not asked for twice. */
   cutOff: string;
 }
 
@@ -184,13 +187,19 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             placeholder="https://www.google.com/maps/@..."
             hint={<PinHint link={details.racepackVenueLink} missing="No pin found in that link yet." />}
           />
-          <DateTimeField
-            id="cut-off"
-            label="Cut off time"
-            value={details.cutOff}
-            onChange={(cutOff) => set({ cutOff })}
-            hint="The last moment a finish still counts. This is for runners to read. It does not stop anyone finishing later, and it does not stop you publishing their result."
-          />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="cut-off">Cut off</Label>
+            <Input
+              id="cut-off"
+              type="time"
+              value={details.cutOff}
+              onChange={(e) => set({ cutOff: e.target.value })}
+              className="numeric w-32"
+            />
+            <p className="text-sm text-muted-foreground">
+              The last moment a finish counts, on the race day.
+            </p>
+          </div>
         </div>
       </section>
     </div>

@@ -45,6 +45,10 @@ export interface EventDocumentDraft {
   racepackEnds: string;
   racepackVenue: string;
   racepackVenueLink: string;
+  /**
+   * `HH:mm`, not a full date. A cut off is a time on the race day, and asking
+   * for the day again would be asking the same question twice.
+   */
   cutOff: string;
 }
 
@@ -74,7 +78,8 @@ interface Phase {
  */
 export function buildEventDocument(draft: EventDocumentDraft): string {
   const raceDay: Phase = { phase: "race_day", gun_start: toIso(draft.startsAt) };
-  if (draft.cutOff) raceDay.cut_off = draft.cutOff;
+  const cutOff = cutOffInstant(draft.startsAt, draft.cutOff);
+  if (cutOff) raceDay.cut_off = cutOff;
 
   const schedule: Phase[] = [];
   // Both ends or neither: a window with one side missing says less than no
@@ -131,4 +136,25 @@ export async function documentHash(text: string): Promise<string> {
 
 function toIso(unixSeconds: bigint): string {
   return new Date(Number(unixSeconds) * 1000).toISOString();
+}
+
+/**
+ * A cut off time, placed on the right day.
+ *
+ * The organiser gives an hour, not a date, because a cut off belongs to the
+ * race day by definition. Almost always that is the start's own day. When the
+ * hour is earlier than the start, the only reading that makes sense is the
+ * following day: a race starting at 22:00 with a 06:00 cut off is an overnight
+ * one, not a race that ended sixteen hours before it began.
+ */
+function cutOffInstant(startsAt: bigint, time: string): string | null {
+  if (!/^\d{2}:\d{2}$/.test(time)) return null;
+
+  const start = new Date(Number(startsAt) * 1000);
+  const [hours, minutes] = time.split(":").map(Number);
+  const cutOff = new Date(start);
+  cutOff.setHours(hours!, minutes!, 0, 0);
+  if (cutOff.getTime() <= start.getTime()) cutOff.setDate(cutOff.getDate() + 1);
+
+  return cutOff.toISOString();
 }
