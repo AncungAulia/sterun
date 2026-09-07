@@ -44,7 +44,7 @@ export function Field({ id, label, hint, required, ...props }: FieldProps) {
 export function RequiredMark() {
   return (
     <>
-      <span aria-hidden="true" className="ml-1 text-danger">
+      <span aria-hidden="true" className="text-danger">
         *
       </span>
       <span className="sr-only">required</span>

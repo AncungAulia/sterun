@@ -96,11 +96,6 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
 
   return (
     <div className="flex flex-col gap-8">
-      <p className="text-sm text-muted-foreground">
-        Fields marked with a star are required. Everything else can be left empty, but not added
-        later.
-      </p>
-
       <Section title="The race" note="The name and the start cannot be changed afterwards.">
         <Field
           id="name"
