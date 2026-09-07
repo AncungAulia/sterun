@@ -26,7 +26,15 @@
 /** The parts of the document this app reads. Everything is optional. */
 export interface EventMetadata {
   posterUrl?: string;
-  location?: { name?: string; lat?: number; lng?: number };
+  location?: {
+    name?: string;
+    city?: string;
+    province?: string;
+    country?: string;
+    countryCode?: string;
+    lat?: number;
+    lng?: number;
+  };
   description?: string;
   waiverUrl?: string;
   /** Where the race talks to people. Covered by the hash like everything else. */
@@ -162,6 +170,10 @@ function parseLinks(raw: Record<string, unknown>): NonNullable<EventMetadata["li
 function parseLocation(raw: Record<string, unknown>): NonNullable<EventMetadata["location"]> {
   return {
     ...str(raw.name, "name"),
+    ...str(raw.city, "city"),
+    ...str(raw.province, "province"),
+    ...str(raw.country, "country"),
+    ...str(raw.country_code, "countryCode"),
     ...(typeof raw.lat === "number" ? { lat: raw.lat } : {}),
     ...(typeof raw.lng === "number" ? { lng: raw.lng } : {}),
   };

@@ -12,7 +12,11 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
   return {
     startsAt: STARTS_AT,
     description: "A road race around the stadium.",
-    locationName: "Gelora Bung Karno, Jakarta",
+    locationName: "Gelora Bung Karno",
+    city: "Jakarta Pusat",
+    province: "DKI Jakarta",
+    country: "Indonesia",
+    countryCode: "ID",
     locationLink: "https://www.google.com/maps/@-6.2185,106.8026,17z",
     posterUrl: "https://cdn.example.test/poster.png",
     waiverUrl: "",
@@ -45,28 +49,60 @@ describe("buildEventDocument", () => {
       const document = JSON.parse(buildEventDocument(draft()));
 
       expect(document.description).toBe("A road race around the stadium.");
-      expect(document.location.name).toBe("Gelora Bung Karno, Jakarta");
+      expect(document.location.name).toBe("Gelora Bung Karno");
       expect(document.poster_url).toBe("https://cdn.example.test/poster.png");
     });
 
     it("puts the pin from a pasted maps link into the document", () => {
       const document = JSON.parse(buildEventDocument(draft()));
 
-      expect(document.location).toEqual({
-        name: "Gelora Bung Karno, Jakarta",
-        lat: -6.2185,
-        lng: 106.8026,
-      });
+      expect(document.location).toMatchObject({ lat: -6.2185, lng: 106.8026 });
     });
 
-    it("keeps the location name when the link has no pin in it", () => {
-      // A shortened maps link carries no coordinates, and losing the name over
-      // that would be a worse trade than showing a place with no map.
+    it("keeps the place names when the link has no pin in it", () => {
+      // A shortened maps link carries no coordinates, and losing the address
+      // over that would be a worse trade than showing a place with no map.
       const document = JSON.parse(
         buildEventDocument(draft({ locationLink: "https://maps.app.goo.gl/abc" })),
       );
 
-      expect(document.location).toEqual({ name: "Gelora Bung Karno, Jakarta" });
+      expect(document.location).toEqual({
+        name: "Gelora Bung Karno",
+        city: "Jakarta Pusat",
+        province: "DKI Jakarta",
+        country: "Indonesia",
+        country_code: "ID",
+      });
+    });
+
+    it("carries the administrative names a directory can group by", () => {
+      // Free text cannot be grouped: Jakarta, DKI Jakarta and jakarta are one
+      // place typed three ways. These come from a list, so they compare.
+      const document = JSON.parse(buildEventDocument(draft()));
+
+      expect(document.location).toMatchObject({
+        city: "Jakarta Pusat",
+        province: "DKI Jakarta",
+        country: "Indonesia",
+        country_code: "ID",
+      });
+    });
+
+    it("leaves location out entirely when nothing about it was given", () => {
+      const document = JSON.parse(
+        buildEventDocument(
+          draft({
+            locationName: "",
+            city: "",
+            province: "",
+            country: "",
+            countryCode: "",
+            locationLink: "",
+          }),
+        ),
+      );
+
+      expect(document).not.toHaveProperty("location");
     });
 
     it("pins the race pack venue the same way", () => {
@@ -115,6 +151,10 @@ describe("buildEventDocument", () => {
           startsAt: STARTS_AT,
           description: "",
           locationName: "",
+          city: "",
+          province: "",
+          country: "",
+          countryCode: "",
           locationLink: "",
           posterUrl: "",
           waiverUrl: "",

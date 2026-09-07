@@ -30,6 +30,7 @@ import { WalletGate } from "@/components/layouts/WalletGate";
 import { useCreateEvent, useSetEventStatus } from "@/hooks/useOrganiser";
 import { EXPLORER_BASE } from "@/lib/env";
 import { buildEventDocument, documentHash } from "@/lib/event-document";
+import { countryName, provinceName } from "@/lib/places";
 import { formatEventDateTime } from "@/utils/format";
 
 import { StepCategories, type AddedCategory } from "./component/StepCategories";
@@ -93,7 +94,15 @@ function Wizard() {
         : buildEventDocument({
             startsAt,
             description: details.description,
-            locationName: details.locationName,
+            locationName: details.place.venue,
+            // Names, not ids: the file is read by people and by other clients,
+            // and an id only means something next to the dataset that made it.
+            city: details.place.city,
+            province:
+              provinceName(details.place.country, Number(details.place.provinceId)) ??
+              details.place.provinceId,
+            country: countryName(details.place.country) ?? "",
+            countryCode: details.place.country,
             locationLink: details.locationLink,
             posterUrl: details.posterUrl,
             waiverUrl: details.waiverUrl,

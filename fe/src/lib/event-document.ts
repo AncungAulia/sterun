@@ -30,7 +30,14 @@ export interface EventDocumentDraft {
   /** Unix seconds, the same value that goes on chain as `starts_at`. */
   startsAt: bigint;
   description: string;
+  /** The venue's own name, e.g. "Gelora Bung Karno". */
   locationName: string;
+  /** Names, not codes: this file is read by people and by other clients. */
+  city: string;
+  province: string;
+  country: string;
+  /** ISO 3166-1 alpha-2, kept alongside the name so a filter has something exact. */
+  countryCode: string;
   /**
    * A Google Maps URL as pasted. The pin is extracted from it; the URL itself
    * is not stored, because a link goes stale and two numbers do not.
@@ -115,15 +122,26 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
   // is a broken link that reads as an oversight forever.
   const document: Record<string, unknown> = {};
   if (draft.posterUrl) document.poster_url = draft.posterUrl;
-  if (draft.locationName) {
-    // The pin is optional even when the name is not. A link with no
-    // coordinates in it (a shortened maps URL, say) loses the map, and losing
-    // the place name over that would be the worse trade.
-    const pin = parseCoordinates(draft.locationLink);
-    document.location = pin
-      ? { name: draft.locationName, lat: pin.lat, lng: pin.lng }
-      : { name: draft.locationName };
+  /**
+   * Every part is optional on its own, and any part is worth having. A race
+   * with only a city is still placed; a race with only coordinates is still
+   * findable. The pin is what a "races near me" search would use, and the names
+   * are what a person reads.
+   */
+  const pin = parseCoordinates(draft.locationLink);
+  const location: Record<string, unknown> = {};
+  if (draft.locationName) location.name = draft.locationName;
+  if (draft.city) location.city = draft.city;
+  if (draft.province) location.province = draft.province;
+  if (draft.country) {
+    location.country = draft.country;
+    if (draft.countryCode) location.country_code = draft.countryCode;
   }
+  if (pin) {
+    location.lat = pin.lat;
+    location.lng = pin.lng;
+  }
+  if (Object.keys(location).length > 0) document.location = location;
   document.schedule = schedule;
   if (draft.description) document.description = draft.description;
   if (draft.waiverUrl) document.waiver_url = draft.waiverUrl;

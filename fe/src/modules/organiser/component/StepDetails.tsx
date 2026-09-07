@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
+import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseCoordinates } from "@/utils/geo";
@@ -55,7 +56,7 @@ export interface EventDetails {
   /** `YYYY-MM-DDTHH:mm`, read in the organiser's own timezone. */
   startsAtLocal: string;
   description: string;
-  locationName: string;
+  place: Place;
   locationLink: string;
   posterUrl: string;
   waiverUrl: string;
@@ -75,7 +76,7 @@ export const EMPTY_DETAILS: EventDetails = {
   name: "",
   startsAtLocal: "",
   description: "",
-  locationName: "",
+  place: EMPTY_PLACE,
   locationLink: "",
   posterUrl: "",
   waiverUrl: "",
@@ -131,13 +132,7 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
             The last moment a finish counts, on the race day.
           </p>
         </div>
-        <Field
-          id="location"
-          label="Location"
-          value={details.locationName}
-          onChange={(e) => set({ locationName: e.target.value })}
-          placeholder="Gelora Bung Karno, Jakarta"
-        />
+        <PlaceFields place={details.place} onChange={(place) => set({ place })} />
         <Field
           id="location-link"
           label="Google Maps link"
@@ -201,14 +196,14 @@ export function StepDetails({ details, onChange }: StepDetailsProps) {
           />
           <Field
             id="pack-venue"
-            label="Venue"
+            label="Collection venue"
             value={details.racepackVenue}
             onChange={(e) => set({ racepackVenue: e.target.value })}
             placeholder="Hall A"
           />
           <Field
             id="pack-venue-link"
-            label="Venue on Google Maps"
+            label="Collection venue on Google Maps"
             value={details.racepackVenueLink}
             onChange={(e) => set({ racepackVenueLink: e.target.value })}
             placeholder="https://www.google.com/maps/@..."

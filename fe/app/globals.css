@@ -75,6 +75,26 @@
   }
 }
 
+/* Nabil's focus ring is declared in tokens.css as
+   `:where(a, button, input, ...):focus-visible { outline: 2px solid ... }`.
+   `:where()` contributes no specificity, but `:focus-visible` does, so the rule
+   ties with any single Tailwind utility and wins on order, because tokens.css
+   is imported after Tailwind. That is correct for real controls and wrong for
+   these three.
+
+   Radix moves focus into a popover, a dialog and a command list itself, as
+   containers rather than as things you tabbed to. The ring then draws a teal
+   rectangle around the whole panel, clipped by its own overflow, which reads as
+   a rendering bug. The controls inside them keep the ring.
+
+   Reported by Ancung as "the combobox search looks like this". */
+[data-slot="popover-content"]:focus-visible,
+[data-slot="dialog-content"]:focus-visible,
+[data-slot="command-input"]:focus-visible,
+[data-slot="command-list"]:focus-visible {
+  outline: none;
+}
+
 /* Tailwind v4 drops the browser's default `cursor: pointer` on buttons, so a
    button looks unclickable unless every component remembers to add it back.
    Restore it once here. Disabled controls keep whatever the component sets,

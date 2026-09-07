@@ -178,7 +178,7 @@ describe("CreateEvent", () => {
       await screen.findByText("Checked");
 
       await user.click(screen.getByRole("button", { name: "Back" }));
-      await user.type(screen.getByLabelText(/^Location$/), "Somewhere else");
+      await user.type(screen.getByLabelText("Venue"), "Somewhere else");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
       expect(screen.queryByText("Checked")).not.toBeInTheDocument();
