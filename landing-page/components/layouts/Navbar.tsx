@@ -73,8 +73,10 @@ export function Navbar() {
               className="cta inline-flex items-center gap-2.5 px-5 py-3 text-[15px] font-medium text-paper sm:px-7 sm:py-3.5"
             >
               <span className="cta-roll">
-                <span>Launch app</span>
-                <span aria-hidden>Launch app</span>
+                <span>
+                  <span>Launch app</span>
+                  <span aria-hidden>Launch app</span>
+                </span>
               </span>
               <span className="cta-arrow inline-flex">
                 <ArrowRight />

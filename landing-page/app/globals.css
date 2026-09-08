@@ -82,7 +82,14 @@
   transform-origin: left;
 }
 
-/* The label and its stacked duplicate. Height is one line so only one shows. */
+/* The label and its stacked duplicate.
+   Three levels, and each one earns its place: the outer box is one line tall
+   and clips, the middle one is what actually travels, and the two inner copies
+   are given an explicit height so the distance to move is a known quantity
+   rather than a percentage of whatever the font decided.
+   An earlier version moved every child of .cta-roll, which meant both copies
+   slid half their own height instead of one copy sliding a whole line, and the
+   label tore in two mid-hover. */
 .cta-roll {
   display: block;
   overflow: hidden;
@@ -92,9 +99,14 @@
   display: block;
   transition: transform 0.4s cubic-bezier(0.76, 0, 0.24, 1);
 }
+.cta-roll > span > span {
+  display: block;
+  height: 1.2em;
+  line-height: 1.2em;
+}
 .cta:hover .cta-roll > span,
 .cta:focus-visible .cta-roll > span {
-  transform: translateY(-50%);
+  transform: translateY(-1.2em);
 }
 
 .cta-arrow {

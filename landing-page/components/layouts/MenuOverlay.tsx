@@ -39,14 +39,16 @@ const CONTENT_DELAY_MS = 430;
 /**
  * One scale for the nav, referenced by everything that has to line up with it.
  *
- * The brief asked for 13vw and for the four items to fill 75-85% of the
- * viewport height. Those two cannot both hold: 13vw alone measured 126% of a
- * short, wide window and would under-fill a tall narrow one, because it ties a
- * height target to the width. Taking the smaller of a width-based and a
- * height-based value keeps the ratio near 80% whichever way the window is
- * shaped, and 13vw still wins on ordinary laptop proportions.
+ * A height target cannot be met with a width unit: 13vw alone measured 126% of
+ * a short, wide window and would under-fill a tall narrow one. Taking the
+ * smaller of a width-based and a height-based value holds the ratio steady
+ * whichever way the window is shaped.
+ *
+ * Tuned to about 70% rather than the 83% the brief's range allows, because the
+ * panel also carries an 86px header offset and a footer. At 83% those three
+ * together came to more than one screen and the menu scrolled; at 70% it fits.
  */
-const NAV_SIZE = "clamp(3.5rem, min(13vw, 21vh), 16rem)";
+const NAV_SIZE = "clamp(3rem, min(11vw, 18vh), 13rem)";
 
 /**
  * Where Big Shoulders' capitals begin inside its line box, as a fraction of the
@@ -83,7 +85,7 @@ function SecondaryGroup({ title, links }: { title: string; links: SecondaryLink[
       <h3 className="text-[clamp(0.75rem,1.1vw,1rem)] uppercase leading-none tracking-[0.12em] text-paper/60">
         {title}
       </h3>
-      <ul className="mt-[0.9em] flex flex-col gap-[0.35em] text-[clamp(1.25rem,2.2vw,2.75rem)]">
+      <ul className="mt-[0.7em] flex flex-col gap-[0.28em] text-[clamp(1.25rem,2.2vw,2.75rem)]">
         {links.map((link) => (
           <li key={link.label}>
             <a
@@ -201,17 +203,15 @@ export function MenuOverlay({
       >
         {/* Same container and gutter as the header, so the wordmark, CLOSE, the
             01-04 numbers and the footer all sit on one line. */}
-        <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col px-5 pb-8 pt-20 sm:px-10 sm:pt-[86px] lg:px-[68px]">
-          <div className="flex flex-1 flex-col gap-12 pt-6 lg:flex-row lg:gap-16 lg:pt-8">
+        <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col px-5 pb-6 pt-20 sm:px-10 sm:pt-[86px] lg:px-[68px]">
+          <div className="flex flex-1 flex-col gap-12 pt-2 lg:flex-row lg:gap-16 lg:pt-4">
             {/* Primary nav. In-page anchors, because there is no second page.
 
-                72/28 rather than the 55/45 the brief asked for: "HOW IT WORKS"
-                is twelve characters, and at this size it needs most of the width
-                to stay on one line. Letting it wrap instead pushed the list to
-                103% of the viewport and broke the height target it was sized
-                for. The right column loses nothing by it — its longest link is
-                a third of the space it still has. */}
-            <nav aria-label="Sections" className="lg:w-[72%]">
+                64/36 rather than the 55/45 the brief asked for: "HOW IT WORKS"
+                is twelve characters and has to stay on one line. Letting it wrap
+                put the list at 103% of the viewport and broke the height target
+                it had just been sized for. */}
+            <nav aria-label="Sections" className="lg:w-[64%]">
               <ul>
                 {/* Size and leading sit on the li so every descendant inherits
                     them. Setting leading only on the innermost span left the
@@ -255,10 +255,14 @@ export function MenuOverlay({
                 is one nav line-pitch, which is what ties the two columns to the
                 same rhythm as the nav grows. */}
             <div
-              className="flex flex-col gap-14 lg:w-[28%]"
+              className="flex flex-col gap-14 lg:w-[36%]"
               style={{
                 paddingTop: CAP_TOP,
-                rowGap: `max(3.5rem, calc(${NAV_SIZE} * 0.95))`,
+                // One nav line-pitch, but capped: unbounded it made the right
+                // column taller than the nav it was meant to echo, and the
+                // panel scrolled for a reason that had nothing to do with the
+                // nav size.
+                rowGap: `clamp(2.5rem, calc(${NAV_SIZE} * 0.95), 4rem)`,
               }}
             >
               <SecondaryGroup title="Sterun" links={STERUN_LINKS} />
@@ -266,7 +270,7 @@ export function MenuOverlay({
             </div>
           </div>
 
-          <div className="mt-14 flex flex-col gap-2 pt-2 text-[clamp(0.875rem,1.4vw,1.25rem)] text-paper sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-8 flex flex-col gap-2 pt-2 text-[clamp(0.875rem,1.4vw,1.25rem)] text-paper sm:flex-row sm:items-center sm:justify-between">
             <p>Verified race records for running events, built on Stellar.</p>
             <p>&copy; {new Date().getFullYear()} Sterun</p>
           </div>
