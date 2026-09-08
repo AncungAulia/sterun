@@ -98,6 +98,22 @@ export interface Config {
      * on-chain. Production sets it.
      */
     readonly publicBaseUrl: string | undefined;
+    /**
+     * Cloudflare R2, or `undefined` to keep bytes on local disk.
+     *
+     * All four values or none: a half-configured bucket is a process that
+     * starts, accepts an upload, and fails at the first PUT with a 403 that
+     * reads like bad credentials. `loadR2Config` refuses that at startup
+     * instead, the same way the vault refuses a DATABASE_URL without PII_KEYS.
+     */
+    readonly r2:
+      | {
+          readonly accountId: string;
+          readonly bucket: string;
+          readonly accessKeyId: string;
+          readonly secretAccessKey: string;
+        }
+      | undefined;
   };
   /**
    * The PII vault, or `undefined` when this process is not running one.
@@ -173,6 +189,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       root: env.STERUN_FILES_ROOT ?? "./data/files",
       maxTotalBytes: num(env.STERUN_FILES_MAX_BYTES, 512 * 1024 * 1024),
       publicBaseUrl: normaliseBaseUrl(env.STERUN_PUBLIC_BASE_URL),
+      r2: loadR2Config(env),
     },
     vault: loadVaultConfig(env),
   };
@@ -186,6 +203,41 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
  * organiser then writes into `create_event`'s `uri` permanently. Failing to
  * boot is far cheaper than that.
  */
+/**
+ * All four, or none.
+ *
+ * The failure this prevents is specific and nasty: with three of the four set,
+ * the process starts happily, serves every other endpoint, and then fails the
+ * first upload with a 403 from R2 — which reads exactly like a wrong secret and
+ * sends whoever is debugging it to regenerate credentials that were fine.
+ */
+function loadR2Config(env: NodeJS.ProcessEnv): Config["files"]["r2"] {
+  const parts = {
+    accountId: env.STERUN_R2_ACCOUNT_ID,
+    bucket: env.STERUN_R2_BUCKET,
+    accessKeyId: env.STERUN_R2_ACCESS_KEY_ID,
+    secretAccessKey: env.STERUN_R2_SECRET_ACCESS_KEY,
+  };
+  const present = Object.entries(parts).filter(([, value]) => value !== undefined && value !== "");
+  if (present.length === 0) return undefined;
+  if (present.length < 4) {
+    const missing = Object.entries(parts)
+      .filter(([, value]) => value === undefined || value === "")
+      .map(([name]) => `STERUN_R2_${name.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase()}`);
+    throw new Error(
+      `R2 is partly configured. Missing: ${missing.join(", ")}. Set all four or none — ` +
+        `three of four starts a process that fails its first upload with a 403 that looks ` +
+        `like a wrong secret. See be/OPERATIONS.md.`,
+    );
+  }
+  return {
+    accountId: parts.accountId as string,
+    bucket: parts.bucket as string,
+    accessKeyId: parts.accessKeyId as string,
+    secretAccessKey: parts.secretAccessKey as string,
+  };
+}
+
 function normaliseBaseUrl(raw: string | undefined): string | undefined {
   if (raw === undefined || raw.trim() === "") return undefined;
   let parsed: URL;
