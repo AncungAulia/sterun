@@ -33,7 +33,7 @@
  * given name plus initials, computed at submit time and stored instead of the
  * name — see `src/roster/name-fragment.ts`.
  */
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import type { ChallengeStore } from "../auth.js";
 import type { ChainReader } from "../chain/reader.js";
@@ -43,6 +43,9 @@ import { DIGITS, TIME_STEP_SECONDS, TOLERANCE_STEPS } from "../spec/totp.js";
 import type { Vault } from "../vault.js";
 
 const HEX_64 = "^[0-9a-f]{64}$";
+
+/** Matches the submit schema's cap, so the two ends agree on one number. */
+export const MAX_ADD_ON_LENGTH = 128;
 
 const rosterResponse = {
   200: {
@@ -87,9 +90,20 @@ const rosterResponse = {
               type: "string",
               enum: ["Entered", "RacepackClaimed", "Finished", "Dnf"],
             },
-            // Bounded by the schema as well as by the producer: a bug that
-            // skipped the reduction still could not put a long legal name on
-            // the wire, because Fastify serialises from this schema.
+            /**
+             * `maxLength` here DOCUMENTS the bound; it does not enforce it.
+             *
+             * This comment used to claim the opposite — that a bug which
+             * skipped the reduction still could not put a long legal name on
+             * the wire "because Fastify serialises from this schema". That is
+             * false, and was checked rather than assumed: fast-json-stringify
+             * ignores `maxLength` on output and emits the string it is given.
+             * A believed control that does not exist is worse than no control,
+             * because nobody looks for the real one.
+             *
+             * The bound is enforced by `bounded()` below, on the value, before
+             * it reaches the response object.
+             */
             name_fragment: { type: ["string", "null"], maxLength: MAX_FRAGMENT_LENGTH },
             /**
              * What this runner picked from the race pack (STE-17), e.g.
@@ -110,8 +124,10 @@ const rosterResponse = {
                 additionalProperties: false,
                 required: ["item", "choice"],
                 properties: {
-                  item: { type: "string" },
-                  choice: { type: "string" },
+                  // Documented here, enforced by `bounded()` — see the note on
+                  // name_fragment for why the distinction matters.
+                  item: { type: "string", maxLength: MAX_ADD_ON_LENGTH },
+                  choice: { type: "string", maxLength: MAX_ADD_ON_LENGTH },
                 },
               },
             },
@@ -137,6 +153,29 @@ export interface RosterDeps {
   vault: Vault;
   reader: ChainReader;
   challenges: ChallengeStore;
+}
+
+/**
+ * Enforce a length the response schema can only describe.
+ *
+ * Truncating rather than throwing is deliberate: this runs on race day, on a
+ * volunteer's phone, and one malformed row must not take out the roster for a
+ * whole event. Truncating a fragment makes one entry harder to read; refusing
+ * the request makes every entry unavailable, and the first failure is the one
+ * that can be worked around at the desk.
+ *
+ * It logs, because a value that needed truncating means the producer is wrong
+ * and nobody would otherwise find out.
+ */
+function bounded(
+  value: string,
+  limit: number,
+  what: string,
+  log: FastifyBaseLogger,
+): string {
+  if (value.length <= limit) return value;
+  log.warn({ what, length: value.length, limit }, "roster value exceeded its bound and was truncated");
+  return value.slice(0, limit);
 }
 
 export async function rosterRoutes(
@@ -200,8 +239,18 @@ export async function rosterRoutes(
           bib_no: record.bibNo,
           category_id: record.categoryId,
           state: record.state,
-          name_fragment: secret.nameFragment,
-          add_ons: secret.addOns,
+          name_fragment:
+            secret.nameFragment === null
+              ? null
+              : bounded(secret.nameFragment, MAX_FRAGMENT_LENGTH, "name_fragment", request.log),
+          // Bounded on the way out for the same reason, even though the submit
+          // schema already caps these at 128: that cap protects rows written
+          // through the route, and this protects the response from every other
+          // way a row can arrive.
+          add_ons: secret.addOns.map((choice) => ({
+            item: bounded(choice.item, MAX_ADD_ON_LENGTH, "add_ons.item", request.log),
+            choice: bounded(choice.choice, MAX_ADD_ON_LENGTH, "add_ons.choice", request.log),
+          })),
           totp_secret: secret.totpSecretHex,
         });
       }

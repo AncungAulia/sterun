@@ -75,6 +75,14 @@ penjelasan. Pakai `BigInt`; `parseFloat` diblokir eslint di paket ini.
 `PII_KEYS` membuka seluruh PII. `.env` di-gitignore, `.env.example` yang di-commit. Jangan pernah
 menaruh `S...` atau kunci PII di file lain, di tiket, di chat, atau di log.
 
+> **`maxLength` di response schema itu DOKUMENTASI, bukan penegakan.** Diuji, bukan diasumsikan:
+> `fast-json-stringify` mengabaikannya saat serialisasi dan mengirim string apa adanya. Yang
+> ditegakkan cuma **daftar propertinya** — field yang tidak disebut schema memang tidak bisa lewat.
+> Panjangnya harus dibatasi di nilainya, sebelum masuk object response (`bounded()` di
+> `routes/roster.ts`). Komentar lama di sana mengklaim sebaliknya; klaim keamanan yang dipercaya
+> tapi tidak ada lebih buruk daripada yang diketahui tidak ada, karena tidak ada yang mencari
+> penggantinya.
+
 **5. Response tidak boleh bisa membawa PII.** Tiap response punya JSON schema eksplisit dengan
 `additionalProperties: false`. Fastify men-serialisasi **hanya** properti yang disebut schema, jadi
 field yang tidak ada di schema **tidak bisa** sampai ke client walaupun ada di object-nya. Ini
@@ -245,7 +253,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-770 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+777 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live

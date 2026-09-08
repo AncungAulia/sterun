@@ -25,6 +25,7 @@ import type { Keyring } from "../src/crypto/keyring.js";
 import { Indexer } from "../src/indexer/indexer.js";
 import { buildServer } from "../src/server.js";
 import { codeAt, secretFromHex } from "../src/spec/totp.js";
+import { MAX_FRAGMENT_LENGTH } from "../src/roster/name-fragment.js";
 import { Vault } from "../src/vault.js";
 import { ADDRESSES, keypairFor } from "./helpers/addresses.js";
 import { FakeChain } from "./helpers/fake-chain.js";
@@ -362,4 +363,86 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       expect((await app.inject({ url: "/config" })).json().roster).toEqual({ enabled: true });
     });
   });
+
+  describe("length bounds are enforced, not merely declared", () => {
+    /**
+     * This exists because a comment in `roster.ts` claimed the response schema
+     * bounded `name_fragment` — that a bug which skipped the reduction "still
+     * could not put a long legal name on the wire, because Fastify serialises
+     * from this schema". Checked rather than believed, and false:
+     * fast-json-stringify ignores `maxLength` on output and emits what it is
+     * given.
+     *
+     * The roster goes to volunteers' phones and works offline, so a full legal
+     * name arriving there is exactly the leak the fragment exists to prevent.
+     * A control that is believed and absent is worse than one known to be
+     * missing, because nobody looks for the real one.
+     */
+    it("truncates a name fragment that is longer than the bound", async () => {
+      await enrol(runnerKp, 0, 0);
+
+      // Overwritten directly: the producer would never emit this, and that is
+      // precisely the bug being guarded against, so it has to be simulated.
+      const longFragment = "B".repeat(400);
+      const { rows } = await pool.query<{ id: string }>(
+        "SELECT id FROM participants WHERE token_id = 0",
+      );
+      const id = rows[0]?.id as string;
+      const { encrypt } = await import("../src/crypto/envelope.js");
+      await pool.query("UPDATE participants SET name_fragment_enc = $1 WHERE id = $2", [
+        encrypt(keyring, longFragment, `pii.name_fragment:${id}`),
+        id,
+      ]);
+      // The vault really does hand it over at full length — so the bound has
+      // to be applied after the vault, not inside it.
+      const secrets = await vault.rosterSecretsForEvent(0);
+      expect(secrets.find((s) => s.tokenId === 0)?.nameFragment).toHaveLength(400);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/events/0/roster",
+        headers: await credentials(organiserKp),
+      });
+
+      const entry = response.json().entries.find((e: { token_id: number }) => e.token_id === 0);
+      expect(entry.name_fragment.length).toBeLessThanOrEqual(MAX_FRAGMENT_LENGTH);
+      expect(response.body).not.toContain(longFragment);
+    });
+
+    it("truncates an add-on that is longer than the bound", async () => {
+      // The submit schema caps these at 128, which protects rows written
+      // through the route. This protects the response from every other way a
+      // row can arrive.
+      await enrol(runnerKp, 0, 0);
+      await pool.query(
+        `UPDATE participants SET add_ons = $1::jsonb WHERE token_id = 0`,
+        [JSON.stringify([{ item: "J".repeat(300), choice: "L".repeat(300) }])],
+      );
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/events/0/roster",
+        headers: await credentials(organiserKp),
+      });
+
+      const entry = response.json().entries.find((e: { token_id: number }) => e.token_id === 0);
+      expect(entry.add_ons[0].item.length).toBeLessThanOrEqual(128);
+      expect(entry.add_ons[0].choice.length).toBeLessThanOrEqual(128);
+    });
+
+    it("leaves a value that is already within the bound exactly as it is", async () => {
+      // Truncation must be a backstop, not a transformation applied to normal
+      // data — a fragment quietly shortened by one character would be worse
+      // than the bug, because nothing would look wrong.
+      await enrol(runnerKp, 0, 0, "Budi Santoso");
+      const response = await app.inject({
+        method: "GET",
+        url: "/events/0/roster",
+        headers: await credentials(organiserKp),
+      });
+      const entry = response.json().entries.find((e: { token_id: number }) => e.token_id === 0);
+      expect(entry.name_fragment).toBe("Budi S.");
+    });
+  });
 });
+
