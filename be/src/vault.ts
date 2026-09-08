@@ -29,6 +29,13 @@ export interface SubmitParticipant extends ParticipantInput {
   eventId: number;
   categoryId: number;
   runnerAddress: string;
+  /**
+   * What the runner picked from the race pack, naming items the way the event
+   * document does. Not PII, and stored in the clear on purpose (migration 005)
+   * because the organiser has to count it to place the order. Absent is the
+   * same as an empty list.
+   */
+  addOns?: AddOnChoice[];
 }
 
 /**
@@ -68,12 +75,25 @@ export interface ParticipantSummary {
  * One roster row's worth of vault material. No name, no id, no contact — see
  * {@link Vault.rosterSecretsForEvent}.
  */
+/** One thing a runner chose, and what they chose for it. */
+export interface AddOnChoice {
+  /** Matches an item name in the event document's `add_ons`. */
+  item: string;
+  /** "L", "One size", whatever the organiser offered. */
+  choice: string;
+}
+
 export interface RosterSecret {
   tokenId: number;
   /** 64 lowercase hex characters. The scanner recomputes TOTP codes with it. */
   totpSecretHex: string;
   /** Given name plus initials, or `null` for rows predating migration 003. */
   nameFragment: string | null;
+  /**
+   * What this runner picked from the race pack. Empty when the race hands out
+   * nothing that has to be chosen.
+   */
+  addOns: AddOnChoice[];
 }
 
 export class ParticipantExistsError extends Error {
@@ -125,8 +145,9 @@ export class Vault {
     await this.pool.query(
       `INSERT INTO participants
          (id, name_enc, national_id_enc, emergency_contact_enc, name_fragment_enc,
-          salt, totp_secret, participant_hash, event_id, category_id, runner_address)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          salt, totp_secret, participant_hash, event_id, category_id, runner_address,
+          add_ons)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [
         id,
         encrypt(this.keyring, input.name, aad("pii.name", id)),
@@ -139,6 +160,10 @@ export class Vault {
         input.eventId,
         input.categoryId,
         input.runnerAddress,
+        // Serialised here rather than passed as an object, so what reaches the
+        // column is exactly what this code decided and never whatever the pg
+        // driver would infer from a bare object.
+        JSON.stringify(input.addOns ?? []),
       ],
     );
 
@@ -253,8 +278,9 @@ export class Vault {
       token_id: number;
       totp_secret: Buffer;
       name_fragment_enc: Buffer | null;
+      add_ons: AddOnChoice[] | null;
     }>(
-      `SELECT id, token_id, totp_secret, name_fragment_enc
+      `SELECT id, token_id, totp_secret, name_fragment_enc, add_ons
          FROM participants
         WHERE event_id = $1 AND token_id IS NOT NULL
         ORDER BY token_id`,
@@ -263,6 +289,9 @@ export class Vault {
     return rows.map((r) => ({
       tokenId: r.token_id,
       totpSecretHex: r.totp_secret.toString("hex"),
+      // Null only for a row written before migration 005 landed; the column is
+      // NOT NULL with a default, so every row written since carries a list.
+      addOns: r.add_ons ?? [],
       // Null for rows submitted before migration 003: the fragment can only be
       // derived from the plaintext at submit time, so there is nothing to
       // backfill from. Reporting null is the honest answer.

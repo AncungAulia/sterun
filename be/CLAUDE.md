@@ -261,6 +261,47 @@ run, dan suite begitu berhenti dibaca orang.
 
 Tiap tiket berikutnya: **e2e + edge + positive + negative**, sama seperti sisi kontrak.
 
+## Pilihan race pack (STE-17): kolom `add_ons`
+
+Migration **005**. Satu-satunya kolom per-pelari di tabel `participants` yang **tidak dienkripsi**,
+dan itu disengaja:
+
+- **Bukan PII.** "Event jersey: L" tidak mengidentifikasi siapa pun. Dump kolom ini isinya daftar
+  ukuran kaos di sebelah nomor bib.
+- **Panitia HARUS bisa membacanya.** Gunanya mengumpulkan ukuran adalah memesan kaosnya. Vault
+  dibangun dengan arah sebaliknya (tidak ada route yang mengembalikan nama, `decryptForAudit`
+  sengaja dinamai bikin tidak nyaman), jadi menaruh ukuran di sana berarti memilih antara jalur
+  decrypt baru keluar dari vault atau panitia yang tidak bisa menghitung pesanannya sendiri. Dua-duanya
+  lebih buruk daripada kolom biasa berisi non-rahasia.
+
+Bentuknya **array pasangan**, bukan object:
+
+```json
+[{ "item": "Event jersey", "choice": "L" }]
+```
+
+Bukan selera: tiap response schema di service ini tertutup (`additionalProperties: false`) dan ada
+test yang gagal kalau ada satu yang tidak. Map tidak bisa ditutup, array of two-field object bisa —
+dan bentuk yang sama di kolom dan di wire berarti tidak ada terjemahan yang bisa salah.
+
+Nama item mengacu ke `add_ons` di **dokumen event** (`docs/WEB_APP_IA.md` §6), yang di-hash dan beku
+di `create_event`, jadi nama di sana tidak bisa berubah di bawah baris yang merujuknya. Itu properti
+yang biasanya dibeli dengan id, tanpa perlu mengarang id.
+
+Tidak divalidasi terhadap dokumen itu: file-nya off-chain di url yang service ini tidak punya, dan
+mengambilnya tiap submit cuma untuk mencocokkan string berarti menambah dependency jaringan ke jalur
+tulis demi cek yang sudah dilakukan console dengan data yang sama di depannya. Yang membatasi:
+maksimal 20 item, masing-masing 128 karakter.
+
+Ikut keluar di **roster bundle** (`GET /events/:eventId/roster`) karena di situlah satu-satunya
+tempat pemanggil berwenang mendapat seluruh pendaftar satu event dalam satu request, dan dua
+pembacanya sama-sama butuh: panitia menghitung ukuran, volunteer di meja race pack perlu tahu kaos
+mana yang masuk ke tas.
+
+**Yang v1 tidak bisa: stok per ukuran.** Kuota di kontrak dihitung per kategori dan tidak tahu apa
+itu M atau L, jadi "M habis" tidak bisa ditegakkan. Cara panitia menjualnya adalah kategori terpisah
+(`10K` vs `10K_JERSEY`), dan kuota kategori jersey itulah jumlah kaos yang dipesan.
+
 ## Results CSV (STE-20, C7)
 
 `POST /events/:eventId/results/preview` — organiser upload CSV, dapat preview + anomali per baris.
