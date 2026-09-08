@@ -128,20 +128,20 @@ export async function filesRoutes(
    * --data-binary @poster.png` is what somebody driving this from a shell will
    * reach for.
    *
-   * The declared types are wide on purpose: they say what a client is allowed
-   * to SEND, and the allow-list that matters is applied to the bytes further
-   * down. Listing every image type here as well would create two lists that
-   * have to agree, and one day would not.
+   * The parsed types are DERIVED from the allow-list rather than written out
+   * again, and that is not tidiness. Fastify refuses a content type it has no
+   * parser for with its own 415 before this router's handler runs, so a type
+   * added to the allow-list and forgotten here is rejected with an error that
+   * says nothing about sniffing and points at no fix. Deriving it means the
+   * two cannot disagree.
+   *
+   * `application/octet-stream` and `text/plain` are additions rather than
+   * exceptions: they are what curl and fetch send when nobody sets a type, and
+   * the bytes still have to pass the sniffer either way.
    */
+  const parsedTypes = [...ALLOWED_CONTENT_TYPES, "application/octet-stream", "text/plain"];
   app.addContentTypeParser(
-    ["application/json", "application/octet-stream", "text/plain"],
-    { parseAs: "buffer", bodyLimit: MAX_FILE_BYTES },
-    (_request, body, done) => {
-      done(null, body);
-    },
-  );
-  app.addContentTypeParser(
-    /^image\/.+$/,
+    parsedTypes,
     { parseAs: "buffer", bodyLimit: MAX_FILE_BYTES },
     (_request, body, done) => {
       done(null, body);

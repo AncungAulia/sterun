@@ -235,7 +235,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-745 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+757 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -313,10 +313,50 @@ tanpa gateway yang bisa mati.
 **Tipe ditentukan dari BYTE, bukan dari header `Content-Type`.** Header itu klaim si pengunggah;
 mengecek allow-list terhadapnya cuma teater. `src/files/content-type.ts` mengendus signature-nya.
 
+Yang diterima: `application/json`, `application/pdf`, dan lima tipe gambar raster
+(PNG/JPEG/GIF/WebP/AVIF).
+
+**PDF diterima untuk surat waiver**, dan alasannya sama dengan alasan fitur ini ada: nilai hukum
+sebuah waiver bergantung pada bisa dibuktikannya apa yang disetujui orang saat itu. Content
+addressing memberikan persis itu — URL-nya sha256 isinya, jadi dokumen tidak bisa diedit setelah
+orang mendaftar. Panitia yang menempel link ke Drive-nya sendiri bisa menggantinya belakangan dan
+tidak ada yang bisa membuktikan itu berubah.
+
+PDF **bisa** membawa JavaScript, dan itu beda nyata dari gambar. Tetap diterima atas pertimbangan
+yang layak ditulis daripada diasumsikan: response-nya sudah mengirim `default-src 'none'; sandbox`
++ `nosniff`, yang menaruh dokumen di origin buram tanpa jaringan sendiri, dan viewer PDF browser
+modern sendiri proses tersandbox. `Content-Disposition`-nya sengaja **`inline`**, bukan
+`attachment`: ini dokumen yang orang diminta menyetujuinya, dan memaksa unduh dulu itu hostile —
+CSP `sandbox` yang membuat `inline` bisa dipertanggungjawabkan.
+
+**Yang sengaja TIDAK dilakukan: memindai byte untuk `/JS` atau `/JavaScript`.** Object stream PDF
+bisa dikompres, jadi pemindaian string sekaligus meleset untuk kasus terobfuskasi dan salah tembak
+untuk konten sah. Cek yang bisa dilewati lebih buruk daripada tidak ada cek, karena dia dipercaya.
+Header penyajiannya tidak bergantung pada mendeteksi apa pun.
+
+PDF juga dicek **header DAN trailer**-nya (`%PDF-1.x`/`2.x` di awal, `%%EOF` di 1024 byte terakhir),
+bukan cuma magic bytes. Alasannya sama dengan JSON yang di-parse: upload terpotong harus ketahuan
+sekarang, bukan pas hari-H waktu waiver-nya tidak mau dibuka.
+
 > **SVG tidak ada di allow-list dan jangan ditambahkan.** SVG itu dokumen XML yang bisa membawa
 > `<script>`. Disajikan dari `api-sterun.jameshub.fun` — origin yang sama dengan PII vault — itu
-> stored XSS dari file yang bisa diunggah siapa saja pemegang keypair. Kalau nanti perlu poster
-> vektor, jawabannya raster saat upload atau origin terpisah, bukan menambah cabang di situ.
+> stored XSS dari file yang bisa diunggah siapa saja pemegang keypair. Bedanya dengan PDF: SVG itu
+> script di origin halaman itu sendiri, bukan dokumen yang dirender viewer terpisah. Kalau nanti
+> perlu poster vektor, jawabannya raster saat upload atau origin terpisah, bukan menambah cabang.
+
+> **Daftar tipe yang di-parse Fastify DITURUNKAN dari allow-list**, bukan ditulis ulang. Fastify
+> menolak content type yang tidak punya parser dengan 415 miliknya sendiri **sebelum** handler jalan,
+> jadi tipe yang ditambahkan ke allow-list tapi lupa didaftarkan ke parser gagal dengan error yang
+> tidak menyebut penyendusan dan tidak menunjuk perbaikan apa pun. Sudah kejadian sekali waktu PDF
+> ditambahkan. Ada test yang membuktikan penurunan itu masih berlaku.
+
+**Waiver yang sudah DITANDATANGANI bukan untuk endpoint ini.** `/files/:sha256` publik tanpa auth —
+memang begitu desainnya, karena URL-nya masuk chain. Dokumen bertanda tangan berisi nama dan tanda
+tangan, itu PII, tempatnya vault. Dan kemungkinan besar tidak perlu disimpan sama sekali: pelari
+sudah menandatangani transaksi `enter` dengan wallet-nya, jadi "orang ini setuju dengan dokumen
+persis ini" sudah terbukti dari chain begitu waiver-nya tercakup `metadata_hash`. Apakah itu memenuhi
+syarat tanda tangan elektronik yang sah menurut hukum Indonesia adalah pertanyaan hukum, bukan
+teknis — belum dijawab.
 
 Lapisan kedua saat menyajikan: `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff`,
 tipe yang dikirim adalah tipe hasil endus, dan `Content-Disposition` menamai file dengan hash-nya —
