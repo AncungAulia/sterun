@@ -12,12 +12,22 @@ export interface DbConfig {
   connectionString: string;
   /** Small on purpose: this service is not the bottleneck, Postgres is. */
   max?: number;
+  /**
+   * Postgres `search_path` for every connection in this pool.
+   *
+   * Defaults to whatever the server does, which is `public`. It exists because
+   * the test suite gives each file its own schema — several suites truncating
+   * `public` in parallel is a flaky suite, and a flaky suite gets ignored — and
+   * because a deployment that does not own `public` needs the same knob.
+   */
+  searchPath?: string;
 }
 
 export function createPool(config: DbConfig): Pool {
   const pool = new Pool({
     connectionString: config.connectionString,
     max: config.max ?? 10,
+    ...(config.searchPath ? { options: `-c search_path=${config.searchPath}` } : {}),
     // A registration request that cannot get a connection should fail fast and
     // let the caller retry, rather than pile up behind a stuck pool.
     connectionTimeoutMillis: 5_000,

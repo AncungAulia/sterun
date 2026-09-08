@@ -1,0 +1,70 @@
+{
+  "name": "@sterun/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Sterun SDK — call the Stellar race-record contracts from TypeScript, no Rust required (component C5)",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "vendor-dist",
+    "schema",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor-bindings.mjs",
+    "vendor:check": "node scripts/vendor-bindings.mjs --check",
+    "prebuild": "tsc -p tsconfig.vendor.json",
+    "build": "tsc -p tsconfig.json",
+    "pretypecheck": "tsc -p tsconfig.vendor.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "pretest": "tsc -p tsconfig.vendor.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "e2e": "tsx scripts/e2e.ts",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^17.0.1",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.9.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^3.2.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AncungAulia/sterun.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/AncungAulia/sterun/tree/main/sdk#readme",
+  "keywords": [
+    "stellar",
+    "soroban",
+    "race",
+    "running",
+    "sdk",
+    "non-transferable",
+    "sterun"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

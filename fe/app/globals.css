@@ -1,2 +1,11 @@
 @import "tailwindcss";
 @import "./tokens.css";
+
+/* Tailwind v4 drops the browser's default `cursor: pointer` on buttons, so a
+   button looks unclickable unless every component remembers to add it back.
+   Restore it once here. Disabled controls keep whatever the component sets,
+   because a utility class beats this element selector. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}

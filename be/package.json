@@ -13,15 +13,22 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "faucet": "tsx src/cli/faucet.ts"
+    "faucet": "tsx src/cli/faucet.ts",
+    "indexer": "tsx src/cli/indexer.ts",
+    "keeper": "tsx src/cli/keeper.ts",
+    "e2e:results": "tsx scripts/e2e-results.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/swagger": "^9.8.1",
     "@stellar/stellar-sdk": "^17.0.1",
     "fastify": "^5.12.1",
     "pg": "^8.23.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@sterun/sdk": "workspace:*",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "eslint": "^10.9.1",

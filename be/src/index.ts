@@ -7,11 +7,21 @@
  * migrations run before the socket opens, so the service is never briefly
  * accepting registrations against a schema that does not exist yet.
  */
+import { ChallengeStore } from "./auth.js";
+import { PostgresNonces } from "./auth-postgres.js";
+import { loadEnvFile } from "./env.js";
+import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
+import { R2FileStore } from "./files/r2.js";
+import { LocalFileStore } from "./files/store.js";
 import { migrate } from "./db/migrate.js";
 import { buildServer } from "./server.js";
 import { Vault } from "./vault.js";
+
+// The documented setup is "copy .env.example to be/.env"; config reads
+// process.env. Real environment variables still win — see src/env.ts.
+loadEnvFile();
 
 const config = loadConfig();
 
@@ -24,7 +34,62 @@ if (pool && config.vault) {
   }
 }
 
-const app = buildServer(config, pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {});
+// Constructing the reader costs nothing — no network call happens until the
+// first roster request — so it is always available when the process can serve
+// one. Whether the route mounts is decided by the pool and the vault.
+const reader = new ChainReader(
+  new RpcContractCaller(
+    config.network.rpcUrl,
+    config.network.passphrase,
+    config.indexer.simulationSource,
+  ),
+  { eventRegistry: config.addresses.eventRegistry, raceRecord: config.addresses.raceRecord },
+);
+
+/**
+ * STE-31. With Postgres, nonces live there; without it, in this process.
+ *
+ * That is not a performance choice. An in-memory store behind two instances
+ * fails intermittently and reports it as "unknown-nonce", which sends whoever
+ * is debugging it to look at their signing code. Postgres makes spending a
+ * nonce a single `DELETE … RETURNING`, which is atomic across instances.
+ *
+ * A single process with no database keeps the memory store, and that is still
+ * correct — there is no second instance for it to disagree with.
+ */
+const challenges = new ChallengeStore(Date.now, pool ? new PostgresNonces(pool) : undefined);
+
+/**
+ * Local disk today, an S3-compatible bucket the day a second replica exists.
+ *
+ * Constructed unconditionally: it needs no credential and no database, and the
+ * directory is created on the first write, so there is no setup step to skip
+ * and no half-configured state to refuse. See files/store.ts for why
+ * content-addressing is what makes this safe, and what the single-box
+ * limitation costs.
+ */
+const fileStore = config.files.r2
+  ? new R2FileStore({
+      accountId: config.files.r2.accountId,
+      bucket: config.files.r2.bucket,
+      credentials: {
+        accessKeyId: config.files.r2.accessKeyId,
+        secretAccessKey: config.files.r2.secretAccessKey,
+      },
+      maxTotalBytes: config.files.maxTotalBytes,
+    })
+  : new LocalFileStore({
+      root: config.files.root,
+      maxTotalBytes: config.files.maxTotalBytes,
+    });
+
+const app = buildServer(config, {
+  ...(pool ? { pool } : {}),
+  fileStore,
+  ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
+  challenges,
+  reader,
+});
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -43,12 +108,23 @@ try {
       network: config.network.name,
       addresses: config.addresses,
       vault: config.vault ? { activeKeyId: config.vault.keyring.activeKeyId } : "disabled",
+      nonces: pool ? "postgres" : "in-memory (single process only)",
+      files: config.files.r2 ? `r2:${config.files.r2.bucket}` : `disk:${config.files.root}`,
     },
     "sterun backend ready",
   );
   if (!config.vault) {
     app.log.warn(
-      "PII vault is OFF — /participants is not mounted. Set DATABASE_URL and PII_KEYS to enable it (be/OPERATIONS.md).",
+      "PII vault is OFF — /participants and the roster bundle are not mounted. " +
+        "Set DATABASE_URL and PII_KEYS to enable them (be/OPERATIONS.md).",
+    );
+  }
+  if (pool) {
+    // The API serves the index; it does not fill it. Saying so here saves the
+    // "why is /events empty" question, which otherwise gets asked once per
+    // person who deploys this.
+    app.log.info(
+      "index read endpoints are mounted. The poller is a separate process: `pnpm indexer follow`.",
     );
   }
 } catch (err) {

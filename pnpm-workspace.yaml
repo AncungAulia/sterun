@@ -9,6 +9,7 @@
 # managers in charge of the same directory for no gain.
 packages:
   - be
+  - sdk
   - fe
   - landing-page
 

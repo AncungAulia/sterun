@@ -1,0 +1,18 @@
+# STE-31 — override khusus homelab jameserver.
+#
+# compose.prod.yml sengaja TIDAK mem-publish port API: di deployment yang
+# normal, Caddy ada di compose yang sama dan menjangkaunya lewat network
+# internal, jadi tidak ada port plaintext di host untuk ditemukan siapa pun.
+#
+# Homelab ini berbeda: router-nya tidak mem-forward 80/443 (sudah diuji dari
+# internet — 522 dari proxy eksternal walau ada yang listen), jadi ACME HTTP-01
+# tidak mungkin dan Caddy di dalam compose ini tidak berguna. Ingress-nya datang
+# dari LUAR container: Tailscale Funnel di pve01, dan nanti Cloudflare Tunnel.
+#
+# Karena itu port-nya di-publish, tapi **di-bind ke IP LAN saja** — bukan
+# 0.0.0.0 — sehingga yang bisa menjangkaunya hanya sesuatu di jaringan ini,
+# yaitu proxy-nya. Postgres tetap tanpa ports:, seperti seharusnya.
+services:
+  api:
+    ports:
+      - "192.168.18.42:3001:3001"

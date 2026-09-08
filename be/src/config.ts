@@ -12,6 +12,8 @@
 import { Networks } from "@stellar/stellar-sdk";
 import { parseKeyring, type Keyring } from "./crypto/keyring.js";
 import { loadDeployments, type Deployments } from "./deployments.js";
+import { DEFAULT_PAGE_LIMIT } from "./indexer/indexer.js";
+import { DEFAULT_EXTEND_TO_LEDGERS, DEFAULT_THRESHOLD_LEDGERS } from "./keeper/ttl.js";
 
 export interface Config {
   readonly env: "development" | "production" | "test";
@@ -33,6 +35,86 @@ export interface Config {
   readonly distributorSecret: string | undefined;
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
+  /**
+   * Browser origins allowed to call this API.
+   *
+   * An allow-list, never `*`. Authenticated requests carry a wallet signature
+   * in a header, and `*` would let any page a runner happens to visit ask their
+   * browser to send one. Empty means no browser may call it at all, which is
+   * the right default for a deployment that has not been told about its web
+   * app yet.
+   */
+  readonly webOrigins: readonly string[];
+  /**
+   * STE-16. The indexer and the TTL keeper. Always present — running them is
+   * decided by which process you start, not by whether they are configured,
+   * and a status endpoint that cannot say what the poll interval is is worse
+   * than one that always can.
+   */
+  readonly indexer: {
+    /**
+     * Any account that exists on the network. It signs nothing: view calls are
+     * simulated, and a simulation still needs a source account to build an
+     * envelope around. Defaults to the sUSD distributor, which
+     * docs/deployments.md proves exists.
+     */
+    readonly simulationSource: string;
+    /** 5-10s is the ticket's recommendation; 7s sits in the middle of it. */
+    readonly pollIntervalMs: number;
+    readonly pageLimit: number;
+    /**
+     * Where a first-ever poll starts. Undefined means "as far back as RPC still
+     * retains", which is the most complete answer available and the right
+     * default for a chain that is days old.
+     */
+    readonly startLedger: number | undefined;
+  };
+  /**
+   * STE-16. Rent for the TTL keeper. Absent in the API process, which never
+   * submits anything — the same split as the faucet's distributor secret.
+   */
+  readonly keeper: {
+    readonly secret: string | undefined;
+    readonly thresholdLedgers: number;
+    readonly extendToLedgers: number;
+  };
+  /**
+   * Event metadata files (posters + the JSON document `metadata_hash` commits
+   * to on-chain). Always present: storing them needs no credential and no
+   * database, so there is no half-configured state to guard against, unlike
+   * the vault.
+   */
+  readonly files: {
+    /** Directory the content-addressed tree lives in. */
+    readonly root: string;
+    /** Hard ceiling on the whole store. Bounds growth; a hit is a 507. */
+    readonly maxTotalBytes: number;
+    /**
+     * Origin to build returned URLs from, e.g. `https://api-sterun.jameshub.fun`.
+     *
+     * Undefined falls back to deriving it from the request, which is right for
+     * `pnpm dev` and wrong for the deployed box: `Host` is attacker-controlled,
+     * and the URL this endpoint returns is one the organiser then commits
+     * on-chain. Production sets it.
+     */
+    readonly publicBaseUrl: string | undefined;
+    /**
+     * Cloudflare R2, or `undefined` to keep bytes on local disk.
+     *
+     * All four values or none: a half-configured bucket is a process that
+     * starts, accepts an upload, and fails at the first PUT with a 403 that
+     * reads like bad credentials. `loadR2Config` refuses that at startup
+     * instead, the same way the vault refuses a DATABASE_URL without PII_KEYS.
+     */
+    readonly r2:
+      | {
+          readonly accountId: string;
+          readonly bucket: string;
+          readonly accessKeyId: string;
+          readonly secretAccessKey: string;
+        }
+      | undefined;
+  };
   /**
    * The PII vault, or `undefined` when this process is not running one.
    *
@@ -79,10 +161,102 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       eventRegistry: env.EVENT_REGISTRY ?? fromDoc.eventRegistry,
       raceRecord: env.RACE_RECORD ?? fromDoc.raceRecord,
     },
-    distributorSecret: env.SUSD_DISTRIBUTOR_SECRET,
+    // Two names accepted, and the reason is worth a line. be/.env carries the
+    // whole Sterun identity set under a STERUN_ prefix — issuer, distributor,
+    // admin, organiser, runners — which is a better scheme than the bare name
+    // this file originally read, because it namespaces them away from anything
+    // else in the environment. Rather than making that file wrong, both work;
+    // the prefixed one wins where both are set.
+    distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    webOrigins: (env.STERUN_WEB_ORIGIN ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
+    indexer: {
+      simulationSource:
+        env.INDEXER_SOURCE_ACCOUNT ?? env.SUSD_DISTRIBUTOR ?? fromDoc.susdDistributor,
+      pollIntervalMs: num(env.INDEXER_POLL_INTERVAL_MS, 7_000),
+      pageLimit: num(env.INDEXER_PAGE_LIMIT, DEFAULT_PAGE_LIMIT),
+      startLedger: env.INDEXER_START_LEDGER ? num(env.INDEXER_START_LEDGER, 0) : undefined,
+    },
+    keeper: {
+      secret: env.STERUN_TTL_KEEPER_SECRET ?? env.TTL_KEEPER_SECRET,
+      thresholdLedgers: num(env.TTL_THRESHOLD_LEDGERS, DEFAULT_THRESHOLD_LEDGERS),
+      extendToLedgers: num(env.TTL_EXTEND_TO_LEDGERS, DEFAULT_EXTEND_TO_LEDGERS),
+    },
+    files: {
+      root: env.STERUN_FILES_ROOT ?? "./data/files",
+      maxTotalBytes: num(env.STERUN_FILES_MAX_BYTES, 512 * 1024 * 1024),
+      publicBaseUrl: normaliseBaseUrl(env.STERUN_PUBLIC_BASE_URL),
+      r2: loadR2Config(env),
+    },
     vault: loadVaultConfig(env),
   };
+}
+
+/**
+ * Validated at startup rather than at the first upload.
+ *
+ * A typo'd base URL does not break anything visible here — it produces a
+ * perfectly successful 201 carrying a URL that goes nowhere, which the
+ * organiser then writes into `create_event`'s `uri` permanently. Failing to
+ * boot is far cheaper than that.
+ */
+/**
+ * All four, or none.
+ *
+ * The failure this prevents is specific and nasty: with three of the four set,
+ * the process starts happily, serves every other endpoint, and then fails the
+ * first upload with a 403 from R2 — which reads exactly like a wrong secret and
+ * sends whoever is debugging it to regenerate credentials that were fine.
+ */
+function loadR2Config(env: NodeJS.ProcessEnv): Config["files"]["r2"] {
+  const parts = {
+    accountId: env.STERUN_R2_ACCOUNT_ID,
+    bucket: env.STERUN_R2_BUCKET,
+    accessKeyId: env.STERUN_R2_ACCESS_KEY_ID,
+    secretAccessKey: env.STERUN_R2_SECRET_ACCESS_KEY,
+  };
+  const present = Object.entries(parts).filter(([, value]) => value !== undefined && value !== "");
+  if (present.length === 0) return undefined;
+  if (present.length < 4) {
+    const missing = Object.entries(parts)
+      .filter(([, value]) => value === undefined || value === "")
+      .map(([name]) => `STERUN_R2_${name.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase()}`);
+    throw new Error(
+      `R2 is partly configured. Missing: ${missing.join(", ")}. Set all four or none — ` +
+        `three of four starts a process that fails its first upload with a 403 that looks ` +
+        `like a wrong secret. See be/OPERATIONS.md.`,
+    );
+  }
+  return {
+    accountId: parts.accountId as string,
+    bucket: parts.bucket as string,
+    accessKeyId: parts.accessKeyId as string,
+    secretAccessKey: parts.secretAccessKey as string,
+  };
+}
+
+function normaliseBaseUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    throw new Error(
+      `STERUN_PUBLIC_BASE_URL is not a valid URL: ${JSON.stringify(raw)}. ` +
+        `Expected something like https://api-sterun.jameshub.fun`,
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `STERUN_PUBLIC_BASE_URL must be http or https, got ${JSON.stringify(parsed.protocol)}`,
+    );
+  }
+  // No trailing slash, so callers can join with `/files/...` without producing
+  // a double slash that some caches treat as a different resource.
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
 }
 
 function loadVaultConfig(env: NodeJS.ProcessEnv): Config["vault"] {

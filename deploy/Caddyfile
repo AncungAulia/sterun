@@ -1,0 +1,53 @@
+# STE-31 — TLS in front of the Sterun API.
+#
+# Caddy obtains and renews the Let's Encrypt certificate itself, with no cron
+# entry to forget. That is the whole reason it is here rather than nginx: a
+# renewal that quietly stops working takes the API down ninety days after
+# anybody last thought about it, and STE-31's done-criterion is a health check a
+# stranger can open over TLS.
+#
+# DNS has to point at this box before the first start, or the ACME challenge
+# fails and Caddy retries with backoff. See be/OPERATIONS.md.
+
+{$STERUN_DOMAIN} {
+	encode zstd gzip
+
+	# The backend is not published to the host at all (compose.prod.yml), so
+	# this is the only path in.
+	reverse_proxy api:3001 {
+		# The API rate-limits per client, and behind a proxy every request
+		# arrives from the proxy's address. Without this header one noisy
+		# client would rate-limit the entire event.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+
+		# Readiness, not liveness: this decides whether to send traffic here,
+		# and /ready is the endpoint that checks the database. /health would
+		# answer 200 from an instance that cannot reach Postgres.
+		health_uri /ready
+		health_interval 15s
+		health_timeout 5s
+	}
+
+	header {
+		# HSTS, nosniff, frame-deny and referrer-policy are set by the API
+		# itself (be/src/http/hardening.ts). They used to be here, which was
+		# wrong: this deployment can be fronted by Caddy, a Cloudflare Tunnel or
+		# Tailscale Funnel, and headers configured in one proxy vanish under
+		# another. Only the thing that is genuinely Caddy's stays here.
+		#
+		# Caddy announces itself by default; a version number is free
+		# reconnaissance.
+		-Server
+	}
+
+	# CORS is set by the API itself (be/src/http/hardening.ts), for the same
+	# reason the security headers are: this deployment can be fronted by Caddy,
+	# a Cloudflare Tunnel or Tailscale Funnel, and a policy configured in one
+	# proxy is simply absent under another.
+
+	log {
+		output stdout
+		format json
+	}
+}

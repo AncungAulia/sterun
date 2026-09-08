@@ -1,0 +1,285 @@
+/**
+ * STE-20 — rate limiting, log redaction, and the OpenAPI document.
+ *
+ * `be/CLAUDE.md` listed rate limiting under "things that do not exist yet".
+ * These are the tests that let that line be deleted.
+ *
+ * The limiter is disabled when `NODE_ENV=test`, so the tests that need it build
+ * a server with a production config and a silenced logger. That is deliberate:
+ * a shared suite would otherwise start failing its 241st request for reasons
+ * unrelated to whatever it was asserting.
+ */
+import type { FastifyInstance } from "fastify";
+import { afterEach, describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config.js";
+import { RATE_LIMITS, REDACTED_HEADERS, loggerOptions } from "../src/http/hardening.js";
+import { buildServer } from "../src/server.js";
+
+let app: FastifyInstance | undefined;
+
+afterEach(async () => {
+  await app?.close();
+  app = undefined;
+});
+
+/** A server with the limiter on, and its logger silenced. */
+async function liveServer(): Promise<FastifyInstance> {
+  const previous = process.env.LOG_LEVEL;
+  process.env.LOG_LEVEL = "silent";
+  try {
+    const server = buildServer(loadConfig({ NODE_ENV: "production" }));
+    await server.ready();
+    return server;
+  } finally {
+    if (previous === undefined) delete process.env.LOG_LEVEL;
+    else process.env.LOG_LEVEL = previous;
+  }
+}
+
+describe("rate limiting", () => {
+  it("allows normal traffic and then refuses the rest", async () => {
+    app = await liveServer();
+    const hit = () => app!.inject({ method: "GET", url: "/health" });
+
+    for (let i = 0; i < RATE_LIMITS.global; i += 1) {
+      expect((await hit()).statusCode).toBe(200);
+    }
+    const refused = await hit();
+    expect(refused.statusCode).toBe(429);
+  });
+
+  it("answers 429 in the same shape as every other error", async () => {
+    app = await liveServer();
+    for (let i = 0; i < RATE_LIMITS.global; i += 1) await app.inject({ url: "/health" });
+    const refused = await app.inject({ url: "/health" });
+    expect(refused.json().error).toBe("rate-limited");
+    expect(refused.json().message).toMatch(/retry in \d+s/);
+  });
+
+  it("counts clients separately by forwarded address", async () => {
+    // Behind the reverse proxy STE-31 will put in front of this, every request
+    // arrives from the same socket. Without the forwarded address, one noisy
+    // client would rate-limit the entire event.
+    app = await liveServer();
+    const from = (ip: string) =>
+      app!.inject({ method: "GET", url: "/health", headers: { "x-forwarded-for": ip } });
+
+    for (let i = 0; i < RATE_LIMITS.global; i += 1) {
+      expect((await from("203.0.113.1")).statusCode).toBe(200);
+    }
+    expect((await from("203.0.113.1")).statusCode).toBe(429);
+    // A different runner, unaffected.
+    expect((await from("203.0.113.2")).statusCode).toBe(200);
+  });
+
+  it("reads only the first hop of a forwarded chain", async () => {
+    // `x-forwarded-for` accumulates: "client, proxy1, proxy2". Keying on the
+    // whole string would let a client rotate the tail and get a fresh bucket.
+    app = await liveServer();
+    const from = (value: string) =>
+      app!.inject({ method: "GET", url: "/health", headers: { "x-forwarded-for": value } });
+
+    for (let i = 0; i < RATE_LIMITS.global; i += 1) await from("203.0.113.9, 10.0.0.1");
+    expect((await from("203.0.113.9, 10.0.0.2")).statusCode).toBe(429);
+  });
+
+  it("gives the expensive endpoints a lower ceiling than the global one", () => {
+    expect(RATE_LIMITS.challenge).toBeLessThan(RATE_LIMITS.global);
+    expect(RATE_LIMITS.results).toBeLessThan(RATE_LIMITS.challenge);
+  });
+
+  it("is off under NODE_ENV=test so suites do not fail on request 241", async () => {
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    await app.ready();
+    for (let i = 0; i < RATE_LIMITS.global + 5; i += 1) {
+      expect((await app.inject({ url: "/health" })).statusCode).toBe(200);
+    }
+  });
+});
+
+describe("logging", () => {
+  it("redacts the credential headers", () => {
+    const options = loggerOptions(loadConfig({ NODE_ENV: "production" })) as {
+      redact: { paths: string[]; censor: string };
+    };
+    expect(options.redact.paths).toEqual(REDACTED_HEADERS);
+    expect(options.redact.paths).toContain('req.headers["x-sterun-signature"]');
+    expect(options.redact.paths).toContain('req.headers["x-sterun-nonce"]');
+  });
+
+  it("logs the path without its query string", () => {
+    // A query string can carry an address; the path never carries more than an
+    // event id.
+    const options = loggerOptions(loadConfig({ NODE_ENV: "production" })) as {
+      serializers: { req: (r: { id: string; method: string; url: string }) => { url: string } };
+    };
+    const serialised = options.serializers.req({
+      id: "1",
+      method: "GET",
+      url: "/events?runner=GABC",
+    });
+    expect(serialised.url).toBe("/events");
+  });
+
+  it("stays off entirely in tests", () => {
+    expect(loggerOptions(loadConfig({ NODE_ENV: "test" }))).toBe(false);
+  });
+});
+
+describe("the OpenAPI document", () => {
+  it("describes the routes that are actually mounted", async () => {
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    await app.ready();
+    const spec = (await app.inject({ url: "/openapi.json" })).json();
+
+    expect(spec.openapi).toMatch(/^3\./);
+    expect(spec.info.title).toBe("Sterun backend API");
+    // A bare server mounts these two and nothing else, so the document says so.
+    expect(Object.keys(spec.paths)).toContain("/health");
+    expect(Object.keys(spec.paths)).toContain("/config");
+    expect(Object.keys(spec.paths)).not.toContain("/participants");
+  });
+
+  it("documents the wallet-signature scheme a client has to implement", async () => {
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    await app.ready();
+    const spec = (await app.inject({ url: "/openapi.json" })).json();
+    const scheme = spec.components.securitySchemes.walletSignature;
+    expect(scheme.name).toBe("x-sterun-signature");
+    // The Uint8Array.toString("base64") trap, in the document rather than only
+    // in a CLAUDE.md nobody outside the repo reads.
+    expect(scheme.description).toContain("Buffer.from");
+  });
+
+  it("carries the response schemas rather than describing them in prose", async () => {
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    await app.ready();
+    const spec = (await app.inject({ url: "/openapi.json" })).json();
+    const health = spec.paths["/health"].get;
+    expect(health).toBeTruthy();
+    // Generated from the same schemas Fastify validates with, so it cannot
+    // describe an endpoint that behaves differently.
+    expect(spec.paths["/config"].get).toBeTruthy();
+  });
+
+  it("does not document itself", async () => {
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    await app.ready();
+    const spec = (await app.inject({ url: "/openapi.json" })).json();
+    expect(Object.keys(spec.paths)).not.toContain("/openapi.json");
+  });
+});
+
+describe("security headers travel with the code, not with the proxy", () => {
+  it("sets nosniff, frame-deny and referrer-policy on every response", async () => {
+    // These were in deploy/Caddyfile until the real deployment showed why that
+    // was wrong: the jameserver homelab forwards no ports, so the ingress there
+    // is Tailscale Funnel rather than Caddy, and every header configured in
+    // Caddy simply was not sent. "Does this API send HSTS" must not depend on
+    // which proxy somebody put in front of it.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["x-frame-options"]).toBe("DENY");
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+  });
+
+  it("sends HSTS in production", async () => {
+    app = await liveServer();
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.headers["strict-transport-security"]).toBe("max-age=31536000; includeSubDomains");
+  });
+
+  it("does NOT send HSTS outside production", async () => {
+    // A year-long HSTS pin picked up from a developer's plain-HTTP server is a
+    // promise their browser keeps long after they have moved on.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.headers["strict-transport-security"]).toBeUndefined();
+  });
+
+  it("sets them on an error response too", async () => {
+    // The 404 path goes through a different handler; a header set only on the
+    // happy path is a header an attacker simply avoids.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({ method: "GET", url: "/nope" });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+  });
+});
+
+describe("CORS is an allow-list, and it is the API's job", () => {
+  const withOrigins = (origins: string) =>
+    buildServer(loadConfig({ NODE_ENV: "test", STERUN_WEB_ORIGIN: origins }));
+
+  it("lets a listed origin through", async () => {
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://sterun.jameshub.fun" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBe("https://sterun.jameshub.fun");
+  });
+
+  it("answers a preflight with the wallet-signature headers", async () => {
+    // Without these three named, the browser blocks the real request and the
+    // failure looks like a frontend bug.
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/events/0/roster",
+      headers: {
+        origin: "https://sterun.jameshub.fun",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "x-sterun-signature",
+      },
+    });
+    expect(res.statusCode).toBeLessThan(400);
+    const allowed = String(res.headers["access-control-allow-headers"] ?? "").toLowerCase();
+    for (const header of ["x-sterun-address", "x-sterun-nonce", "x-sterun-signature"]) {
+      expect(allowed).toContain(header);
+    }
+  });
+
+  it("refuses an origin that is not on the list", async () => {
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://evil.example" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("accepts several origins, so a preview deployment can be listed too", async () => {
+    app = withOrigins("https://sterun.jameshub.fun, http://localhost:3000");
+    for (const origin of ["https://sterun.jameshub.fun", "http://localhost:3000"]) {
+      const res = await app.inject({ method: "GET", url: "/health", headers: { origin } });
+      expect(res.headers["access-control-allow-origin"]).toBe(origin);
+    }
+  });
+
+  it("allows no browser at all when nothing is configured", async () => {
+    // A deployment that has not been told about its web app should refuse every
+    // browser rather than guess. Never `*`: authenticated requests carry a
+    // wallet signature in a header.
+    app = buildServer(loadConfig({ NODE_ENV: "test" }));
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://anything.example" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("exposes x-request-id so a browser client can quote it", async () => {
+    app = withOrigins("https://sterun.jameshub.fun");
+    const res = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://sterun.jameshub.fun" },
+    });
+    expect(String(res.headers["access-control-expose-headers"] ?? "")).toContain("x-request-id");
+  });
+});

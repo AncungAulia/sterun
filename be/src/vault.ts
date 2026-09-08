@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { aad, decrypt, encrypt } from "./crypto/envelope.js";
 import type { Keyring } from "./crypto/keyring.js";
+import { nameFragment } from "./roster/name-fragment.js";
 import {
   participantHash,
   generateSalt,
@@ -63,6 +64,18 @@ export interface ParticipantSummary {
   createdAt: Date;
 }
 
+/**
+ * One roster row's worth of vault material. No name, no id, no contact — see
+ * {@link Vault.rosterSecretsForEvent}.
+ */
+export interface RosterSecret {
+  tokenId: number;
+  /** 64 lowercase hex characters. The scanner recomputes TOTP codes with it. */
+  totpSecretHex: string;
+  /** Given name plus initials, or `null` for rows predating migration 003. */
+  nameFragment: string | null;
+}
+
 export class ParticipantExistsError extends Error {
   constructor(readonly tokenId: number) {
     super(`token_id ${tokenId} is already linked to a different participant record`);
@@ -105,17 +118,21 @@ export class Vault {
     // Hashed before anything is written. A normalisation refusal (blank name,
     // an id that is only separators) must fail the request, not leave a row.
     const hash = participantHash(input, salt);
+    // Reduced here, where the plaintext already is, so nothing downstream ever
+    // needs a "decrypt the name" path to build a roster (STE-16).
+    const fragment = nameFragment(input.name);
 
     await this.pool.query(
       `INSERT INTO participants
-         (id, name_enc, national_id_enc, emergency_contact_enc, salt, totp_secret,
-          participant_hash, event_id, category_id, runner_address)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+         (id, name_enc, national_id_enc, emergency_contact_enc, name_fragment_enc,
+          salt, totp_secret, participant_hash, event_id, category_id, runner_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         id,
         encrypt(this.keyring, input.name, aad("pii.name", id)),
         encrypt(this.keyring, input.nationalId, aad("pii.national_id", id)),
         encrypt(this.keyring, input.emergencyContact, aad("pii.emergency_contact", id)),
+        encrypt(this.keyring, fragment, aad("pii.name_fragment", id)),
         salt,
         totpSecret,
         Buffer.from(hash, "hex"),
@@ -214,6 +231,46 @@ export class Vault {
       [tokenId],
     );
     return rows[0]?.totp_secret ?? null;
+  }
+
+  /**
+   * The secret material a scanner needs for one event's roster (STE-16).
+   *
+   * This is the second read path out of the vault, and it stays inside the
+   * module's rule for two reasons: what it returns is a check-in secret and a
+   * *fragment*, never a name; and it is reachable only from an endpoint that
+   * demands a wallet signature from an address the chain lists as a scanner for
+   * this event. The blast radius is written down honestly in
+   * docs/SYSTEM_DESIGN.md §11 point 3 — a leaked roster lets someone mint valid
+   * codes, and the on-chain `state == Entered` guard is what caps the damage.
+   *
+   * Confirmed rows only: a record that is not on-chain has no token id, and a
+   * scanner cannot check in something that was never entered.
+   */
+  async rosterSecretsForEvent(eventId: number): Promise<RosterSecret[]> {
+    const { rows } = await this.pool.query<{
+      id: string;
+      token_id: number;
+      totp_secret: Buffer;
+      name_fragment_enc: Buffer | null;
+    }>(
+      `SELECT id, token_id, totp_secret, name_fragment_enc
+         FROM participants
+        WHERE event_id = $1 AND token_id IS NOT NULL
+        ORDER BY token_id`,
+      [eventId],
+    );
+    return rows.map((r) => ({
+      tokenId: r.token_id,
+      totpSecretHex: r.totp_secret.toString("hex"),
+      // Null for rows submitted before migration 003: the fragment can only be
+      // derived from the plaintext at submit time, so there is nothing to
+      // backfill from. Reporting null is the honest answer.
+      nameFragment:
+        r.name_fragment_enc === null
+          ? null
+          : decrypt(this.keyring, r.name_fragment_enc, aad("pii.name_fragment", r.id)),
+    }));
   }
 
   /**

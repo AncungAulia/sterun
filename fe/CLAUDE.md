@@ -5,45 +5,87 @@
 Blok `@AGENTS.md` di atas ditulis ulang oleh `next dev` — biarkan, dan commit bersama kerjaanmu.
 Isi di bawah ini punya Sterun.
 
-Owner: **Ancung** (flow) + **Nabil** (design system). Komponen C9/C10/C11/C12. Tiket STE-17
-(organiser console), STE-18/21/22 (QR pass + scanner PWA), dst. **Belum ada kode Sterun di sini** —
-masih scaffold `create-next-app`.
+Owner: **Ancung** (flow) + **Nabil** (design system). Komponen C9/C10/C11/C12. Sudah ada:
+**STE-8** (shell + wallet connect) dan **STE-13** (directory `/` + detail `/events/[id]`).
+Berikutnya STE-17 (organiser console), lalu STE-21/22 (QR pass + scanner PWA), STE-24 (profile).
 
 Stack terpasang: **Next.js 16.3.3**, React 19.2.8, Tailwind v4 (`@tailwindcss/postcss`),
-TypeScript 5, ESLint 9. Dua lockfile ada (`package-lock.json` + `pnpm-lock.yaml`) — pilih satu dan
-hapus yang lain saat mulai kerja serius, jangan biarkan dua-duanya hidup.
+TypeScript 5 (`target: ES2022` — harga kontrak `i128` datang sebagai `bigint`, dan literal
+`bigint` tidak lolos typecheck di bawah ES2020), ESLint 9, **`@tanstack/react-query`** untuk cache
+baca chain, `zustand` untuk state wallet.
+
+**Tidak ada lockfile di `fe/`.** Folder ini anggota pnpm workspace (`pnpm-workspace.yaml` di root),
+jadi yang berlaku cuma `pnpm-lock.yaml` di root — itu juga yang dipasang CI dengan
+`--frozen-lockfile`. Jangan menjalankan `npm install` atau `pnpm install` dari dalam `fe/`: itu
+menumbuhkan lockfile kedua yang tidak dibaca siapa pun tapi tetap ikut ter-commit.
 
 ```bash
-cd fe
-npm install      # atau pnpm install — konsisten dengan lockfile yang kamu pilih
-npm run dev
-npm run build
-npm run lint
+pnpm install                # dari ROOT repo, bukan dari fe/
+pnpm --filter fe dev
+pnpm --filter fe build
+pnpm --filter fe lint
+pnpm --filter fe typecheck
 ```
+
+`typecheck` = `next typegen && tsc --noEmit`, dan `next typegen`-nya **tidak boleh dilewati**:
+`app/layout.tsx` memakai `LayoutProps<"/">`, tipe global yang di-generate Next 16 ke `.next/types/`
+dan tidak ikut ke repo (`.next/` di-gitignore). `tsc` polos di mesin yang belum pernah build gagal
+dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-generate, bukan bug.
 
 ## Yang WAJIB dibaca sebelum bikin flow
 
 | Dokumen | Untuk apa |
 | --- | --- |
+| `fe/guides/ARCHITECTURE.md` | **baca duluan**: struktur folder, aturan per lapisan, akses data, aturan UI, checklist |
+| `docs/WEB_APP_IA.md` | **peta halaman app ini**: URL apa saja, isinya apa, datanya dari mana, urutan bangun |
 | `docs/SYSTEM_DESIGN.md` §6 | user flow lengkap: entry, race day, finish, verify |
 | `docs/SYSTEM_DESIGN.md` §7 | desain rotating QR / anti-fraud |
 | `docs/specs/HASH_AND_TOTP.md` §4–§5 | payload QR + derivasi kode TOTP, **byte-exact** |
 | `docs/specs/INTERFACE.md` | signature fungsi + kode error |
 | `sc/bindings/README.md` | cara memakai client TS hasil generate |
 
-## Kontrak: pakai bindings yang sudah di-generate
+## Kontrak: lewat `@sterun/sdk`, bukan bindings mentah
 
 ```json
-{
-  "dependencies": {
-    "event-registry": "file:../sc/bindings/event-registry",
-    "race-record": "file:../sc/bindings/race-record"
-  }
-}
+{ "dependencies": { "@sterun/sdk": "workspace:*" } }
 ```
+
+Catatan ini dulu menyuruh memakai `file:../sc/bindings/*`; itu ditulis waktu SDK belum ada.
+Sekarang `@sterun/sdk` (STE-15/STE-19) sudah jadi dan sudah diuji ke testnet live, dan
+`fe/guides/ARCHITECTURE.md` §2 menetapkan SDK sebagai **satu-satunya** jalan bicara ke kontrak.
+`workspace:*` karena paketnya belum di-publish ke npm.
+
+**SDK harus di-build dulu** sebelum `fe` bisa typecheck/test/build: `pnpm --filter @sterun/sdk
+build` (menghasilkan `sdk/dist/`). `pnpm -r build` dari root sudah urut topologis, jadi ini cuma
+menggigit kalau kamu menjalankan `fe` sendirian di clone baru.
 
 Jangan mengetik ulang signature kontrak, dan jangan mengedit apa pun di `sc/bindings/*/` — itu
 output generator, edit tangan hilang tanpa jejak pada regenerate berikutnya.
+
+### Baca chain (yang sudah ada dari STE-13)
+
+- `src/lib/sterun.ts` — `readClient`, **read-only**. Semua view SDK itu simulasi, jadi halaman
+  publik jalan tanpa wallet. Ada test yang gagal kalau file ini mengimpor wallet.
+- `src/lib/events.ts` — `listEvents` / `getEventSummary`. Registry tidak punya "list events"
+  (view yang mengembalikan vector tak terbatas akan mati sendiri begitu protokolnya laku), jadi
+  daftar disusun dari `event_count` + `get_event` per id, paralel.
+- `src/lib/metadata.ts` — unduh dokumen di `uri`, hitung sha256 byte-nya, bandingkan dengan
+  `metadata_hash`. **Konvensi: `metadata_hash` = sha256 byte persis yang disajikan**, tanpa
+  kanonikalisasi. STE-17 menulis dokumennya dengan aturan yang sama.
+- `src/hooks/useEvents.ts` + `useEventMetadata.ts` — React Query di atas keduanya.
+
+## Test
+
+```bash
+pnpm --filter fe test                      # unit + komponen, tanpa network
+STERUN_E2E=1 pnpm --filter fe test test/e2e  # e2e ke testnet live, manual
+```
+
+E2E-nya opt-in supaya `typescript.yml` tetap tidak menyentuh network. File e2e jalan di environment
+**node**, bukan jsdom: jsdom memasang `Uint8Array` realm-nya sendiri sebagai global, sehingga
+`Buffer` bikinan stellar-sdk gagal `instanceof Uint8Array` di encoder XDR dan tiap call mati dengan
+`functionName: expected Uint8Array` sebelum menyentuh jaringan. Di browser tidak terjadi (stellar-sdk
+membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
 
 ## Yang bikin salah di sisi frontend
 
@@ -64,6 +106,15 @@ output generator, edit tangan hilang tanpa jejak pada regenerate berikutnya.
 
 ## Konvensi
 
+- **Semua teks UI Bahasa Inggris.** Label tombol, judul, pesan error, empty state, placeholder —
+  semuanya. Dokumen `.md` tetap Bahasa Indonesia, komentar kode tetap Inggris; aturan ini menambah
+  satu hal saja, yaitu teks yang tampil di layar.
+- **Jangan pernah memakai em dash (`—`) atau en dash (`–`) di teks UI.** Pecah jadi dua kalimat,
+  pakai koma, atau tanda kurung. Kalau benar-benar perlu pemisah, pakai tanda hubung biasa.
+  Larangan ini khusus teks UI; komentar kode dan `.md` tidak terpengaruh.
+- **Tidak ada hex, nama font, atau px mentah di komponen** — semua dari token `app/tokens.css`
+  (milik Nabil, STE-7). Token itu punya dua salinan (`fe/` dan `landing-page/`); kalau diubah,
+  ubah keduanya dalam satu commit.
 - Contract address dari `docs/deployments.md`, lewat env var, bukan hardcode tersebar.
 - Testnet RPC `https://soroban-testnet.stellar.org`, passphrase `Test SDF Network ; September 2015`.
 - Test: e2e + edge + positive + negative (`CLAUDE.md` root). Untuk flow bayar dan scan, kasus

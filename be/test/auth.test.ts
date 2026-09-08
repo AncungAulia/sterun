@@ -21,110 +21,147 @@ import { AuthError, ChallengeStore, NONCE_TTL_MS } from "../src/auth.js";
 const sign = (kp: Keypair, nonce: string): string =>
   Buffer.from(kp.sign(Buffer.from(nonce, "utf8"))).toString("base64");
 
+/**
+ * The same nonce, signed the way a browser wallet signs it.
+ *
+ * SEP-53 does not sign the message: it signs the sha256 of the message under a
+ * fixed "Stellar Signed Message:" prefix. Freighter and the other
+ * wallets behind Stellar Wallets Kit implement that, so this is what actually
+ * arrives from the organiser console, and it is a different 64 bytes from
+ * `sign` above for the same nonce and the same key.
+ */
+const signSep53 = (kp: Keypair, nonce: string): string =>
+  Buffer.from(kp.signMessage(nonce)).toString("base64");
+
 describe("ChallengeStore", () => {
-  it("accepts a nonce signed by the account it was issued to", () => {
+  it("accepts a nonce signed by the account it was issued to", async () => {
     const store = new ChallengeStore();
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
-    expect(store.verify(kp.publicKey(), nonce, sign(kp, nonce))).toBe(kp.publicKey());
+    const { nonce } = await store.issue(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, sign(kp, nonce))).resolves.toBe(kp.publicKey());
   });
 
-  it("spends the nonce, so a captured signature cannot be replayed", () => {
+  it("accepts the SEP-53 signature a browser wallet produces", async () => {
+    // Every caller so far has been a script holding a raw keypair, which signs
+    // the nonce itself. A wallet cannot: SEP-53 exists so that what a user
+    // approves in a popup can never also be a valid transaction. Refusing it
+    // would mean no browser can ever authenticate, which is most of the product.
     const store = new ChallengeStore();
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
+    const { nonce } = await store.issue(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, signSep53(kp, nonce))).resolves.toBe(
+      kp.publicKey(),
+    );
+  });
+
+  it("still refuses a SEP-53 signature over some other message", async () => {
+    // Accepting two encodings must not become accepting anything: the bytes
+    // still have to be this nonce, signed by this key.
+    const store = new ChallengeStore();
+    const kp = Keypair.random();
+    const { nonce } = await store.issue(kp.publicKey());
+    const elsewhere = Buffer.from(kp.signMessage("some other nonce")).toString("base64");
+    await expect(store.verify(kp.publicKey(), nonce, elsewhere)).rejects.toThrow(
+      /does not match the nonce/,
+    );
+  });
+
+  it("spends the nonce, so a captured signature cannot be replayed", async () => {
+    const store = new ChallengeStore();
+    const kp = Keypair.random();
+    const { nonce } = await store.issue(kp.publicKey());
     const signature = sign(kp, nonce);
-    expect(store.verify(kp.publicKey(), nonce, signature)).toBe(kp.publicKey());
-    expect(() => store.verify(kp.publicKey(), nonce, signature)).toThrow(/already been used/);
+    await expect(store.verify(kp.publicKey(), nonce, signature)).resolves.toBe(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, signature)).rejects.toThrow(/already been used/);
   });
 
-  it("spends the nonce even when the signature is wrong", () => {
+  it("spends the nonce even when the signature is wrong", async () => {
     // Otherwise an attacker holding a nonce could grind signatures against it.
     const store = new ChallengeStore();
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
-    expect(() => store.verify(kp.publicKey(), nonce, sign(Keypair.random(), nonce))).toThrow(
+    const { nonce } = await store.issue(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, sign(Keypair.random(), nonce))).rejects.toThrow(
       /signature does not match/,
     );
-    expect(store.size).toBe(0);
+    await expect(store.size()).resolves.toBe(0);
   });
 
-  it("rejects a signature from a different key", () => {
+  it("rejects a signature from a different key", async () => {
     const store = new ChallengeStore();
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
-    expect(() => store.verify(kp.publicKey(), nonce, sign(Keypair.random(), nonce))).toThrow(
+    const { nonce } = await store.issue(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, sign(Keypair.random(), nonce))).rejects.toThrow(
       AuthError,
     );
   });
 
-  it("rejects a nonce presented by a different address", () => {
+  it("rejects a nonce presented by a different address", async () => {
     const store = new ChallengeStore();
     const alice = Keypair.random();
     const bob = Keypair.random();
-    const { nonce } = store.issue(alice.publicKey());
-    expect(() => store.verify(bob.publicKey(), nonce, sign(bob, nonce))).toThrow(
+    const { nonce } = await store.issue(alice.publicKey());
+    await expect(store.verify(bob.publicKey(), nonce, sign(bob, nonce))).rejects.toThrow(
       /issued to a different address/,
     );
   });
 
-  it("expires an unused nonce", () => {
+  it("expires an unused nonce", async () => {
     let now = 1_000_000;
     const store = new ChallengeStore(() => now);
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
+    const { nonce } = await store.issue(kp.publicKey());
     now += NONCE_TTL_MS + 1;
-    expect(() => store.verify(kp.publicKey(), nonce, sign(kp, nonce))).toThrow(/has expired/);
+    await expect(store.verify(kp.publicKey(), nonce, sign(kp, nonce))).rejects.toThrow(/has expired/);
   });
 
-  it("still accepts a nonce one millisecond before it expires", () => {
+  it("still accepts a nonce one millisecond before it expires", async () => {
     let now = 1_000_000;
     const store = new ChallengeStore(() => now);
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
+    const { nonce } = await store.issue(kp.publicKey());
     now += NONCE_TTL_MS - 1;
-    expect(store.verify(kp.publicKey(), nonce, sign(kp, nonce))).toBe(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, sign(kp, nonce))).resolves.toBe(kp.publicKey());
   });
 
-  it("sweeps expired nonces instead of growing without bound", () => {
+  it("sweeps expired nonces instead of growing without bound", async () => {
     let now = 1_000_000;
     const store = new ChallengeStore(() => now);
-    for (let i = 0; i < 5; i += 1) store.issue(Keypair.random().publicKey());
-    expect(store.size).toBe(5);
+    for (let i = 0; i < 5; i += 1) await store.issue(Keypair.random().publicKey());
+    await expect(store.size()).resolves.toBe(5);
     now += NONCE_TTL_MS + 1;
-    store.issue(Keypair.random().publicKey());
-    expect(store.size).toBe(1);
+    await store.issue(Keypair.random().publicKey());
+    await expect(store.size()).resolves.toBe(1);
   });
 
   it.each([
     [undefined, "nonce", "sig"],
     ["G".padEnd(56, "A"), undefined, "sig"],
     ["G".padEnd(56, "A"), "nonce", undefined],
-  ])("rejects missing credentials (%s, %s, %s)", (address, nonce, signature) => {
+  ])("rejects missing credentials (%s, %s, %s)", async (address, nonce, signature) => {
     const store = new ChallengeStore();
-    expect(() => store.verify(address, nonce, signature)).toThrow(/are all required/);
+    await expect(store.verify(address, nonce, signature)).rejects.toThrow(/are all required/);
   });
 
-  it("refuses to issue a challenge for something that is not a Stellar address", () => {
+  it("refuses to issue a challenge for something that is not a Stellar address", async () => {
     const store = new ChallengeStore();
-    expect(() => store.issue("not-an-address")).toThrow(/must be a Stellar public key/);
+    await expect(store.issue("not-an-address")).rejects.toThrow(/must be a Stellar public key/);
   });
 
-  it("names the Uint8Array.toString trap instead of blaming the key", () => {
+  it("names the Uint8Array.toString trap instead of blaming the key", async () => {
     const store = new ChallengeStore();
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
+    const { nonce } = await store.issue(kp.publicKey());
     // What a client produces when it forgets to wrap the signature in a Buffer.
     const wrong = kp.sign(Buffer.from(nonce, "utf8")).toString();
     expect(wrong).toMatch(/^\d+,\d+/);
-    expect(() => store.verify(kp.publicKey(), nonce, wrong)).toThrow(/must be base64 of 64 raw bytes/);
+    await expect(store.verify(kp.publicKey(), nonce, wrong)).rejects.toThrow(/must be base64 of 64 raw bytes/);
   });
 
-  it("rejects an unparseable signature the same way as a wrong one", () => {
+  it("rejects an unparseable signature the same way as a wrong one", async () => {
     // Distinguishing them would tell an attacker which half they got wrong.
     const store = new ChallengeStore();
     const kp = Keypair.random();
-    const { nonce } = store.issue(kp.publicKey());
-    expect(() => store.verify(kp.publicKey(), nonce, "!!!not base64!!!")).toThrow(AuthError);
+    const { nonce } = await store.issue(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, "!!!not base64!!!")).rejects.toThrow(AuthError);
   });
 });

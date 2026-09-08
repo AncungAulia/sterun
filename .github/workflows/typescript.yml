@@ -1,4 +1,4 @@
-# STE-6 (infra) — CI for the TypeScript side: be/, fe/, landing-page/.
+# STE-6 (infra) — CI for the TypeScript side: be/, sdk/, fe/, landing-page/.
 #
 # Companion to contracts.yml, which owns everything under sc/. Split rather
 # than merged because the two have nothing in common: different toolchains,
@@ -7,10 +7,11 @@
 #
 # What this proves on every push: the workspace installs from the committed
 # lockfile exactly, every package lints, every package's types check, every
-# package builds, and the backend's tests pass. Nothing here touches the
-# network, so it cannot go red because testnet had a bad afternoon — the
-# faucet's live behaviour is exercised by hand and written up in
-# docs/deployments.md instead.
+# package builds, and the backend's and SDK's tests pass. Nothing here touches
+# the network, so it cannot go red because testnet had a bad afternoon — the
+# faucet's and the SDK's live behaviour is exercised by hand
+# (`pnpm --filter @sterun/sdk e2e`) and written up in docs/deployments.md
+# instead.
 name: typescript
 
 # docs/deployments.md is in this list on purpose and is easy to miss: the
@@ -22,13 +23,21 @@ on:
     branches: ["**"]
     paths: &ts_paths
       - "be/**"
+      - "sdk/**"
       - "fe/**"
       - "landing-page/**"
+      # sdk/ vendors these (sdk/vendor/), and test/vendor.test.ts fails if the
+      # copies drift, so a regenerate has to re-run this job.
+      - "sc/bindings/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "docs/deployments.md"
       - "docs/specs/vectors/**"
+      # The deployment files are validated by this job too — see the step at the
+      # bottom, and the bug that put it there.
+      - "compose*.yml"
+      - "be/Dockerfile"
       - ".github/workflows/typescript.yml"
   pull_request:
     paths: *ts_paths
@@ -107,6 +116,16 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # fe/ imports @sterun/sdk, whose package.json points `types` and `exports`
+      # at dist/ — which is generated and gitignored. Without this step every
+      # fe file that touches the SDK fails typecheck with TS2307 "cannot find
+      # module @sterun/sdk", which reads like a missing dependency and is
+      # really a missing build. `pnpm build` further down would produce it, but
+      # it runs after Typecheck, and reordering the whole workflow to fix one
+      # package's input is a bigger change than saying what fe needs.
+      - name: Build @sterun/sdk (fe typechecks against its dist)
+        run: pnpm --filter @sterun/sdk build
+
       - name: Lint
         run: pnpm lint
 
@@ -120,3 +139,31 @@ jobs:
         run: pnpm test
         env:
           DATABASE_URL: postgres://sterun:sterun@127.0.0.1:5432/sterun
+
+      # STE-31. `docker compose ps` on the deployed host once failed outright
+      # with "required variable TUNNEL_TOKEN is missing a value" — for a service
+      # behind a profile that host would never start. Compose interpolates every
+      # service regardless of profile, so a `${VAR:?}` on a profiled service is a
+      # hard error for completely unrelated commands. Nothing caught it until it
+      # was run on a real box.
+      #
+      # Each ingress profile is checked separately for exactly that reason: the
+      # failure only appears when the file is parsed with that profile selected.
+      - name: Validate the deployment compose files
+        env:
+          # A value, not the value. This step parses; it never starts anything.
+          POSTGRES_PASSWORD: ci-validation-only
+        run: |
+          # env_file must exist to be parsed. Its contents are irrelevant here,
+          # and it is gitignored, so this cannot leak into a commit.
+          : > be/.env.production
+          for args in \
+            "-f compose.prod.yml" \
+            "-f compose.prod.yml -f compose.homelab.yml" \
+            "-f compose.prod.yml --profile caddy" \
+            "-f compose.prod.yml --profile tunnel"; do
+            echo "::group::docker compose $args config"
+            docker compose $args config > /dev/null
+            echo "::endgroup::"
+          done
+          rm -f be/.env.production

@@ -7,6 +7,7 @@
 | `brand.md` | panduan aset, warna, huruf (C13) — rangkuman yang bisa dibaca tanpa buka kode | ya, tapi lihat di bawah |
 | `landing-copy.md` | teks landing page (STE-12) + keputusan yang menguncinya | ya; kalau teks di kode beda, samakan di commit yang sama |
 | `social/` | draft konten publik sebelum tayang, plus URL-nya sesudah tayang | ya |
+| `WEB_APP_IA.md` | information architecture `fe/`: peta halaman, batasan data per halaman, bentuk dokumen metadata event, urutan bangun | ya, sama aturannya dengan `SYSTEM_DESIGN.md` |
 | `specs/` | handoff contract **BEKU** (C4) | punya aturannya sendiri → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
 
 ## `SYSTEM_DESIGN.md`
