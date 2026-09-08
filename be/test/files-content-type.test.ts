@@ -34,6 +34,19 @@ const avif = (major: string, compatible = "") => {
   return Buffer.concat([size, body]);
 };
 
+const pdf = (options: { version?: string; eof?: boolean; pad?: number } = {}) => {
+  const head = `%PDF-${options.version ?? "1.4"}\n`;
+  const body =
+    "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
+    "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n" +
+    "trailer<</Root 1 0 R>>\n";
+  return Buffer.from(
+    head + body + "x".repeat(options.pad ?? 0) + (options.eof === false ? "" : "%%EOF\n"),
+    "latin1",
+  );
+};
+
 describe("positive", () => {
   it("recognises a PNG", () => {
     expect(sniffContentType(png(64))).toBe("image/png");
@@ -65,6 +78,14 @@ describe("positive", () => {
     // Encoders are allowed to put a different major brand first; rejecting
     // those would refuse files that display everywhere.
     expect(sniffContentType(avif("mif1", "avif"))).toBe("image/avif");
+  });
+
+  it("recognises a PDF", () => {
+    expect(sniffContentType(pdf())).toBe("application/pdf");
+  });
+
+  it.each([["1.4"], ["1.7"], ["2.0"]])("recognises a PDF declaring version %s", (version) => {
+    expect(sniffContentType(pdf({ version }))).toBe("application/pdf");
   });
 
   it("recognises a JSON object", () => {
@@ -103,8 +124,19 @@ describe("negative", () => {
     expect(sniffContentType(Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01]))).toBeUndefined();
   });
 
-  it("refuses a PDF", () => {
+  it("refuses a PDF header with no document behind it", () => {
+    // The five magic characters alone are not a PDF. Accepting them would let a
+    // truncated upload through, and "the waiver will not open" is discovered on
+    // race day rather than at upload.
     expect(sniffContentType(Buffer.from("%PDF-1.7\n"))).toBeUndefined();
+  });
+
+  it("refuses a PDF that was cut off before its trailer", () => {
+    expect(sniffContentType(pdf({ eof: false }))).toBeUndefined();
+  });
+
+  it("refuses a file that only claims to be a PDF", () => {
+    expect(sniffContentType(Buffer.from("%PDF-nope, this is prose".padEnd(64, " ")))).toBeUndefined();
   });
 
   it("refuses a ZIP, which is what a .docx or a .jar arrives as", () => {
@@ -178,6 +210,19 @@ describe("edge", () => {
     size.writeUInt32BE(0xffffffff);
     const bomb = Buffer.concat([size, body, Buffer.alloc(64)]);
     expect(sniffContentType(bomb)).toBeUndefined();
+  });
+
+  it("accepts a PDF whose %%EOF sits at the end of a long document", () => {
+    // The trailer is looked for in the last 1024 bytes, per the specification,
+    // not at the very last byte: producers pad and append newlines.
+    expect(sniffContentType(pdf({ pad: 900 }))).toBe("application/pdf");
+  });
+
+  it("refuses a PDF whose %%EOF is further back than the trailer window", () => {
+    // A file with %%EOF buried under 5 KB of trailing bytes is not a document a
+    // reader will open; treating it as valid would be optimism, not leniency.
+    const buried = Buffer.concat([pdf(), Buffer.alloc(5000, 0x20)]);
+    expect(sniffContentType(buried)).toBeUndefined();
   });
 
   it("treats a JSON document containing the word svg as JSON, not as a script", () => {

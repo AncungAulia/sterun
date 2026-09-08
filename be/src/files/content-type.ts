@@ -12,6 +12,28 @@
  * So the header is ignored entirely and the leading bytes decide. A file whose
  * bytes are not one of the types below is refused, whatever it says it is.
  *
+ * ## Why PDF is here, and what it is for
+ *
+ * The liability waiver. A waiver's whole legal value is being able to show what
+ * a runner agreed to at the time, which is exactly what content addressing
+ * provides: the URL is the sha256, so the document cannot be edited after
+ * people have entered. An organiser pasting a link to their own Drive can
+ * change it afterwards and nobody can prove it changed.
+ *
+ * PDF can carry JavaScript, and that is a real difference from an image. It is
+ * accepted anyway, on a judgement that is worth stating rather than assuming:
+ * the responses in `routes/files.ts` already send `default-src 'none'; sandbox`
+ * and `nosniff`, which put the document in an opaque origin with no network of
+ * its own, and modern browser PDF viewers are themselves sandboxed processes.
+ * SVG is different in kind — it is script in the page's own origin, not a
+ * document rendered by a viewer.
+ *
+ * What is deliberately NOT done: scanning the bytes for `/JS` or `/JavaScript`.
+ * PDF object streams are compressible, so a string scan both misses obfuscated
+ * cases and fires on legitimate content — a check that can be walked past is
+ * worse than no check, because it is believed. The serving headers do not
+ * depend on detecting anything.
+ *
  * ## Why SVG is NOT here, and must not be added
  *
  * SVG is an XML document. It can carry `<script>`, `onload=`, and external
@@ -43,6 +65,7 @@
  */
 export const ALLOWED_CONTENT_TYPES = [
   "application/json",
+  "application/pdf",
   "image/png",
   "image/jpeg",
   "image/gif",
@@ -55,6 +78,7 @@ export type AllowedContentType = (typeof ALLOWED_CONTENT_TYPES)[number];
 /** File extension per type, used only to name the download. */
 export const EXTENSIONS: Record<AllowedContentType, string> = {
   "application/json": "json",
+  "application/pdf": "pdf",
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/gif": "gif",
@@ -106,6 +130,25 @@ const isGif = (bytes: Buffer): boolean => {
 };
 
 /**
+ * PDF, proven by its header AND its trailer.
+ *
+ * `%PDF-` alone would accept a truncated upload that fails to open days later,
+ * which is the same failure the JSON parse check exists to prevent — and for a
+ * waiver, "the document does not open" on race day is worse than for a poster.
+ *
+ * The version digit is checked so a file that merely starts with the five magic
+ * characters is not enough. `%%EOF` is looked for in the last 1024 bytes, which
+ * is where the specification says it lives; trailing whitespace or a stray
+ * newline after it is normal and tolerated.
+ */
+const isPdf = (bytes: Buffer): boolean => {
+  if (bytes.length < 32) return false;
+  if (!/^%PDF-[12]\.\d/.test(bytes.subarray(0, 9).toString("latin1"))) return false;
+  const tail = bytes.subarray(Math.max(0, bytes.length - 1024)).toString("latin1");
+  return tail.includes("%%EOF");
+};
+
+/**
  * JSON, proven by parsing.
  *
  * Only an object or an array counts. A bare `12` or `"poster"` is valid JSON
@@ -144,6 +187,7 @@ export function sniffContentType(bytes: Buffer): AllowedContentType | undefined 
   if (isGif(bytes)) return "image/gif";
   if (isWebp(bytes)) return "image/webp";
   if (isAvif(bytes)) return "image/avif";
+  if (isPdf(bytes)) return "application/pdf";
   if (isJson(bytes)) return "application/json";
   return undefined;
 }

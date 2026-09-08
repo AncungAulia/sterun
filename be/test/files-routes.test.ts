@@ -19,6 +19,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ChallengeStore } from "../src/auth.js";
 import { loadConfig } from "../src/config.js";
+import { ALLOWED_CONTENT_TYPES } from "../src/files/content-type.js";
 import { LocalFileStore } from "../src/files/store.js";
 import { buildServer } from "../src/server.js";
 
@@ -28,6 +29,14 @@ const PNG = Buffer.concat([
 ]);
 const METADATA = Buffer.from(
   JSON.stringify({ name: "Borobudur 10K", location: "Magelang", instagram: "@borobudurrun" }),
+);
+
+/** Smallest thing that satisfies both the header and the trailer check. */
+const WAIVER_PDF = Buffer.from(
+  "%PDF-1.7\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
+    "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+    "trailer<</Root 1 0 R>>\n%%EOF\n",
+  "latin1",
 );
 
 const organiser = Keypair.random();
@@ -129,11 +138,32 @@ describe("positive", () => {
     expect((await app.inject({ method: "GET", url: path })).statusCode).toBe(200);
   });
 
+  it("stores a waiver PDF, which is what the document has to be to be legible", async () => {
+    const body = (await upload(organiser, WAIVER_PDF, "application/pdf")).json();
+    expect(body.content_type).toBe("application/pdf");
+    expect(body.url.endsWith(".pdf")).toBe(true);
+  });
+
+  it("serves a PDF sandboxed and with its own type, not as a download prompt", async () => {
+    // Inline rather than attachment on purpose: this is a document somebody is
+    // being asked to agree to, and making them download it first is hostile.
+    // The sandbox CSP is what makes inline defensible.
+    const { sha256 } = (await upload(organiser, WAIVER_PDF, "application/pdf")).json();
+    const fetched = await app.inject({ method: "GET", url: `/files/${sha256}.pdf` });
+
+    expect(fetched.statusCode).toBe(200);
+    expect(fetched.headers["content-type"]).toMatch(/^application\/pdf/);
+    expect(fetched.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+    expect(fetched.headers["content-disposition"]).toBe(`inline; filename="${sha256}.pdf"`);
+    expect(fetched.rawPayload.equals(WAIVER_PDF)).toBe(true);
+  });
+
   it("advertises the limits on /config so the console need not hardcode them", async () => {
     const config = (await app.inject({ method: "GET", url: "/config" })).json();
     expect(config.files.enabled).toBe(true);
     expect(config.files.maxBytes).toBe(5 * 1024 * 1024);
     expect(config.files.contentTypes).toContain("image/png");
+    expect(config.files.contentTypes).toContain("application/pdf");
     expect(config.files.contentTypes).not.toContain("image/svg+xml");
   });
 });
@@ -246,6 +276,11 @@ describe("what may be uploaded", () => {
   it("refuses HTML labelled as an image", async () => {
     const response = await upload(organiser, Buffer.from("<html><script>x()</script></html>"), "image/png");
     expect(response.statusCode).toBe(415);
+  });
+
+  it("refuses a truncated PDF, so a broken waiver is caught at upload", async () => {
+    const cut = WAIVER_PDF.subarray(0, WAIVER_PDF.length - 8);
+    expect((await upload(organiser, cut, "application/pdf")).statusCode).toBe(415);
   });
 
   it("refuses an executable labelled as JSON", async () => {
@@ -399,6 +434,25 @@ describe("edge", () => {
       payload: { address: organiser.publicKey() },
     });
     expect(response.statusCode).toBe(200);
+  });
+
+  it("accepts a request body sent as ANY type on the allow-list", async () => {
+    /**
+     * The guard for a trap that already cost time once: Fastify refuses a
+     * content type it has no parser for with its own 415, before this router
+     * runs, so a type added to the allow-list and forgotten in the parser list
+     * fails with an error mentioning neither. The parser list is derived from
+     * the allow-list now; this proves the derivation still holds.
+     *
+     * The bytes are junk on purpose — 415 from OUR sniffer is the pass here,
+     * because it means the request reached the sniffer at all. What must never
+     * appear is the parser's own rejection.
+     */
+    for (const type of ALLOWED_CONTENT_TYPES) {
+      const response = await upload(organiser, Buffer.from("not a real file of any type"), type);
+      expect(response.statusCode, `content-type: ${type}`).toBe(415);
+      expect(response.json().error, `content-type: ${type}`).toBe("unsupported-file-type");
+    }
   });
 
   it("is described in the OpenAPI document", async () => {
