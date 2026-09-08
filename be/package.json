@@ -16,7 +16,8 @@
     "faucet": "tsx src/cli/faucet.ts",
     "indexer": "tsx src/cli/indexer.ts",
     "keeper": "tsx src/cli/keeper.ts",
-    "e2e:results": "tsx scripts/e2e-results.ts"
+    "e2e:results": "tsx scripts/e2e-results.ts",
+    "e2e:addons": "tsx scripts/e2e-addons.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
