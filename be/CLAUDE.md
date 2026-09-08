@@ -235,7 +235,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-717 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+745 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -334,11 +334,57 @@ tidak membatasi apa pun; plafon itulah yang membatasi.
 header `Host` — yang dikendalikan penyerang — dan URL yang dikembalikan endpoint ini adalah URL yang
 organiser commit **permanen** on-chain.
 
-**Volume `sterun-files` bukan cache.** File hilang = event rusak selamanya, karena hash-nya sudah
-di ledger dan menunjuk 404. Dockerfile membuat `/app/data/files` milik uid 1000 lebih dulu: named
-volume kosong mewarisi ownership direktori itu dari image, dan kalau path-nya tidak ada di image
-Docker membuatnya milik root sehingga upload pertama gagal `EACCES`. Bentuk bug yang sama dengan
-cloudflared di STE-31, dan cuma muncul di deployment sungguhan.
+### Di mana byte-nya disimpan: R2, dengan disk sebagai fallback
+
+`FileStore` punya dua implementasi, dan yang dipakai ditentukan config — bukan flag:
+
+| Kondisi | Store | Dipakai di |
+| --- | --- | --- |
+| keempat `STERUN_R2_*` ada | `R2FileStore` | produksi |
+| keempatnya kosong | `LocalFileStore` (disk) | `pnpm dev`, test |
+
+**Keempatnya atau tidak sama sekali.** Tiga dari empat membuat proses start dengan normal, melayani
+semua endpoint lain, lalu gagal di upload pertama dengan **403** dari R2 — yang persis mirip secret
+salah dan mengirim orang me-regenerate kredensial yang sebenarnya benar. `loadR2Config` menolak itu
+saat startup.
+
+**Yang TIDAK berubah: URL publiknya.** File tetap disajikan API ini di `/files/:sha256`, bukan dari
+bucket publik atau custom domain R2. Ini keputusan paling berkonsekuensi di fitur ini:
+
+- **URL-nya di-commit on-chain, permanen.** `create_event` menyimpan `uri` di storage kontrak dan v1
+  non-upgradeable. URL yang menunjuk ke penyedia storage adalah taruhan bahwa kita tidak akan pernah
+  pindah penyedia; URL di domain sendiri selamat dari migrasi berikutnya — dan akan ada.
+- **Header keamanannya milik kita.** Byte ini diunggah siapa pun pemegang keypair dan disajikan dari
+  origin yang juga melayani PII vault. CSP `sandbox`, tipe hasil endus, dan nama file dari hash
+  semuanya di `routes/files.ts`. Bucket yang menyajikan sendiri menjawab dengan apa pun yang
+  dikonfigurasi di tempat yang `git log` tidak bisa menjawabnya.
+- Cloudflare sudah men-cache jalur baca, jadi API tidak ada di hot path untuk pembacaan berulang.
+
+Jadi R2 mengganti **di mana byte disimpan**, bukan **siapa yang menyajikannya**.
+
+**SigV4-nya ditulis tangan** (`src/files/sigv4.ts`), bukan `@aws-sdk/client-s3`. Alasannya sama
+dengan migrator ~60 baris: paket ini punya **enam** dependency runtime dengan sengaja, dan SDK itu
+membawa puluhan paket transitif plus middleware stack-nya untuk empat operasi ke satu bucket.
+Risikonya rendah karena mode gagalnya keras dan langsung: signature meleset satu byte = `403
+SignatureDoesNotMatch` di request pertama, bukan kebocoran diam-diam. Cara membuktikannya ada tiga
+lapis, dan itu sengaja: **implementasi pembanding independen** di file test (pola yang sama dengan
+`docs/specs/verify.sh` — dua implementasi referensi wajib sepakat), aturan struktural, dan R2 sendiri
+yang menerima signature-nya (dicatat di `docs/deployments.md`, tidak bisa jalan di CI).
+
+Satu detail yang enak: SigV4 butuh sha256 dari body, dan content-addressing sudah menghitung angka
+yang persis sama untuk dijadikan key. Satu hash, dua kegunaan.
+
+**Tipe objek dicek ulang saat dibaca**, tidak dipercaya karena kita yang menulisnya. Token yang
+menjangkau bucket bisa menulis objek apa pun dengan content type apa pun, dan bucket itu bukan milik
+kode ini sendirian. Satu perbandingan murah yang menahan objek `text/html` nyasar disajikan ke
+browser dari origin kita.
+
+**Volume `sterun-files` bukan cache** (dan sekarang cuma dipakai kalau R2 tidak dikonfigurasi). File
+hilang = event rusak selamanya, karena hash-nya sudah di ledger dan menunjuk 404. Dockerfile membuat
+`/app/data/files` milik uid 1000 lebih dulu: named volume kosong mewarisi ownership direktori itu
+dari image, dan kalau path-nya tidak ada di image Docker membuatnya milik root sehingga upload
+pertama gagal `EACCES`. Bentuk bug yang sama dengan cloudflared di STE-31, dan cuma muncul di
+deployment sungguhan.
 
 **Belum ada: sweeper file yatim.** File yang tidak pernah dirujuk `uri` event mana pun tetap
 tersimpan. Plafon store yang menahan pertumbuhannya, bukan penghapusan. Kandidat perintah keeper
@@ -406,9 +452,16 @@ endpoint sensitif tetap 401 dan bahwa SVG tidak ada di tipe upload yang diterima
 Job re-encrypt untuk rotasi kunci, alert kalau keeper berhenti, sweeper file yatim, dan backup
 Postgres terjadwal.
 
-**Replica API kedua sekarang jadi blocker, bukan lagi "mungkin".** `LocalFileStore` menyimpan byte
-di disk satu box, jadi instance kedua akan menjawab 404 untuk semua file milik yang pertama.
-Solusinya sudah disiapkan bentuknya: implement `FileStore` di atas R2 (S3-compatible, dan Cloudflare
-sudah ada di stack) lalu ganti satu baris di `index.ts` — tidak ada bagian lain dari kode ini yang
-tahu di mana byte disimpan. Daftar lengkapnya di bagian akhir
-[`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah satunya mendarat.
+**Blocker replica sudah HILANG.** `R2FileStore` menghapusnya: byte tidak lagi di disk satu box, jadi
+API sekarang stateless. Yang tersisa sebelum benar-benar menyalakan replica kedua:
+
+1. **backup Postgres terjadwal** — dan ini harus duluan. Replica itu ketersediaan, backup itu
+   pemulihan; replica menyalin `DROP TABLE` yang salah ketik dengan setia.
+2. **Redis untuk rate limit** — limiter-nya sudah ada dan sudah per-endpoint, tapi state-nya
+   in-memory, jadi dua instance = limit efektif dua kali lipat.
+
+**Poller dan keeper tetap singleton.** Dua poller berebut cursor yang sama; dua keeper membayar sewa
+dua kali. Yang di-replika cuma API.
+
+Daftar lengkapnya di bagian akhir [`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah
+satunya mendarat.

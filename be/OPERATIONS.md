@@ -547,6 +547,47 @@ allowlist dari chain (`reader.isScanner`) tiap request, jadi index yang under-re
 bisa memberi akses ke orang yang salah — paling buruk dia bikin console tidak menampilkan seseorang
 yang sebenarnya berhak.
 
+### R2: object storage untuk file metadata
+
+Byte file event disimpan di **Cloudflare R2** kalau keempat variabel ini ada; kalau kosong, jatuh ke
+disk lokal.
+
+```bash
+STERUN_R2_ACCOUNT_ID=<32 hex, dari dashboard Cloudflare>
+STERUN_R2_BUCKET=sterun-files
+STERUN_R2_ACCESS_KEY_ID=<R2 API token: Access Key ID>
+STERUN_R2_SECRET_ACCESS_KEY=<R2 API token: Secret Access Key>
+```
+
+**Keempatnya atau tidak sama sekali.** Tiga dari empat = proses start normal lalu gagal di upload
+pertama dengan 403 yang mirip secret salah. Startup menolak konfigurasi separuh.
+
+Endpoint S3-nya dibentuk dari account id (`https://<id>.r2.cloudflarestorage.com`) dan region SigV4
+selalu **`auto`** — bukan `us-east-1`, walau itu di-alias.
+
+> `R2_TOKEN_VALUE` di `.env` adalah **API token Cloudflare**, bukan kredensial S3. Aplikasi tidak
+> memakainya; dia untuk mengelola bucket lewat `api.cloudflare.com` (membuat, melihat daftar).
+> Access Key ID + Secret Access Key yang di atas itu yang dipakai untuk baca/tulis objek.
+
+**URL publiknya tidak berubah.** File tetap disajikan API ini di `/files/:sha256`. Jangan
+menyalakan public bucket atau custom domain R2 lalu memindahkan URL ke sana: URL itu sudah
+di-commit on-chain permanen, dan header keamanan (CSP `sandbox`, `nosniff`) hilang begitu bucket
+yang menyajikan.
+
+Cek isi bucket tanpa SSH ke box:
+
+```bash
+# butuh R2_TOKEN_VALUE (API token, bukan kredensial S3)
+curl -s "https://api.cloudflare.com/client/v4/accounts/$ACC/r2/buckets" \
+  -H "Authorization: Bearer $R2_TOKEN_VALUE" | jq '.result'
+```
+
+**Pindah dari disk ke R2 (atau sebaliknya) tidak otomatis.** Objek yang sudah ada di volume tidak
+ikut berpindah, dan URL-nya akan 404 begitu store-nya berganti. Prosedurnya: unggah ulang tiap file
+dari volume ke bucket dengan key `files/<sha256>` dan content type yang benar, **sebelum** mengganti
+konfigurasi. Karena file-nya content-addressed, mengunggah ulang file yang sama tidak pernah
+menghasilkan URL berbeda — jadi migrasi ini aman diulang.
+
 ### File metadata event
 
 Poster dan dokumen JSON tiap event disimpan **content-addressed**: nama file-nya adalah sha256
