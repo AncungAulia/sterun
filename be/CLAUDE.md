@@ -189,7 +189,7 @@ materialisasi, jalan ulang dari **state** kontrak, dan index-nya utuh lagi. Jalu
 testnet cuma menyimpan jendela `getEvents` terbatas; desain yang butuh replay event akan berjarak
 satu minggu buruk dari index yang tidak bisa diperbaiki.
 
-Empat hal yang akan bikin bingung kalau tidak disebut:
+Lima hal yang akan bikin bingung kalau tidak disebut:
 
 1. **`source` di tiap baris bukan hiasan.** `'event'` = poller melihatnya terjadi (ada ledger + tx
    hash). `'state'` = rebuild membacanya dari storage: sama benarnya, tanpa provenance.
@@ -199,7 +199,19 @@ Empat hal yang akan bikin bingung kalau tidak disebut:
    pilih salah satu.
 3. **Filter per contract id, bukan per nama topic** (`INTERFACE.md` §2.3). `getEvents` itu feed
    publik; siapa pun bisa men-deploy kontrak yang memancarkan topic `record_entered`.
-4. **Keeper memperpanjang ledger key, bukan memanggil `extend_record_ttl`.** Fungsi kontrak itu
+4. **Daftar scanner adalah satu-satunya tabel yang TIDAK bisa dibangun ulang dari state.**
+   EventRegistry cuma punya `is_scanner(event_id, address)` — tanya satu address, jawab ya/tidak.
+   Tidak ada fungsi yang meng-enumerate. Itulah kenapa `/events/:eventId/scanners` membaca index,
+   bukan chain. Konsekuensinya `rebuild` tidak boleh menghapus `event_scanners` begitu saja:
+   kandidatnya dikumpulkan dari tabelnya **dan** dari replay `scanner_added`/`scanner_removed` di
+   `chain_events` (log mentah itu sengaja diselamatkan lewat rebuild), lalu tiap address diverifikasi
+   ulang ke chain dengan `is_scanner` sebelum ditulis balik. Yang tetap **tidak** bisa dipulihkan:
+   scanner yang ditambahkan sebelum index ini pernah poll sama sekali — tidak ada barisnya, tidak
+   ada event-nya, dan chain tidak bisa ditanya "siapa saja". Hasilnya under-report, arah yang aman,
+   tapi tetap under-report. Ada test yang mengunci batas itu supaya tidak dibaca sebagai pemulihan
+   total.
+
+5. **Keeper memperpanjang ledger key, bukan memanggil `extend_record_ttl`.** Fungsi kontrak itu
    tidak menyentuh entry `Owner` milik OpenZeppelin, dan record yang entry `Owner`-nya ter-archive
    tetap mematahkan `verify` dan `records_of`. Key-nya didapat dari footprint hasil simulasi, bukan
    disusun tangan.
@@ -223,7 +235,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-714 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+717 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live

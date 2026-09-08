@@ -83,7 +83,17 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
    * testing the cross-check rather than the flow.
    */
   function seedFullRace(): { events: ReturnType<typeof eventCreated>[] } {
-    chain.addEvent({ eventId: 0, organiser: ORGANISER, name: "Jakarta Run", status: "Completed" });
+    chain.addEvent({
+      eventId: 0,
+      organiser: ORGANISER,
+      name: "Jakarta Run",
+      status: "Completed",
+      // The stream below emits scannerAdded for this address, so the chain has
+      // to list it too. The docstring above promises the two agree; for
+      // scanners they did not, and that silence is part of why a rebuild could
+      // drop the allowlist unnoticed.
+      scanners: [SCANNER],
+    });
     chain.addCategory({
       eventId: 0,
       categoryId: 0,
@@ -469,7 +479,69 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       expect(after.categories).toBe(before.categories);
       expect(after.records).toBe(before.records);
       expect(after.record_transitions).toBe(before.record_transitions);
+      // Was missing, and its absence is exactly why the scanner table could be
+      // dropped by a rebuild without a single test noticing.
+      expect(after.event_scanners).toBe(before.event_scanners);
       expect((await indexer.doctor()).ok).toBe(true);
+    });
+
+    it("keeps the scanner allowlist through a rebuild", async () => {
+      /**
+       * The scanner list is the ONE materialised table that cannot be
+       * reconstructed from contract state: EventRegistry has no enumeration
+       * (that is the whole reason /events/:eventId/scanners reads the index
+       * instead of the chain), so a rebuild that truncates it has thrown away
+       * something it cannot get back.
+       *
+       * This was harmless while nothing read the table. It stopped being
+       * harmless when the organiser console started asking it who the
+       * scanners are: after the documented recovery procedure, the honest
+       * answer "several" would have become the confident answer "none".
+       */
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      expect(await store.listScanners(pool, 0)).toHaveLength(1);
+
+      await indexer.rebuild();
+
+      expect(await store.listScanners(pool, 0)).toEqual([
+        expect.objectContaining({ address: SCANNER }),
+      ]);
+    });
+
+    it("drops a scanner the chain no longer lists, rather than trusting the old row", async () => {
+      // Preserving the rows is only safe because each one is re-checked against
+      // the chain. A removal that happened while the index was down has no
+      // event to replay, so the check is the only thing that would catch it.
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+
+      chain.removeScanner(0, SCANNER);
+      await indexer.rebuild();
+
+      expect(await store.listScanners(pool, 0)).toEqual([]);
+    });
+
+    it("cannot invent a scanner it never saw, and does not pretend it can", async () => {
+      /**
+       * The honest boundary, written down as a test so nobody later reads the
+       * recovery as total.
+       *
+       * A scanner added before this index ever polled leaves no local trace:
+       * no row, and no event in the raw log. EventRegistry cannot be asked to
+       * list its scanners — only whether a GIVEN address is one — so there is
+       * no address to check and nothing to recover. The result is an
+       * under-report, which is the safe direction, but it IS an under-report.
+       */
+      seedFullRace(); // the chain lists SCANNER; this index never polled for it
+      await build(new FakeEventSource([])).rebuild();
+
+      expect(await store.listScanners(pool, 0)).toEqual([]);
+      // ...and the chain still says that address is a scanner, which is the
+      // whole point: the gap is in what we can enumerate, not in the chain.
+      await expect(reader.isScanner(0, SCANNER)).resolves.toBe(true);
     });
 
     it("keeps the raw event log through a rebuild", async () => {

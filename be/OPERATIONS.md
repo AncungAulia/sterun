@@ -514,6 +514,39 @@ berapa tingkat sub-domainnya sebelum membongkar tunnel.
 > yang membingungkan. Kalau ACM/Total TLS diaktifkan nanti, kembalikan keduanya dalam satu
 > perubahan — jangan salah satu saja.
 
+### `indexer rebuild` dan daftar scanner
+
+`rebuild` membangun ulang seluruh index dari state kontrak. Satu tabel tidak bisa ikut dibangun
+begitu: **`event_scanners`**. EventRegistry cuma punya `is_scanner(event_id, address)` — tanya satu
+address, jawab ya/tidak — dan tidak ada fungsi yang meng-enumerate isinya.
+
+Jadi `rebuild` memperlakukan tabel itu khusus:
+
+1. kumpulkan kandidat dari `event_scanners` **dan** dari replay `scanner_added`/`scanner_removed`
+   di `chain_events` (log mentah itu memang diselamatkan lewat rebuild),
+2. verifikasi tiap address ke chain dengan `is_scanner`,
+3. tulis balik yang masih diakui chain.
+
+Efeknya: `pnpm indexer rebuild` — termasuk sesudah tabelnya di-`TRUNCATE` tangan — mengembalikan
+daftar scanner, dan scanner yang dicabut saat index mati ikut hilang karena langkah 2.
+
+**Yang tetap tidak bisa dipulihkan**: scanner yang ditambahkan **sebelum** index ini pernah poll
+sama sekali. Tidak ada barisnya, tidak ada event-nya di log, dan chain tidak bisa ditanya "siapa
+saja". `/events/:eventId/scanners` akan under-report tanpa bisa tahu bahwa dia under-report.
+
+Kalau ragu daftarnya lengkap, jangan tebak — konfirmasi tiap address ke chain:
+
+```bash
+# organiser console memang sudah melakukan ini per address sebelum mempercayainya
+stellar contract invoke --id $EVENT_REGISTRY --network testnet \
+  -- is_scanner --event_id 0 --address G...
+```
+
+Dan ingat pembagian tugasnya: **otorisasi tidak pernah lewat tabel ini.** Roster bundle membaca
+allowlist dari chain (`reader.isScanner`) tiap request, jadi index yang under-report tidak pernah
+bisa memberi akses ke orang yang salah — paling buruk dia bikin console tidak menampilkan seseorang
+yang sebenarnya berhak.
+
 ### File metadata event
 
 Poster dan dokumen JSON tiap event disimpan **content-addressed**: nama file-nya adalah sha256
