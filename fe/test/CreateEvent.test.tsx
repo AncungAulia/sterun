@@ -13,6 +13,7 @@ const setEventStatus = vi.hoisted(() =>
   vi.fn(async () => ({ value: undefined, txHash: "tx3", ledger: 1 })),
 );
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
+const uploadEventFile = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sterun", () => ({ readClient: { createEvent, addCategory, setEventStatus } }));
 vi.mock("@/lib/metadata", async (importOriginal) => ({
@@ -26,7 +27,12 @@ vi.mock("@/lib/wallet", () => ({
   connectWallet: vi.fn(),
   disconnectWallet: vi.fn(),
   signTransaction: vi.fn(async (xdr: string) => ({ signedTxXdr: xdr })),
+  signMessage: vi.fn(async () => "c2ln"),
   walletErrorMessage: (e: unknown) => String(e),
+}));
+vi.mock("@/lib/upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/upload")>()),
+  uploadEventFile,
 }));
 
 /**
@@ -98,12 +104,89 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-09-07T00:00:00Z"));
   vi.clearAllMocks();
   fetchEventMetadata.mockResolvedValue({ status: "unavailable", reason: "not reachable" });
+  uploadEventFile.mockImplementation(async ({ expectedSha256 }: { expectedSha256?: string }) => ({
+    url: `https://api-sterun.jameshub.fun/files/${expectedSha256}.json`,
+    sha256: expectedSha256,
+    size: 512,
+    contentType: "application/json",
+    created: true,
+  }));
   useWallet.setState({ address: ORGANISER, isRestoring: false, isConnecting: false, error: null });
 });
 
 afterEach(() => vi.useRealTimers());
 
 describe("CreateEvent", () => {
+  describe("publishing the details file", () => {
+    it("records the address the backend stored it at", async () => {
+      // The point of the whole endpoint: the organiser hosts nothing, and the
+      // uri that lands on chain is one the store guarantees keeps serving the
+      // same bytes.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
+      await screen.findByText("Published");
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uri: expect.stringContaining("https://api-sterun.jameshub.fun/files/"),
+          metadataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        }),
+        expect.anything(),
+      );
+    });
+
+    it("signs as the connected organiser", async () => {
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
+      await screen.findByText("Published");
+
+      expect(uploadEventFile).toHaveBeenCalledWith(
+        expect.objectContaining({ address: ORGANISER, contentType: "application/json" }),
+      );
+    });
+
+    it("still proves the file is really being served before trusting it", async () => {
+      // Uploading is not the same as being readable. The check runs the same
+      // code path the public event page uses, so a document that passes here
+      // passes there.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
+      await screen.findByText("Published");
+
+      expect(fetchEventMetadata).toHaveBeenCalledWith(
+        expect.stringContaining("/files/"),
+        expect.stringMatching(/^[0-9a-f]{64}$/),
+      );
+    });
+
+    it("leaves the step unpublished when the wallet is declined", async () => {
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+
+      uploadEventFile.mockRejectedValue(new Error("User declined the signature"));
+      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/declined/i);
+      expect(screen.queryByText("Published")).toBeNull();
+    });
+
+  });
+
   describe("positive", () => {
     it("creates the event with the document it verified", async () => {
       const { user } = renderWizard();
