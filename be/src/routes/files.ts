@@ -44,6 +44,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ChallengeStore } from "../auth.js";
 import { RATE_LIMITS } from "../http/hardening.js";
 import { sniffContentType, ALLOWED_CONTENT_TYPES, EXTENSIONS } from "../files/content-type.js";
+import { R2Error } from "../files/r2.js";
 import { FileStoreError, SHA256_PATTERN, type FileStore } from "../files/store.js";
 
 /**
@@ -226,6 +227,24 @@ export async function filesRoutes(
           // matters to whoever is on the other end of the alert.
           return reply.code(507).send({ error: "store-full", message: e.message });
         }
+        if (e instanceof R2Error && e.transient) {
+          /**
+           * 503, not 500. The store already retried and the failure outlasted
+           * it, so the honest answer is "upstream is unwell, try again" rather
+           * than "we are broken" — and the difference decides what the person
+           * on the other end does next. `Retry-After` makes that instruction
+           * machine-readable instead of implied.
+           *
+           * Safe to advertise a retry because uploads are idempotent: the same
+           * bytes resolve to the same URL, so trying again cannot duplicate
+           * anything.
+           */
+          void reply.header("retry-after", "5");
+          return reply.code(503).send({
+            error: "storage-unavailable",
+            message: "the file store is temporarily unreachable; retry in a few seconds",
+          });
+        }
         throw e;
       }
     },
@@ -266,7 +285,19 @@ export async function filesRoutes(
         });
       }
 
-      const found = await store.get(sha256);
+      let found;
+      try {
+        found = await store.get(sha256);
+      } catch (e) {
+        if (e instanceof R2Error && e.transient) {
+          void reply.header("retry-after", "5");
+          return reply.code(503).send({
+            error: "storage-unavailable",
+            message: "the file store is temporarily unreachable; retry in a few seconds",
+          });
+        }
+        throw e;
+      }
       if (!found) {
         return reply.code(404).send({
           error: "not-found",

@@ -20,6 +20,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ChallengeStore } from "../src/auth.js";
 import { loadConfig } from "../src/config.js";
 import { ALLOWED_CONTENT_TYPES } from "../src/files/content-type.js";
+import { R2Error } from "../src/files/r2.js";
+import type { FileStore } from "../src/files/store.js";
 import { LocalFileStore } from "../src/files/store.js";
 import { buildServer } from "../src/server.js";
 
@@ -309,6 +311,53 @@ describe("what may be uploaded", () => {
     const exact = Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024 - PNG.length)]);
     expect(exact.length).toBe(5 * 1024 * 1024);
     expect((await upload(organiser, exact, "image/png")).statusCode).toBe(201);
+  });
+
+  it("answers 503 with Retry-After when the store is temporarily unreachable", async () => {
+    /**
+     * Not 500. The store already retried and the failure outlasted it, so the
+     * honest answer is "upstream is unwell, try again" — and that difference
+     * decides what the organiser does next. Safe to advertise because uploads
+     * are idempotent: retrying the same bytes cannot duplicate anything.
+     */
+    const failing: FileStore = {
+      put: async () => {
+        throw new R2Error(500, "PUT files/x", "<Error><Code>InternalError</Code></Error>");
+      },
+      get: async () => undefined,
+      totalBytes: async () => 0,
+    };
+    await app.close();
+    app = buildServer(loadConfig({ ...process.env, NODE_ENV: "test", DATABASE_URL: "", PII_KEYS: "" }), {
+      challenges: (challenges = new ChallengeStore()),
+      fileStore: failing,
+    });
+    await app.ready();
+
+    const response = await upload(organiser, PNG, "image/png");
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe("storage-unavailable");
+    expect(response.headers["retry-after"]).toBe("5");
+  });
+
+  it("still answers 500 when the storage failure is NOT transient", async () => {
+    // A 403 is bad credentials. Telling the organiser to retry would be a lie,
+    // and they would keep retrying something only an operator can fix.
+    const failing: FileStore = {
+      put: async () => {
+        throw new R2Error(403, "PUT files/x", "<Error><Code>SignatureDoesNotMatch</Code></Error>");
+      },
+      get: async () => undefined,
+      totalBytes: async () => 0,
+    };
+    await app.close();
+    app = buildServer(loadConfig({ ...process.env, NODE_ENV: "test", DATABASE_URL: "", PII_KEYS: "" }), {
+      challenges: (challenges = new ChallengeStore()),
+      fileStore: failing,
+    });
+    await app.ready();
+
+    expect((await upload(organiser, PNG, "image/png")).statusCode).toBe(500);
   });
 
   it("answers 507 rather than 500 when the store is full", async () => {
