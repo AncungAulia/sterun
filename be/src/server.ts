@@ -29,9 +29,12 @@ import { authRoutes } from "./routes/auth.js";
 import { registerErrorHandler } from "./http/errors.js";
 import { loggerOptions, registerHardening } from "./http/hardening.js";
 import { directoryRoutes } from "./routes/directory.js";
+import { filesRoutes, MAX_FILE_BYTES } from "./routes/files.js";
 import { participantRoutes } from "./routes/participants.js";
 import { resultsRoutes } from "./routes/results.js";
 import { rosterRoutes } from "./routes/roster.js";
+import { ALLOWED_CONTENT_TYPES } from "./files/content-type.js";
+import type { FileStore } from "./files/store.js";
 import type { Vault } from "./vault.js";
 
 export interface ServerDeps {
@@ -53,6 +56,12 @@ export interface ServerDeps {
    * mounted at all.
    */
   reader?: ChainReader;
+  /**
+   * Present when this process stores event metadata files. Independent of the
+   * pool and the vault: an upload needs neither, so a deployment with nothing
+   * but a disk can still serve the organiser console's file step.
+   */
+  fileStore?: FileStore;
 }
 
 /** Shared by 200 and 503: the shape does not change, only the verdict does. */
@@ -147,6 +156,14 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
       results: {
         enabled: deps.pool !== undefined && deps.reader !== undefined,
       },
+      files: {
+        enabled: deps.fileStore !== undefined,
+        maxBytes: MAX_FILE_BYTES,
+        // What the sniffer will accept. Published so the console can validate
+        // before spending an upload, and so it never has to hardcode a list
+        // that would drift from ours.
+        contentTypes: [...ALLOWED_CONTENT_TYPES],
+      },
       vault: {
         enabled: deps.vault !== undefined,
         // The key IDS, never the keys. Which key is active is what you need to
@@ -214,7 +231,11 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   // STE-20. Mounted once, next to whatever needs it — never inside one router.
   // The results upload authenticates but needs no vault, so a deployment with
   // Postgres and RPC and no PII_KEYS must still be able to issue a nonce.
-  if (deps.vault || (deps.pool && deps.reader)) {
+  // The upload authenticates too, so a deployment that only stores files must
+  // still be able to issue a nonce. Forgetting this is the STE-20 bug where
+  // /auth/challenge was the vault's property and the results endpoint could
+  // never be reached.
+  if (deps.vault || (deps.pool && deps.reader) || deps.fileStore) {
     void app.register(async (instance) => authRoutes(instance, challenges));
   }
 
@@ -239,6 +260,20 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   if (deps.pool && deps.reader) {
     const results = { pool: deps.pool, reader: deps.reader, challenges };
     void app.register(async (instance) => resultsRoutes(instance, results));
+  }
+
+  // Event metadata files. Needs neither the index nor the chain: the upload
+  // happens BEFORE create_event, so there is nothing on-chain to check against
+  // yet.
+  if (deps.fileStore) {
+    const store = deps.fileStore;
+    void app.register(async (instance) =>
+      filesRoutes(instance, {
+        store,
+        challenges,
+        publicBaseUrl: config.files.publicBaseUrl,
+      }),
+    );
   }
 
   return app;

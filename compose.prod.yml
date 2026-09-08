@@ -58,8 +58,23 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-sterun}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterun}
+      # Inside the image, not on the host bind path. The volume below is what
+      # makes it survive.
+      STERUN_FILES_ROOT: /app/data/files
     depends_on:
       postgres: { condition: service_healthy }
+    volumes:
+      # Event metadata files (posters + the JSON document), content-addressed.
+      #
+      # This volume is NOT optional and NOT a cache. `create_event` commits the
+      # file's sha256 on-chain and the event page refuses a file that does not
+      # match, so a lost file is a permanently broken event — the hash stays on
+      # the ledger forever pointing at a 404. Anonymous storage here would be
+      # wiped by the next `up --build`.
+      #
+      # Back it up with the database, not separately: an event row and its
+      # poster are one fact.
+      - sterun-files:/app/data/files
     # Also no `ports:`. Caddy is the only thing that reaches it, so there is no
     # plaintext port on the box for anyone to find.
     expose: ["3001"]
@@ -194,5 +209,6 @@ services:
 
 volumes:
   sterun-pgdata:
+  sterun-files:
   sterun-caddy-data:
   sterun-caddy-config:

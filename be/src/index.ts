@@ -13,6 +13,7 @@ import { loadEnvFile } from "./env.js";
 import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
+import { LocalFileStore } from "./files/store.js";
 import { migrate } from "./db/migrate.js";
 import { buildServer } from "./server.js";
 import { Vault } from "./vault.js";
@@ -57,8 +58,23 @@ const reader = new ChainReader(
  */
 const challenges = new ChallengeStore(Date.now, pool ? new PostgresNonces(pool) : undefined);
 
+/**
+ * Local disk today, an S3-compatible bucket the day a second replica exists.
+ *
+ * Constructed unconditionally: it needs no credential and no database, and the
+ * directory is created on the first write, so there is no setup step to skip
+ * and no half-configured state to refuse. See files/store.ts for why
+ * content-addressing is what makes this safe, and what the single-box
+ * limitation costs.
+ */
+const fileStore = new LocalFileStore({
+  root: config.files.root,
+  maxTotalBytes: config.files.maxTotalBytes,
+});
+
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
+  fileStore,
   ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
   challenges,
   reader,
