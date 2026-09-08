@@ -21,12 +21,49 @@ import { AuthError, ChallengeStore, NONCE_TTL_MS } from "../src/auth.js";
 const sign = (kp: Keypair, nonce: string): string =>
   Buffer.from(kp.sign(Buffer.from(nonce, "utf8"))).toString("base64");
 
+/**
+ * The same nonce, signed the way a browser wallet signs it.
+ *
+ * SEP-53 does not sign the message: it signs the sha256 of the message under a
+ * fixed "Stellar Signed Message:" prefix. Freighter and the other
+ * wallets behind Stellar Wallets Kit implement that, so this is what actually
+ * arrives from the organiser console, and it is a different 64 bytes from
+ * `sign` above for the same nonce and the same key.
+ */
+const signSep53 = (kp: Keypair, nonce: string): string =>
+  Buffer.from(kp.signMessage(nonce)).toString("base64");
+
 describe("ChallengeStore", () => {
   it("accepts a nonce signed by the account it was issued to", async () => {
     const store = new ChallengeStore();
     const kp = Keypair.random();
     const { nonce } = await store.issue(kp.publicKey());
     await expect(store.verify(kp.publicKey(), nonce, sign(kp, nonce))).resolves.toBe(kp.publicKey());
+  });
+
+  it("accepts the SEP-53 signature a browser wallet produces", async () => {
+    // Every caller so far has been a script holding a raw keypair, which signs
+    // the nonce itself. A wallet cannot: SEP-53 exists so that what a user
+    // approves in a popup can never also be a valid transaction. Refusing it
+    // would mean no browser can ever authenticate, which is most of the product.
+    const store = new ChallengeStore();
+    const kp = Keypair.random();
+    const { nonce } = await store.issue(kp.publicKey());
+    await expect(store.verify(kp.publicKey(), nonce, signSep53(kp, nonce))).resolves.toBe(
+      kp.publicKey(),
+    );
+  });
+
+  it("still refuses a SEP-53 signature over some other message", async () => {
+    // Accepting two encodings must not become accepting anything: the bytes
+    // still have to be this nonce, signed by this key.
+    const store = new ChallengeStore();
+    const kp = Keypair.random();
+    const { nonce } = await store.issue(kp.publicKey());
+    const elsewhere = Buffer.from(kp.signMessage("some other nonce")).toString("base64");
+    await expect(store.verify(kp.publicKey(), nonce, elsewhere)).rejects.toThrow(
+      /does not match the nonce/,
+    );
   });
 
   it("spends the nonce, so a captured signature cannot be replayed", async () => {

@@ -171,6 +171,16 @@ Baca sebelum menyalakan ini di mana pun selain laptop sendiri.
 Auth: signature wallet Stellar (challenge → sign → spend). Nonce sekali pakai, kedaluwarsa 2 menit,
 terikat ke satu address.
 
+**Dua encoding tanda tangan diterima, dan itu bukan kelonggaran.** Script yang memegang keypair
+menandatangani byte nonce langsung; browser tidak bisa, karena kuncinya ada di wallet dan wallet
+menandatangani lewat **SEP-53** — yang ditandatangani adalah sha256 dari pesan di bawah prefix tetap
+`Stellar Signed Message:`, bukan pesannya. Itu justru inti standarnya: yang di-approve user di popup
+dijamin tidak pernah bisa sekaligus jadi transaksi yang sah. Jadi dapp tidak punya pilihan untuk
+tidak memakainya, dan menerima cuma bentuk mentah berarti **tidak ada browser yang bisa login sama
+sekali** — yang mana itu sebagian besar produk ini. `ChallengeStore.verify` mencoba `verify` lalu
+`verifyMessage`. Tidak ada yang melemah: byte-nya tetap harus nonce ini, ditandatangani kunci
+address ini, dan nonce-nya sudah dibelanjakan sebelum pengecekan.
+
 **Store-nya sekarang bisa dua-duanya** (STE-31): `MemoryNonces` untuk satu proses, `PostgresNonces`
 untuk lebih. Entry point memilih berdasarkan ada-tidaknya pool. Sifat sekali-pakai lintas instance
 dijaga `DELETE … RETURNING` — satu statement atomik; read-then-delete meninggalkan celah, dan di

@@ -8,7 +8,7 @@
  * `enter` with it, so there is no second credential to invent, store or lose.
  *
  *   POST /auth/challenge {address}  ->  {nonce, expiresAt}
- *   sign the nonce with the account's key
+ *   sign the nonce with the account's key, raw or per SEP-53
  *   send x-sterun-address / x-sterun-nonce / x-sterun-signature on the request
  *
  * Three properties, each of which is a real attack if missing:
@@ -185,7 +185,24 @@ export class ChallengeStore {
 
     let ok: boolean;
     try {
-      ok = Keypair.fromPublicKey(address).verify(Buffer.from(nonce, "utf8"), signature);
+      const key = Keypair.fromPublicKey(address);
+      // Two encodings of the same claim, because two kinds of client sign.
+      //
+      // A script holding a keypair signs the nonce bytes directly, which is
+      // what every caller did while this was a server-to-server API. A browser
+      // cannot do that: the key lives in the wallet, and wallets sign through
+      // SEP-53, which signs the sha256 of the message under a fixed
+      // "Stellar Signed Message:" prefix rather than the message itself.
+      // That indirection is the point of the standard — it guarantees
+      // what a user approves in a popup can never also be a valid transaction —
+      // so it is not something a dapp can opt out of. Accepting only the raw
+      // form would mean no browser could ever authenticate.
+      //
+      // Accepting both weakens nothing. Either way the bytes have to be this
+      // nonce, signed by this address's key, and the nonce is single-use and
+      // already spent by the time we get here.
+      ok =
+        key.verify(Buffer.from(nonce, "utf8"), signature) || key.verifyMessage(nonce, signature);
     } catch {
       // A malformed address or an unparseable signature is the same answer as a
       // wrong one; distinguishing them would leak which part was wrong.
