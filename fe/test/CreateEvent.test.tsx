@@ -324,7 +324,7 @@ describe("CreateEvent", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent(/nothing has been created yet/i);
     });
 
-    it("offers the ways out only once publishing has actually failed", async () => {
+    it("offers the way out only once publishing has actually failed", async () => {
       // Hosting the file yourself is a real escape hatch, since our backend
       // being down should not stop anybody creating an event. It is not a
       // choice worth putting in front of somebody who has no problem.
@@ -337,26 +337,21 @@ describe("CreateEvent", () => {
       await startRun(user);
 
       expect(await screen.findByLabelText("Published URL")).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /create the event without any details/i }),
-      ).toBeInTheDocument();
     });
 
-    it("creates the event with no document when told to go on without one", async () => {
+    it("never offers to create an event with no details at all", async () => {
+      // It used to, next to hosting the file yourself, as though they were the
+      // same kind of thing. They are not: skipping produces a page with no
+      // poster, no location and no schedule, for ever, offered at the moment
+      // somebody is annoyed enough to press anything.
       const { user } = renderWizard();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
       await screen.findByRole("alert");
 
-      await user.click(screen.getByRole("button", { name: /create the event without any details/i }));
-      await startRun(user);
-
-      await screen.findByText(/the event is open/i);
-      expect(createEvent).toHaveBeenCalledWith(
-        expect.objectContaining({ uri: "", metadataHash: "0".repeat(64) }),
-        expect.anything(),
-      );
+      expect(screen.queryByText(/without any details/i)).not.toBeInTheDocument();
+      expect(createEvent).not.toHaveBeenCalled();
     });
 
     it("takes a document the organiser hosted and checked themselves", async () => {
@@ -369,7 +364,7 @@ describe("CreateEvent", () => {
       await user.type(screen.getByLabelText("Published URL"), "https://example.test/event.json");
       await user.click(screen.getByRole("button", { name: "Check the published file" }));
 
-      // A checked url satisfies that step, so the ways out fold away and the
+      // A checked url satisfies that step, so the way out folds away and the
       // list above shows the first line as done.
       await waitFor(() => expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument());
       await user.click(screen.getByRole("button", { name: "Carry on" }));

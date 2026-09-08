@@ -22,7 +22,6 @@ describe("planRun", () => {
       const steps = planRun({
         name: "Jakarta Sunrise 10K",
         categories: [category("5K"), category("10K")],
-        withDocument: true,
       });
 
       expect(labels(steps)).toEqual([
@@ -35,11 +34,10 @@ describe("planRun", () => {
     });
 
     it("grows by exactly one signature per distance", () => {
-      const one = planRun({ name: "A", categories: [category("5K")], withDocument: true });
+      const one = planRun({ name: "A", categories: [category("5K")] });
       const three = planRun({
         name: "A",
         categories: [category("5K"), category("10K"), category("21K")],
-        withDocument: true,
       });
 
       expect(three.length - one.length).toBe(2);
@@ -47,13 +45,14 @@ describe("planRun", () => {
   });
 
   describe("negative", () => {
-    it("drops the publish step when there is no document to publish", () => {
-      // Only reachable after publishing has failed and the organiser chose to
-      // go on without one. The event still works; its page just has nothing on
-      // it, and that cannot be fixed later.
-      const steps = planRun({ name: "A", categories: [category("5K")], withDocument: false });
+    it("always publishes the details, with no way to opt out", () => {
+      // An event created without a document has a page with no poster, no
+      // location and no schedule, permanently: the hash is committed by
+      // create_event and there is no update_event. When publishing fails the
+      // answer is to host the file elsewhere, not to go on without one.
+      const steps = planRun({ name: "A", categories: [category("5K")] });
 
-      expect(labels(steps)).toEqual(['Create "A"', "Add the 5K", "Open for entries"]);
+      expect(labels(steps)[0]).toBe("Publish the event details");
     });
   });
 
@@ -61,7 +60,7 @@ describe("planRun", () => {
     it("still describes the event before its name has been typed", () => {
       // The review step is reached with a name, but the plan is derived on
       // every render, so it has to read sensibly halfway through one.
-      const steps = planRun({ name: "  ", categories: [], withDocument: true });
+      const steps = planRun({ name: "  ", categories: [] });
 
       expect(labels(steps)).toEqual([
         "Publish the event details",
@@ -74,7 +73,7 @@ describe("planRun", () => {
       // What is already signed is tracked by id. If ids moved when the list was
       // recomputed, a resumed run would repeat a transaction that has landed
       // and cannot be undone.
-      const args = { name: "A", categories: [category("5K"), category("10K")], withDocument: true };
+      const args = { name: "A", categories: [category("5K"), category("10K")] };
 
       expect(planRun(args).map((step) => step.id)).toEqual(
         planRun(args).map((step) => step.id),
@@ -94,7 +93,6 @@ describe("nextStep", () => {
   const steps = planRun({
     name: "A",
     categories: [category("5K"), category("10K")],
-    withDocument: true,
   });
 
   it("resumes at the first thing that has not landed", () => {

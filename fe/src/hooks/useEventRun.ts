@@ -40,14 +40,6 @@ import type { PublishedDocument } from "@/modules/organiser/component/DocumentFa
 import { nextStep, planRun, type RunStep } from "@/modules/organiser/run";
 import { parseStroops } from "@/utils/format";
 
-/**
- * `metadata_hash` is a required 32 bytes, so an event without a document still
- * has to store something. All zeroes is that something, and it reads as "no
- * document" safely because `uri` is empty in the same event and the page never
- * fetches anything to compare it against.
- */
-export const NO_DOCUMENT_HASH = "0".repeat(64);
-
 export interface EventRunInput {
   name: string;
   plan: PlannedCategory[];
@@ -66,7 +58,6 @@ export function useEventRun({ name, plan, startsAt, documentText, hash }: EventR
   const addCategory = useAddCategory();
   const setStatus = useSetEventStatus();
 
-  const [withDocument, setWithDocument] = useState(true);
   const [done, setDone] = useState<string[]>([]);
   const [receipts, setReceipts] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState<string | null>(null);
@@ -75,10 +66,7 @@ export function useEventRun({ name, plan, startsAt, documentText, hash }: EventR
   const [eventId, setEventId] = useState<number | null>(null);
   const [document, setDocument] = useState<PublishedDocument | null>(null);
 
-  const steps = useMemo(
-    () => planRun({ name, categories: plan, withDocument }),
-    [name, plan, withDocument],
-  );
+  const steps = useMemo(() => planRun({ name, categories: plan }), [name, plan]);
 
   const upload = useUploadPhase();
   const waitingFor: WaitingFor =
@@ -121,10 +109,13 @@ export function useEventRun({ name, plan, startsAt, documentText, hash }: EventR
       }
       case "event": {
         if (startsAt === null) throw new Error("The race needs a date and a start time first.");
+        // The document is always present by the time this runs: it is the step
+        // before, and the run stops on a step that fails.
+        if (!state.document) throw new Error("The event details have not been published yet.");
         const sent = await createEvent.write({
           name: name.trim(),
-          metadataHash: state.document?.hash ?? NO_DOCUMENT_HASH,
-          uri: state.document?.uri ?? "",
+          metadataHash: state.document.hash,
+          uri: state.document.uri,
           startsAt,
         });
         state.eventId = sent.value;
@@ -193,15 +184,6 @@ export function useEventRun({ name, plan, startsAt, documentText, hash }: EventR
     /** True once every step in the plan has landed. */
     isComplete: steps.length > 0 && steps.every((step) => done.includes(step.id)),
     start,
-    /**
-     * Go on without a details file. Reachable only after publishing has failed:
-     * the event still works, its page just has nothing on it, and nothing can
-     * be added later.
-     */
-    skipDocument() {
-      setWithDocument(false);
-      setFailure(null);
-    },
     /** Adopt a document the organiser hosted and checked themselves. */
     useHostedDocument(hosted: PublishedDocument) {
       setDocument(hosted);

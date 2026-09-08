@@ -127,9 +127,14 @@ memetakan satu transaksi; alasannya di `docs/WEB_APP_IA.md` §5.1 dan di header
   lokal `landed`**, karena `setState` baru berlaku render berikutnya dan loop-nya selesai dalam satu
   render.
 - `component/StepReview.tsx` — lomba dalam bahasa manusia + toggle file mentah. Tombol **Create
-  event** ada di kanan bawah seperti tiap step lain, dan membuka **Dialog** berisi daftar tanda
-  tangan; jalannya baru mulai setelah tekanan kedua. Daftar itu satu-satunya hal yang wajib dibaca
-  sebelum ada yang tidak bisa dibatalkan, dan blok di tengah halaman panjang tidak dibaca siapa pun.
+  event** ada di kanan bawah seperti tiap step lain, dan membuka **Dialog** yang memuat **seluruh
+  rangkaian**: daftar tanda tangan, centangnya, kegagalannya, dan jalan keluarnya. Mulainya tekanan
+  kedua. Dialog-nya tidak bisa ditutup selama jalan, dan menutup sendiri begitu selesai.
+- **Tidak ada "buat event tanpa dokumen".** Pernah ada, dan itu jebakan: yang dihasilkan bukan event
+  darurat tapi event cacat permanen (halaman tanpa poster, lokasi, jadwal, selamanya — hash
+  di-commit `create_event` dan tidak ada `update_event`), ditawarkan tepat saat orang lagi kesal.
+  Jalan keluar kalau publish gagal cuma satu: **host file-nya sendiri**, yang tetap menghasilkan
+  event utuh.
 - `component/StepAddOns.tsx` — isi race pack. Nama item pakai `elements/CreatableSelect.tsx`:
   saran boleh, tapi apa pun yang diketik bisa ditambahkan lewat baris "Add …" di dasar daftar.
   Lomba membagikan barang yang tidak mungkin didaftar di muka.

@@ -11,8 +11,18 @@
  *
  * It stays in the product rather than being deleted. `uri` is just a string on
  * chain and nothing about the contract prefers our origin, so our backend being
- * down should not be able to stop anybody creating an event. Both ways out are
- * here: host it somewhere else, or go on with no document at all.
+ * down should not be able to stop anybody creating an event.
+ *
+ * ## Why "create it with no document at all" is gone
+ *
+ * It used to sit at the bottom of this panel, and it looked like the same kind
+ * of thing as hosting the file yourself. It was not. Hosting it elsewhere
+ * produces a complete event; skipping produces an event whose page has no
+ * poster, no location and no schedule, permanently, because there is no
+ * `update_event` and the hash is committed at creation. That button offered a
+ * broken event at the exact moment somebody is frustrated enough to press
+ * anything, and it could never be undone. An escape hatch that ruins the thing
+ * it is escaping from is a trap.
  *
  * Checking a hosted url runs the same code path the public event page uses, so
  * a document that passes here passes there.
@@ -35,8 +45,6 @@ interface DocumentFallbackProps {
   hash: string;
   /** Called with a url that has been fetched back and matches the hash. */
   onChecked: (document: PublishedDocument) => void;
-  /** Called when the organiser decides to create the event with no document. */
-  onSkip: () => void;
 }
 
 type CheckState =
@@ -46,7 +54,7 @@ type CheckState =
   | { kind: "mismatch"; served: string }
   | { kind: "unreachable"; reason: string };
 
-export function DocumentFallback({ text, hash, onChecked, onSkip }: DocumentFallbackProps) {
+export function DocumentFallback({ text, hash, onChecked }: DocumentFallbackProps) {
   const [uri, setUri] = useState("");
   const [check, setCheck] = useState<CheckState>({ kind: "idle" });
 
@@ -78,7 +86,7 @@ export function DocumentFallback({ text, hash, onChecked, onSkip }: DocumentFall
   return (
     <div className="flex flex-col gap-5 rounded-lg border border-border px-5 py-4">
       <div>
-        <p className="heading-strong text-base text-foreground">Other ways to go on</p>
+        <p className="heading-strong text-base text-foreground">Host the file yourself instead</p>
         <p className="mt-1 max-w-2xl text-base text-muted-foreground">
           Your event can point at any public address. Save the file, put it online exactly as it
           is, then paste the link and we will read it back to check.
@@ -140,15 +148,6 @@ export function DocumentFallback({ text, hash, onChecked, onSkip }: DocumentFall
         </div>
       ) : null}
 
-      <div className="border-t border-border pt-4">
-        <Button variant="ghost" onClick={onSkip}>
-          Create the event without any details
-        </Button>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          The event will work, and people can enter. Its page will have no poster, no location and
-          no schedule on it, and you cannot add them later.
-        </p>
-      </div>
     </div>
   );
 }

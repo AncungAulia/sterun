@@ -40,19 +40,19 @@ export interface RunStep {
 export interface RunPlan {
   name: string;
   categories: PlannedCategory[];
-  /**
-   * False when there is no details file to publish, which happens only after
-   * publishing has failed and the organiser chose to go on without one.
-   */
-  withDocument: boolean;
 }
 
-export function planRun({ name, categories, withDocument }: RunPlan): RunStep[] {
+export function planRun({ name, categories }: RunPlan): RunStep[] {
   const steps: RunStep[] = [];
 
-  if (withDocument) {
-    steps.push({ id: "document", kind: "document", label: "Publish the event details" });
-  }
+  /**
+   * Always first, and never optional. An event created without one has a page
+   * with no poster, no location and no schedule, for ever: the hash is
+   * committed by `create_event` and there is no `update_event`. When publishing
+   * fails the answer is to host the file somewhere else, not to go on without
+   * it.
+   */
+  steps.push({ id: "document", kind: "document", label: "Publish the event details" });
 
   steps.push({
     id: "event",

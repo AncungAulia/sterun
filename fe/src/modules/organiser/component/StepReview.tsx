@@ -17,19 +17,23 @@
  * anybody who wants it, because the fingerprint of those exact bytes is what
  * ends up on chain and somebody checking our claim should be able to see them.
  *
- * ## Why the signatures are listed in a dialog rather than on the page
+ * ## Why the whole run happens in a dialog
  *
- * There are three of them plus one per distance, and that number cannot be
+ * There are three signatures plus one per distance, and that number cannot be
  * reduced (see `run.ts`). Prompts nobody mentioned feel like a retry loop;
  * prompts shown as a numbered list that ticks off feel like a task with an end.
  *
- * The list used to sit in a panel above the button, where it was one more block
- * to scroll past on a long page. It is the single thing here that has to be read
- * before anything irreversible happens, so it now interrupts: Create event opens
- * a dialog, the dialog says how many prompts are coming and what each one is,
- * and starting is a second deliberate press. Once the run begins the dialog
- * closes and the same list carries on ticking off in place, because a run that
- * stops needs room for what to do about it.
+ * The list used to sit in a panel on the page, where it was one more block to
+ * scroll past. It is the single thing here that must be read before anything
+ * irreversible happens, so it interrupts instead: Create event opens a dialog,
+ * the dialog says how many prompts are coming and what each is, and starting is
+ * a second deliberate press.
+ *
+ * The dialog then stays for the run itself. Once signing starts there is
+ * nothing else to do on this page, wallet prompts are already stealing focus,
+ * and a progress list behind a scroll position is a progress list nobody is
+ * watching. It closes on its own when the run finishes, because at that point
+ * the page has somewhere to send you.
  *
  * The list is the same object the run walks, so what is described and what
  * happens cannot drift apart.
@@ -115,30 +119,6 @@ export function StepReview({
         ) : null}
       </div>
 
-      {started ? <RunPanel run={run} /> : null}
-
-      {run.failure ? (
-        <div className="flex flex-col gap-4">
-          <div role="alert" className="rounded-lg border border-danger-border bg-danger-surface px-5 py-4">
-            <p className="heading-strong text-base text-danger">Stopped at step {stepNumber(run)}</p>
-            <p className="mt-1 text-base text-foreground">{run.failure.message}</p>
-            <p className="mt-1 text-base text-foreground">
-              {run.done.length === 0
-                ? "Nothing has been created yet, so it is safe to try again."
-                : "Everything above it is done and stays done. Carrying on picks up from here."}
-            </p>
-          </div>
-          {run.failure.stepId === "document" ? (
-            <DocumentFallback
-              text={documentText}
-              hash={hash}
-              onChecked={run.useHostedDocument}
-              onSkip={run.skipDocument}
-            />
-          ) : null}
-        </div>
-      ) : null}
-
       {run.isComplete ? null : (
         <div className="flex flex-wrap justify-end gap-3">
           {started ? null : (
@@ -146,13 +126,7 @@ export function StepReview({
               Back
             </Button>
           )}
-          {started ? (
-            <Button onClick={() => void run.start()} disabled={run.isRunning}>
-              {run.isRunning ? "Working" : "Carry on"}
-            </Button>
-          ) : (
-            <ConfirmDialog run={run} />
-          )}
+          <RunDialog run={run} documentText={documentText} hash={hash} started={started} />
         </div>
       )}
 
@@ -327,99 +301,132 @@ function Pack({ addOns }: { addOns: PlannedAddOn[] }) {
 }
 
 /**
- * What the wallet is about to ask for, and afterwards what it did ask for.
+ * The run, from "are you sure" to the last signature, in one dialog.
  *
- * One list in both states rather than two screens: the thing that makes six
- * prompts bearable is watching the list you were shown tick itself off.
- */
-function RunPanel({ run }: { run: ReturnType<typeof useEventRun> }) {
-  return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border px-5 py-5">
-      <p className="heading-strong text-base text-foreground">
-        {run.isComplete
-          ? "All done"
-          : `Step ${run.done.length + 1} of ${run.steps.length}`}
-      </p>
-
-      <ol className="flex flex-col gap-2">
-        {run.steps.map((step, index) => {
-          const isDone = run.done.includes(step.id);
-          const isCurrent = run.current === step.id;
-          const failed = run.failure?.stepId === step.id;
-          return (
-            <li key={step.id} className="flex flex-wrap items-center gap-3 text-base">
-              <span className="numeric w-5 text-muted-foreground">{index + 1}</span>
-              <span className={isDone ? "text-muted-foreground" : "text-foreground"}>
-                {step.label}
-              </span>
-              {isDone ? (
-                <span className="inline-flex items-center gap-1 text-sm text-success">
-                  <CheckIcon aria-hidden="true" className="size-4" />
-                  Done
-                </span>
-              ) : null}
-              {isCurrent ? (
-                <span className="text-sm text-teal-500">
-                  {run.waitingFor === "network" ? "Working on it" : "Check your wallet"}
-                </span>
-              ) : null}
-              {failed ? <span className="text-sm text-danger">Stopped here</span> : null}
-              {run.receipts[step.id] ? <Receipt txHash={run.receipts[step.id]!} /> : null}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
-
-/**
- * The last thing between a form and four irreversible transactions.
+ * Three states, one list. Before it starts the list is a warning: this many
+ * prompts, in this order. During the run the same list ticks off. When it stops
+ * the failure sits under it with the way out, and the button becomes Carry on,
+ * which resumes at the first step that has not landed rather than repeating one
+ * that has.
  *
- * A dialog rather than a paragraph because of what it has to achieve: the
- * number of wallet prompts is the one fact that makes the next minute make
- * sense, and a paragraph on a long page is read by nobody. This cannot be
- * dismissed by accident either, which is the point of the second press.
+ * It cannot be dismissed while signing. A dialog that closes mid-run leaves
+ * somebody watching a wallet prompt with no idea what it belongs to.
  */
-function ConfirmDialog({ run }: { run: ReturnType<typeof useEventRun> }) {
-  const [open, setOpen] = useState(false);
+function RunDialog({
+  run,
+  documentText,
+  hash,
+  started,
+}: {
+  run: ReturnType<typeof useEventRun>;
+  documentText: string;
+  hash: string;
+  started: boolean;
+}) {
+  const [requested, setRequested] = useState(false);
+  /**
+   * Derived rather than closed by an effect. Once everything has landed what
+   * happens next is on the page, not in here, and a `setState` in an effect to
+   * say so is a second render that exists only to undo the first.
+   */
+  const open = requested && !run.isComplete;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button onClick={() => setOpen(true)}>Create event</Button>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (run.isRunning) return;
+        setRequested(next);
+      }}
+    >
+      <Button onClick={() => setRequested(true)}>{started ? "Carry on" : "Create event"}</Button>
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto"
+        onInteractOutside={(event) => {
+          if (run.isRunning) event.preventDefault();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (run.isRunning) event.preventDefault();
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>This takes {run.steps.length} signatures</DialogTitle>
+          <DialogTitle>
+            {started
+              ? `Step ${Math.min(run.done.length + 1, run.steps.length)} of ${run.steps.length}`
+              : `This takes ${run.steps.length} signatures`}
+          </DialogTitle>
           <DialogDescription>
-            Your wallet will ask you once for each line below, one after another. Nothing here can
-            be edited or deleted afterwards.
+            {started
+              ? "Keep this open until it finishes. Your wallet will ask again for each line left."
+              : "Your wallet will ask you once for each line below, one after another. Nothing here can be edited or deleted afterwards."}
           </DialogDescription>
         </DialogHeader>
 
         <ol className="flex flex-col gap-2 py-2">
-          {run.steps.map((step, index) => (
-            <li key={step.id} className="flex items-center gap-3 text-base text-foreground">
-              <span className="numeric w-5 text-muted-foreground">{index + 1}</span>
-              {step.label}
-            </li>
-          ))}
+          {run.steps.map((step, index) => {
+            const isDone = run.done.includes(step.id);
+            const isCurrent = run.current === step.id;
+            const failed = run.failure?.stepId === step.id;
+            return (
+              <li key={step.id} className="flex flex-wrap items-center gap-3 text-base">
+                <span className="numeric w-5 text-muted-foreground">{index + 1}</span>
+                <span className={isDone ? "text-muted-foreground" : "text-foreground"}>
+                  {step.label}
+                </span>
+                {isDone ? (
+                  <span className="inline-flex items-center gap-1 text-sm text-success">
+                    <CheckIcon aria-hidden="true" className="size-4" />
+                    Done
+                  </span>
+                ) : null}
+                {isCurrent ? (
+                  <span className="text-sm text-teal-500">
+                    {run.waitingFor === "network" ? "Working on it" : "Check your wallet"}
+                  </span>
+                ) : null}
+                {failed ? <span className="text-sm text-danger">Stopped here</span> : null}
+                {run.receipts[step.id] ? <Receipt txHash={run.receipts[step.id]!} /> : null}
+              </li>
+            );
+          })}
         </ol>
 
-        <p className="text-sm text-muted-foreground">
-          Stopping partway is safe. Whatever is already done stays done, and you can carry on from
-          where it stopped.
-        </p>
+        {run.failure ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-danger-border bg-danger-surface px-5 py-4"
+          >
+            <p className="heading-strong text-base text-danger">
+              Stopped at step {stepNumber(run)}
+            </p>
+            <p className="mt-1 text-base text-foreground">{run.failure.message}</p>
+            <p className="mt-1 text-base text-foreground">
+              {run.done.length === 0
+                ? "Nothing has been created yet, so it is safe to try again."
+                : "Everything above it is done and stays done. Carrying on picks up from here."}
+            </p>
+          </div>
+        ) : null}
+
+        {run.failure?.stepId === "document" ? (
+          <DocumentFallback text={documentText} hash={hash} onChecked={run.useHostedDocument} />
+        ) : null}
+
+        {started ? null : (
+          <p className="text-sm text-muted-foreground">
+            Stopping partway is safe. Whatever is already done stays done, and you can carry on
+            from where it stopped.
+          </p>
+        )}
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="secondary">Not yet</Button>
+            <Button variant="secondary" disabled={run.isRunning}>
+              {started ? "Close" : "Not yet"}
+            </Button>
           </DialogClose>
-          <Button
-            onClick={() => {
-              setOpen(false);
-              void run.start();
-            }}
-          >
-            Start signing
+          <Button onClick={() => void run.start()} disabled={run.isRunning}>
+            {run.isRunning ? "Working" : started ? "Carry on" : "Start signing"}
           </Button>
         </DialogFooter>
       </DialogContent>
