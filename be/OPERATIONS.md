@@ -331,7 +331,8 @@ route hasil waktu membaca organiser.
 
 **Auth:** signature wallet Stellar, sama seperti route vault (`POST /auth/challenge`, tanda tangani
 nonce, kirim `x-sterun-address` / `x-sterun-nonce` / `x-sterun-signature`). Nonce sekali pakai,
-kedaluwarsa 2 menit.
+kedaluwarsa 2 menit. Tanda tangannya boleh atas byte nonce langsung (script yang pegang keypair)
+**atau** SEP-53 (yang dipakai wallet browser lewat Stellar Wallets Kit); server mencoba keduanya.
 
 **Siapa yang boleh:** organiser event itu, atau address yang **chain** sebut scanner
 (`is_scanner(event_id, addr)`). Dibaca ulang dari chain **tiap request** — scanner yang dicabut
