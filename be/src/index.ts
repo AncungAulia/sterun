@@ -13,6 +13,7 @@ import { loadEnvFile } from "./env.js";
 import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
 import { createPool } from "./db/pool.js";
+import { R2FileStore } from "./files/r2.js";
 import { LocalFileStore } from "./files/store.js";
 import { migrate } from "./db/migrate.js";
 import { buildServer } from "./server.js";
@@ -67,10 +68,20 @@ const challenges = new ChallengeStore(Date.now, pool ? new PostgresNonces(pool) 
  * content-addressing is what makes this safe, and what the single-box
  * limitation costs.
  */
-const fileStore = new LocalFileStore({
-  root: config.files.root,
-  maxTotalBytes: config.files.maxTotalBytes,
-});
+const fileStore = config.files.r2
+  ? new R2FileStore({
+      accountId: config.files.r2.accountId,
+      bucket: config.files.r2.bucket,
+      credentials: {
+        accessKeyId: config.files.r2.accessKeyId,
+        secretAccessKey: config.files.r2.secretAccessKey,
+      },
+      maxTotalBytes: config.files.maxTotalBytes,
+    })
+  : new LocalFileStore({
+      root: config.files.root,
+      maxTotalBytes: config.files.maxTotalBytes,
+    });
 
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
@@ -98,6 +109,7 @@ try {
       addresses: config.addresses,
       vault: config.vault ? { activeKeyId: config.vault.keyring.activeKeyId } : "disabled",
       nonces: pool ? "postgres" : "in-memory (single process only)",
+      files: config.files.r2 ? `r2:${config.files.r2.bucket}` : `disk:${config.files.root}`,
     },
     "sterun backend ready",
   );

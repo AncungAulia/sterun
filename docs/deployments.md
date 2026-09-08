@@ -1334,6 +1334,64 @@ Hasilnya upload pertama gagal di produksi dan tidak di mana pun sebelumnya.
 Verifikasi eksternal naik jadi **18 dari 18 lolos** (empat cek baru: upload menolak tanpa
 signature, file store aktif, SVG tidak ada di tipe yang diterima, `/files/<hash tak dikenal>` → 404).
 
+### File metadata event pindah ke Cloudflare R2
+
+Byte file sekarang di **R2**, bukan di disk box. Yang **menyajikan** tetap API ini di
+`/files/:sha256` — URL itu di-commit on-chain permanen, jadi dia tidak boleh menunjuk ke penyedia
+storage mana pun.
+
+| | |
+| --- | --- |
+| Bucket | `sterun-files`, lokasi **APAC** |
+| Endpoint S3 | `https://<account id>.r2.cloudflarestorage.com` |
+| Region SigV4 | `auto` (bukan `us-east-1`, walau itu di-alias) |
+| Klien | SigV4 tulis tangan, `be/src/files/sigv4.ts` — **tanpa** `@aws-sdk/client-s3` |
+
+**Migrasi tiga file yang sudah ada dijalankan SEBELUM store-nya berganti**, karena URL yang mati
+berarti event rusak permanen. Sesudah pergantian, ketiganya diambil lagi lewat URL publiknya dan
+hash-nya dihitung ulang:
+
+```
+40e511e6def7…  -> HTTP 200, hash COCOK
+420033984720…  -> HTTP 200, hash COCOK
+6bf7567756b1…  -> HTTP 200, hash COCOK
+```
+
+Tidak ada satu pun URL yang berubah. Itu konsekuensi content-addressing: file yang sama menghasilkan
+key yang sama di store mana pun, jadi migrasi ini aman diulang dan tidak bisa menghasilkan URL baru.
+
+**E2E lewat R2**, 2026-09-08T06:08Z terhadap `https://api-sterun.jameshub.fun`:
+
+```
+1. upload            -> 201  sha256 cocok: true
+2. fetch             -> 200  application/json  | byte identik: true
+   CSP               -> default-src 'none'; sandbox
+   cache-control     -> public, max-age=31536000, immutable
+3. upload ulang      -> 201  created: false
+4. SVG (label PNG)   -> 415  unsupported-file-type
+5. tanpa signature   -> 401
+```
+
+**Baris 2 yang paling penting di sini**: header keamanannya masih milik kita. Kalau byte-nya
+disajikan langsung dari bucket, CSP `sandbox` itu hilang — dan bersamanya alasan kenapa file yang
+diunggah siapa pun aman disajikan dari origin yang juga melayani PII vault.
+
+**Signature-nya terbukti tiga lapis**, karena SigV4-nya ditulis tangan:
+
+| Lapis | Apa yang dibuktikan | Di mana |
+| --- | --- | --- |
+| Implementasi pembanding independen | dua pembacaan spesifikasi sepakat | `be/test/files-r2.test.ts` |
+| Aturan struktural | urutan header, encoding RFC 3986, payload hash | test yang sama |
+| **R2 sendiri menerimanya** | satu-satunya known-answer test sungguhan | run di atas |
+
+Lapis ketiga tidak bisa jalan di CI (butuh kredensial), makanya dicatat di sini. Mode gagalnya keras:
+signature meleset satu byte = `403 SignatureDoesNotMatch` di request pertama.
+
+**Konsekuensi arsitektur:** API sekarang **stateless**, jadi blocker di depan replica kedua hilang.
+Yang tersisa sebelum benar-benar menyalakannya: backup Postgres terjadwal (duluan — replica itu
+ketersediaan, backup itu pemulihan) lalu Redis untuk rate limit. Poller dan keeper **tetap
+singleton**.
+
 ### Untuk web app (STE-8/13/21/22/24/32)
 
 ```bash
