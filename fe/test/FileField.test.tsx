@@ -153,6 +153,20 @@ describe("FileField", () => {
       expect(uploadEventFile).not.toHaveBeenCalled();
     });
 
+    it("refuses a WebP, which the store would take but this field does not offer", async () => {
+      // Narrower than the backend on purpose: a poster is a poster, and naming
+      // five formats where two will do turns a glance into a decision. Anybody
+      // holding a WebP can convert it, so nobody is actually blocked.
+      const user = userEvent.setup({ applyAccept: false });
+      render(<Harness />);
+
+      const webp = new File([new Uint8Array(64)], "poster.webp", { type: "image/webp" });
+      await user.upload(screen.getByLabelText("Poster"), webp);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/PNG or a JPEG/i);
+      expect(uploadEventFile).not.toHaveBeenCalled();
+    });
+
     it("says a declined signature is not a failure to fix, and lets it be tried again", async () => {
       const user = userEvent.setup();
       uploadEventFile.mockRejectedValueOnce(new Error("User declined the request"));

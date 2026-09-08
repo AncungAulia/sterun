@@ -13,24 +13,29 @@
  */
 import type { InputHTMLAttributes, ReactNode } from "react";
 
+import { Help } from "@/components/elements/Help";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   id: string;
   label: string;
-  /** Shown under the input. Say what the value is for, not what it looks like. */
+  /**
+   * Shown under the input, and kept to what somebody has to type: the accepted
+   * format, the limit, the shape. Anything longer belongs in `help`, which is
+   * opened on purpose rather than read past. See `elements/Help.tsx`.
+   */
   hint?: ReactNode;
+  /** Why this field matters, behind an info button on the label. */
+  help?: ReactNode;
   /** Shown instead of the hint, in red, once the field has been asked for. */
   error?: string;
 }
 
-export function Field({ id, label, hint, error, required, ...props }: FieldProps) {
+export function Field({ id, label, hint, help, error, required, ...props }: FieldProps) {
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>
-        <LabelText label={label} required={required} />
-      </Label>
+      <LabelRow htmlFor={id} label={label} required={required} help={help} />
       <Input id={id} required={required} aria-invalid={error ? true : undefined} {...props} />
       <FieldMessage hint={hint} error={error} />
     </div>
@@ -84,6 +89,7 @@ interface TextAreaFieldProps {
   id: string;
   label: string;
   hint?: ReactNode;
+  help?: ReactNode;
   error?: string;
   required?: boolean;
   value: string;
@@ -96,6 +102,7 @@ export function TextAreaField({
   id,
   label,
   hint,
+  help,
   error,
   required,
   value,
@@ -105,9 +112,7 @@ export function TextAreaField({
 }: TextAreaFieldProps) {
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>
-        <LabelText label={label} required={required} />
-      </Label>
+      <LabelRow htmlFor={id} label={label} required={required} help={help} />
       <textarea
         id={id}
         rows={rows}
@@ -117,6 +122,34 @@ export function TextAreaField({
         className="rounded-md border border-input bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       />
       <FieldMessage hint={hint} error={error} />
+    </div>
+  );
+}
+
+/**
+ * A label and, when there is one, the info button that explains the field.
+ *
+ * One row rather than the button living inside `Label`: a `<label>` wrapping a
+ * `<button>` means clicking the button also focuses the input, so the tooltip
+ * opens and the caret jumps at the same time.
+ */
+export function LabelRow({
+  htmlFor,
+  label,
+  required,
+  help,
+}: {
+  htmlFor: string;
+  label: string;
+  required?: boolean;
+  help?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Label htmlFor={htmlFor}>
+        <LabelText label={label} required={required} />
+      </Label>
+      {help ? <Help label={label}>{help}</Help> : null}
     </div>
   );
 }

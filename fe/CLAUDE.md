@@ -172,6 +172,15 @@ membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
 - **Semua teks UI Bahasa Inggris.** Label tombol, judul, pesan error, empty state, placeholder —
   semuanya. Dokumen `.md` tetap Bahasa Indonesia, komentar kode tetap Inggris; aturan ini menambah
   satu hal saja, yaitu teks yang tampil di layar.
+- **Hint di bawah field = cuma yang harus diketik.** Format yang diterima, batas ukuran, bentuk
+  yang sah. Latar belakang dan "kenapa ini penting" pindah ke **Tooltip** lewat
+  `components/elements/Help.tsx` (`help` prop di `Field`, `TextAreaField`, `FileField`,
+  `DateTimeField`, `DateRangeField`, dan `Section` di `StepDetails`). Alasannya: waktu tiap field
+  punya satu paragraf, membaca jadi keputusan, dan keputusan di bawah tiap field bikin orang
+  berhenti membaca semuanya.
+  **Yang TIDAK boleh masuk tooltip: peringatan yang ada ongkosnya** (nama tidak bisa diganti,
+  kategori tidak bisa dihapus, dokumen tidak bisa ditukar). Itu wajib kelihatan tanpa hover —
+  tempatnya di `note` section atau di hint.
 - **Teks UI menyebut akibatnya, bukan mekanismenya.** Panitia lomba tidak perlu tahu kata "chain",
   "kontrak", "hash", "transaksi", atau "revert" — mereka perlu tahu apa konsekuensinya buat mereka.
   "Enforced on chain, entry number 301 reverts" jadi "Entries stop on their own once this many

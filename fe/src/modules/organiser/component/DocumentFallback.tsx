@@ -97,7 +97,8 @@ export function DocumentFallback({ text, hash, onChecked, onSkip }: DocumentFall
         value={uri}
         onChange={(e) => setUri(e.target.value)}
         placeholder="https://raw.githubusercontent.com/..."
-        hint="It has to be public. We read it straight from your browser."
+        hint="It has to be public."
+        help="We fetch it from your browser and compare what comes back with what was built here, so a link we cannot read is caught now rather than by a runner three days before the race."
       />
 
       <div className="flex flex-wrap items-center gap-3">

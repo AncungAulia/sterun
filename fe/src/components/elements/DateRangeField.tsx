@@ -19,7 +19,9 @@
  */
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
+import { Help } from "@/components/elements/Help";
 import { FieldMessage, LabelText } from "@/components/elements/Field";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -45,6 +47,8 @@ interface DateRangeFieldProps {
   value: DayRange;
   onChange: (value: DayRange) => void;
   hint?: string;
+  /** Why this field matters, behind an info button. See `elements/Help.tsx`. */
+  help?: ReactNode;
   error?: string;
   required?: boolean;
 }
@@ -55,6 +59,7 @@ export function DateRangeField({
   value,
   onChange,
   hint,
+  help,
   error,
   required = false,
 }: DateRangeFieldProps) {
@@ -64,8 +69,9 @@ export function DateRangeField({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-medium text-foreground">
+      <legend className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
         <LabelText label={label} required={required} />
+        {help ? <Help label={label}>{help}</Help> : null}
       </legend>
 
       <div className="flex flex-wrap items-end gap-4">

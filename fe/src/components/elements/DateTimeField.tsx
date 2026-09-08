@@ -22,7 +22,9 @@
  */
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
+import { Help } from "@/components/elements/Help";
 import { FieldMessage, LabelText } from "@/components/elements/Field";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -45,6 +47,8 @@ interface DateTimeFieldProps {
   dateOnly?: boolean;
   onChange: (value: string) => void;
   hint?: string;
+  /** Why this field matters, behind an info button. See `elements/Help.tsx`. */
+  help?: ReactNode;
   error?: string;
   required?: boolean;
   /** Warn when the moment is already gone. Used for the start time. */
@@ -57,6 +61,7 @@ export function DateTimeField({
   value,
   onChange,
   hint,
+  help,
   error,
   dateOnly = false,
   required = false,
@@ -97,8 +102,9 @@ export function DateTimeField({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-medium text-foreground">
+      <legend className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
         <LabelText label={label} required={required} />
+        {help ? <Help label={label}>{help}</Help> : null}
       </legend>
 
       <div className="flex flex-wrap items-end gap-4">

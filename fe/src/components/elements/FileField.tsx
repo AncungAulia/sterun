@@ -32,9 +32,8 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { FieldMessage, LabelText } from "@/components/elements/Field";
+import { FieldMessage, LabelRow } from "@/components/elements/Field";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { useWallet } from "@/hooks/useWallet";
 import { MAX_FILE_BYTES, uploadEventFile } from "@/lib/upload";
 import { signMessage, walletErrorMessage } from "@/lib/wallet";
@@ -47,25 +46,35 @@ import { signMessage, walletErrorMessage } from "@/lib/wallet";
 export type FileKind = "image" | "document";
 
 /**
- * Mirrors `ALLOWED_CONTENT_TYPES` in the backend, minus the metadata document,
- * which is never picked by hand. SVG is absent there deliberately and must stay
- * absent here — it is script in our own origin, not a picture.
+ * A subset of the backend's `ALLOWED_CONTENT_TYPES`, and deliberately narrower.
+ *
+ * The store also accepts GIF, WebP and AVIF, and will keep accepting them. They
+ * are not offered here because a poster is a poster: nobody exports one as an
+ * animated GIF, and naming five formats where two would do turns one glance
+ * into a decision. Anyone who really has a WebP can convert it; nobody is
+ * blocked, and the line under the field stays a line rather than a list.
+ *
+ * SVG is absent in the backend deliberately and must stay absent here too. It
+ * is script in our own origin, not a picture.
  */
 const ACCEPTED: Record<FileKind, string[]> = {
-  image: ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"],
+  image: ["image/png", "image/jpeg"],
   document: ["application/pdf"],
 };
 
 const REFUSED: Record<FileKind, string> = {
-  image: "That is not an image we can host. Use a PNG, JPEG, GIF, WebP or AVIF.",
-  document: "That is not a PDF. A waiver has to be a PDF so it opens the same way for everyone.",
+  image: "That is not a PNG or a JPEG.",
+  document: "That is not a PDF.",
 };
 
 interface FileFieldProps {
   id: string;
   label: string;
   kind: FileKind;
+  /** Kept to what to pick: the formats and the limit. */
   hint?: ReactNode;
+  /** Why it matters, behind an info button. See `elements/Help.tsx`. */
+  help?: ReactNode;
   /** The stored url, or an empty string. Owned by the form, like every field. */
   value: string;
   onChange: (url: string) => void;
@@ -77,7 +86,7 @@ type State =
   | { kind: "uploading" }
   | { kind: "failed"; message: string };
 
-export function FileField({ id, label, kind, hint, value, onChange }: FileFieldProps) {
+export function FileField({ id, label, kind, hint, help, value, onChange }: FileFieldProps) {
   const address = useWallet((state) => state.address);
   const [state, setState] = useState<State>({ kind: "idle" });
   const [name, setName] = useState("");
@@ -135,9 +144,7 @@ export function FileField({ id, label, kind, hint, value, onChange }: FileFieldP
 
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>
-        <LabelText label={label} />
-      </Label>
+      <LabelRow htmlFor={id} label={label} help={help} />
 
       {value ? <Stored kind={kind} url={value} label={label} name={name} /> : null}
 

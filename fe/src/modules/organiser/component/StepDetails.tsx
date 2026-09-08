@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { DateRangeField, EMPTY_RANGE, type DayRange } from "@/components/elements/DateRangeField";
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
+import { Help } from "@/components/elements/Help";
 import { FileField } from "@/components/elements/FileField";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
 import { parseCoordinates } from "@/utils/geo";
@@ -37,11 +38,32 @@ function PinHint({ link, missing }: { link: string; missing: string }) {
   return <>Pin found.</>;
 }
 
-function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+/**
+ * A heading, the one line that has to be read, and the rest behind an info
+ * button.
+ *
+ * The split is the same one every field makes (`elements/Help.tsx`): `note` is
+ * what somebody needs in order to fill this section in, or a cost they cannot
+ * undo. Background goes in `help`, where it is opened on purpose.
+ */
+function Section({
+  title,
+  note,
+  help,
+  children,
+}: {
+  title: string;
+  note?: string;
+  help?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-5 border-t border-border pt-6 first:border-t-0 first:pt-0">
       <div>
-        <h2 className="heading-strong text-lg text-foreground">{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="heading-strong text-lg text-foreground">{title}</h2>
+          {help ? <Help label={title}>{help}</Help> : null}
+        </div>
         {note ? <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{note}</p> : null}
       </div>
       {children}
@@ -106,6 +128,7 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           value={details.name}
           onChange={(e) => set({ name: e.target.value })}
           placeholder="Jakarta Sunrise 10K"
+          help="This is the name on the public list of races and on every runner's pass. It is stored with the event, and there is no way to rename it afterwards."
         />
         <DateTimeField
           id="race-date"
@@ -134,9 +157,10 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           hint={
             <PinHint
               link={details.locationLink}
-              missing="Paste the long link from the address bar. A shortened one (maps.app.goo.gl) carries no coordinates."
+              missing="Paste the long link from the address bar. A short link (maps.app.goo.gl) has no coordinates in it."
             />
           }
+          help="We read the two coordinates out of the link and keep those, not the link itself. That is what puts the start on a map, and what lets somebody find your race by looking near themselves."
         />
         <TextAreaField
           id="description"
@@ -146,12 +170,14 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           value={details.description}
           onChange={(description) => set({ description })}
           placeholder="Two laps of the park, flat, water at every 2 km."
+          help="The only part of the page that says what the race is actually like. Without it a runner has a name, a date, and nothing to decide on."
         />
       </Section>
 
       <Section
         title="Registration"
-        note="When people can enter. Opening and closing entries is still a switch you press yourself, so treat these as what you are promising runners."
+        note="When people can enter."
+        help="These go on your event page as what you are promising runners. Opening and closing entries is still a switch you press yourself, so nothing shuts on its own at the time you put here."
       >
         <div className="grid gap-5 sm:grid-cols-2">
           <DateTimeField
@@ -175,7 +201,8 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
 
       <Section
         title="Race pack collection"
-        note="Leave empty if there is no collection day and packs are handed out at the start."
+        note="Leave empty if packs are handed out at the start instead."
+        help="Collection is a desk somebody sits at, so this is a run of days plus the hours it is open on each of them, rather than one long window that stays open overnight."
       >
         <DateRangeField
           id="racepack"
@@ -207,7 +234,8 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
 
       <Section
         title="Poster and links"
-        note="Where runners go for updates. These are part of the details file, so the account you name here cannot be swapped for another one after people have entered."
+        note="Where runners go for updates. None of these can be swapped for something else once the event exists."
+        help="They are part of what gets frozen with your event, so the account you name here cannot quietly become a different account after people have entered."
       >
         <FileField
           id="poster"
@@ -215,7 +243,8 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           kind="image"
           value={details.posterUrl}
           onChange={(posterUrl) => set({ posterUrl })}
-          hint="PNG, JPEG, GIF, WebP or AVIF, up to 5 MB. It goes on your event page."
+          hint="PNG or JPEG, 1200 px wide or more, up to 5 MB."
+          help="It sits at the top of your event page, as wide as the page and up to about 400 px tall, so a wide picture fills that space and a tall one is shown smaller. Any shape works. Under 1200 px wide it starts to look soft on a good screen."
         />
         <FileField
           id="waiver"
@@ -223,7 +252,8 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           kind="document"
           value={details.waiverUrl}
           onChange={(waiverUrl) => set({ waiverUrl })}
-          hint="A PDF, up to 5 MB. Once your event is created this is the copy runners agreed to, and it cannot be swapped for a different one."
+          hint="PDF, up to 5 MB."
+          help="This becomes the exact copy runners agreed to. Nobody can put a different document in its place later, including you, which is the whole reason it is worth uploading rather than linking to one."
         />
         <Field
           id="instagram"
@@ -231,7 +261,8 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           value={details.instagram}
           onChange={(e) => set({ instagram: e.target.value })}
           placeholder="@jakartarun"
-          hint="Or paste the profile link and we will take the handle out of it."
+          hint="A handle, or paste the profile link."
+          help="The handle is stored rather than the address, because Instagram has changed the shape of its URLs before and this cannot be edited afterwards."
         />
         <Field
           id="website"

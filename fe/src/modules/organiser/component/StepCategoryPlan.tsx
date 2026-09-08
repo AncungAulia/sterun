@@ -19,6 +19,7 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Field } from "@/components/elements/Field";
+import { Help } from "@/components/elements/Help";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,11 +94,16 @@ export function StepCategoryPlan({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="heading-strong text-lg text-foreground">Distance categories</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="heading-strong text-lg text-foreground">Distance categories</h2>
+          <Help label="distance categories">
+            Nothing is signed on this screen. You are writing the race down, and the wallet comes
+            at the end, once for each distance.
+          </Help>
+        </div>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          One per distance people can enter. Nothing is signed yet: you are writing the race down,
-          and the wallet comes later. A distance cannot be changed or removed once it is on chain,
-          so this is the place to get it right.
+          One per distance people can enter. A distance cannot be changed or removed once it
+          exists, so this is the place to get it right.
         </p>
       </div>
 
@@ -138,7 +144,8 @@ export function StepCategoryPlan({
                 value={category.code}
                 onChange={(e) => set(index, { code: e.target.value })}
                 placeholder="5K, 10K, HALF"
-                hint="What runners pick between. Letters, digits and underscores only."
+                hint="Letters, digits and underscores only."
+                help="This is what a runner picks between on your event page, so it should read the way people already talk about the distance."
               />
               <Field
                 id={`km-${index}`}
@@ -156,6 +163,7 @@ export function StepCategoryPlan({
                 onChange={(e) => set(index, { quota: e.target.value })}
                 placeholder="300"
                 hint="Entries stop on their own once this many people have joined."
+                help="The limit holds by itself, even if two people try for the last place at the same moment. You do not have to watch it or close anything."
               />
               <Field
                 id={`price-${index}`}
@@ -163,7 +171,8 @@ export function StepCategoryPlan({
                 value={category.price}
                 onChange={(e) => set(index, { price: e.target.value })}
                 placeholder="25"
-                hint="Enter 0 if this category is free."
+                hint="Enter 0 if this distance is free."
+                help="Paid in sUSD, the test currency for this stage. It goes straight from the runner to your wallet when they enter, and we never hold it."
               />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`start-${index}`}>
@@ -182,7 +191,13 @@ export function StepCategoryPlan({
                 <p className="text-sm text-muted-foreground">On the race day.</p>
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor={`cut-${index}`}>Cut off</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor={`cut-${index}`}>Cut off</Label>
+                  <Help label="cut off">
+                    Shown to runners as information. Nothing enforces it, so a finish recorded
+                    after this time is still recorded.
+                  </Help>
+                </div>
                 <Input
                   id={`cut-${index}`}
                   type="time"
@@ -191,7 +206,7 @@ export function StepCategoryPlan({
                   className="numeric w-32"
                 />
                 <p className="text-sm text-muted-foreground">
-                  The last moment a finish counts for this distance.
+                  The last moment a finish counts.
                 </p>
               </div>
             </div>
