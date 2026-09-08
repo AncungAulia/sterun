@@ -113,6 +113,20 @@ export class FakeChain implements ContractCaller {
 
   constructor(readonly addresses: FakeChainAddresses) {}
 
+
+  /**
+   * Revoke a scanner on the chain WITHOUT emitting an event.
+   *
+   * That combination is the point: it is what a removal looks like to an index
+   * that was not running when it happened. There is no event to replay, so only
+   * a direct read of the chain can notice.
+   */
+  removeScanner(eventId: number, address: string): void {
+    const event = this.events.get(eventId);
+    if (!event) throw new Error(`fake chain has no event ${eventId}`);
+    event.scanners = event.scanners.filter((s) => s !== address);
+  }
+
   addEvent(event: Partial<FakeEvent> & { eventId: number; organiser: string }): FakeEvent {
     const full: FakeEvent = {
       name: `Event ${event.eventId}`,
