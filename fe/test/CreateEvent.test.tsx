@@ -290,6 +290,51 @@ describe("CreateEvent", () => {
       expect(screen.getByLabelText(/Event name/)).toBeInTheDocument();
     });
 
+    it("marks a backwards registration window as soon as both dates exist", async () => {
+      // Nobody has pressed Continue here. Two dates that cannot both be true
+      // are wrong the moment the second one is picked, and the organiser is
+      // looking at both fields right now — later is after they moved on.
+      const { user } = renderWizard();
+
+      await user.click(screen.getByRole("button", { name: "Registration opens date" }));
+      await user.click(screen.getByRole("button", { name: /September 27th, 2026/ }));
+      await user.click(screen.getByRole("button", { name: "Registration closes date" }));
+      await user.click(screen.getByRole("button", { name: /September 8th, 2026/ }));
+
+      expect(await screen.findByText(/cannot close before they open/i)).toBeInTheDocument();
+    });
+
+    it("leaves the fields that are merely empty alone until Continue", async () => {
+      // The other half of the same decision. A form being filled in is not a
+      // form being got wrong, and one that goes red under the cursor is one
+      // people learn to read past.
+      const { user } = renderWizard();
+
+      await user.click(screen.getByRole("button", { name: "Registration opens date" }));
+      await user.click(screen.getByRole("button", { name: /September 27th, 2026/ }));
+      await user.click(screen.getByRole("button", { name: "Registration closes date" }));
+      await user.click(screen.getByRole("button", { name: /September 8th, 2026/ }));
+
+      await screen.findByText(/cannot close before they open/i);
+      expect(screen.queryByText(/give the race a name/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/paste a google maps link/i)).not.toBeInTheDocument();
+    });
+
+    it("clears the clash the moment the dates make sense again", async () => {
+      const { user } = renderWizard();
+
+      await user.click(screen.getByRole("button", { name: "Registration opens date" }));
+      await user.click(screen.getByRole("button", { name: /September 27th, 2026/ }));
+      await user.click(screen.getByRole("button", { name: "Registration closes date" }));
+      await user.click(screen.getByRole("button", { name: /September 8th, 2026/ }));
+      await screen.findByText(/cannot close before they open/i);
+
+      await user.click(screen.getByRole("button", { name: "Registration opens date" }));
+      await user.click(screen.getByRole("button", { name: /September 7th, 2026/ }));
+
+      expect(screen.queryByText(/cannot close before they open/i)).not.toBeInTheDocument();
+    });
+
     it("insists on a maps link with a pin, because that is what places the race", async () => {
       const { user } = renderWizard();
       await user.type(screen.getByLabelText(/Event name/), "A race");

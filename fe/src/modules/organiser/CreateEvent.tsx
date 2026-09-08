@@ -42,7 +42,7 @@ import {
 } from "./component/StepCategoryPlan";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepDocument, type PublishedDocument } from "./component/StepDocument";
-import { focusField, missingDetails } from "./missing";
+import { focusField, incoherentDates, missingDetails, type Missing } from "./missing";
 
 /**
  * `metadata_hash` is a required `BytesN<32>`, so an event without a document
@@ -110,12 +110,20 @@ function Wizard() {
    * press to find out. Pressing it and landing on the empty field answers the
    * question in one action, and the messages appear only once somebody has
    * asked, so a form nobody has touched yet is not already covered in red.
+   *
+   * Contradictions are the exception, and shown straight away. An empty field
+   * may simply be one the organiser has not reached; two dates that cannot both
+   * be true are already wrong, and the person is looking at both of them at the
+   * moment they become wrong. Holding that back until Continue means raising it
+   * after they have moved on to something else.
    */
   const missing = useMemo(() => missingDetails(details), [details]);
+  const clashes = useMemo(() => incoherentDates(details), [details]);
   const [askedToContinue, setAskedToContinue] = useState(false);
-  const errors = askedToContinue
-    ? Object.fromEntries(missing.map((item) => [item.field, item.message]))
-    : {};
+  const errors = {
+    ...(askedToContinue ? asMessages(missing) : {}),
+    ...asMessages(clashes),
+  };
 
   function continueFromDetails() {
     if (missing.length === 0) {
@@ -454,6 +462,11 @@ function earliestStart(raceDate: string, plan: PlannedCategory[]): bigint | null
 
   const ms = new Date(`${raceDate}T${earliest}`).getTime();
   return Number.isNaN(ms) ? null : BigInt(Math.floor(ms / 1000));
+}
+
+/** Field key to message, in the shape `StepDetails` marks its inputs with. */
+function asMessages(problems: Missing[]): Record<string, string> {
+  return Object.fromEntries(problems.map((item) => [item.field, item.message]));
 }
 
 function toIso(local: string): string {

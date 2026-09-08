@@ -9,6 +9,19 @@
  * reason is a dead end: the organiser sees it, cannot tell what is wrong, and
  * has nothing to click to find out. Pressing it and being taken to the empty
  * field answers the question in one action.
+ *
+ * ## Two kinds of wrong, shown at two different moments
+ *
+ * An empty field is not yet a mistake. Somebody who has filled in three of
+ * eight fields is not doing anything wrong, and a form that goes red under the
+ * cursor is a form people learn to ignore. Those wait for Continue.
+ *
+ * A pair of dates that contradict each other is different: it is wrong the
+ * moment the second one exists, nothing later will make it right, and the
+ * person is looking at both fields right now. Waiting to mention it means
+ * mentioning it after they have moved on. So `incoherentDates` is exported
+ * separately and shown as it happens, while `missingDetails` — which includes
+ * it — is what Continue is judged against.
  */
 import { parseCoordinates } from "@/utils/geo";
 
@@ -87,8 +100,12 @@ export function missingDetails(details: EventDetails): Missing[] {
  * published and frozen before anybody else reads it. Nothing here is enforced
  * by the contract: it will happily store a race that starts before its own
  * entries close. That is exactly why the console has to.
+ *
+ * Every check below reads two values and returns nothing unless both are
+ * present. That is what makes it safe to run on every keystroke: a form being
+ * filled in cannot trip it, only a form that is finished and wrong.
  */
-function incoherentDates(details: EventDetails): Missing[] {
+export function incoherentDates(details: EventDetails): Missing[] {
   const problems: Missing[] = [];
 
   const opens = at(details.registrationOpens);

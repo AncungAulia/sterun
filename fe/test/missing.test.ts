@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { EMPTY_RANGE } from "@/components/elements/DateRangeField";
 import { EMPTY_PLACE } from "@/components/elements/PlaceFields";
 import type { EventDetails } from "@/modules/organiser/component/StepDetails";
-import { missingDetails } from "@/modules/organiser/missing";
+import { incoherentDates, missingDetails } from "@/modules/organiser/missing";
 
 /** A complete, coherent form. Each test breaks exactly one thing. */
 function details(overrides: Partial<EventDetails> = {}): EventDetails {
@@ -124,6 +124,79 @@ describe("missingDetails", () => {
       });
 
       expect(missingDetails(afterwards)[0]?.message).toMatch(/finish on race day/i);
+    });
+  });
+});
+
+/**
+ * The subset that is knowable before anybody presses Continue.
+ *
+ * An empty field is not yet a mistake — the organiser may simply not have got
+ * there. Two dates that contradict each other are a mistake the moment both
+ * exist, and saying so straight away is the difference between fixing it now
+ * and fixing it after the file is frozen.
+ */
+describe("incoherentDates", () => {
+  describe("positive", () => {
+    it("finds nothing wrong with a coherent schedule", () => {
+      expect(incoherentDates(details())).toEqual([]);
+    });
+  });
+
+  describe("negative", () => {
+    it("reports entries that close before they open", () => {
+      const backwards = details({
+        registrationOpens: "2026-09-30T09:00",
+        registrationCloses: "2026-09-01T21:00",
+      });
+
+      expect(incoherentDates(backwards).map((item) => item.field)).toEqual(["registrationCloses"]);
+    });
+
+    it("reports entries that close after the race has been run", () => {
+      const late = details({ registrationCloses: "2026-10-20T21:00" });
+
+      expect(incoherentDates(late)[0]?.message).toMatch(/already been run/i);
+    });
+
+    it("reports race pack collection that ends after race day", () => {
+      const afterwards = details({
+        racepack: { from: "2026-10-05", to: "2026-10-06", opens: "09:00", closes: "17:00" },
+      });
+
+      expect(incoherentDates(afterwards)[0]?.field).toBe("racepack");
+    });
+  });
+
+  describe("edge", () => {
+    it("stays silent while only one half of a pair is filled in", () => {
+      // This is the whole reason the two checks are separate. These problems
+      // are shown as somebody types, so a half-typed form must not go red.
+      const half = details({ registrationCloses: "" });
+
+      expect(incoherentDates(half)).toEqual([]);
+    });
+
+    it("stays silent on a form nobody has touched", () => {
+      const untouched = details({
+        raceDate: "",
+        registrationOpens: "",
+        registrationCloses: "",
+      });
+
+      expect(incoherentDates(untouched)).toEqual([]);
+    });
+
+    it("is a subset of what Continue refuses to pass", () => {
+      // Continue must still be blocked by everything here. If these two ever
+      // disagree, a form could show an error and continue anyway.
+      const broken = details({
+        registrationOpens: "2026-09-30T09:00",
+        registrationCloses: "2026-09-01T21:00",
+      });
+
+      const all = missingDetails(broken).map((item) => item.field);
+      for (const problem of incoherentDates(broken)) expect(all).toContain(problem.field);
     });
   });
 });
