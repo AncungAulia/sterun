@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Where a race happens: a venue you type, and a country, province and city you
- * pick from a searchable list.
+ * Where a race happens: a country, province and city you pick from a searchable
+ * list, and then a venue you type.
  *
  * ## Why lists and not free text
  *
@@ -72,14 +72,6 @@ export function PlaceFields({
 
   return (
     <>
-      <Field
-        id="venue"
-        label="Venue"
-        value={place.venue}
-        onChange={(e) => onChange({ ...place, venue: e.target.value })}
-        placeholder="Gelora Bung Karno"
-      />
-
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="country">
@@ -155,6 +147,14 @@ export function PlaceFields({
           <FieldMessage error={errors.city} />
         </div>
       </div>
+
+      <Field
+        id="venue"
+        label="Venue"
+        value={place.venue}
+        onChange={(e) => onChange({ ...place, venue: e.target.value })}
+        placeholder="Gelora Bung Karno"
+      />
     </>
   );
 }

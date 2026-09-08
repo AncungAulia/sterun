@@ -114,7 +114,6 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           warnIfPast
           value={details.raceDate}
           onChange={(raceDate) => set({ raceDate })}
-          hint="Start times are set per distance in the next step, since waves do not go together."
         />
         <PlaceFields
           required
