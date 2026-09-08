@@ -36,19 +36,29 @@ import { formatEventDateTimeLong, formatPrice, parseStroops } from "@/utils/form
 import type { useEventRun } from "@/hooks/useEventRun";
 
 import { DocumentFallback } from "./DocumentFallback";
+import type { PlannedAddOn } from "./StepAddOns";
 import type { PlannedCategory } from "./StepCategoryPlan";
 import type { EventDetails } from "./StepDetails";
 
 interface StepReviewProps {
   details: EventDetails;
   plan: PlannedCategory[];
+  addOns: PlannedAddOn[];
   startsAt: bigint | null;
   documentText: string;
   hash: string;
   run: ReturnType<typeof useEventRun>;
 }
 
-export function StepReview({ details, plan, startsAt, documentText, hash, run }: StepReviewProps) {
+export function StepReview({
+  details,
+  plan,
+  addOns,
+  startsAt,
+  documentText,
+  hash,
+  run,
+}: StepReviewProps) {
   const [showFile, setShowFile] = useState(false);
   const started = run.done.length > 0 || run.isRunning || run.failure !== null;
 
@@ -62,7 +72,7 @@ export function StepReview({ details, plan, startsAt, documentText, hash, run }:
         </p>
       </div>
 
-      <Summary details={details} plan={plan} startsAt={startsAt} />
+      <Summary details={details} plan={plan} addOns={addOns} startsAt={startsAt} />
 
       <div>
         <Button variant="ghost" onClick={() => setShowFile((open) => !open)}>
@@ -134,10 +144,12 @@ export function StepReview({ details, plan, startsAt, documentText, hash, run }:
 function Summary({
   details,
   plan,
+  addOns,
   startsAt,
 }: {
   details: EventDetails;
   plan: PlannedCategory[];
+  addOns: PlannedAddOn[];
   startsAt: bigint | null;
 }) {
   const place = [
@@ -229,6 +241,49 @@ function Summary({
           ))}
         </tbody>
       </table>
+
+      {addOns.length > 0 ? <Pack addOns={addOns} /> : null}
+    </div>
+  );
+}
+
+/**
+ * What each ticket buys, listed by item rather than by distance.
+ *
+ * By item because that is how it was entered and how it is stored, and because
+ * one jersey line naming three distances is shorter to read than three
+ * distances each repeating the jersey.
+ */
+function Pack({ addOns }: { addOns: PlannedAddOn[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="heading-strong text-base text-foreground">What runners get</p>
+      {addOns.map((addOn, index) => {
+        const sizes = addOn.sized ? addOn.sizes.filter((size) => size.label.trim()) : [];
+        return (
+          <div key={index} className="flex flex-wrap items-start gap-4">
+            {addOn.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={addOn.photoUrl}
+                alt={addOn.name}
+                className="size-20 rounded-md border border-border object-contain"
+              />
+            ) : null}
+            <div>
+              <p className="text-base text-foreground">{addOn.name}</p>
+              <p className="text-sm text-muted-foreground">
+                Included in {addOn.includedIn.join(", ") || "no distance yet"}
+              </p>
+              {sizes.length > 0 ? (
+                <p className="numeric text-sm text-muted-foreground">
+                  Sizes {sizes.map((size) => size.label.trim()).join(", ")}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

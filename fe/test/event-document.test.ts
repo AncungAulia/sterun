@@ -32,6 +32,7 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     racepackVenueLink: "",
     raceDate: "2026-10-04",
     categories: [{ code: "10K", startTime: "06:00", cutOff: "" }],
+    addOns: [],
     ...overrides,
   };
 }
@@ -212,6 +213,7 @@ describe("buildEventDocument", () => {
           locationLink: "",
           posterUrl: "",
           waiverUrl: "",
+          addOns: [],
           instagram: "",
           website: "",
           registrationOpens: "",
@@ -399,5 +401,89 @@ describe("what STE-17 writes, STE-13 reads", () => {
     expect(gunStartConflict(result.document, STARTS_AT)).toBe(false);
 
     vi.unstubAllGlobals();
+  });
+});
+
+describe("add-ons in the document", () => {
+  const jersey = {
+    name: "Event jersey",
+    photoUrl: "https://cdn.example.test/jersey.png",
+    includedIn: ["10K"],
+    sizes: [
+      { label: "S", chest: "48", length: "68" },
+      { label: "M", chest: "52", length: "70" },
+    ],
+  };
+
+  describe("positive", () => {
+    it("records what a distance includes, with the chart as numbers", () => {
+      // Numbers rather than "52 cm": a chart is data a client can lay out or
+      // convert, and a unit inside the value makes both a parsing job.
+      const document = JSON.parse(buildEventDocument(draft({ addOns: [jersey] })));
+
+      expect(document.add_ons).toEqual([
+        {
+          name: "Event jersey",
+          photo_url: "https://cdn.example.test/jersey.png",
+          included_in: ["10K"],
+          sizes: [
+            { label: "S", chest_cm: 48, length_cm: 68 },
+            { label: "M", chest_cm: 52, length_cm: 70 },
+          ],
+        },
+      ]);
+    });
+
+    it("keeps a size that has a label and no measurements", () => {
+      // Plenty of races publish S/M/L and no chart at all, and knowing an XXL
+      // exists is worth something on its own.
+      const document = JSON.parse(
+        buildEventDocument(
+          draft({ addOns: [{ ...jersey, sizes: [{ label: "XXL", chest: "", length: "" }] }] }),
+        ),
+      );
+
+      expect(document.add_ons[0].sizes).toEqual([{ label: "XXL" }]);
+    });
+  });
+
+  describe("negative", () => {
+    it("leaves out an item nobody receives", () => {
+      // An add-on ticked against no distance is invisible to every runner, and
+      // this file cannot be corrected afterwards.
+      const document = JSON.parse(
+        buildEventDocument(draft({ addOns: [{ ...jersey, includedIn: [] }] })),
+      );
+
+      expect(document).not.toHaveProperty("add_ons");
+    });
+
+    it("leaves out an item with no name", () => {
+      const document = JSON.parse(
+        buildEventDocument(draft({ addOns: [{ ...jersey, name: "  " }] })),
+      );
+
+      expect(document).not.toHaveProperty("add_ons");
+    });
+  });
+
+  describe("edge", () => {
+    it("writes nothing at all when the race pack is empty", () => {
+      // A race that hands out nothing but a bib is still a race, and an empty
+      // array would be a permanent record of a section nobody filled in.
+      const document = JSON.parse(buildEventDocument(draft()));
+
+      expect(document).not.toHaveProperty("add_ons");
+    });
+
+    it("drops a measurement that is not a number", () => {
+      const document = JSON.parse(
+        buildEventDocument(
+          draft({ addOns: [{ ...jersey, sizes: [{ label: "M", chest: "wide", length: "70" }] }] }),
+        ),
+      );
+
+      expect(document.add_ons[0].sizes).toEqual([{ label: "M", length_cm: 70 }]);
+    });
   });
 });

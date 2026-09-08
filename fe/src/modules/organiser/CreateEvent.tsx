@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * STE-17 — creating an event: decide, plan the distances, then sign the lot.
+ * STE-17 — creating an event: decide, lay it out, then sign the lot.
  *
- * ## Why three steps and not six
+ * ## Why four steps and not six
  *
  * It used to be six, and four of them were about our plumbing rather than the
  * race: publish a file, create the event, add each distance, open for entries.
@@ -12,7 +12,7 @@
  * and the transactions are how we deliver the second one.
  *
  * So the wizard is now what somebody actually does: fill in the race, lay out
- * the distances, read it back and sign. The signatures themselves did not go
+ * the distances, say what is in the race pack, read it back and sign. The signatures themselves did not go
  * anywhere. There are still three plus one per distance, because a transaction
  * carries one contract call and `add_category` needs an event id that does not
  * exist until `create_event` lands. They are listed before the first one is
@@ -48,6 +48,7 @@ import {
   categoryProblem,
   type PlannedCategory,
 } from "./component/StepCategoryPlan";
+import { StepAddOns, addOnProblem, type PlannedAddOn } from "./component/StepAddOns";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepReview } from "./component/StepReview";
 import { focusField, incoherentDates, missingDetails, type Missing } from "./missing";
@@ -55,6 +56,7 @@ import { focusField, incoherentDates, missingDetails, type Missing } from "./mis
 const STEPS = [
   { id: "details", label: "Details" },
   { id: "distances", label: "Distances" },
+  { id: "add-ons", label: "Add-ons" },
   { id: "review", label: "Review" },
 ] as const;
 type Step = (typeof STEPS)[number]["id"];
@@ -72,6 +74,12 @@ function Wizard() {
   const [details, setDetails] = useState<EventDetails>(EMPTY_DETAILS);
   const [plan, setPlan] = useState<PlannedCategory[]>([{ ...EMPTY_CATEGORY }]);
   const [showPlanProblems, setShowPlanProblems] = useState(false);
+  /**
+   * Add-ons start empty, and staying empty is a normal way to finish. A race
+   * that hands out nothing but a bib is still a race.
+   */
+  const [addOns, setAddOns] = useState<PlannedAddOn[]>([]);
+  const [showAddOnProblems, setShowAddOnProblems] = useState(false);
 
   /**
    * What goes on chain as `starts_at`: the first wave off the line. The event
@@ -113,11 +121,34 @@ function Wizard() {
 
   function continueFromDistances() {
     if (planProblems === 0 && plan.length > 0) {
-      setStep("review");
+      setStep("add-ons");
       return;
     }
     setShowPlanProblems(true);
   }
+
+  function continueFromAddOns() {
+    if (addOns.every((addOn) => addOnProblem(addOn) === null)) {
+      setStep("review");
+      return;
+    }
+    setShowAddOnProblems(true);
+  }
+
+  /**
+   * A distance renamed after an add-on was ticked would leave that add-on
+   * pointing at a code nobody can enter, and the document is permanent. Rather
+   * than repairing references, the ticks are read through the distances that
+   * currently exist, so a rename simply unticks and the organiser is told by
+   * the same message that catches an add-on nobody receives.
+   */
+  const liveAddOns = useMemo(() => {
+    const codes = new Set(plan.map((category) => category.code.trim()).filter(Boolean));
+    return addOns.map((addOn) => ({
+      ...addOn,
+      includedIn: addOn.includedIn.filter((code) => codes.has(code)),
+    }));
+  }, [addOns, plan]);
 
   // Derived, not stored. The text on screen is always the text its hash covers,
   // with no effect in between that could leave the two out of step for a render.
@@ -151,13 +182,19 @@ function Wizard() {
             racepackVenue: details.racepackVenue,
             racepackVenueLink: details.racepackVenueLink,
             raceDate: details.raceDate,
+            addOns: liveAddOns.map((addOn) => ({
+              name: addOn.name,
+              photoUrl: addOn.photoUrl,
+              includedIn: addOn.includedIn,
+              sizes: addOn.sized ? addOn.sizes : [],
+            })),
             categories: plan.map((category) => ({
               code: category.code,
               startTime: category.startTime,
               cutOff: category.cutOff,
             })),
           }),
-    [details, plan, startsAt],
+    [details, liveAddOns, plan, startsAt],
   );
 
   // Hashing is async (crypto.subtle), so it is a query keyed by the exact text
@@ -212,11 +249,29 @@ function Wizard() {
           </>
         ) : null}
 
+        {step === "add-ons" ? (
+          <>
+            <StepAddOns
+              addOns={addOns}
+              categories={plan}
+              onChange={setAddOns}
+              showProblems={showAddOnProblems}
+            />
+            <div className="mt-8 flex flex-wrap justify-end gap-3">
+              <Button variant="secondary" onClick={() => setStep("distances")}>
+                Back
+              </Button>
+              <Button onClick={continueFromAddOns}>Continue</Button>
+            </div>
+          </>
+        ) : null}
+
         {step === "review" ? (
           <>
             <StepReview
               details={details}
               plan={plan}
+              addOns={liveAddOns}
               startsAt={startsAt}
               documentText={documentText}
               hash={hash}
@@ -230,7 +285,7 @@ function Wizard() {
             */}
             {run.done.length === 0 && !run.isRunning ? (
               <div className="mt-8 flex justify-start">
-                <Button variant="secondary" onClick={() => setStep("distances")}>
+                <Button variant="secondary" onClick={() => setStep("add-ons")}>
                   Back
                 </Button>
               </div>

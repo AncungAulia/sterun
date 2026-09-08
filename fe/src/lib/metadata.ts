@@ -42,6 +42,17 @@ export interface EventMetadata {
   /** ISO 8601 from the `race_day` schedule entry, if the document has one. */
   gunStart?: string;
   schedule?: MetadataPhase[];
+  /** What each distance includes: jersey, medal, whatever is in the pack. */
+  addOns?: MetadataAddOn[];
+}
+
+export interface MetadataAddOn {
+  name: string;
+  photoUrl?: string;
+  /** Distance codes that receive this one. */
+  includedIn: string[];
+  /** Flat measurements, absent on anything without sizes. */
+  sizes?: { label: string; chestCm?: number; lengthCm?: number }[];
 }
 
 export interface MetadataPhase {
@@ -138,6 +149,7 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
   const schedule = Array.isArray(raw.schedule)
     ? raw.schedule.filter(isRecord).map(parsePhase)
     : undefined;
+  const addOns = parseAddOns(raw.add_ons);
 
   return {
     ...str(raw.poster_url, "posterUrl"),
@@ -149,7 +161,46 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
     ...(schedule?.find((phase) => phase.gunStart)?.gunStart
       ? { gunStart: schedule.find((phase) => phase.gunStart)!.gunStart }
       : {}),
+    ...(addOns && addOns.length > 0 ? { addOns } : {}),
   };
+}
+
+/**
+ * An add-on is only shown when it has a name and at least one distance that
+ * receives it. Anything else is a row somebody abandoned, and this file is
+ * permanent: it will still be there on race day.
+ */
+function parseAddOns(raw: unknown): MetadataAddOn[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const addOns = raw.filter(isRecord).flatMap((entry): MetadataAddOn[] => {
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    const includedIn = Array.isArray(entry.included_in)
+      ? entry.included_in.filter((code): code is string => typeof code === "string")
+      : [];
+    if (!name || includedIn.length === 0) return [];
+    const sizes = Array.isArray(entry.sizes)
+      ? entry.sizes.filter(isRecord).flatMap((size): NonNullable<MetadataAddOn["sizes"]> => {
+          const label = typeof size.label === "string" ? size.label.trim() : "";
+          if (!label) return [];
+          return [
+            {
+              label,
+              ...(typeof size.chest_cm === "number" ? { chestCm: size.chest_cm } : {}),
+              ...(typeof size.length_cm === "number" ? { lengthCm: size.length_cm } : {}),
+            },
+          ];
+        })
+      : [];
+    return [
+      {
+        name,
+        includedIn,
+        ...str(entry.photo_url, "photoUrl"),
+        ...(sizes.length > 0 ? { sizes } : {}),
+      },
+    ];
+  });
+  return addOns.length > 0 ? addOns : undefined;
 }
 
 function parsePhase(raw: Record<string, unknown>): MetadataPhase {

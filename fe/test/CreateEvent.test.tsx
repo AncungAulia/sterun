@@ -100,11 +100,27 @@ async function fillDistances(
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
-/** Everything up to the review screen, with the file publishing cleanly. */
+/**
+ * Everything up to the review screen, with the file publishing cleanly.
+ *
+ * Add-ons are skipped by default: an empty race pack is a normal way to finish,
+ * and the tests that care about add-ons fill them in themselves.
+ */
 async function reachReview(user: ReturnType<typeof userEvent.setup>) {
   await fillDetails(user);
   await fillDistances(user);
+  await user.click(screen.getByRole("button", { name: "Continue" }));
   fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+}
+
+/** Add one item on the add-ons step, then move on to the review. */
+async function fillAddOn(
+  user: ReturnType<typeof userEvent.setup>,
+  { name = "Event jersey" }: { name?: string } = {},
+) {
+  await user.click(screen.getByRole("button", { name: /add an item/i }));
+  await user.type(screen.getByLabelText(/^Item/), name);
+  await user.click(screen.getByRole("checkbox", { name: "10K" }));
 }
 
 beforeEach(() => {
@@ -193,6 +209,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await fillDetails(user);
       await fillDistances(user);
+      await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "unavailable", reason: "404" });
 
       await user.click(screen.getByRole("button", { name: "Create event" }));
@@ -205,6 +222,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await fillDetails(user);
       await fillDistances(user, { price: "25.5" });
+      await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
       await user.click(screen.getByRole("button", { name: "Create event" }));
@@ -260,6 +278,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await fillDetails(user);
       await fillDistances(user);
+      await user.click(screen.getByRole("button", { name: "Continue" }));
       uploadEventFile.mockRejectedValueOnce(new Error("User declined the request"));
 
       await user.click(screen.getByRole("button", { name: "Create event" }));
@@ -339,6 +358,88 @@ describe("CreateEvent", () => {
 
       expect(await screen.findByText(/showing a different file/i)).toBeInTheDocument();
       expect(screen.queryByText("Checked")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("what runners get", () => {
+    it("writes an item into the document against the distances that include it", async () => {
+      // The whole model in one assertion: an add-on is not a product with a
+      // price, it is what a ticket already buys. `enter` moves one amount once,
+      // so there is nowhere for a second charge to live.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await fillAddOn(user);
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+
+      await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+
+      const file = await screen.findByText(/"add_ons"/);
+      expect(file).toHaveTextContent(/"name": "Event jersey"/);
+      expect(file).toHaveTextContent(/"included_in": \[\s*"10K"/);
+    });
+
+    it("seeds a size chart when the item is one people wear", async () => {
+      // Picking a preset answers "does this have sizes" as well as naming it,
+      // because the two are the same question and asking twice is friction.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await fillAddOn(user);
+
+      expect(screen.getByRole("checkbox", { name: /runners pick a size/i })).toBeChecked();
+      for (const label of ["S", "M", "L", "XL"]) {
+        expect(screen.getByDisplayValue(label)).toBeInTheDocument();
+      }
+    });
+
+    it("leaves a tumbler without one", async () => {
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await fillAddOn(user, { name: "Tumbler" });
+
+      expect(screen.getByRole("checkbox", { name: /runners pick a size/i })).not.toBeChecked();
+      expect(screen.queryByText("Size chart")).not.toBeInTheDocument();
+    });
+
+    it("refuses an item nobody would ever receive", async () => {
+      // An add-on ticked against no distance is invisible to every runner, and
+      // the document is permanent, so it is caught before it is frozen.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await user.click(screen.getByRole("button", { name: /add an item/i }));
+      await user.type(screen.getByLabelText(/^Item/), "Event jersey");
+
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/tick at least one distance/i);
+    });
+
+    it("unticks a distance that was renamed after it was chosen", async () => {
+      // Otherwise the document would name a distance nobody can enter, and
+      // there is no editing it once it is published.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await fillAddOn(user);
+
+      await user.click(screen.getByRole("button", { name: "Back" }));
+      await user.clear(screen.getByLabelText(/^Code/));
+      await user.type(screen.getByLabelText(/^Code/), "10KM");
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(screen.getByRole("checkbox", { name: "10KM" })).not.toBeChecked();
+    });
+
+    it("carries on with nothing in the race pack, because that is a real race", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      expect(screen.queryByText("What runners get")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Create event" })).toBeInTheDocument();
     });
   });
 

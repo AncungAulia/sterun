@@ -166,3 +166,64 @@ describe("gunStartConflict", () => {
     });
   });
 });
+
+describe("reading add-ons back", () => {
+  /** Serve a document carrying these add_ons, and hand back what was parsed. */
+  async function readAddOns(addOns: unknown) {
+    const body = JSON.stringify({ ...DOCUMENT, add_ons: addOns }, null, 2);
+    respondWith(body);
+    const hash = createHash("sha256").update(body, "utf8").digest("hex");
+    const result = await fetchEventMetadata(URI, hash);
+    if (result.status !== "verified") throw new Error("unreachable");
+    return result.document.addOns;
+  }
+
+  describe("positive", () => {
+    it("reads an item and its chart", async () => {
+      const addOns = await readAddOns([
+        {
+          name: "Event jersey",
+          photo_url: "https://cdn.example.test/j.png",
+          included_in: ["10K", "HALF"],
+          sizes: [{ label: "M", chest_cm: 52, length_cm: 70 }],
+        },
+      ]);
+
+      expect(addOns).toEqual([
+        {
+          name: "Event jersey",
+          photoUrl: "https://cdn.example.test/j.png",
+          includedIn: ["10K", "HALF"],
+          sizes: [{ label: "M", chestCm: 52, lengthCm: 70 }],
+        },
+      ]);
+    });
+  });
+
+  describe("negative", () => {
+    it("ignores an item with no distances, because nobody would receive it", async () => {
+      expect(await readAddOns([{ name: "Event jersey", included_in: [] }])).toBeUndefined();
+    });
+
+    it("ignores an item with no name", async () => {
+      expect(await readAddOns([{ included_in: ["10K"] }])).toBeUndefined();
+    });
+
+    it("ignores a size with no label", async () => {
+      const addOns = await readAddOns([
+        { name: "Jersey", included_in: ["10K"], sizes: [{ chest_cm: 52 }] },
+      ]);
+
+      expect(addOns?.[0]).not.toHaveProperty("sizes");
+    });
+  });
+
+  describe("edge", () => {
+    it("survives a document where add_ons is not a list", async () => {
+      // The bytes are already proven to be the organiser's, so this is shaping
+      // known-good data. It still must not throw on a document written by some
+      // other client that guessed the shape.
+      expect(await readAddOns("jersey")).toBeUndefined();
+    });
+  });
+});

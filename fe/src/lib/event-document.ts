@@ -32,6 +32,23 @@ export interface DocumentCategory {
   cutOff: string;
 }
 
+/**
+ * One thing a runner receives, and the distances that receive it.
+ *
+ * Not a product with a price. `enter` moves exactly `category.price` once, so
+ * an extra charge has nowhere to live; a jersey that costs more is a second
+ * distance at a higher price, and this only records what that price includes.
+ * The reasoning is in `modules/organiser/component/StepAddOns.tsx`.
+ */
+export interface DocumentAddOn {
+  name: string;
+  photoUrl: string;
+  /** Distance codes. An add-on nobody receives is not written out. */
+  includedIn: string[];
+  /** Empty when the item has no sizes to pick, like a tumbler. */
+  sizes: { label: string; chest: string; length: string }[];
+}
+
 /** Everything the wizard collects for the document. Empty string means absent. */
 export interface EventDocumentDraft {
   /** Unix seconds, the same value that goes on chain as `starts_at`. */
@@ -77,6 +94,8 @@ export interface EventDocumentDraft {
   racepackCloses: string;
   racepackVenue: string;
   racepackVenueLink: string;
+  /** What is in the race pack. Empty is normal and writes nothing. */
+  addOns: DocumentAddOn[];
 }
 
 interface Phase {
@@ -200,6 +219,38 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
       return entry;
     });
   if (categories.length > 0) document.categories = categories;
+
+  /**
+   * What each ticket actually buys. Written here rather than left implied by
+   * the price, because the price alone cannot tell a runner whether a shirt is
+   * coming, and this file is the only permanent record either of them has.
+   *
+   * Measurements are numbers, not strings: a size chart is data a client can
+   * lay out as a table or convert to inches, and "52 cm" would make both a
+   * parsing job. A row that is only a label is still kept, because plenty of
+   * races publish S/M/L with no chart at all and an empty chart says less than
+   * a list of what exists.
+   */
+  const addOns = draft.addOns
+    .filter((addOn) => addOn.name.trim() && addOn.includedIn.length > 0)
+    .map((addOn) => {
+      const entry: Record<string, unknown> = { name: addOn.name.trim() };
+      if (addOn.photoUrl) entry.photo_url = addOn.photoUrl;
+      entry.included_in = addOn.includedIn;
+      const sizes = addOn.sizes
+        .filter((size) => size.label.trim())
+        .map((size) => {
+          const row: Record<string, unknown> = { label: size.label.trim() };
+          const chest = Number(size.chest);
+          const length = Number(size.length);
+          if (size.chest.trim() && Number.isFinite(chest)) row.chest_cm = chest;
+          if (size.length.trim() && Number.isFinite(length)) row.length_cm = length;
+          return row;
+        });
+      if (sizes.length > 0) entry.sizes = sizes;
+      return entry;
+    });
+  if (addOns.length > 0) document.add_ons = addOns;
 
   const instagram = instagramHandle(draft.instagram);
   const links: Record<string, string> = {};

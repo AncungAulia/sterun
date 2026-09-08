@@ -175,6 +175,72 @@ describe("EventDetail", () => {
       expect(screen.queryByRole("link", { name: /race website/i })).not.toBeInTheDocument();
     });
 
+    it("shows the jersey and its size chart, which is what people decide on", async () => {
+      // A fun run is sold on its shirt as much as on its route, and a chart is
+      // the difference between picking a size and guessing one. Both are
+      // covered by the hash, so the shirt in the picture is the one promised.
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            {
+              name: "Event jersey",
+              photoUrl: "https://cdn.example.test/jersey.png",
+              includedIn: ["10K", "HALF"],
+              sizes: [
+                { label: "M", chestCm: 52, lengthCm: 70 },
+                { label: "L", chestCm: 54, lengthCm: 72 },
+              ],
+            },
+          ],
+        },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      expect(await screen.findByText("Event jersey")).toBeInTheDocument();
+      expect(screen.getByText("With 10K, HALF")).toBeInTheDocument();
+      expect(screen.getByRole("row", { name: /M 52 cm 70 cm/ })).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "Event jersey" })).toBeInTheDocument();
+    });
+
+    it("lists the sizes as words when the organiser published no measurements", async () => {
+      // Some races publish S/M/L and nothing else. An empty three column table
+      // would say less than the sentence does.
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            {
+              name: "Event jersey",
+              includedIn: ["10K"],
+              sizes: [{ label: "S" }, { label: "M" }, { label: "L" }],
+            },
+          ],
+        },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      expect(await screen.findByText("Sizes S, M, L")).toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    });
+
+    it("shows nothing about a race pack when the document has no add-ons", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { description: "A road race." },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      await screen.findByText("A road race.");
+      expect(screen.queryByText("What you get")).not.toBeInTheDocument();
+    });
+
     it("shows the verified document once it checks out", async () => {
       getEventSummary.mockResolvedValue(summary());
       fetchEventMetadata.mockResolvedValue({
