@@ -223,7 +223,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-706 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+714 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
