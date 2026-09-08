@@ -91,6 +91,30 @@ const rosterResponse = {
             // skipped the reduction still could not put a long legal name on
             // the wire, because Fastify serialises from this schema.
             name_fragment: { type: ["string", "null"], maxLength: MAX_FRAGMENT_LENGTH },
+            /**
+             * What this runner picked from the race pack (STE-17), e.g.
+             * `{"Event jersey": "L"}`. It rides on the roster because this is
+             * already the one place an authorised caller gets a whole event's
+             * entries in one request, and both readers want it: the organiser
+             * counts sizes to place the order, and a volunteer handing over a
+             * pack needs to know which shirt goes in it.
+             *
+             * Not a secret, unlike everything else in here. It identifies
+             * nobody on its own, and it is stored in the clear for the same
+             * reason (migration 005).
+             */
+            add_ons: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["item", "choice"],
+                properties: {
+                  item: { type: "string" },
+                  choice: { type: "string" },
+                },
+              },
+            },
             totp_secret: { type: "string", pattern: HEX_64 },
           },
         },
@@ -177,6 +201,7 @@ export async function rosterRoutes(
           category_id: record.categoryId,
           state: record.state,
           name_fragment: secret.nameFragment,
+          add_ons: secret.addOns,
           totp_secret: secret.totpSecretHex,
         });
       }

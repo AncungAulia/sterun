@@ -103,6 +103,33 @@ export async function participantRoutes(
             event_id: { type: "integer", minimum: 0 },
             category_id: { type: "integer", minimum: 0 },
             runner_address: { type: "string", pattern: STELLAR_ADDRESS },
+            /**
+             * What the runner picked from the race pack, keyed by the item name
+             * in the event document: `{"Event jersey": "L"}`.
+             *
+             * Optional, because a race that hands out nothing but a bib asks
+             * for nothing. Not validated against the document: that file lives
+             * off-chain at a url this service does not have, and fetching it
+             * per submission to check a string would add a network dependency
+             * to the write path in exchange for a check the console already
+             * makes with the same data in front of it.
+             *
+             * Bounded rather than free: an unbounded object on an authenticated
+             * write is a place to park data, and this column is not storage.
+             */
+            add_ons: {
+              type: "array",
+              maxItems: 20,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["item", "choice"],
+                properties: {
+                  item: { type: "string", minLength: 1, maxLength: 128 },
+                  choice: { type: "string", minLength: 1, maxLength: 128 },
+                },
+              },
+            },
           },
         },
         response: submitResponse,
@@ -117,6 +144,7 @@ export async function participantRoutes(
           event_id: number;
           category_id: number;
           runner_address: string;
+          add_ons?: { item: string; choice: string }[];
         };
       }>,
       reply: FastifyReply,
@@ -139,6 +167,10 @@ export async function participantRoutes(
         eventId: body.event_id,
         categoryId: body.category_id,
         runnerAddress: body.runner_address,
+        // Spread rather than passed as possibly-undefined: the package sets
+        // `exactOptionalPropertyTypes`, so an absent field and a field holding
+        // undefined are not the same thing.
+        ...(body.add_ons ? { addOns: body.add_ons } : {}),
       });
 
       return reply.code(201).send({
