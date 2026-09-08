@@ -126,8 +126,13 @@ memetakan satu transaksi; alasannya di `docs/WEB_APP_IA.md` §5.1 dan di header
   mendarat tetap tercatat, `start()` lagi = lanjut dari yang belum. **Loop-nya memegang salinan
   lokal `landed`**, karena `setState` baru berlaku render berikutnya dan loop-nya selesai dalam satu
   render.
-- `component/StepReview.tsx` — lomba dalam bahasa manusia + toggle file mentah + daftar tanda
-  tangan yang dicentang.
+- `component/StepReview.tsx` — lomba dalam bahasa manusia + toggle file mentah. Tombol **Create
+  event** ada di kanan bawah seperti tiap step lain, dan membuka **Dialog** berisi daftar tanda
+  tangan; jalannya baru mulai setelah tekanan kedua. Daftar itu satu-satunya hal yang wajib dibaca
+  sebelum ada yang tidak bisa dibatalkan, dan blok di tengah halaman panjang tidak dibaca siapa pun.
+- `component/StepAddOns.tsx` — isi race pack. Nama item pakai `elements/CreatableSelect.tsx`:
+  saran boleh, tapi apa pun yang diketik bisa ditambahkan lewat baris "Add …" di dasar daftar.
+  Lomba membagikan barang yang tidak mungkin didaftar di muka.
 - `component/DocumentFallback.tsx` — cuma dirender setelah publish gagal.
 - `component/FileField.tsx` (di `components/elements/`) — poster & waiver. Upload saat dipilih.
   `ACCEPTED` di situ mencerminkan `be/src/files/content-type.ts`; **SVG sengaja tidak ada dan

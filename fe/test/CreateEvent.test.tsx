@@ -113,14 +113,32 @@ async function reachReview(user: ReturnType<typeof userEvent.setup>) {
   fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 }
 
-/** Add one item on the add-ons step, then move on to the review. */
+/**
+ * Add one item on the add-ons step. The name control is a combobox that also
+ * accepts things it has never heard of, so both paths are exercised: a preset
+ * is chosen from the list, anything else is added from the row at the bottom.
+ */
 async function fillAddOn(
   user: ReturnType<typeof userEvent.setup>,
-  { name = "Event jersey" }: { name?: string } = {},
+  { name = "Event jersey", tick = "10K" }: { name?: string; tick?: string | null } = {},
 ) {
   await user.click(screen.getByRole("button", { name: /add an item/i }));
-  await user.type(screen.getByLabelText(/^Item/), name);
-  await user.click(screen.getByRole("checkbox", { name: "10K" }));
+  await user.click(screen.getByRole("combobox", { name: "Item" }));
+  await user.type(screen.getByPlaceholderText(/search or type your own/i), name);
+  await user.click(await screen.findByRole("option", { name: new RegExp(name, "i") }));
+  if (tick) await user.click(screen.getByRole("checkbox", { name: tick }));
+}
+
+/**
+ * Press Create event and confirm in the dialog.
+ *
+ * The dialog is the whole point of the second press: it is where the number of
+ * wallet prompts is stated, and a run this irreversible should not start on one
+ * click at the bottom of a long page.
+ */
+async function startRun(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Create event" }));
+  await user.click(await screen.findByRole("button", { name: /start signing/i }));
 }
 
 beforeEach(() => {
@@ -147,21 +165,41 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
 
-      expect(screen.getByText(/takes 4 signatures/i)).toBeInTheDocument();
+      // Not on the page until it is asked for: it is the one thing here that
+      // has to be read, and a block on a long page is read by nobody.
+      expect(screen.queryByText(/takes 4 signatures/i)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(await screen.findByText(/takes 4 signatures/i)).toBeInTheDocument();
       expect(screen.getByText("Publish the event details")).toBeInTheDocument();
       expect(screen.getByText('Create "Jakarta Sunrise 10K"')).toBeInTheDocument();
       expect(screen.getByText("Add the 10K")).toBeInTheDocument();
       expect(screen.getByText("Open for entries")).toBeInTheDocument();
-      // Nothing has been asked for yet.
+      // Opening it is not agreeing to it.
       expect(uploadEventFile).not.toHaveBeenCalled();
       expect(createEvent).not.toHaveBeenCalled();
+    });
+
+    it("signs nothing when the dialog is dismissed", async () => {
+      // The second press is the consent. Backing out of it has to leave the
+      // form exactly as it was.
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await user.click(await screen.findByRole("button", { name: /not yet/i }));
+
+      expect(uploadEventFile).not.toHaveBeenCalled();
+      expect(createEvent).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Create event" })).toBeInTheDocument();
     });
 
     it("walks the whole run from one press, and ends with an open event", async () => {
       const { user } = renderWizard();
       await reachReview(user);
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
 
       expect(await screen.findByText(/the event is open/i)).toBeInTheDocument();
       expect(uploadEventFile).toHaveBeenCalledTimes(1);
@@ -178,7 +216,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByText(/the event is open/i);
 
       expect(createEvent).toHaveBeenCalledWith(
@@ -194,7 +232,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByText(/the event is open/i);
 
       expect(uploadEventFile).toHaveBeenCalledWith(
@@ -212,7 +250,7 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "unavailable", reason: "404" });
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
 
       expect(await screen.findByRole("alert")).toHaveTextContent(/could not be read back/i);
       expect(createEvent).not.toHaveBeenCalled();
@@ -225,7 +263,7 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByText(/the event is open/i);
 
       expect(addCategory).toHaveBeenCalledWith(
@@ -240,7 +278,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByText(/the event is open/i);
 
       const expected = BigInt(Math.floor(new Date("2026-09-28T06:00").getTime() / 1000));
@@ -259,7 +297,7 @@ describe("CreateEvent", () => {
       await reachReview(user);
       setEventStatus.mockRejectedValueOnce(new Error("User declined the request"));
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
 
       expect(await screen.findByRole("alert")).toHaveTextContent(/declined/i);
       expect(createEvent).toHaveBeenCalledTimes(1);
@@ -281,7 +319,7 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       uploadEventFile.mockRejectedValueOnce(new Error("User declined the request"));
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
 
       expect(await screen.findByRole("alert")).toHaveTextContent(/nothing has been created yet/i);
     });
@@ -296,7 +334,7 @@ describe("CreateEvent", () => {
       expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument();
 
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
 
       expect(await screen.findByLabelText("Published URL")).toBeInTheDocument();
       expect(
@@ -308,11 +346,11 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByRole("alert");
 
       await user.click(screen.getByRole("button", { name: /create the event without any details/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
 
       await screen.findByText(/the event is open/i);
       expect(createEvent).toHaveBeenCalledWith(
@@ -325,7 +363,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByLabelText("Published URL");
 
       await user.type(screen.getByLabelText("Published URL"), "https://example.test/event.json");
@@ -349,7 +387,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByLabelText("Published URL");
 
       fetchEventMetadata.mockResolvedValue({ status: "modified", actualHash: "f".repeat(64) });
@@ -394,6 +432,21 @@ describe("CreateEvent", () => {
       }
     });
 
+    it("takes an item that is not on the list at all", async () => {
+      // Races hand out things nobody could enumerate in advance. The control
+      // offers suggestions; it never limits the answer.
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      await fillAddOn(user, { name: "Meal ticket" });
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+
+      await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+
+      expect(await screen.findByText(/"name": "Meal ticket"/)).toBeInTheDocument();
+    });
+
     it("leaves a tumbler without one", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
@@ -410,8 +463,7 @@ describe("CreateEvent", () => {
       const { user } = renderWizard();
       await fillDetails(user);
       await fillDistances(user);
-      await user.click(screen.getByRole("button", { name: /add an item/i }));
-      await user.type(screen.getByLabelText(/^Item/), "Event jersey");
+      await fillAddOn(user, { tick: null });
 
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
@@ -477,7 +529,7 @@ describe("CreateEvent", () => {
       expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
 
       setEventStatus.mockRejectedValueOnce(new Error("User declined the request"));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await startRun(user);
       await screen.findByRole("alert");
 
       expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();

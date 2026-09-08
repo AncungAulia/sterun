@@ -35,10 +35,12 @@
  */
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
-import { Field } from "@/components/elements/Field";
+import { CreatableSelect } from "@/components/elements/CreatableSelect";
 import { FileField } from "@/components/elements/FileField";
+import { LabelRow } from "@/components/elements/Field";
 import { Help } from "@/components/elements/Help";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -136,7 +138,11 @@ export function StepAddOns({
   const set = (index: number, patch: Partial<PlannedAddOn>) =>
     onChange(addOns.map((addOn, i) => (i === index ? { ...addOn, ...patch } : addOn)));
 
-  /** Picking a preset name also answers whether the thing has sizes. */
+  /**
+   * Picking a preset name also answers whether the thing has sizes, because
+   * they are the same question: nobody who chose "Tumbler" then wants to be
+   * asked whether a tumbler comes in a medium.
+   */
   function rename(index: number, name: string) {
     const preset = ADD_ON_PRESETS.find((entry) => entry.name === name);
     if (!preset) return set(index, { name });
@@ -192,16 +198,20 @@ export function StepAddOns({
               </Button>
             </div>
 
-            <Field
-              id={`addon-name-${index}`}
-              label="Item"
-              required
-              list="add-on-presets"
-              value={addOn.name}
-              onChange={(e) => rename(index, e.target.value)}
-              placeholder="Event jersey"
-              hint="Pick one or type your own."
-            />
+            <div className="flex flex-col gap-2">
+              <LabelRow htmlFor={`addon-name-${index}`} label="Item" required />
+              <CreatableSelect
+                id={`addon-name-${index}`}
+                ariaLabel="Item"
+                options={ADD_ON_PRESETS.map((preset) => preset.name)}
+                value={addOn.name}
+                onChange={(name) => rename(index, name)}
+                placeholder="Choose or add an item"
+              />
+              <p className="text-sm text-muted-foreground">
+                Not on the list? Type it and add it.
+              </p>
+            </div>
 
             <FileField
               id={`addon-photo-${index}`}
@@ -213,24 +223,31 @@ export function StepAddOns({
               help="For a jersey this is the thing people decide on. A race with the shirt on the page reads as a race that has actually made the shirt."
             />
 
+            {/*
+              Two questions, and they were being read as one. A tick list of
+              distances followed immediately by a lone tick box put "Runners
+              pick a size" in the same visual group as "10K", where it looks
+              like a distance. Separate blocks with their own headings is what
+              fixes that; a rule between them was tried and only added lines to
+              a card that already has a border of its own.
+            */}
             <fieldset className="flex flex-col gap-3">
-              <legend className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                Included in
-                <Help label="included in">
+              <legend className="sr-only">Included in</legend>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Which distances include it</p>
+                <Help label="which distances include it">
                   The entry fee for a ticked distance already covers this. The quota you set on
                   that distance is therefore how many of these you need to have made.
                 </Help>
-              </legend>
-              <div className="flex flex-wrap gap-4">
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
                 {codes.map((code) => (
                   <label key={code} className="flex items-center gap-2 text-base text-foreground">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-teal-500"
+                    <Checkbox
                       checked={addOn.includedIn.includes(code)}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         set(index, {
-                          includedIn: e.target.checked
+                          includedIn: checked
                             ? [...addOn.includedIn, code]
                             : addOn.includedIn.filter((entry) => entry !== code),
                         })
@@ -242,28 +259,36 @@ export function StepAddOns({
               </div>
             </fieldset>
 
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <input
-                type="checkbox"
-                className="size-4 accent-teal-500"
-                checked={addOn.sized}
-                onChange={(e) =>
-                  set(index, {
-                    sized: e.target.checked,
-                    sizes: e.target.checked && addOn.sizes.length === 0 ? defaultSizes() : addOn.sizes,
-                  })
-                }
-              />
-              Runners pick a size
-            </label>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Sizes</p>
+                <Help label="sizes">
+                  Only for something worn. A tumbler has no size to pick, and asking for one is a
+                  question every runner has to stop and answer for nothing.
+                </Help>
+              </div>
+              <label className="flex items-center gap-2 text-base text-foreground">
+                <Checkbox
+                  checked={addOn.sized}
+                  onCheckedChange={(checked) =>
+                    set(index, {
+                      sized: checked === true,
+                      sizes:
+                        checked && addOn.sizes.length === 0 ? defaultSizes() : addOn.sizes,
+                    })
+                  }
+                />
+                Runners pick a size for this
+              </label>
 
-            {addOn.sized ? (
-              <SizeChart
-                index={index}
-                sizes={addOn.sizes}
-                onChange={(sizes) => set(index, { sizes })}
-              />
-            ) : null}
+              {addOn.sized ? (
+                <SizeChart
+                  index={index}
+                  sizes={addOn.sizes}
+                  onChange={(sizes) => set(index, { sizes })}
+                />
+              ) : null}
+            </div>
 
             {problem ? (
               <p role="alert" className="text-sm text-danger">
@@ -281,16 +306,6 @@ export function StepAddOns({
         </Button>
       </div>
 
-      {/*
-        Native rather than a combobox: it offers the list and still takes
-        anything typed, with no component to keep in step and no keyboard
-        behaviour to reimplement.
-      */}
-      <datalist id="add-on-presets">
-        {ADD_ON_PRESETS.map((preset) => (
-          <option key={preset.name} value={preset.name} />
-        ))}
-      </datalist>
     </div>
   );
 }

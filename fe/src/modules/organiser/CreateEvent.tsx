@@ -276,20 +276,15 @@ function Wizard() {
               documentText={documentText}
               hash={hash}
               run={run}
+              /*
+                Going back is offered only while nothing has been signed, which
+                the step decides for itself. Once the first transaction has
+                landed the form no longer describes what exists, and editing it
+                would silently change the document whose fingerprint is already
+                on chain.
+              */
+              onBack={() => setStep("add-ons")}
             />
-            {/*
-              Going back is offered only while nothing has been signed. Once the
-              first transaction has landed the form no longer describes what
-              exists, and editing it would silently change the document whose
-              fingerprint is already on chain.
-            */}
-            {run.done.length === 0 && !run.isRunning ? (
-              <div className="mt-8 flex justify-start">
-                <Button variant="secondary" onClick={() => setStep("add-ons")}>
-                  Back
-                </Button>
-              </div>
-            ) : null}
           </>
         ) : null}
       </Card>

@@ -17,11 +17,20 @@
  * anybody who wants it, because the fingerprint of those exact bytes is what
  * ends up on chain and somebody checking our claim should be able to see them.
  *
- * ## Why the signatures are listed before the first one is asked for
+ * ## Why the signatures are listed in a dialog rather than on the page
  *
  * There are three of them plus one per distance, and that number cannot be
  * reduced (see `run.ts`). Prompts nobody mentioned feel like a retry loop;
  * prompts shown as a numbered list that ticks off feel like a task with an end.
+ *
+ * The list used to sit in a panel above the button, where it was one more block
+ * to scroll past on a long page. It is the single thing here that has to be read
+ * before anything irreversible happens, so it now interrupts: Create event opens
+ * a dialog, the dialog says how many prompts are coming and what each one is,
+ * and starting is a second deliberate press. Once the run begins the dialog
+ * closes and the same list carries on ticking off in place, because a run that
+ * stops needs room for what to do about it.
+ *
  * The list is the same object the run walks, so what is described and what
  * happens cannot drift apart.
  */
@@ -30,6 +39,15 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EXPLORER_BASE } from "@/lib/env";
 import { countryName, provinceName } from "@/lib/places";
 import { formatEventDateTimeLong, formatPrice, parseStroops } from "@/utils/format";
@@ -48,6 +66,8 @@ interface StepReviewProps {
   documentText: string;
   hash: string;
   run: ReturnType<typeof useEventRun>;
+  /** Offered only while nothing has been signed. See `CreateEvent.tsx`. */
+  onBack: () => void;
 }
 
 export function StepReview({
@@ -58,6 +78,7 @@ export function StepReview({
   documentText,
   hash,
   run,
+  onBack,
 }: StepReviewProps) {
   const [showFile, setShowFile] = useState(false);
   const started = run.done.length > 0 || run.isRunning || run.failure !== null;
@@ -94,7 +115,7 @@ export function StepReview({
         ) : null}
       </div>
 
-      <RunPanel run={run} started={started} />
+      {started ? <RunPanel run={run} /> : null}
 
       {run.failure ? (
         <div className="flex flex-col gap-4">
@@ -117,6 +138,23 @@ export function StepReview({
           ) : null}
         </div>
       ) : null}
+
+      {run.isComplete ? null : (
+        <div className="flex flex-wrap justify-end gap-3">
+          {started ? null : (
+            <Button variant="secondary" onClick={onBack}>
+              Back
+            </Button>
+          )}
+          {started ? (
+            <Button onClick={() => void run.start()} disabled={run.isRunning}>
+              {run.isRunning ? "Working" : "Carry on"}
+            </Button>
+          ) : (
+            <ConfirmDialog run={run} />
+          )}
+        </div>
+      )}
 
       {run.isComplete && run.eventId !== null ? (
         <div className="rounded-lg border border-success-border bg-success-surface px-5 py-4">
@@ -294,18 +332,14 @@ function Pack({ addOns }: { addOns: PlannedAddOn[] }) {
  * One list in both states rather than two screens: the thing that makes six
  * prompts bearable is watching the list you were shown tick itself off.
  */
-function RunPanel({ run, started }: { run: ReturnType<typeof useEventRun>; started: boolean }) {
+function RunPanel({ run }: { run: ReturnType<typeof useEventRun> }) {
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border px-5 py-5">
-      <div>
-        <p className="heading-strong text-base text-foreground">
-          Creating this event takes {run.steps.length} signatures
-        </p>
-        <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-          Your wallet will ask you once for each line below, one after another. Stopping partway is
-          safe. Whatever is already done stays done, and you can carry on from where it stopped.
-        </p>
-      </div>
+      <p className="heading-strong text-base text-foreground">
+        {run.isComplete
+          ? "All done"
+          : `Step ${run.done.length + 1} of ${run.steps.length}`}
+      </p>
 
       <ol className="flex flex-col gap-2">
         {run.steps.map((step, index) => {
@@ -335,15 +369,61 @@ function RunPanel({ run, started }: { run: ReturnType<typeof useEventRun>; start
           );
         })}
       </ol>
-
-      {run.isComplete ? null : (
-        <div>
-          <Button onClick={() => void run.start()} disabled={run.isRunning}>
-            {run.isRunning ? "Working" : started ? "Carry on" : "Create event"}
-          </Button>
-        </div>
-      )}
     </div>
+  );
+}
+
+/**
+ * The last thing between a form and four irreversible transactions.
+ *
+ * A dialog rather than a paragraph because of what it has to achieve: the
+ * number of wallet prompts is the one fact that makes the next minute make
+ * sense, and a paragraph on a long page is read by nobody. This cannot be
+ * dismissed by accident either, which is the point of the second press.
+ */
+function ConfirmDialog({ run }: { run: ReturnType<typeof useEventRun> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button onClick={() => setOpen(true)}>Create event</Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>This takes {run.steps.length} signatures</DialogTitle>
+          <DialogDescription>
+            Your wallet will ask you once for each line below, one after another. Nothing here can
+            be edited or deleted afterwards.
+          </DialogDescription>
+        </DialogHeader>
+
+        <ol className="flex flex-col gap-2 py-2">
+          {run.steps.map((step, index) => (
+            <li key={step.id} className="flex items-center gap-3 text-base text-foreground">
+              <span className="numeric w-5 text-muted-foreground">{index + 1}</span>
+              {step.label}
+            </li>
+          ))}
+        </ol>
+
+        <p className="text-sm text-muted-foreground">
+          Stopping partway is safe. Whatever is already done stays done, and you can carry on from
+          where it stopped.
+        </p>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="secondary">Not yet</Button>
+          </DialogClose>
+          <Button
+            onClick={() => {
+              setOpen(false);
+              void run.start();
+            }}
+          >
+            Start signing
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
