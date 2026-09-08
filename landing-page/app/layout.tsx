@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { Big_Shoulders, Poppins } from "next/font/google";
+
+import { CursorFollower } from "@/components/elements/CursorFollower";
+import { Navbar } from "@/components/layouts/Navbar";
+
 import "./globals.css";
 
 // Attention type. The landing hero and nothing else — a condensed face at 700
@@ -33,7 +37,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${bigShoulders.variable} ${poppins.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Navbar />
+        {children}
+        <CursorFollower />
+      </body>
     </html>
   );
 }

@@ -1,2 +1,117 @@
 @import "tailwindcss";
 @import "./tokens.css";
+
+/* ============================================================================
+   Landing-only interaction primitives.
+   ----------------------------------------------------------------------------
+   These live here rather than in tokens.css because tokens.css is mirrored into
+   fe/ and describes the design system; a hover wipe on a marketing nav is not
+   part of that contract.
+
+   They are written as CSS rather than composed from utilities on purpose. Each
+   one needs a paired enter/leave state — a clip-path that only moves one way, or
+   a transform-origin that flips between hover and rest — and expressing that in
+   variant classes spreads one behaviour across four places where it is easy to
+   change half of it. Tailwind also silently emitted nothing for one of the
+   translate utilities used here earlier, which cost an afternoon.
+   ========================================================================= */
+
+/* --- Nav fill ------------------------------------------------------------
+   A 1:1 copy of the word, clipped away at the bottom and revealed upward on
+   hover, so the colour reads as poured in rather than swapped. */
+.nav-fill {
+  clip-path: inset(100% 0 0 0);
+  transition: clip-path 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.nav-item:hover .nav-fill,
+.nav-item:focus-visible .nav-fill {
+  clip-path: inset(0 0 0 0);
+}
+
+/* --- Underline -----------------------------------------------------------
+   Grows from the left, then is pulled off to the right. The origin flip is
+   what makes leaving feel like a withdrawal instead of a rewind. */
+.wipe-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.08em;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.wipe-underline:hover::after,
+.wipe-underline:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* --- CTA -----------------------------------------------------------------
+   Outline at rest. On hover a fill sweeps in from the left, the label rolls up
+   to its own duplicate, and the arrow stays put because a moving target is
+   harder to aim at than a still one. Text colour lags the fill slightly so it
+   flips once the ground beneath it has actually changed. */
+.cta {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid currentColor;
+  border-radius: 9999px;
+  transition: color 0.25s ease 0.12s;
+}
+.cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-paper);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.cta:hover,
+.cta:focus-visible {
+  color: var(--color-ink);
+}
+.cta:hover::before,
+.cta:focus-visible::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* The label and its stacked duplicate. Height is one line so only one shows. */
+.cta-roll {
+  display: block;
+  overflow: hidden;
+  height: 1.2em;
+}
+.cta-roll > span {
+  display: block;
+  transition: transform 0.4s cubic-bezier(0.76, 0, 0.24, 1);
+}
+.cta:hover .cta-roll > span,
+.cta:focus-visible .cta-roll > span {
+  transform: translateY(-50%);
+}
+
+.cta-arrow {
+  transition: transform 0.25s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.cta:hover .cta-arrow,
+.cta:focus-visible .cta-arrow {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-fill,
+  .wipe-underline::after,
+  .cta,
+  .cta::before,
+  .cta-roll > span,
+  .cta-arrow {
+    transition: none;
+  }
+}
