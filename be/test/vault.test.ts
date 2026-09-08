@@ -248,14 +248,16 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
 
     it("refuses a row whose add_ons is not a list", async () => {
       // The check constraint is the only thing that says what shape the rest of
-      // the code may assume, since jsonb itself takes any valid json.
+      // the code may assume, since jsonb itself takes any valid json. Written
+      // straight to the table, because no code path we own can produce this.
+      const bytes = Buffer.alloc(1);
       await expect(
         pool.query(
           `INSERT INTO participants
              (id, name_enc, national_id_enc, emergency_contact_enc, salt, totp_secret,
               participant_hash, event_id, category_id, runner_address, add_ons)
-           VALUES ($1,'\x00','\x00','\x00','\x00','\x00','\x00',0,0,$2,$3)`,
-          [randomUUID(), RUNNER, JSON.stringify({ "Event jersey": "L" })],
+           VALUES ($1,$2,$2,$2,$2,$2,$2,0,0,$3,$4)`,
+          [randomUUID(), bytes, RUNNER, JSON.stringify({ "Event jersey": "L" })],
         ),
       ).rejects.toThrow(/add_ons_is_a_list/);
     });

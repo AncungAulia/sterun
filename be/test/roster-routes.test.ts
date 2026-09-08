@@ -243,12 +243,16 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
         missing_from_index: 0,
         totp: { digits: 6, step_seconds: 30, tolerance_steps: 1 },
       });
+      // `toEqual`, not `toMatchObject`: the point of this test is that nothing
+      // else can appear here. A new field has to be added deliberately, which
+      // is how `add_ons` arrived (STE-17).
       expect(body.entries[0]).toEqual({
         token_id: 0,
         bib_no: 1,
         category_id: 0,
         state: "Entered",
         name_fragment: "Budi S.",
+        add_ons: [],
         totp_secret: totpSecretHex,
       });
     });
