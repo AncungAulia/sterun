@@ -81,6 +81,7 @@ export async function participantRoutes(
     "/participants",
     {
       schema: {
+        security: [{ walletSignature: [] }],
         body: {
           type: "object",
           additionalProperties: false,
@@ -154,6 +155,7 @@ export async function participantRoutes(
     "/participants/:id/confirm",
     {
       schema: {
+        security: [{ walletSignature: [] }],
         params: {
           type: "object",
           required: ["id"],
@@ -219,6 +221,7 @@ export async function participantRoutes(
     "/participants/:id",
     {
       schema: {
+        security: [{ walletSignature: [] }],
         params: {
           type: "object",
           required: ["id"],

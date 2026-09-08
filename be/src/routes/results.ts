@@ -202,6 +202,13 @@ export async function resultsRoutes(
       // read of the event's records.
       config: { rateLimit: { max: RATE_LIMITS.results, timeWindow: "1 minute" } },
       schema: {
+        /**
+         * Declared so the OpenAPI document says this endpoint needs a wallet
+         * signature. The securitySchemes block existed from STE-20 but no route
+         * referenced it, so a client generated from the spec sent no credentials
+         * and met a 401 with nothing pointing at the cause.
+         */
+        security: [{ walletSignature: [] }],
         params: {
           type: "object",
           required: ["eventId"],
