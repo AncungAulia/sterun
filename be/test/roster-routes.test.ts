@@ -388,9 +388,12 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
         "SELECT id FROM participants WHERE token_id = 0",
       );
       const id = rows[0]?.id as string;
-      const { encrypt } = await import("../src/crypto/envelope.js");
+      // `aad()` rather than a hand-built string: the AAD binds a ciphertext to
+      // its row and its column, so building it by hand here would be writing a
+      // second definition of the thing the vault relies on being one.
+      const { aad, encrypt } = await import("../src/crypto/envelope.js");
       await pool.query("UPDATE participants SET name_fragment_enc = $1 WHERE id = $2", [
-        encrypt(keyring, longFragment, `pii.name_fragment:${id}`),
+        encrypt(keyring, longFragment, aad("pii.name_fragment", id)),
         id,
       ]);
       // The vault really does hand it over at full length — so the bound has
