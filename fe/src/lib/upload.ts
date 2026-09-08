@@ -30,6 +30,14 @@
  */
 import { ApiError, apiFetch } from "./api";
 
+/**
+ * Mirrors `MAX_FILE_BYTES` in `be/src/routes/files.ts`. Duplicated rather than
+ * imported because the backend is not a dependency of this app, and checking it
+ * here only saves the organiser a wallet prompt and an upload — the limit that
+ * counts is still the server's.
+ */
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
 /** What the store answered, in the shape the wizard needs it. */
 export interface UploadedFile {
   /** Absolute, because it is destined for `create_event`'s `uri` argument. */

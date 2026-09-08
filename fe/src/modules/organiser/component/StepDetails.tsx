@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { DateRangeField, EMPTY_RANGE, type DayRange } from "@/components/elements/DateRangeField";
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
+import { FileField } from "@/components/elements/FileField";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
 import { parseCoordinates } from "@/utils/geo";
 
@@ -55,6 +56,7 @@ export interface EventDetails {
   description: string;
   place: Place;
   locationLink: string;
+  /** Both hold a url from `POST /events/files`, not one anybody typed. */
   posterUrl: string;
   waiverUrl: string;
   instagram: string;
@@ -207,13 +209,21 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
         title="Poster and links"
         note="Where runners go for updates. These are part of the details file, so the account you name here cannot be swapped for another one after people have entered."
       >
-        <Field
+        <FileField
           id="poster"
-          label="Poster image URL"
+          label="Poster"
+          kind="image"
           value={details.posterUrl}
-          onChange={(e) => set({ posterUrl: e.target.value })}
-          placeholder="https://..."
-          hint="A link to an image you already host somewhere. There is no upload here yet."
+          onChange={(posterUrl) => set({ posterUrl })}
+          hint="PNG, JPEG, GIF, WebP or AVIF, up to 5 MB. It goes on your event page."
+        />
+        <FileField
+          id="waiver"
+          label="Waiver"
+          kind="document"
+          value={details.waiverUrl}
+          onChange={(waiverUrl) => set({ waiverUrl })}
+          hint="A PDF, up to 5 MB. Once your event is created this is the copy runners agreed to, and it cannot be swapped for a different one."
         />
         <Field
           id="instagram"
@@ -228,13 +238,6 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           label="Website"
           value={details.website}
           onChange={(e) => set({ website: e.target.value })}
-          placeholder="https://..."
-        />
-        <Field
-          id="waiver"
-          label="Waiver URL"
-          value={details.waiverUrl}
-          onChange={(e) => set({ waiverUrl: e.target.value })}
           placeholder="https://..."
         />
       </Section>
