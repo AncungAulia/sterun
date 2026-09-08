@@ -192,4 +192,74 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
       expect(await vault.totpSecretForToken(999_999)).toBeNull();
     });
   });
+
+  describe("race pack choices (STE-17)", () => {
+    it("hands the organiser back what the runner picked", async () => {
+      // The reason the column exists: sizes have to come back out in bulk, or
+      // the organiser cannot place the shirt order. Everything else in this
+      // table is written to never come back out at all.
+      const r = await vault.submit({
+        ...ENTRY,
+        eventId: 7100,
+        addOns: [
+          { item: "Event jersey", choice: "L" },
+          { item: "Cap", choice: "One size" },
+        ],
+      });
+      await vault.confirm(r.participantId, 7101, "2".repeat(64));
+
+      const [entry] = await vault.rosterSecretsForEvent(7100);
+
+      expect(entry?.addOns).toEqual([
+        { item: "Event jersey", choice: "L" },
+        { item: "Cap", choice: "One size" },
+      ]);
+    });
+
+    it("is stored in the clear, unlike every other per-runner column", async () => {
+      // Deliberate, and worth a test rather than a comment: a shirt size
+      // identifies nobody, and encrypting it would mean either a new decrypt
+      // path out of the vault or an organiser who cannot count their own order.
+      const r = await vault.submit({
+        ...ENTRY,
+        eventId: 7102,
+        addOns: [{ item: "Event jersey", choice: "XXL" }],
+      });
+
+      const { rows } = await pool.query<{ add_ons: unknown }>(
+        "SELECT add_ons FROM participants WHERE id = $1",
+        [r.participantId],
+      );
+
+      expect(rows[0]?.add_ons).toEqual([{ item: "Event jersey", choice: "XXL" }]);
+    });
+
+    it("is an empty list for a race that hands out nothing to choose", async () => {
+      // The common case, and the state of every row written before the column
+      // existed. One representation, so nobody counting sizes has to decide
+      // what null meant.
+      const r = await vault.submit({ ...ENTRY, eventId: 7103 });
+      await vault.confirm(r.participantId, 7104, "3".repeat(64));
+
+      const [entry] = await vault.rosterSecretsForEvent(7103);
+
+      expect(entry?.addOns).toEqual([]);
+    });
+
+    it("refuses a row whose add_ons is not a list", async () => {
+      // The check constraint is the only thing that says what shape the rest of
+      // the code may assume, since jsonb itself takes any valid json. Written
+      // straight to the table, because no code path we own can produce this.
+      const bytes = Buffer.alloc(1);
+      await expect(
+        pool.query(
+          `INSERT INTO participants
+             (id, name_enc, national_id_enc, emergency_contact_enc, salt, totp_secret,
+              participant_hash, event_id, category_id, runner_address, add_ons)
+           VALUES ($1,$2,$2,$2,$2,$2,$2,0,0,$3,$4)`,
+          [randomUUID(), bytes, RUNNER, JSON.stringify({ "Event jersey": "L" })],
+        ),
+      ).rejects.toThrow(/add_ons_is_a_list/);
+    });
+  });
 });
