@@ -67,6 +67,17 @@ COPY --from=build /out/package.json ./package.json
 COPY --from=build /repo/be/migrations ./migrations
 COPY --from=build /repo/docs/deployments.md ../docs/deployments.md
 
+# The mount point for the event metadata files, created here and owned by the
+# user that has to write to it.
+#
+# This exists so a fresh Docker named volume inherits the right ownership.
+# Docker seeds an empty volume from the image's directory at that path; when the
+# path is ABSENT from the image it creates one owned by root instead, and the
+# first upload then fails with EACCES from a process that cannot chown its way
+# out. That is the same shape as the cloudflared permission bug in STE-31, and
+# it only shows up on a real deployment.
+RUN mkdir -p /app/data/files && chown -R node:node /app/data
+
 # Never root. The image holds the code that decrypts PII; if something does get
 # in through it, it should arrive as a user that owns nothing.
 USER node

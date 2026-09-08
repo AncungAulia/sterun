@@ -595,6 +595,78 @@ export interface ScannerRow {
 }
 
 /**
+ * Every scanner a rebuild should consider re-inserting.
+ *
+ * This exists because the scanner allowlist is the one materialised table that
+ * `rebuild` cannot reconstruct from contract state: EventRegistry has no
+ * function that enumerates an event's scanners, which is the whole reason
+ * `/events/:eventId/scanners` reads this index rather than the chain.
+ *
+ * Two sources, unioned, because they fail in different situations:
+ *
+ *   - `event_scanners` itself, for an ordinary `rebuild` where the rows are
+ *     still there and are simply about to be truncated.
+ *   - a replay of `scanner_added` / `scanner_removed` from `chain_events`, for
+ *     the case where somebody dropped the tables first. That raw log is kept
+ *     through a rebuild precisely because it is "the only local evidence of
+ *     what the chain said at the time", and RPC will not hand those events
+ *     back once its retention window has passed.
+ *
+ * Neither source can DISCOVER a scanner that was added before this index ever
+ * polled. Nothing can: the contract cannot be asked. Callers must treat the
+ * result as "everything recoverable", not "everything true".
+ */
+export async function listScannerCandidates(db: Queryable): Promise<ScannerRow[]> {
+  const current = await db.query<{
+    event_id: number;
+    scanner_address: string;
+    added_ledger: number;
+  }>(
+    `SELECT event_id, scanner_address, added_ledger
+       FROM event_scanners
+      WHERE removed_ledger IS NULL`,
+  );
+
+  // Ordered by (ledger, id) so an add and a later removal in the SAME ledger
+  // fold in the order they happened — RPC event ids are zero-padded and sort
+  // chronologically, which is what makes the tiebreak meaningful.
+  const replay = await db.query<{ name: string; event_id: number; scanner: string; ledger: number }>(
+    `SELECT name,
+            (payload->>'eventId')::int AS event_id,
+            payload->>'scanner'        AS scanner,
+            ledger
+       FROM chain_events
+      WHERE name IN ('scanner_added', 'scanner_removed')
+        AND payload ? 'eventId' AND payload ? 'scanner'
+      ORDER BY ledger, id`,
+  );
+
+  const key = (eventId: number, address: string) => `${eventId}:${address}`;
+  const allowed = new Map<string, ScannerRow>();
+  for (const r of replay.rows) {
+    const k = key(r.event_id, r.scanner);
+    if (r.name === "scanner_added") {
+      allowed.set(k, { eventId: r.event_id, address: r.scanner, addedLedger: r.ledger });
+    } else {
+      allowed.delete(k);
+    }
+  }
+  // The table wins where both have the row: it already folded the same events,
+  // and its added_ledger is the one the endpoint has been reporting.
+  for (const r of current.rows) {
+    allowed.set(key(r.event_id, r.scanner_address), {
+      eventId: r.event_id,
+      address: r.scanner_address,
+      addedLedger: r.added_ledger,
+    });
+  }
+
+  return [...allowed.values()].sort(
+    (a, b) => a.eventId - b.eventId || a.addedLedger - b.addedLedger || a.address.localeCompare(b.address),
+  );
+}
+
+/**
  * The scanners an event currently allows.
  *
  * `removed_ledger IS NULL` rather than deleting the row: the table is the

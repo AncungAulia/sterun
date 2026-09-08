@@ -519,6 +519,29 @@ export class Indexer {
     const startedAt = Date.now();
     const fromLedger = (await this.source.health()).latestLedger;
 
+    /**
+     * The scanner allowlist is carried across the truncate, because it is the
+     * one materialised table that CANNOT be rebuilt from contract state.
+     *
+     * EventRegistry has no function that enumerates an event's scanners — that
+     * is exactly why `/events/:eventId/scanners` reads this index instead of
+     * the chain. So a rebuild that dropped these rows would throw away
+     * something no amount of reading could recover, and the organiser console
+     * would answer "no scanners" for an event that has several. Silently, and
+     * right after the procedure people run when something is already wrong.
+     *
+     * Carrying rows forward is only safe because each one is re-checked
+     * against the chain below. `is_scanner` takes an address and answers
+     * yes/no, which is enough to confirm every address we already know — it is
+     * only discovery that the contract cannot do.
+     *
+     * The candidates come from the rows AND from a replay of the raw event log,
+     * so this also survives someone truncating the tables by hand before
+     * running the rebuild — which is what the documented recovery looks like
+     * when things have already gone wrong.
+     */
+    const knownScanners = await store.listScannerCandidates(this.pool);
+
     const eventCount = await this.reader.eventCount();
     const events: ChainEvent[] = [];
     const categories: ChainCategory[] = [];
@@ -538,6 +561,22 @@ export class Indexer {
       records.push({ ...record, runnerAddress: owner });
     }
 
+    /**
+     * Re-checked against the chain before anything is written, and outside the
+     * transaction like every other read in this method.
+     *
+     * A scanner revoked while the index was down has no event left to replay,
+     * so this is the only thing that would notice. Dropping such a row is the
+     * conservative direction: the index under-reports rather than naming
+     * someone the chain no longer trusts.
+     */
+    const stillAllowed: typeof knownScanners = [];
+    for (const scanner of knownScanners) {
+      if (await this.reader.isScanner(scanner.eventId, scanner.address)) {
+        stillAllowed.push(scanner);
+      }
+    }
+
     const client = await this.pool.connect();
     let transitions = 0;
     try {
@@ -546,6 +585,10 @@ export class Indexer {
       const at = { source: "state" as const, ledger: fromLedger };
       for (const event of events) await store.upsertEvent(client, event, at);
       for (const category of categories) await store.upsertCategory(client, category, at);
+      // After the events, because event_scanners references them.
+      for (const scanner of stillAllowed) {
+        await store.addScanner(client, scanner.eventId, scanner.address, scanner.addedLedger);
+      }
       for (const record of records) {
         await store.upsertRecord(client, record, at);
         for (const t of reconstructTransitions(record)) {

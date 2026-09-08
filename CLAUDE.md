@@ -71,6 +71,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-31 | deploy backend ke VPS | **SELESAI** — live di `https://api-sterun.jameshub.fun` (jameserver / pve02 / ct-sterun), Cloudflare Tunnel, verifikasi 14/14 |
 | STE-8 | web app shell + wallet connect (C9) | selesai |
 | STE-13 | directory + detail event dari chain (C9) | selesai, fe 161 test + e2e testnet live |
+| — | file metadata event (`POST /events/files`) untuk STE-17 | selesai, backend 714 test + e2e live — **belum ada tiket Linear-nya** |
 
 Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
 [`docs/deployments.md`](docs/deployments.md):

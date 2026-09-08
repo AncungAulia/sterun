@@ -1,6 +1,7 @@
 # `be/` — backend Node/TS (CLAUDE.md)
 
-API + helper Stellar + **PII vault** + **indexer** + **TTL keeper** + **results review**.
+API + helper Stellar + **PII vault** + **indexer** + **TTL keeper** + **results review** +
+**file metadata event**.
 Owner: **James**. Komponen **C7** (PII vault + API, STE-11; results CSV + hardening, STE-20) dan
 **C8** (indexer, TTL keeper, roster bundle, STE-16).
 
@@ -188,7 +189,7 @@ materialisasi, jalan ulang dari **state** kontrak, dan index-nya utuh lagi. Jalu
 testnet cuma menyimpan jendela `getEvents` terbatas; desain yang butuh replay event akan berjarak
 satu minggu buruk dari index yang tidak bisa diperbaiki.
 
-Empat hal yang akan bikin bingung kalau tidak disebut:
+Lima hal yang akan bikin bingung kalau tidak disebut:
 
 1. **`source` di tiap baris bukan hiasan.** `'event'` = poller melihatnya terjadi (ada ledger + tx
    hash). `'state'` = rebuild membacanya dari storage: sama benarnya, tanpa provenance.
@@ -198,7 +199,19 @@ Empat hal yang akan bikin bingung kalau tidak disebut:
    pilih salah satu.
 3. **Filter per contract id, bukan per nama topic** (`INTERFACE.md` §2.3). `getEvents` itu feed
    publik; siapa pun bisa men-deploy kontrak yang memancarkan topic `record_entered`.
-4. **Keeper memperpanjang ledger key, bukan memanggil `extend_record_ttl`.** Fungsi kontrak itu
+4. **Daftar scanner adalah satu-satunya tabel yang TIDAK bisa dibangun ulang dari state.**
+   EventRegistry cuma punya `is_scanner(event_id, address)` — tanya satu address, jawab ya/tidak.
+   Tidak ada fungsi yang meng-enumerate. Itulah kenapa `/events/:eventId/scanners` membaca index,
+   bukan chain. Konsekuensinya `rebuild` tidak boleh menghapus `event_scanners` begitu saja:
+   kandidatnya dikumpulkan dari tabelnya **dan** dari replay `scanner_added`/`scanner_removed` di
+   `chain_events` (log mentah itu sengaja diselamatkan lewat rebuild), lalu tiap address diverifikasi
+   ulang ke chain dengan `is_scanner` sebelum ditulis balik. Yang tetap **tidak** bisa dipulihkan:
+   scanner yang ditambahkan sebelum index ini pernah poll sama sekali — tidak ada barisnya, tidak
+   ada event-nya, dan chain tidak bisa ditanya "siapa saja". Hasilnya under-report, arah yang aman,
+   tapi tetap under-report. Ada test yang mengunci batas itu supaya tidak dibaca sebagai pemulihan
+   total.
+
+5. **Keeper memperpanjang ledger key, bukan memanggil `extend_record_ttl`.** Fungsi kontrak itu
    tidak menyentuh entry `Owner` milik OpenZeppelin, dan record yang entry `Owner`-nya ter-archive
    tetap mematahkan `verify` dan `records_of`. Key-nya didapat dari footprint hasil simulasi, bukan
    disusun tangan.
@@ -222,7 +235,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-586 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+717 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -274,6 +287,63 @@ Itu yang dicatat di event metadata supaya hasil yang ter-publish tetap tamper-ev
 pnpm --filter be e2e:results   # butuh DATABASE_URL + PII_KEYS; bikin event baru di testnet
 ```
 
+## File metadata event (untuk STE-17)
+
+`POST /events/files` → `{ url, sha256, size, content_type, created }`, dan `GET /files/:sha256`
+menyajikannya kembali. Diminta Ancung buat organiser console: sebelum ini panitia disuruh hosting
+poster sendiri lalu menempel URL-nya, langkah paling nyebelin di wizard.
+
+**Tidak menyentuh spec beku.** `create_event` sudah punya `metadata_hash: BytesN<32>` + `uri: String`
+(`INTERFACE.md` §1.1), jadi separuh on-chain-nya memang sudah ada; yang kurang cuma tempat menaruh
+byte-nya.
+
+**Content-addressed, dan itu keseluruhan desainnya.** Key penyimpanan **adalah** sha256 byte-nya —
+bukan id acak dengan hash dicatat di sebelahnya, tapi satu angka yang dipakai untuk dua tugas.
+Konsekuensinya:
+
+- URL tidak bisa berubah isi. Byte berbeda = URL berbeda, jadi `metadata_hash` on-chain dan file
+  yang disajikan tidak mungkin berselisih.
+- Upload **idempoten**. Kirim file yang sama dua kali = satu file, URL sama, `created: false`.
+- Tidak ada jalur overwrite, jadi tidak ada cara satu organiser menimpa poster organiser lain.
+- `Cache-Control: immutable` jadi pernyataan fakta, bukan harapan.
+
+Ini properti yang Ancung suka dari IPFS ("CID itu sendiri hash konten") tanpa pinning service dan
+tanpa gateway yang bisa mati.
+
+**Tipe ditentukan dari BYTE, bukan dari header `Content-Type`.** Header itu klaim si pengunggah;
+mengecek allow-list terhadapnya cuma teater. `src/files/content-type.ts` mengendus signature-nya.
+
+> **SVG tidak ada di allow-list dan jangan ditambahkan.** SVG itu dokumen XML yang bisa membawa
+> `<script>`. Disajikan dari `api-sterun.jameshub.fun` — origin yang sama dengan PII vault — itu
+> stored XSS dari file yang bisa diunggah siapa saja pemegang keypair. Kalau nanti perlu poster
+> vektor, jawabannya raster saat upload atau origin terpisah, bukan menambah cabang di situ.
+
+Lapisan kedua saat menyajikan: `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff`,
+tipe yang dikirim adalah tipe hasil endus, dan `Content-Disposition` menamai file dengan hash-nya —
+tidak ada apa pun pilihan pengunggah yang dipantulkan ke header.
+
+**Siapa yang boleh upload: siapa pun dengan signature wallet yang sah, dan itu disengaja.** Brief-nya
+mengusulkan membatasi ke address yang sudah pernah bikin event. Itu justru mengunci organiser
+pertama kali — persis orang yang fiturnya dibuat untuk mereka — karena URL-nya dibutuhkan
+**sebelum** `create_event` dipanggil. Yang membatasi penyalahgunaan: 5 MB per file, rate limit
+12/menit, allow-list hasil endus, dan **plafon keras seluruh store** (`STERUN_FILES_MAX_BYTES`,
+default 512 MiB) yang menjawab **507**. Keypair Stellar gratis dibikin, jadi aturan per-address
+tidak membatasi apa pun; plafon itulah yang membatasi.
+
+**`STERUN_PUBLIC_BASE_URL` wajib di-set di box yang publik.** Kalau kosong, origin diambil dari
+header `Host` — yang dikendalikan penyerang — dan URL yang dikembalikan endpoint ini adalah URL yang
+organiser commit **permanen** on-chain.
+
+**Volume `sterun-files` bukan cache.** File hilang = event rusak selamanya, karena hash-nya sudah
+di ledger dan menunjuk 404. Dockerfile membuat `/app/data/files` milik uid 1000 lebih dulu: named
+volume kosong mewarisi ownership direktori itu dari image, dan kalau path-nya tidak ada di image
+Docker membuatnya milik root sehingga upload pertama gagal `EACCES`. Bentuk bug yang sama dengan
+cloudflared di STE-31, dan cuma muncul di deployment sungguhan.
+
+**Belum ada: sweeper file yatim.** File yang tidak pernah dirujuk `uri` event mana pun tetap
+tersimpan. Plafon store yang menahan pertumbuhannya, bukan penghapusan. Kandidat perintah keeper
+berikutnya: index sudah menyimpan `uri` tiap event, jadi selisihnya bisa dihitung tanpa tabel baru.
+
 ## Hardening (STE-20)
 
 **Satu bentuk error untuk seluruh API**, dari satu root handler di `src/http/errors.ts`:
@@ -295,7 +365,7 @@ yang menyebabkan kegagalan — di service yang memegang dokumen identitas, itu p
 sampai ke response body. Isinya kalimat tetap + `x-request-id` untuk dikutip; error aslinya masuk log.
 
 **Rate limit** per-endpoint sesuai biayanya: 240/menit global, 30 untuk `/auth/challenge`, 10 untuk
-upload hasil. Key-nya hop pertama `x-forwarded-for` — di belakang reverse proxy (STE-31) semua
+upload hasil, 12 untuk upload file metadata. Key-nya hop pertama `x-forwarded-for` — di belakang reverse proxy (STE-31) semua
 request datang dari satu socket, dan tanpa itu satu client berisik akan mengunci seluruh event.
 **Mati saat `NODE_ENV=test`** supaya suite tidak gagal di request ke-241 karena alasan yang tidak
 ada hubungannya.
@@ -328,11 +398,17 @@ Dua hal yang layak diingat:
 `docs/deployments.md` **ikut masuk image**: `src/deployments.ts` mem-parse-nya untuk alamat kontrak,
 jadi aturan "alamat tidak pernah di-hardcode" tetap berlaku di dalam container.
 
-Verifikasi dari luar tanpa SSH: `./deploy/verify-deployment.sh https://…` — 13 cek, termasuk bahwa
-endpoint sensitif tetap 401. Prosedur lengkap: [`OPERATIONS.md`](OPERATIONS.md) bagian "Deploy ke VPS".
+Verifikasi dari luar tanpa SSH: `./deploy/verify-deployment.sh https://…` — 18 cek, termasuk bahwa
+endpoint sensitif tetap 401 dan bahwa SVG tidak ada di tipe upload yang diterima. Prosedur lengkap: [`OPERATIONS.md`](OPERATIONS.md) bagian "Deploy ke VPS".
 
 ## Yang belum ada (jangan diasumsikan sudah)
 
-Job re-encrypt untuk rotasi kunci, alert kalau keeper berhenti, replica API kedua (mungkin sekarang,
-belum diuji di bawah load nyata), dan backup Postgres terjadwal. Daftar lengkapnya di bagian akhir
+Job re-encrypt untuk rotasi kunci, alert kalau keeper berhenti, sweeper file yatim, dan backup
+Postgres terjadwal.
+
+**Replica API kedua sekarang jadi blocker, bukan lagi "mungkin".** `LocalFileStore` menyimpan byte
+di disk satu box, jadi instance kedua akan menjawab 404 untuk semua file milik yang pertama.
+Solusinya sudah disiapkan bentuknya: implement `FileStore` di atas R2 (S3-compatible, dan Cloudflare
+sudah ada di stack) lalu ganti satu baris di `index.ts` — tidak ada bagian lain dari kode ini yang
+tahu di mana byte disimpan. Daftar lengkapnya di bagian akhir
 [`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah satunya mendarat.

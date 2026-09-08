@@ -514,6 +514,86 @@ berapa tingkat sub-domainnya sebelum membongkar tunnel.
 > yang membingungkan. Kalau ACM/Total TLS diaktifkan nanti, kembalikan keduanya dalam satu
 > perubahan — jangan salah satu saja.
 
+### `indexer rebuild` dan daftar scanner
+
+`rebuild` membangun ulang seluruh index dari state kontrak. Satu tabel tidak bisa ikut dibangun
+begitu: **`event_scanners`**. EventRegistry cuma punya `is_scanner(event_id, address)` — tanya satu
+address, jawab ya/tidak — dan tidak ada fungsi yang meng-enumerate isinya.
+
+Jadi `rebuild` memperlakukan tabel itu khusus:
+
+1. kumpulkan kandidat dari `event_scanners` **dan** dari replay `scanner_added`/`scanner_removed`
+   di `chain_events` (log mentah itu memang diselamatkan lewat rebuild),
+2. verifikasi tiap address ke chain dengan `is_scanner`,
+3. tulis balik yang masih diakui chain.
+
+Efeknya: `pnpm indexer rebuild` — termasuk sesudah tabelnya di-`TRUNCATE` tangan — mengembalikan
+daftar scanner, dan scanner yang dicabut saat index mati ikut hilang karena langkah 2.
+
+**Yang tetap tidak bisa dipulihkan**: scanner yang ditambahkan **sebelum** index ini pernah poll
+sama sekali. Tidak ada barisnya, tidak ada event-nya di log, dan chain tidak bisa ditanya "siapa
+saja". `/events/:eventId/scanners` akan under-report tanpa bisa tahu bahwa dia under-report.
+
+Kalau ragu daftarnya lengkap, jangan tebak — konfirmasi tiap address ke chain:
+
+```bash
+# organiser console memang sudah melakukan ini per address sebelum mempercayainya
+stellar contract invoke --id $EVENT_REGISTRY --network testnet \
+  -- is_scanner --event_id 0 --address G...
+```
+
+Dan ingat pembagian tugasnya: **otorisasi tidak pernah lewat tabel ini.** Roster bundle membaca
+allowlist dari chain (`reader.isScanner`) tiap request, jadi index yang under-report tidak pernah
+bisa memberi akses ke orang yang salah — paling buruk dia bikin console tidak menampilkan seseorang
+yang sebenarnya berhak.
+
+### File metadata event
+
+Poster dan dokumen JSON tiap event disimpan **content-addressed**: nama file-nya adalah sha256
+isinya, dan itu juga angka yang masuk `create_event` sebagai `metadata_hash`.
+
+```bash
+# Yang harus ada di be/.env.production pada box publik:
+STERUN_PUBLIC_BASE_URL=https://api-sterun.jameshub.fun
+```
+
+Kalau variabel itu kosong, API menyusun URL dari header `Host` request. Header itu dikendalikan
+pemanggil, dan URL yang dikembalikan endpoint ini adalah URL yang organiser commit **permanen** ke
+ledger. Jadi di box yang bisa dijangkau internet, ini bukan opsional.
+
+**Volume `sterun-files` bukan cache — jangan pernah dihapus untuk "membersihkan".**
+
+Ini beda dengan `sterun-caddy-data` atau image yang bisa dibangun ulang. Hash file sudah ada di
+ledger dan tidak bisa dicabut; kalau byte-nya hilang, `uri` event itu menunjuk 404 selamanya dan
+halaman event menolak menampilkannya. Backup-nya barengan Postgres, bukan terpisah: satu baris event
+dan poster-nya itu satu fakta.
+
+```bash
+# Cek isinya dan berapa besarnya
+docker exec sterun-api-1 du -sh /app/data/files
+docker exec sterun-api-1 find /app/data/files -type f | wc -l
+
+# Backup (bareng dump database, dalam satu jendela waktu)
+docker run --rm -v sterun_sterun-files:/data -v "$PWD:/out" alpine \
+  tar czf /out/sterun-files-$(date -u +%Y%m%d).tar.gz -C /data .
+```
+
+**Plafon store.** `STERUN_FILES_MAX_BYTES` (default 512 MiB) adalah satu-satunya hal yang membatasi
+pertumbuhan: siapa pun pemegang keypair Stellar boleh upload, dan keypair gratis dibikin, jadi
+aturan per-address tidak menahan apa pun. Kalau penuh, endpoint menjawab **507** dengan pesan yang
+menyebut variabel ini — naikkan, atau (nanti, kalau sweeper-nya sudah ada) bersihkan file yatim.
+Yang **jangan** dilakukan: menghapus file sembarangan, karena tidak ada cara membedakan poster yang
+sudah dirujuk on-chain dari yang belum tanpa membaca `uri` tiap event di index.
+
+**Kalau upload gagal `EACCES`.** Artinya volume-nya dibuat sebelum image punya `/app/data/files`
+milik uid 1000 — Docker membuat volume kosong milik root kalau path-nya tidak ada di image. Perbaiki
+sekali:
+
+```bash
+docker run --rm -v sterun_sterun-files:/data alpine chown -R 1000:1000 /data
+docker compose -f compose.prod.yml -f compose.homelab.yml up -d api
+```
+
 #### Tailscale Funnel: cadangan, sekarang mati
 
 Sebelum tunnel ada, ingress-nya Tailscale Funnel di pve01. Sudah dimatikan
