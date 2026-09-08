@@ -97,6 +97,42 @@ else
   bad "POST /events/0/results/preview -> $code, expected 401"
 fi
 
+# The upload has to refuse an unauthenticated caller too. Getting this wrong
+# would turn the box into open file hosting under our own domain name, which is
+# the kind of thing that is noticed by someone else first.
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST -H 'content-type: application/json' \
+  --data-binary '{"name":"probe"}' "$BASE/events/files" || echo 000)"
+if [[ "$code" == "401" ]]; then
+  ok "POST /events/files -> 401 without a signature"
+else
+  bad "POST /events/files -> $code, expected 401"
+fi
+
+step "Event metadata files"
+# That the capability is switched on at all, and that it advertises the limits
+# the console reads instead of hardcoding.
+files_config="$(curl -sSf --max-time 15 "$BASE/config" 2>/dev/null || echo '{}')"
+if jq -e '.files.enabled == true' >/dev/null 2>&1 <<<"$files_config"; then
+  ok "/config reports the file store is enabled"
+else
+  bad "/config does not report an enabled file store"
+fi
+# SVG must not be offered. If this ever passes, someone has added a branch that
+# turns this origin into a script host — see be/CLAUDE.md.
+if jq -e '[.files.contentTypes[]] | index("image/svg+xml") | not' >/dev/null 2>&1 <<<"$files_config"; then
+  ok "SVG is not an accepted upload type"
+else
+  bad "SVG appears in the accepted upload types"
+fi
+# A well-formed hash that is certainly not stored. 404 proves the route is
+# mounted and public; anything else means it is missing or guarded wrongly.
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/files/$(printf 'f%.0s' {1..64})" || echo 000)"
+if [[ "$code" == "404" ]]; then
+  ok "GET /files/<unknown hash> -> 404, so the route is mounted and public"
+else
+  bad "GET /files/<unknown hash> -> $code, expected 404"
+fi
+
 step "Documentation"
 if curl -sSf --max-time 15 "$BASE/openapi.json" 2>/dev/null | jq -e '.openapi' >/dev/null 2>&1; then
   ok "/openapi.json describes the API"

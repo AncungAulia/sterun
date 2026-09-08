@@ -33,6 +33,14 @@ export const RATE_LIMITS = {
    * records — the most expensive request in the API by a wide margin.
    */
   results: 10,
+  /**
+   * The metadata file upload. Up to 5 MB that we then STORE, which is the part
+   * that makes it different from the results upload: that one parses and
+   * forgets, this one consumes disk that stays consumed. Low enough that a
+   * loop is stopped early, high enough that an organiser adjusting a poster
+   * three times in a minute never meets it.
+   */
+  files: 12,
 } as const;
 
 /**

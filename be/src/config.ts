@@ -79,6 +79,27 @@ export interface Config {
     readonly extendToLedgers: number;
   };
   /**
+   * Event metadata files (posters + the JSON document `metadata_hash` commits
+   * to on-chain). Always present: storing them needs no credential and no
+   * database, so there is no half-configured state to guard against, unlike
+   * the vault.
+   */
+  readonly files: {
+    /** Directory the content-addressed tree lives in. */
+    readonly root: string;
+    /** Hard ceiling on the whole store. Bounds growth; a hit is a 507. */
+    readonly maxTotalBytes: number;
+    /**
+     * Origin to build returned URLs from, e.g. `https://api-sterun.jameshub.fun`.
+     *
+     * Undefined falls back to deriving it from the request, which is right for
+     * `pnpm dev` and wrong for the deployed box: `Host` is attacker-controlled,
+     * and the URL this endpoint returns is one the organiser then commits
+     * on-chain. Production sets it.
+     */
+    readonly publicBaseUrl: string | undefined;
+  };
+  /**
    * The PII vault, or `undefined` when this process is not running one.
    *
    * Absent is a legitimate state — `pnpm dev` with no setup should still start
@@ -148,8 +169,42 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       thresholdLedgers: num(env.TTL_THRESHOLD_LEDGERS, DEFAULT_THRESHOLD_LEDGERS),
       extendToLedgers: num(env.TTL_EXTEND_TO_LEDGERS, DEFAULT_EXTEND_TO_LEDGERS),
     },
+    files: {
+      root: env.STERUN_FILES_ROOT ?? "./data/files",
+      maxTotalBytes: num(env.STERUN_FILES_MAX_BYTES, 512 * 1024 * 1024),
+      publicBaseUrl: normaliseBaseUrl(env.STERUN_PUBLIC_BASE_URL),
+    },
     vault: loadVaultConfig(env),
   };
+}
+
+/**
+ * Validated at startup rather than at the first upload.
+ *
+ * A typo'd base URL does not break anything visible here — it produces a
+ * perfectly successful 201 carrying a URL that goes nowhere, which the
+ * organiser then writes into `create_event`'s `uri` permanently. Failing to
+ * boot is far cheaper than that.
+ */
+function normaliseBaseUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    throw new Error(
+      `STERUN_PUBLIC_BASE_URL is not a valid URL: ${JSON.stringify(raw)}. ` +
+        `Expected something like https://api-sterun.jameshub.fun`,
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `STERUN_PUBLIC_BASE_URL must be http or https, got ${JSON.stringify(parsed.protocol)}`,
+    );
+  }
+  // No trailing slash, so callers can join with `/files/...` without producing
+  // a double slash that some caches treat as a different resource.
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
 }
 
 function loadVaultConfig(env: NodeJS.ProcessEnv): Config["vault"] {

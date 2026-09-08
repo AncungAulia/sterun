@@ -482,6 +482,53 @@ berapa tingkat sub-domainnya sebelum membongkar tunnel.
 > yang membingungkan. Kalau ACM/Total TLS diaktifkan nanti, kembalikan keduanya dalam satu
 > perubahan — jangan salah satu saja.
 
+### File metadata event
+
+Poster dan dokumen JSON tiap event disimpan **content-addressed**: nama file-nya adalah sha256
+isinya, dan itu juga angka yang masuk `create_event` sebagai `metadata_hash`.
+
+```bash
+# Yang harus ada di be/.env.production pada box publik:
+STERUN_PUBLIC_BASE_URL=https://api-sterun.jameshub.fun
+```
+
+Kalau variabel itu kosong, API menyusun URL dari header `Host` request. Header itu dikendalikan
+pemanggil, dan URL yang dikembalikan endpoint ini adalah URL yang organiser commit **permanen** ke
+ledger. Jadi di box yang bisa dijangkau internet, ini bukan opsional.
+
+**Volume `sterun-files` bukan cache — jangan pernah dihapus untuk "membersihkan".**
+
+Ini beda dengan `sterun-caddy-data` atau image yang bisa dibangun ulang. Hash file sudah ada di
+ledger dan tidak bisa dicabut; kalau byte-nya hilang, `uri` event itu menunjuk 404 selamanya dan
+halaman event menolak menampilkannya. Backup-nya barengan Postgres, bukan terpisah: satu baris event
+dan poster-nya itu satu fakta.
+
+```bash
+# Cek isinya dan berapa besarnya
+docker exec sterun-api-1 du -sh /app/data/files
+docker exec sterun-api-1 find /app/data/files -type f | wc -l
+
+# Backup (bareng dump database, dalam satu jendela waktu)
+docker run --rm -v sterun_sterun-files:/data -v "$PWD:/out" alpine \
+  tar czf /out/sterun-files-$(date -u +%Y%m%d).tar.gz -C /data .
+```
+
+**Plafon store.** `STERUN_FILES_MAX_BYTES` (default 512 MiB) adalah satu-satunya hal yang membatasi
+pertumbuhan: siapa pun pemegang keypair Stellar boleh upload, dan keypair gratis dibikin, jadi
+aturan per-address tidak menahan apa pun. Kalau penuh, endpoint menjawab **507** dengan pesan yang
+menyebut variabel ini — naikkan, atau (nanti, kalau sweeper-nya sudah ada) bersihkan file yatim.
+Yang **jangan** dilakukan: menghapus file sembarangan, karena tidak ada cara membedakan poster yang
+sudah dirujuk on-chain dari yang belum tanpa membaca `uri` tiap event di index.
+
+**Kalau upload gagal `EACCES`.** Artinya volume-nya dibuat sebelum image punya `/app/data/files`
+milik uid 1000 — Docker membuat volume kosong milik root kalau path-nya tidak ada di image. Perbaiki
+sekali:
+
+```bash
+docker run --rm -v sterun_sterun-files:/data alpine chown -R 1000:1000 /data
+docker compose -f compose.prod.yml -f compose.homelab.yml up -d api
+```
+
 #### Tailscale Funnel: cadangan, sekarang mati
 
 Sebelum tunnel ada, ingress-nya Tailscale Funnel di pve01. Sudah dimatikan
