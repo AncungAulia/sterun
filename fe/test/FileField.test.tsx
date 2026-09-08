@@ -89,6 +89,8 @@ describe("FileField", () => {
 
       await user.upload(screen.getByLabelText("Poster"), png("first.png"));
       await screen.findByRole("img", { name: /poster/i });
+      // The button says what pressing it now does, since there is already one.
+      expect(screen.getByRole("button", { name: /replace the poster/i })).toBeInTheDocument();
 
       uploadEventFile.mockResolvedValue({
         url: "https://api-sterun.jameshub.fun/files/second.png",
@@ -97,7 +99,7 @@ describe("FileField", () => {
         contentType: "image/png",
         created: true,
       });
-      await user.upload(screen.getByLabelText(/replace/i), png("second.png"));
+      await user.upload(screen.getByLabelText("Poster"), png("second.png"));
 
       await waitFor(() =>
         expect(screen.getByRole("img", { name: /poster/i })).toHaveAttribute(

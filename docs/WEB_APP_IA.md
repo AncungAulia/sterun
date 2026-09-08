@@ -272,17 +272,48 @@ EventRegistry, `100..=199` RaceRecord, `200+` OZ.
 | URL | Menampilkan |
 | --- | --- |
 | `/org` | Event yang aku buat (query by address), empty state, tombol buat event |
-| `/org/new` | Wizard: event → kategori → jadwal → review → tanda tangan |
+| `/org/new` | Wizard 3 langkah: **Details → Distances → Review** (review yang menandatangani semuanya) |
 | `/org/events/[id]` | Kuota terisi per kategori (live dari chain), kontrol status, hitungan per state, roster **anonim**: bib, kategori, state, `token_id` |
 | `/org/events/[id]/scanners` | Daftar scanner aktif, tambah/hapus address |
 | `/org/events/[id]/results` | Upload CSV (bib_no, finish_time) → preview + anomali → submit batch `recordFinish`/`recordDnf` |
 
 Tidak ada tombol Edit maupun Hapus di mana pun (§2.2), dan tidak ada nama peserta (§2.1).
 
-Wizard bertahap karena **tiap langkah adalah transaksi terpisah**: bikin event satu tanda tangan,
-tiap kategori satu lagi, buka pendaftaran satu lagi. Panitia dengan 3 kategori diminta approve 5
-kali — UI harus menjelaskan itu di depan, bukan mengejutkan di tengah jalan. Kolom harga dan kuota
-perlu peringatan permanen karena tidak bisa diperbaiki.
+**Tanda tangannya banyak dan tidak bisa dikurangi**: publish file detail satu, `create_event`
+satu, tiap kategori satu, buka pendaftaran satu. Panitia dengan 3 kategori diminta approve 6 kali.
+Satu transaksi cuma boleh memanggil satu fungsi kontrak, kontraknya tidak punya entry point batch,
+dan `add_category` butuh `event_id` yang baru lahir setelah `create_event` mendarat.
+
+Yang **bisa** diperbaiki cuma kagetnya, dan itu memutuskan bentuk wizard-nya (STE-17, 8 Sep 2026):
+
+- **Langkahnya 3, bukan 6.** Yang dulu enam langkah itu memetakan transaksi satu-satu — publish,
+  create, add, open — padahal transaksi adalah cara kita mengantar, bukan pekerjaan panitia.
+  Pekerjaan panitia cuma dua: menggambarkan lomba, lalu menyetujui ongkosnya.
+- **Step "Details file" diganti step Review.** Dulu isinya dump JSON mentah + tombol Publish. Itu
+  meminta orang memeriksa hal yang tidak bisa mereka periksa, dan meminta mereka tahu ada "file" —
+  itu pipa kita. Review menampilkan lombanya sebagai lomba: tanggal, kota, jarak beserta jam
+  start-nya. **File mentahnya tetap ada satu klik di balik toggle**, karena sha256 byte itulah yang
+  masuk chain dan orang yang mau mengecek klaim kita harus bisa melihatnya.
+- **Daftar tanda tangan ditampilkan SEBELUM yang pertama diminta**, lalu dicentang satu per satu
+  sambil jalan. Enam popup yang tidak disebut siapa pun terasa seperti retry loop; enam popup yang
+  sudah ditulis sebagai daftar bernomor terasa seperti pekerjaan yang ada ujungnya.
+- **Berhenti di tengah aman dan bisa dilanjutkan.** Yang sudah mendarat tidak bisa dibatalkan, jadi
+  layar yang me-reset akan berbohong soal apa yang ada di chain. Tombolnya jadi "Carry on" dan
+  melanjutkan dari langkah pertama yang belum mendarat.
+- **Jalan keluar dokumen (host sendiri / tanpa dokumen) cuma muncul setelah publish gagal.** `uri`
+  itu string biasa di chain dan kontrak tidak peduli host-nya siapa, jadi backend kita mati tidak
+  boleh ikut mematikan pembuatan event. Tapi itu bukan pilihan yang pantas disodorkan ke orang yang
+  tidak sedang punya masalah.
+
+Kolom harga dan kuota perlu peringatan permanen karena tidak bisa diperbaiki.
+
+**Poster dan waiver di-upload, bukan ditempel URL-nya** (`POST /events/files`, terima gambar dan
+PDF, maks 5 MB). Dua alasan: menyuruh panitia meng-hosting sendiri adalah langkah yang paling
+mungkin membuat wizard-nya tidak dipakai, dan file di tempat lain bisa **ditukar** setelah orang
+mendaftar — persis penipuan yang produk ini ada untuk menutupnya. Yang dikembalikan store itu
+content-addressed, jadi poster dan waiver ikut beku seperti dokumen yang menyebutnya. Upload jalan
+**saat file dipilih**, bukan di akhir: endpoint-nya butuh tanda tangan, dan menumpuknya di akhir
+berarti popup beruntun di saat yang paling tidak enak.
 
 Console tidak boleh mengirim baris CSV yang gagal preview. Aksi oleh wallet non-organiser harus
 memunculkan pesan yang bisa dibaca, bukan crash.

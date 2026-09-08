@@ -114,6 +114,29 @@ output generator, edit tangan hilang tanpa jejak pada regenerate berikutnya.
   kanonikalisasi. STE-17 menulis dokumennya dengan aturan yang sama.
 - `src/hooks/useEvents.ts` + `useEventMetadata.ts` — React Query di atas keduanya.
 
+## Organiser console: bentuk wizard (STE-17)
+
+`/org/new` = **3 langkah**: Details → Distances → Review. Jangan menambah langkah yang cuma
+memetakan satu transaksi; alasannya di `docs/WEB_APP_IA.md` §5.1 dan di header
+`modules/organiser/CreateEvent.tsx`.
+
+- `modules/organiser/run.ts` — daftar tanda tangan (murni, tanpa React). Urutannya terpaksa:
+  dokumen di-hash `create_event`, jadi harus online dulu; `add_category` butuh `event_id`.
+- `hooks/useEventRun.ts` — yang menjalankan daftar itu. Berhenti di langkah yang gagal, yang sudah
+  mendarat tetap tercatat, `start()` lagi = lanjut dari yang belum. **Loop-nya memegang salinan
+  lokal `landed`**, karena `setState` baru berlaku render berikutnya dan loop-nya selesai dalam satu
+  render.
+- `component/StepReview.tsx` — lomba dalam bahasa manusia + toggle file mentah + daftar tanda
+  tangan yang dicentang.
+- `component/DocumentFallback.tsx` — cuma dirender setelah publish gagal.
+- `component/FileField.tsx` (di `components/elements/`) — poster & waiver. Upload saat dipilih.
+  `ACCEPTED` di situ mencerminkan `be/src/files/content-type.ts`; **SVG sengaja tidak ada dan
+  jangan ditambahkan** (itu script di origin kita sendiri, bukan gambar).
+
+Validasi form punya dua kelas yang tampil di waktu berbeda (`modules/organiser/missing.ts`):
+`missingDetails` (field kosong) nunggu Continue, `incoherentDates` (dua tanggal yang bertabrakan)
+muncul seketika. Field kosong belum tentu salah; tanggal yang bertentangan sudah pasti salah.
+
 ## Test
 
 ```bash

@@ -38,7 +38,6 @@ import { Label } from "@/components/ui/label";
 import { useWallet } from "@/hooks/useWallet";
 import { MAX_FILE_BYTES, uploadEventFile } from "@/lib/upload";
 import { signMessage, walletErrorMessage } from "@/lib/wallet";
-import { cn } from "@/utils/cn";
 
 /**
  * What the field is for, which decides both what it accepts and how it shows
@@ -133,31 +132,39 @@ export function FileField({ id, label, kind, hint, value, onChange }: FileFieldP
   }
 
   const busy = state.kind === "signing" || state.kind === "uploading";
-  const inputId = value ? `${id}-replace` : id;
 
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={inputId}>
-        <LabelText label={value ? `Replace ${label.toLowerCase()}` : label} />
+      <Label htmlFor={id}>
+        <LabelText label={label} />
       </Label>
 
       {value ? <Stored kind={kind} url={value} label={label} name={name} /> : null}
 
       <div className="flex flex-wrap items-center gap-3">
+        {/*
+          The browser's own file control is a grey button and a sentence, styled
+          by the platform and by nothing else on this page. It is kept for what
+          it is good at (labelling, keyboard, the picker itself) and taken out of
+          the layout, with our own button in front of it.
+        */}
         <input
           ref={input}
-          id={inputId}
+          id={id}
           type="file"
           accept={ACCEPTED[kind].join(",")}
           disabled={busy || !address}
           onChange={(e) => void pick(e.target.files?.[0])}
-          className={cn(
-            "block w-full max-w-md cursor-pointer rounded-md border border-input text-sm text-foreground",
-            "file:mr-3 file:cursor-pointer file:border-0 file:bg-muted file:px-4 file:py-2",
-            "file:text-sm file:text-foreground hover:file:bg-accent",
-            "disabled:cursor-not-allowed disabled:opacity-60",
-          )}
+          className="sr-only"
         />
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={busy || !address}
+          onClick={() => input.current?.click()}
+        >
+          {value ? `Replace the ${label.toLowerCase()}` : `Choose a ${kind === "image" ? "picture" : "PDF"}`}
+        </Button>
         {value ? (
           <Button
             type="button"

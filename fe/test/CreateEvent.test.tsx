@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,7 +28,7 @@ vi.mock("@/lib/wallet", () => ({
   disconnectWallet: vi.fn(),
   signTransaction: vi.fn(async (xdr: string) => ({ signedTxXdr: xdr })),
   signMessage: vi.fn(async () => "c2ln"),
-  walletErrorMessage: (e: unknown) => String(e),
+  walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
 vi.mock("@/lib/upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/upload")>()),
@@ -53,7 +53,7 @@ function renderWizard() {
   return { user: userEvent.setup(), ...render(<CreateEvent />, { wrapper: Wrapper }) };
 }
 
-/** Fill everything step one insists on, then move to the document step. */
+/** Fill everything step one insists on, then move to the distances. */
 async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jakarta Sunrise 10K") {
   await user.type(screen.getByLabelText(/Event name/), name);
 
@@ -72,7 +72,7 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jak
   // Dates come from the calendar now, the way an organiser sets them. The clock
   // is frozen in beforeEach so the calendar always opens on the month these
   // clicks expect.
-  // Distinct days, because the form now refuses a schedule that cannot happen:
+  // Distinct days, because the form refuses a schedule that cannot happen:
   // entries open, then close, then the race is run.
   const days: [string, RegExp][] = [
     ["Registration opens date", /September 7th, 2026/],
@@ -86,7 +86,7 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jak
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
-/** Fill the one distance the wizard starts with, then move to the file step. */
+/** Fill the one distance the wizard starts with, then move to the review. */
 async function fillDistances(
   user: ReturnType<typeof userEvent.setup>,
   { code = "10K", price = "25" }: { code?: string; price?: string } = {},
@@ -98,6 +98,13 @@ async function fillDistances(
   await user.clear(screen.getByLabelText(/Start time/));
   await user.type(screen.getByLabelText(/Start time/), "06:00");
   await user.click(screen.getByRole("button", { name: "Continue" }));
+}
+
+/** Everything up to the review screen, with the file publishing cleanly. */
+async function reachReview(user: ReturnType<typeof userEvent.setup>) {
+  await fillDetails(user);
+  await fillDistances(user);
+  fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 }
 
 beforeEach(() => {
@@ -117,20 +124,46 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("CreateEvent", () => {
-  describe("publishing the details file", () => {
-    it("records the address the backend stored it at", async () => {
+  describe("the run of signatures", () => {
+    it("lists every signature before asking for the first one", async () => {
+      // The number cannot be reduced, so the only thing that makes it bearable
+      // is not being surprised by it. Three fixed steps plus one distance.
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      expect(screen.getByText(/takes 4 signatures/i)).toBeInTheDocument();
+      expect(screen.getByText("Publish the event details")).toBeInTheDocument();
+      expect(screen.getByText('Create "Jakarta Sunrise 10K"')).toBeInTheDocument();
+      expect(screen.getByText("Add the 10K")).toBeInTheDocument();
+      expect(screen.getByText("Open for entries")).toBeInTheDocument();
+      // Nothing has been asked for yet.
+      expect(uploadEventFile).not.toHaveBeenCalled();
+      expect(createEvent).not.toHaveBeenCalled();
+    });
+
+    it("walks the whole run from one press, and ends with an open event", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(await screen.findByText(/the event is open/i)).toBeInTheDocument();
+      expect(uploadEventFile).toHaveBeenCalledTimes(1);
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(addCategory).toHaveBeenCalledTimes(1);
+      expect(setEventStatus).toHaveBeenCalledWith(4, "Open", expect.anything());
+      expect(screen.getByText(/write down number/i)).toHaveTextContent("4");
+    });
+
+    it("records the address the store put the details file at", async () => {
       // The point of the whole endpoint: the organiser hosts nothing, and the
       // uri that lands on chain is one the store guarantees keeps serving the
       // same bytes.
       const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
+      await reachReview(user);
 
-      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
-      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
-      await screen.findByText("Published");
-      await user.click(screen.getByRole("button", { name: "Continue" }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByText(/the event is open/i);
 
       expect(createEvent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -141,122 +174,57 @@ describe("CreateEvent", () => {
       );
     });
 
-    it("signs as the connected organiser", async () => {
+    it("signs the upload as the connected organiser", async () => {
       const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
+      await reachReview(user);
 
-      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
-      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
-      await screen.findByText("Published");
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByText(/the event is open/i);
 
       expect(uploadEventFile).toHaveBeenCalledWith(
         expect.objectContaining({ address: ORGANISER, contentType: "application/json" }),
       );
     });
 
-    it("still proves the file is really being served before trusting it", async () => {
-      // Uploading is not the same as being readable. The check runs the same
-      // code path the public event page uses, so a document that passes here
-      // passes there.
+    it("proves the file is really being served before anything is recorded", async () => {
+      // Stored is not served. A hash committed for bytes nobody fetched leaves
+      // the event page saying the details were altered, for the rest of the
+      // event's life, with nothing anybody can do about it.
       const { user } = renderWizard();
       await fillDetails(user);
       await fillDistances(user);
+      fetchEventMetadata.mockResolvedValue({ status: "unavailable", reason: "404" });
 
-      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
-      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
-      await screen.findByText("Published");
-
-      expect(fetchEventMetadata).toHaveBeenCalledWith(
-        expect.stringContaining("/files/"),
-        expect.stringMatching(/^[0-9a-f]{64}$/),
-      );
-    });
-
-    it("leaves the step unpublished when the wallet is declined", async () => {
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-
-      uploadEventFile.mockRejectedValue(new Error("User declined the signature"));
-      await user.click(screen.getByRole("button", { name: /publish the details file/i }));
-
-      expect(await screen.findByRole("alert")).toHaveTextContent(/declined/i);
-      expect(screen.queryByText("Published")).toBeNull();
-    });
-
-  });
-
-  describe("positive", () => {
-    it("creates the event with the document it verified", async () => {
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-
-      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
-      await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
-      await user.click(screen.getByRole("button", { name: /check the published file/i }));
-      await screen.findByText("Checked");
-      await user.click(screen.getByRole("button", { name: "Continue" }));
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
-      expect(createEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: "Jakarta Sunrise 10K",
-          uri: "https://example.test/e.json",
-          metadataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
-        }),
-        expect.anything(),
-      );
-    });
-
-    it("walks through to an open event", async () => {
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
-
-      expect(await screen.findByText(/write that number down/i)).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: /add this distance/i }));
-      await screen.findByText("Added");
-
-      await user.click(screen.getByRole("button", { name: "Continue" }));
-      await user.click(screen.getByRole("button", { name: "Open for entries" }));
-
-      expect(await screen.findByText(/the event is open/i)).toBeInTheDocument();
-      expect(setEventStatus).toHaveBeenCalledWith(4, "Open", expect.anything());
+      expect(await screen.findByRole("alert")).toHaveTextContent(/could not be read back/i);
+      expect(createEvent).not.toHaveBeenCalled();
     });
 
     it("passes the price through as stroops, not as a decimal", async () => {
       const { user } = renderWizard();
       await fillDetails(user);
-      await fillDistances(user, { code: "FUN5K", price: "15.5" });
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
+      await fillDistances(user, { price: "25.5" });
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+
       await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/write that number down/i);
+      await screen.findByText(/the event is open/i);
 
-      await user.click(screen.getByRole("button", { name: /add this distance/i }));
-
-      await screen.findByText("Added");
       expect(addCategory).toHaveBeenCalledWith(
-        expect.objectContaining({ priceStroops: 155_000_000n, distanceM: 10_000 }),
+        expect.objectContaining({ priceStroops: 255_000_000n, distanceM: 10_000, quota: 300 }),
         expect.anything(),
       );
     });
 
     it("puts the earliest wave on chain as the event start", async () => {
-      // The event has one timestamp and a race has several. The earliest is the
-      // only one that is true of the whole event.
+      // The event has one timestamp and the race has several. 06:00 on race day
+      // in the browser's zone, which the frozen clock makes deterministic.
       const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await reachReview(user);
 
-      await screen.findByText(/write that number down/i);
-      // The race date from fillDetails, at the one distance's start time.
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByText(/the event is open/i);
+
       const expected = BigInt(Math.floor(new Date("2026-09-28T06:00").getTime() / 1000));
       expect(createEvent).toHaveBeenCalledWith(
         expect.objectContaining({ startsAt: expected }),
@@ -265,8 +233,158 @@ describe("CreateEvent", () => {
     });
   });
 
-  describe("edge", () => {
-    it("asks for a wallet before showing the wizard at all", () => {
+  describe("when the run stops partway", () => {
+    it("keeps what has landed and carries on from there", async () => {
+      // Those transactions cannot be undone, so a screen that reset would be
+      // lying about what exists. Carrying on must never repeat one.
+      const { user } = renderWizard();
+      await reachReview(user);
+      setEventStatus.mockRejectedValueOnce(new Error("User declined the request"));
+
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/declined/i);
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(addCategory).toHaveBeenCalledTimes(1);
+
+      await user.click(screen.getByRole("button", { name: "Carry on" }));
+
+      expect(await screen.findByText(/the event is open/i)).toBeInTheDocument();
+      // The event and the distance were not signed a second time.
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(addCategory).toHaveBeenCalledTimes(1);
+      expect(setEventStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it("says nothing was created when it stops on the very first step", async () => {
+      const { user } = renderWizard();
+      await fillDetails(user);
+      await fillDistances(user);
+      uploadEventFile.mockRejectedValueOnce(new Error("User declined the request"));
+
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/nothing has been created yet/i);
+    });
+
+    it("offers the ways out only once publishing has actually failed", async () => {
+      // Hosting the file yourself is a real escape hatch, since our backend
+      // being down should not stop anybody creating an event. It is not a
+      // choice worth putting in front of somebody who has no problem.
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument();
+
+      uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(await screen.findByLabelText("Published URL")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create the event without any details/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("creates the event with no document when told to go on without one", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+      uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByRole("alert");
+
+      await user.click(screen.getByRole("button", { name: /create the event without any details/i }));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      await screen.findByText(/the event is open/i);
+      expect(createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ uri: "", metadataHash: "0".repeat(64) }),
+        expect.anything(),
+      );
+    });
+
+    it("takes a document the organiser hosted and checked themselves", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+      uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByLabelText("Published URL");
+
+      await user.type(screen.getByLabelText("Published URL"), "https://example.test/event.json");
+      await user.click(screen.getByRole("button", { name: "Check the published file" }));
+
+      // A checked url satisfies that step, so the ways out fold away and the
+      // list above shows the first line as done.
+      await waitFor(() => expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument());
+      await user.click(screen.getByRole("button", { name: "Carry on" }));
+
+      await screen.findByText(/the event is open/i);
+      expect(createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ uri: "https://example.test/event.json" }),
+        expect.anything(),
+      );
+      // The upload was not attempted a second time: that step is satisfied.
+      expect(uploadEventFile).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses a hosted url that is serving different bytes", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+      uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByLabelText("Published URL");
+
+      fetchEventMetadata.mockResolvedValue({ status: "modified", actualHash: "f".repeat(64) });
+      await user.type(screen.getByLabelText("Published URL"), "https://example.test/event.json");
+      await user.click(screen.getByRole("button", { name: "Check the published file" }));
+
+      expect(await screen.findByText(/showing a different file/i)).toBeInTheDocument();
+      expect(screen.queryByText("Checked")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("the review itself", () => {
+    it("shows the race in words rather than as a file", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      expect(screen.getByText("Jakarta Sunrise 10K")).toBeInTheDocument();
+      expect(screen.getByText("Two laps of the park.")).toBeInTheDocument();
+      // The asset name comes from `formatPrice` and must not be added twice.
+      expect(screen.getByRole("row", { name: /10K/ })).toHaveTextContent("sUSD 25");
+      expect(screen.getByRole("row", { name: /10K/ })).not.toHaveTextContent("sUSD 25 sUSD");
+      // The document is not on screen until it is asked for.
+      expect(screen.queryByText(/"schedule"/)).not.toBeInTheDocument();
+    });
+
+    it("still hands over the exact bytes, for anybody who wants to check them", async () => {
+      // The fingerprint of these bytes is what goes on chain, so somebody
+      // checking our claim has to be able to see them.
+      const { user } = renderWizard();
+      await reachReview(user);
+
+      await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+
+      expect(await screen.findByText(/"schedule"/)).toBeInTheDocument();
+      expect(screen.getByText(/^Fingerprint /)).toBeInTheDocument();
+    });
+
+    it("stops offering Back once something has been signed", async () => {
+      // The form no longer describes what exists. Editing it would silently
+      // change the document whose fingerprint is already on chain.
+      const { user } = renderWizard();
+      await reachReview(user);
+      expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+
+      setEventStatus.mockRejectedValueOnce(new Error("User declined the request"));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await screen.findByRole("alert");
+
+      expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("before any of that", () => {
+    it("asks for a wallet before showing the form at all", async () => {
       useWallet.setState({ address: null, isRestoring: false });
 
       renderWizard();
@@ -343,129 +461,21 @@ describe("CreateEvent", () => {
       expect(await screen.findByText(/paste a google maps link/i)).toBeInTheDocument();
     });
 
-    it("will not create an event with an unverified document", async () => {
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-
-      // The URL is typed but never checked. Continuing here would commit a hash
-      // for bytes nobody has fetched, and the hash cannot be changed later.
-      await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
-
-      expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-    });
-
-    it("un-verifies the document when a detail changes after checking it", async () => {
-      // The bytes are different now, so the URL that was checked a moment ago
-      // serves something else. This is the mistake that would otherwise ship a
-      // permanently broken event.
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-
-      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
-      await user.type(screen.getByLabelText("Published URL"), "https://example.test/e.json");
-      await user.click(screen.getByRole("button", { name: /check the published file/i }));
-      await screen.findByText("Checked");
-
-      // Back to the details, which now sit two steps away. Each step is waited
-      // for: clicking twice in a row races the render and lands both clicks on
-      // the same button.
-      await user.click(screen.getByRole("button", { name: "Back" }));
-      await screen.findByRole("heading", { name: "Distance categories" });
-      await user.click(screen.getByRole("button", { name: "Back" }));
-      await screen.findByRole("heading", { name: "The race" });
-
-      await user.type(screen.getByLabelText("Venue"), "Somewhere else");
-
-      await user.click(screen.getByRole("button", { name: "Continue" }));
-      await screen.findByRole("heading", { name: "Distance categories" });
-      await user.click(screen.getByRole("button", { name: "Continue" }));
-      await screen.findByRole("heading", { name: /publish the event details/i });
-
-      expect(screen.queryByText("Checked")).not.toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /create without a document/i }),
-      ).toBeInTheDocument();
-    });
-
-    it("creates an event with no document when told to", async () => {
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
-
-      expect(createEvent).toHaveBeenCalledWith(
-        expect.objectContaining({ uri: "", metadataHash: "0".repeat(64) }),
-        expect.anything(),
-      );
-    });
-
-    it("will not open an event whose distances are not all on chain yet", async () => {
-      // The event exists and one signature is still outstanding. Opening now
-      // would put a race in front of people with a distance they cannot enter.
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await fillDistances(user);
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/write that number down/i);
-
-      expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-      expect(screen.getByText(/add them all before opening/i)).toBeInTheDocument();
-    });
-
     it("refuses a distance code the contract would reject, without spending a signature", async () => {
-      // Symbol accepts letters, digits and underscore. A revert would cost a
-      // wallet prompt and a wait to learn what a regex answers instantly.
       const { user } = renderWizard();
       await fillDetails(user);
 
-      await user.type(screen.getByLabelText(/^Code/), "10 K!");
+      await user.type(screen.getByLabelText(/^Code/), "10 K");
       await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
       await user.type(screen.getByLabelText(/Maximum entries/), "300");
-      await user.type(screen.getByLabelText(/Start time/), "06:00");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
+      // The same words are in the field's hint, so the assertion is on the
+      // one that is announced as a problem rather than on the text.
       expect(await screen.findByRole("alert")).toHaveTextContent(
         /letters, digits and underscores/i,
       );
-      expect(createEvent).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("negative", () => {
-    it("keeps a distance that is already on chain when the next one fails", async () => {
-      // Those transactions have landed and cannot be undone, so a screen that
-      // reset on failure would be lying about what is on chain.
-      const { user } = renderWizard();
-      await fillDetails(user);
-      await user.type(screen.getByLabelText(/^Code/), "10K");
-      await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
-      await user.type(screen.getByLabelText(/Maximum entries/), "300");
-      await user.type(screen.getByLabelText(/Start time/), "06:00");
-      await user.click(screen.getByRole("button", { name: /add another distance/i }));
-
-      const codes = screen.getAllByLabelText(/^Code/);
-      await user.type(codes[1]!, "FUN5K");
-      await user.type(screen.getAllByLabelText(/Distance in kilometres/)[1]!, "5");
-      await user.type(screen.getAllByLabelText(/Maximum entries/)[1]!, "100");
-      await user.type(screen.getAllByLabelText(/Start time/)[1]!, "07:00");
-      await user.click(screen.getByRole("button", { name: "Continue" }));
-
-      await user.click(screen.getByRole("button", { name: /create without a document/i }));
-      await user.click(screen.getByRole("button", { name: "Create event" }));
-      await screen.findByText(/write that number down/i);
-
-      await user.click(screen.getByRole("button", { name: /add this distance/i }));
-      await screen.findByText("Added");
-
-      addCategory.mockRejectedValueOnce(new Error("user declined"));
-      await user.click(screen.getByRole("button", { name: /add this distance/i }));
-
-      expect(await screen.findByRole("alert")).toHaveTextContent(/not added/i);
-      expect(screen.getByText("Added")).toBeInTheDocument();
+      await waitFor(() => expect(createEvent).not.toHaveBeenCalled());
     });
   });
 });
