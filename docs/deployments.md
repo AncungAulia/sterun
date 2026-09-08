@@ -1234,8 +1234,8 @@ dua yang tidak diurus. Prosedur menyalakannya lagi kalau tunnel bermasalah: `be/
 
 ### Verifikasi dari luar, tanpa SSH
 
-`./deploy/verify-deployment.sh https://api-sterun.jameshub.fun` — **14 dari 14 lolos**,
-2026-09-06T20:15:11Z:
+`./deploy/verify-deployment.sh https://api-sterun.jameshub.fun` — **18 dari 18 lolos**,
+2026-09-08T01:33:54Z (14/14 saat STE-31; empat cek file ditambahkan sesudahnya):
 
 ```
 ▸ TLS
@@ -1284,6 +1284,55 @@ Dua detail yang bagus dari lognya:
 - Setelah hidup lagi dia **melanjutkan dari cursor**, bukan mengulang dari nol: hitungannya tetap
   4 event / 10 record / 56 chain event, dan `last_ledger` maju. Kalau dia meng-ingest ulang,
   angkanya akan naik.
+
+### File metadata event — LIVE
+
+`POST /events/files` + `GET /files/:sha256`, live di deployment yang sama. Diminta Ancung buat
+organiser console (STE-17): wizard butuh `uri` + `metadata_hash` untuk `create_event`, dan sebelum
+ini panitia disuruh hosting sendiri.
+
+**Content-addressed**: nama file adalah sha256 isinya, jadi URL dan sidik jarinya satu benda. Itu
+yang membuat `metadata_hash` on-chain tidak mungkin berselisih dengan file yang disajikan.
+
+Dijalankan terhadap `https://api-sterun.jameshub.fun` pada 2026-09-08T01:34Z:
+
+```
+1. upload            -> 201 https://api-sterun.jameshub.fun/files/40e511e6…678d.json
+   sha256 cocok      -> true
+2. fetch             -> 200 application/json
+   byte identik      -> true
+   CSP               -> default-src 'none'; sandbox
+   cache-control     -> public, max-age=31536000, immutable
+3. upload ulang      -> 201 created: false url sama: true
+4. SVG (label PNG)   -> 415 unsupported-file-type
+5. tanpa signature   -> 401
+```
+
+Baris 3 dan 4 yang paling layak dibaca. **Baris 3**: byte yang sama menghasilkan URL yang sama dan
+`created: false` — upload-nya idempoten, jadi retry setelah koneksi putus tidak menggandakan apa
+pun. **Baris 4**: file itu SVG yang dikirim dengan header `Content-Type: image/png` dan tetap
+ditolak, karena tipe ditentukan dari byte-nya, bukan dari header. SVG bisa membawa `<script>`, dan
+origin ini juga menyajikan PII vault.
+
+File yang diunggah di atas masih hidup dan bisa diklik:
+[`…40e511e6…678d.json`](https://api-sterun.jameshub.fun/files/40e511e6def7b3bc72da94edc96cd040570704c8faa1e1f79e8a82ef4778678d.json)
+
+**Bukti volume, dijalankan terhadap image yang sudah di-build sebelum deploy** — ini kegagalan yang
+paling mungkin lolos sampai produksi:
+
+| Percobaan | Hasil |
+| --- | --- |
+| container restart, volume terpasang | file **tetap 200** |
+| container dibuat ulang **tanpa** volume | **404** — event rusak permanen |
+| image **tanpa** `mkdir /app/data/files` di Dockerfile | direktori milik `root`, tulis **ditolak** (`EACCES`) |
+| image **dengan** `mkdir` + `chown node` | direktori milik `node`, tulis **berhasil** |
+
+Baris ketiga itu bentuk bug yang sama dengan permission cloudflared: Docker menyemai named volume
+kosong dari direktori image, dan kalau path-nya tidak ada di image, volume dibuat milik root.
+Hasilnya upload pertama gagal di produksi dan tidak di mana pun sebelumnya.
+
+Verifikasi eksternal naik jadi **18 dari 18 lolos** (empat cek baru: upload menolak tanpa
+signature, file store aktif, SVG tidak ada di tipe yang diterima, `/files/<hash tak dikenal>` → 404).
 
 ### Untuk web app (STE-8/13/21/22/24/32)
 
