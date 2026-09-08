@@ -182,6 +182,29 @@ describe("authentication", () => {
     expect((await app.inject({ method: "POST", url: "/events/files", headers, payload: PNG })).statusCode).toBe(401);
   });
 
+  it("accepts the SEP-53 signature a browser wallet sends", async () => {
+    // The organiser console is the only client this endpoint was built for, and
+    // it signs through a wallet, which means SEP-53 rather than the raw nonce
+    // bytes every script here uses. If this route only took the raw form, the
+    // console could never upload anything and the whole endpoint would be
+    // reachable by curl alone.
+    const { nonce } = await challenges.issue(organiser.publicKey());
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/events/files",
+      headers: {
+        "x-sterun-address": organiser.publicKey(),
+        "x-sterun-nonce": nonce,
+        "x-sterun-signature": Buffer.from(organiser.signMessage(nonce)).toString("base64"),
+        "content-type": "image/png",
+      },
+      payload: PNG,
+    });
+
+    expect(response.statusCode).toBe(201);
+  });
+
   it("refuses a signature from a different key than the nonce was issued to", async () => {
     const { nonce } = await challenges.issue(organiser.publicKey());
     const response = await app.inject({
