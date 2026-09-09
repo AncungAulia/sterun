@@ -96,6 +96,27 @@ fn deploy(env: &Env) -> (Address, Address) {
     (admin, registry)
 }
 
+/// Puts `organiser` on the admin's allowlist, which `create_event` requires
+/// since v2.1. Idempotent, because a second `add_organiser` for the same
+/// address reverts `OrganiserAlreadyAdded(16)` and fixtures should not have to
+/// track who they already allowlisted.
+fn allowlist(env: &Env, client: &EventRegistryClient, organiser: &Address) {
+    env.mock_all_auths();
+    if !client.is_organiser(organiser) {
+        client.add_organiser(organiser);
+    }
+}
+
+/// Allowlists `organiser` and creates one event owned by them. Every test that
+/// wants an event as a *precondition* goes through here: the allowlist gate is
+/// what `create_event` tests exercise on purpose, and everything else would
+/// otherwise be testing the gate by accident.
+fn create_event(env: &Env, client: &EventRegistryClient, organiser: &Address) -> u32 {
+    allowlist(env, client, organiser);
+    env.mock_all_auths();
+    client.create_event(organiser, &name(env), &hash(env), &uri(env), &STARTS_AT)
+}
+
 /// Creates an event owned by `organiser` with one category, moves it to
 /// `Open`, and returns `(event_id, category_id)`. Uses `mock_all_auths`
 /// because the auth model is not what these callers are testing.
@@ -105,8 +126,8 @@ fn open_event(
     organiser: &Address,
     quota: u32,
 ) -> (u32, u32) {
+    let event_id = create_event(env, client, organiser);
     env.mock_all_auths();
-    let event_id = client.create_event(organiser, &name(env), &hash(env), &uri(env), &STARTS_AT);
     let category_id = client.add_category(
         &event_id,
         &symbol_short!("10K"),
@@ -188,8 +209,8 @@ fn create_event_ids_are_monotonic_and_data_roundtrips() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let first = create_event(&env, &client, &organiser);
+    let second = create_event(&env, &client, &organiser);
 
     assert_eq!(first, 0);
     assert_eq!(second, 1);
@@ -217,8 +238,8 @@ fn add_category_ids_are_per_event_and_data_roundtrips() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_a = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let event_b = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_a = create_event(&env, &client, &organiser);
+    let event_b = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.add_category(&event_a, &symbol_short!("5K"), &5_000, &100, &25_000_000),
@@ -266,8 +287,7 @@ fn set_event_status_walks_the_lifecycle() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     assert_eq!(client.get_event(&event_id).status, EventStatus::Draft);
 
     for status in [
@@ -289,8 +309,7 @@ fn scanner_allowlist_add_then_remove() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     assert!(!client.is_scanner(&event_id, &scanner));
 
     client.add_scanner(&event_id, &scanner);
@@ -335,8 +354,7 @@ fn emits_event_created() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         env.events().all(),
@@ -356,8 +374,7 @@ fn emits_category_added() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     let category_id =
         client.add_category(&event_id, &symbol_short!("10K"), &10_000, &200, &50_000_000);
 
@@ -381,8 +398,7 @@ fn emits_event_status_changed() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     client.set_event_status(&event_id, &EventStatus::Open);
 
     assert_eq!(
@@ -404,8 +420,7 @@ fn emits_scanner_added_and_removed() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     client.add_scanner(&event_id, &scanner);
     assert_eq!(
@@ -515,8 +530,7 @@ fn organiser_only_calls_reject_a_foreign_signer() {
     let scanner = Address::generate(&env);
 
     env.mock_all_auths();
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     client.add_scanner(&event_id, &scanner);
 
     macro_rules! signed_by_impostor {
@@ -651,8 +665,7 @@ fn reserve_slot_requires_status_open() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     let category_id = client.add_category(&event_id, &symbol_short!("10K"), &10_000, &10, &0);
     let race_record = wire_race_record(&env, &client);
     let caller = MockRaceRecordClient::new(&env, &race_record);
@@ -736,8 +749,7 @@ fn add_category_validates_its_inputs() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.try_add_category(&event_id, &symbol_short!("10K"), &10_000, &0, &0),
@@ -769,8 +781,7 @@ fn views_revert_on_unknown_ids() {
         Err(Ok(Error::CategoryNotFound))
     );
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     assert_eq!(
         client.try_get_category(&event_id, &0),
         Err(Ok(Error::CategoryNotFound))
@@ -790,8 +801,7 @@ fn scanner_allowlist_rejects_duplicate_and_unknown() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.try_remove_scanner(&event_id, &scanner),
@@ -819,8 +829,7 @@ fn set_event_status_rejects_illegal_transitions() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     // Draft cannot jump straight to Completed, nor re-enter Draft.
     assert_eq!(
@@ -871,8 +880,7 @@ fn an_event_can_be_cancelled_from_every_non_terminal_state() {
     env.mock_all_auths();
 
     for reach in [EventStatus::Draft, EventStatus::Open, EventStatus::Closed] {
-        let event_id =
-            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let event_id = create_event(&env, &client, &organiser);
         match reach {
             EventStatus::Draft => {}
             EventStatus::Open => client.set_event_status(&event_id, &EventStatus::Open),
@@ -1030,8 +1038,7 @@ fn free_category_and_extreme_values_are_accepted() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     // price 0 — a free category is legal (only negative prices are not).
     let free = client.add_category(&event_id, &symbol_short!("FUN"), &1, &1, &0);
@@ -1080,8 +1087,8 @@ fn events_of_different_organisers_are_isolated() {
     let bob = Address::generate(&env);
 
     env.mock_all_auths();
-    let alice_event = client.create_event(&alice, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let bob_event = client.create_event(&bob, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let alice_event = create_event(&env, &client, &alice);
+    let bob_event = create_event(&env, &client, &bob);
     assert_eq!(client.get_organiser(&alice_event), alice);
     assert_eq!(client.get_organiser(&bob_event), bob);
 
@@ -1131,8 +1138,8 @@ fn scanner_allowlist_is_per_event() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let first = create_event(&env, &client, &organiser);
+    let second = create_event(&env, &client, &organiser);
 
     client.add_scanner(&first, &scanner);
     assert!(client.is_scanner(&first, &scanner));
@@ -1240,8 +1247,8 @@ fn add_addon_ids_are_per_event_and_data_roundtrips() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let first = create_event(&env, &client, &organiser);
+    let second = create_event(&env, &client, &organiser);
 
     assert_eq!(client.addon_count(&first), 0);
     let (jersey, tumbler) = add_two_addons(&env, &client, first);
@@ -1272,8 +1279,7 @@ fn add_addon_validates_its_inputs() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.try_add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &0),
@@ -1304,8 +1310,7 @@ fn add_addon_rejects_a_foreign_signer() {
     let impostor = Address::generate(&env);
 
     env.mock_all_auths();
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     env.mock_auths(&[MockAuth {
         address: &impostor,
