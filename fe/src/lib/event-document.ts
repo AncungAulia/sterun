@@ -96,6 +96,14 @@ export interface EventDocumentDraft {
   racepackVenueLink: string;
   /** What is in the race pack. Empty is normal and writes nothing. */
   addOns: DocumentAddOn[];
+  /**
+   * The rules a runner agrees to, as the organiser typed them.
+   *
+   * Here rather than on a page the organiser hosts, because being inside this
+   * file is what makes them permanent: the hash on chain covers them, so the
+   * terms somebody agreed to are provably the terms still being served.
+   */
+  terms: string;
 }
 
 interface Phase {
@@ -195,6 +203,10 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
   if (Object.keys(location).length > 0) document.location = location;
   document.schedule = schedule;
   if (draft.description) document.description = draft.description;
+  // Trailing whitespace trimmed but the line breaks kept: the shape of a terms
+  // document is most of its readability, and a hash over a stray blank line at
+  // the end is a different hash for the same rules.
+  if (draft.terms.trim()) document.terms = draft.terms.trim();
   if (draft.waiverUrl) document.waiver_url = draft.waiverUrl;
 
   /**

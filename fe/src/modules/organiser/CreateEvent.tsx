@@ -53,6 +53,7 @@ import { findNameClash } from "@/lib/event-names";
 
 import { StepAddOns, addOnProblem, type PlannedAddOn } from "./component/StepAddOns";
 import { StepDone } from "./component/StepDone";
+import { StepTerms } from "./component/StepTerms";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepReview } from "./component/StepReview";
 import { focusField, incoherentDates, missingDetails, type Missing } from "./missing";
@@ -60,6 +61,7 @@ import { focusField, incoherentDates, missingDetails, type Missing } from "./mis
 const STEPS = [
   { id: "details", label: "Details" },
   { id: "distances", label: "Distances" },
+  { id: "terms", label: "Terms" },
   { id: "add-ons", label: "Add-ons" },
   { id: "review", label: "Review" },
   { id: "done", label: "Done" },
@@ -84,6 +86,7 @@ function Wizard() {
    * that hands out nothing but a bib is still a race.
    */
   const [addOns, setAddOns] = useState<PlannedAddOn[]>([]);
+  const [terms, setTerms] = useState("");
   const [showAddOnProblems, setShowAddOnProblems] = useState(false);
 
   /**
@@ -126,7 +129,7 @@ function Wizard() {
 
   function continueFromDistances() {
     if (planProblems === 0 && plan.length > 0) {
-      setStep("add-ons");
+      setStep("terms");
       return;
     }
     setShowPlanProblems(true);
@@ -187,6 +190,7 @@ function Wizard() {
             racepackVenue: details.racepackVenue,
             racepackVenueLink: details.racepackVenueLink,
             raceDate: details.raceDate,
+            terms,
             addOns: liveAddOns.map((addOn) => ({
               name: addOn.name,
               photoUrl: addOn.photoUrl,
@@ -199,7 +203,7 @@ function Wizard() {
               cutOff: category.cutOff,
             })),
           }),
-    [details, liveAddOns, plan, startsAt],
+    [details, liveAddOns, plan, startsAt, terms],
   );
 
   // Hashing is async (crypto.subtle), so it is a query keyed by the exact text
@@ -272,6 +276,22 @@ function Wizard() {
           </>
         ) : null}
 
+        {shownStep === "terms" ? (
+          <>
+            <StepTerms terms={terms} onChange={setTerms} />
+            <div className="mt-8 flex flex-wrap justify-end gap-3">
+              <Button variant="secondary" onClick={() => setStep("distances")}>
+                Back
+              </Button>
+              {/*
+                No validation to fail: the terms are optional, so Continue
+                never has anything to refuse.
+              */}
+              <Button onClick={() => setStep("add-ons")}>Continue</Button>
+            </div>
+          </>
+        ) : null}
+
         {shownStep === "add-ons" ? (
           <>
             <StepAddOns
@@ -281,7 +301,7 @@ function Wizard() {
               showProblems={showAddOnProblems}
             />
             <div className="mt-8 flex flex-wrap justify-end gap-3">
-              <Button variant="secondary" onClick={() => setStep("distances")}>
+              <Button variant="secondary" onClick={() => setStep("terms")}>
                 Back
               </Button>
               <Button onClick={continueFromAddOns}>Continue</Button>

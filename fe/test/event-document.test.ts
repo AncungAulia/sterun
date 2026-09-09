@@ -33,6 +33,7 @@ function draft(overrides: Partial<EventDocumentDraft> = {}): EventDocumentDraft 
     raceDate: "2026-10-04",
     categories: [{ code: "10K", startTime: "06:00", cutOff: "" }],
     addOns: [],
+    terms: "",
     ...overrides,
   };
 }
@@ -198,6 +199,37 @@ describe("buildEventDocument", () => {
       expect(document).not.toHaveProperty("description");
     });
 
+    it("carries the terms, so the hash on chain covers the rules too", () => {
+      const terms = "General\n\n- One ticket admits one runner.";
+      const document = JSON.parse(buildEventDocument({ ...draft(), terms }));
+
+      expect(document.terms).toBe(terms);
+    });
+
+    it("keeps the line breaks inside the terms, because the shape is the reading", () => {
+      const document = JSON.parse(
+        buildEventDocument({ ...draft(), terms: "One\n\nTwo\n- three" }),
+      );
+
+      expect(document.terms).toBe("One\n\nTwo\n- three");
+    });
+
+    it("writes no terms key at all when the organiser skipped it", () => {
+      // Same rule as every other optional field here: a published document is
+      // permanent, and `"terms": ""` reads as an oversight forever.
+      expect(JSON.parse(buildEventDocument({ ...draft(), terms: "" }))).not.toHaveProperty("terms");
+      expect(JSON.parse(buildEventDocument({ ...draft(), terms: "   \n\n  " }))).not.toHaveProperty(
+        "terms",
+      );
+    });
+
+    it("trims the ends but not the middle, so the same rules hash the same way", () => {
+      const padded = buildEventDocument({ ...draft(), terms: "\n  Rules\n\n- a\n  " });
+      const clean = buildEventDocument({ ...draft(), terms: "Rules\n\n- a" });
+
+      expect(JSON.parse(padded).terms).toBe(JSON.parse(clean).terms);
+    });
+
     it("still writes the race day phase when nothing optional was filled in", () => {
       // gun_start is the one thing the document must always carry, because it
       // is the claim the chain can be checked against.
@@ -214,6 +246,7 @@ describe("buildEventDocument", () => {
           posterUrl: "",
           waiverUrl: "",
           addOns: [],
+          terms: "",
           instagram: "",
           website: "",
           registrationOpens: "",

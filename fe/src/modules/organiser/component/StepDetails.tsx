@@ -14,12 +14,11 @@
  * look like. Each is a heading with a rule under it, so a long form reads as
  * four short ones rather than a wall of inputs.
  */
-import type { ReactNode } from "react";
 
 import { DateRangeField, EMPTY_RANGE, type DayRange } from "@/components/elements/DateRangeField";
 import { DateTimeField } from "@/components/elements/DateTimeField";
 import { Field, TextAreaField } from "@/components/elements/Field";
-import { Help } from "@/components/elements/Help";
+import { Section } from "@/components/elements/Section";
 import { FileField } from "@/components/elements/FileField";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
 import { parseCoordinates } from "@/utils/geo";
@@ -36,39 +35,6 @@ function PinHint({ link, missing }: { link: string; missing: string }) {
   if (!link.trim()) return null;
   if (!parseCoordinates(link)) return <span className="text-warning">{missing}</span>;
   return <>Pin found.</>;
-}
-
-/**
- * A heading, the one line that has to be read, and the rest behind an info
- * button.
- *
- * The split is the same one every field makes (`elements/Help.tsx`): `note` is
- * what somebody needs in order to fill this section in, or a cost they cannot
- * undo. Background goes in `help`, where it is opened on purpose.
- */
-function Section({
-  title,
-  note,
-  help,
-  children,
-}: {
-  title: string;
-  note?: string;
-  help?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-5 border-t border-border pt-6 first:border-t-0 first:pt-0">
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="heading-strong text-lg text-foreground">{title}</h2>
-          {help ? <Help label={title}>{help}</Help> : null}
-        </div>
-        {note ? <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{note}</p> : null}
-      </div>
-      {children}
-    </section>
-  );
 }
 
 export interface EventDetails {

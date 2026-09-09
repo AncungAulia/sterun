@@ -48,8 +48,12 @@ vi.mock("@/lib/upload", async (importOriginal) => ({
  * step alone now opens and closes three calendars. That is comfortably over
  * vitest's five second default once the suite runs files in parallel, and a
  * timeout there says nothing about the code.
+ *
+ * Raised again when the terms step landed: every walk through the wizard grew
+ * another render and another click, which was enough to push the longest tests
+ * past twenty seconds on a loaded machine.
  */
-vi.setConfig({ testTimeout: 20_000 });
+vi.setConfig({ testTimeout: 40_000 });
 
 const ORGANISER = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
 
@@ -97,7 +101,11 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jak
 /** Fill the one distance the wizard starts with, then move to the review. */
 async function fillDistances(
   user: ReturnType<typeof userEvent.setup>,
-  { code = "10K", price = "25" }: { code?: string; price?: string } = {},
+  {
+    code = "10K",
+    price = "25",
+    terms,
+  }: { code?: string; price?: string; terms?: string } = {},
 ) {
   await user.type(screen.getByLabelText(/^Code/), code);
   await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
@@ -105,6 +113,23 @@ async function fillDistances(
   if (price) await user.type(screen.getByLabelText(/Entry fee in sUSD/), price);
   await user.clear(screen.getByLabelText(/Start time/));
   await user.type(screen.getByLabelText(/Start time/), "06:00");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await passTerms(user, terms);
+}
+
+/**
+ * Walk through the terms step, optionally leaving some behind.
+ *
+ * Its own helper rather than another click inside `fillDistances`, because
+ * "the rules are optional and Continue never refuses" is a claim worth being
+ * able to point at, and the tests that care about the terms need to type into
+ * it rather than pass through.
+ */
+async function passTerms(user: ReturnType<typeof userEvent.setup>, terms?: string) {
+  // By role, not by label: `Help` gives its button the field's own label as an
+  // accessible name, so getByLabelText matches the textarea and the info
+  // button both.
+  if (terms) await user.type(screen.getByRole("textbox", { name: /rules of your race/i }), terms);
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
@@ -495,12 +520,44 @@ describe("CreateEvent", () => {
       await fillDistances(user);
       await fillAddOn(user);
 
+      // Twice: the terms sit between the add-ons and the distances now.
+      await user.click(screen.getByRole("button", { name: "Back" }));
       await user.click(screen.getByRole("button", { name: "Back" }));
       await user.clear(screen.getByLabelText(/^Code/));
       await user.type(screen.getByLabelText(/^Code/), "10KM");
       await user.click(screen.getByRole("button", { name: "Continue" }));
+      await passTerms(user);
 
       expect(screen.getByRole("checkbox", { name: "10KM" })).not.toBeChecked();
+    });
+
+    it("puts the terms in the file whose fingerprint goes on chain", async () => {
+      // The whole reason the rules live here rather than on a page the
+      // organiser hosts: covered by metadata_hash, so they cannot change after
+      // somebody has agreed to them.
+      const { user } = renderWizard();
+      // Set here rather than leaned on from reachReview: this test walks the
+      // wizard itself so it can stop at the terms step, so it owns the mock.
+      fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
+      await fillDetails(user);
+      await fillDistances(user, { terms: "One ticket admits one runner." });
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      await startRun(user);
+      await screen.findByText(/your race is live/i);
+
+      const [[uploaded]] = uploadEventFile.mock.calls;
+      const published = JSON.parse(new TextDecoder().decode(uploaded.bytes));
+      expect(published.terms).toBe("One ticket admits one runner.");
+    });
+
+    it("leaves the terms out entirely when the organiser skipped them", async () => {
+      const { user } = renderWizard();
+      await reachReview(user);
+      await startRun(user);
+      await screen.findByText(/your race is live/i);
+
+      const [[uploaded]] = uploadEventFile.mock.calls;
+      expect(JSON.parse(new TextDecoder().decode(uploaded.bytes))).not.toHaveProperty("terms");
     });
 
     it("carries on with nothing in the race pack, because that is a real race", async () => {
