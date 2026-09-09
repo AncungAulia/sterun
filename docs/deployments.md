@@ -1638,6 +1638,53 @@ Yang tersisa sebelum benar-benar menyalakannya: backup Postgres terjadwal (dulua
 ketersediaan, backup itu pemulihan) lalu Redis untuk rate limit. Poller dan keeper **tetap
 singleton**.
 
+### Backend pindah ke kontrak v2 — LIVE
+
+2026-09-09. `be/` dan `fe/` sekarang menunjuk pasangan v2. Keputusan James: pindah sekarang, karena
+makin lama makin banyak data yang harus dibuang.
+
+**Ongkos perpindahannya kecil justru karena dilakukan cepat** — isinya 3 participants, dan
+ketiganya `token_id` NULL, jadi **tidak ada dokumen identitas yang tertaut ke record on-chain
+mana pun**. Backup diambil lebih dulu (`/opt/sterun/backups/pre-v2-*.sql.gz`, 11 tabel).
+
+Alamatnya berpindah lewat `docs/deployments.md`, bukan env var: baris tanpa sufiks membawa v2 dan
+yang lama dilabeli `v1`. Ada test yang gagal kalau parser me-resolve pasangan v1 — keduanya contract
+id yang sah di file yang sama, jadi regex yang terlalu longgar akan mem-parse bersih sambil menunjuk
+kontrak mati.
+
+**Index dan vault di-truncate**, karena tidak ada kolom pembeda kontrak: `events.event_id` dan
+`records.token_id` primary key telanjang, dan v2 menomori event dari 0 lagi. Prosedur lengkap +
+urutannya (poller dihentikan **sebelum** truncate) ada di `be/OPERATIONS.md`.
+
+Hasil rebuild dari state v2:
+
+```
+rebuilt in 6361ms: 2 events, 2 categories, 3 records, 5 transitions.
+doctor: index matches the chain
+```
+
+Verifikasi sesudahnya:
+
+| Cek | Hasil |
+| --- | --- |
+| `verify-deployment.sh` | **18/18** |
+| alamat di `/config` | `CAPB6NQ…` + `CCVW7WV…` (v2) |
+| poller mengikuti | `CAPB6NQ…` dan `CCVW7WV…` |
+| event v1 lama (`/events/4`) | **404** — sudah tidak ada, seperti seharusnya |
+| file R2 lama | **200** — tidak ikut terhapus, file tidak terikat versi kontrak |
+| e2e add-ons penuh di v2 | lolos: submit → `enter` → confirm → index → roster |
+
+Dua hal dari daftar itu yang paling layak diperhatikan.
+
+**Index memuat event berstatus `Cancelled`** (`Sterun Cancelled Rehearsal`). Itu status v2-only, dan
+kehadirannya membuktikan kerja tiga lapis kemarin benar-benar berfungsi terhadap event sungguhan —
+decoder, JSON schema route, dan CHECK constraint database. Lapis ketiga itu yang tidak disebut
+`INTERFACE.md` §8 dan satu-satunya yang ditegakkan Postgres.
+
+**Poller-nya, bukan cuma `rebuild`, menangkap event v2 baru.** Event 2 dibuat oleh script e2e
+sesudah semuanya menyala, dan muncul di index produksi dalam satu siklus poll. Itu membedakan "bisa
+membaca state sekali" dari "mengikuti chain".
+
 ### Untuk web app (STE-8/13/21/22/24/32)
 
 ```bash
