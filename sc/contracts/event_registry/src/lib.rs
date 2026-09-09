@@ -50,6 +50,17 @@ const BUMP_TO: u32 = 180 * DAY_IN_LEDGERS;
 /// Lifecycle of an event. `Draft` -> `Open` -> `Closed` -> `Completed`, with
 /// `Closed` <-> `Open` allowed so an organiser can re-open registration.
 /// `Completed` is terminal.
+///
+/// `Cancelled` (v2) is reachable from every non-terminal state and is itself
+/// terminal. It is **not** the same thing as `Closed`: `Closed` means
+/// registration is shut but the race is still happening, and the organiser can
+/// re-open it. `Cancelled` means the race is off. Nothing on-chain refunds
+/// anybody — refunds stay an off-chain promise (`docs/SYSTEM_DESIGN.md` §11) —
+/// so the value of this status is that the chain, not a website banner, is
+/// where "this race is not happening" is recorded.
+///
+/// The variant is appended last on purpose. A `#[contracttype]` enum travels as
+/// its variant *name*, so every `EventData` already written keeps decoding.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EventStatus {
@@ -57,6 +68,7 @@ pub enum EventStatus {
     Open,
     Closed,
     Completed,
+    Cancelled,
 }
 
 /// One race event. `metadata_hash` commits to the off-chain detail document
@@ -363,8 +375,14 @@ impl EventRegistry {
     }
 
     /// Moves the event through its lifecycle. Only forward moves are legal,
-    /// plus the `Open` <-> `Closed` toggle; `Completed` is terminal and a
-    /// no-op transition is rejected so no misleading event is emitted.
+    /// plus the `Open` <-> `Closed` toggle; `Completed` and `Cancelled` are
+    /// terminal and a no-op transition is rejected so no misleading event is
+    /// emitted.
+    ///
+    /// Cancelling stops entries by itself: [`Self::reserve_slot`] and
+    /// [`Self::reserve_addon`] both require `Open`, so a cancelled event
+    /// rejects every new entry with [`Error::EventNotOpen`] without needing a
+    /// guard of its own.
     pub fn set_event_status(env: Env, event_id: u32, status: EventStatus) -> Result<(), Error> {
         bump_instance(&env);
         let mut event = auth_organiser(&env, event_id)?;
@@ -581,16 +599,25 @@ fn auth_organiser(env: &Env, event_id: u32) -> Result<EventData, Error> {
 }
 
 /// Forward-only lifecycle with an `Open` <-> `Closed` toggle for re-opening
-/// registration. `Completed` is terminal and self-transitions are rejected.
+/// registration. `Completed` and `Cancelled` are terminal and self-transitions
+/// are rejected.
+///
+/// Cancelling is legal from every non-terminal state, including `Draft`: an
+/// event can be called off before it ever opened. It is deliberately NOT legal
+/// from `Completed` — a race that was run and had results published did happen,
+/// and rewriting that is falsifying history, not fixing a typo.
 fn is_valid_transition(from: EventStatus, to: EventStatus) -> bool {
     matches!(
         (from, to),
         (EventStatus::Draft, EventStatus::Open)
             | (EventStatus::Draft, EventStatus::Closed)
+            | (EventStatus::Draft, EventStatus::Cancelled)
             | (EventStatus::Open, EventStatus::Closed)
             | (EventStatus::Open, EventStatus::Completed)
+            | (EventStatus::Open, EventStatus::Cancelled)
             | (EventStatus::Closed, EventStatus::Open)
             | (EventStatus::Closed, EventStatus::Completed)
+            | (EventStatus::Closed, EventStatus::Cancelled)
     )
 }
 

@@ -822,13 +822,15 @@ fn set_event_status_rejects_illegal_transitions() {
     client.set_event_status(&event_id, &EventStatus::Closed);
     client.set_event_status(&event_id, &EventStatus::Open);
 
-    // Completed is terminal.
+    // Completed is terminal — including against Cancelled: a race that was run
+    // and had results published did happen.
     client.set_event_status(&event_id, &EventStatus::Completed);
     for status in [
         EventStatus::Draft,
         EventStatus::Open,
         EventStatus::Closed,
         EventStatus::Completed,
+        EventStatus::Cancelled,
     ] {
         assert_eq!(
             client.try_set_event_status(&event_id, &status),
@@ -836,6 +838,81 @@ fn set_event_status_rejects_illegal_transitions() {
         );
     }
     assert_eq!(client.get_event(&event_id).status, EventStatus::Completed);
+}
+
+/// Cancelling is reachable from each of the three non-terminal states, and is
+/// itself terminal.
+#[test]
+fn an_event_can_be_cancelled_from_every_non_terminal_state() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    for reach in [EventStatus::Draft, EventStatus::Open, EventStatus::Closed] {
+        let event_id =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        match reach {
+            EventStatus::Draft => {}
+            EventStatus::Open => client.set_event_status(&event_id, &EventStatus::Open),
+            _ => {
+                client.set_event_status(&event_id, &EventStatus::Open);
+                client.set_event_status(&event_id, &EventStatus::Closed);
+            }
+        }
+        assert_eq!(client.get_event(&event_id).status, reach);
+
+        client.set_event_status(&event_id, &EventStatus::Cancelled);
+        assert_eq!(client.get_event(&event_id).status, EventStatus::Cancelled);
+
+        // Terminal: there is no way back out, not even to Cancelled again.
+        for status in [
+            EventStatus::Draft,
+            EventStatus::Open,
+            EventStatus::Closed,
+            EventStatus::Completed,
+            EventStatus::Cancelled,
+        ] {
+            assert_eq!(
+                client.try_set_event_status(&event_id, &status),
+                Err(Ok(Error::InvalidStatus))
+            );
+        }
+    }
+}
+
+/// A cancelled event stops taking entries without needing a guard of its own:
+/// `reserve_slot` already demands `Open`.
+#[test]
+fn a_cancelled_event_refuses_new_entries() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    // While Open, an entry lands.
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Ok(Ok(0))
+    );
+
+    env.mock_all_auths();
+    client.set_event_status(&event_id, &EventStatus::Cancelled);
+
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::EventNotOpen))
+    );
+    // The slot already taken is untouched — cancelling is not a rollback.
+    assert_eq!(
+        client.get_category(&event_id, &category_id).entered_count,
+        1
+    );
 }
 
 #[test]
