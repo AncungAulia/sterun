@@ -16,7 +16,7 @@ pegang **sebelum** menulis kode di sini.
 ```bash
 cd sc
 stellar contract build            # WAJIB duluan — test membaca wasm hasilnya
-cargo test                        # 54 (event_registry) + 60 (race_record)
+cargo test                        # 66 (event_registry) + 60 (race_record)
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 ./scripts/check-exports.sh        # non-transferable dibuktikan dari wasm
@@ -61,7 +61,7 @@ menghasilkan hash wasm tercatat di `README.md`; CI mem-pin angka yang sama.
 
 | Band | Pemilik | Terpakai sekarang |
 | --- | --- | --- |
-| `1..=99` | `event_registry` (C1) | `1..=15` |
+| `1..=99` | `event_registry` (C1) | `1..=18` |
 | `100..=199` | `race_record` (C2) | `100..=107` |
 | `200+` | OpenZeppelin `NonFungibleTokenError` (200–214 di stellar-tokens 0.7.2) | `200..=214` |
 | kelipatan 100 berikutnya | kontrak baru | — |
@@ -111,6 +111,16 @@ Menjalankan ulang script ini menghasilkan pasangan alamat **baru** (deploy memak
 Sejak v2 itu bukan lagi satu-satunya cara mengubah kontrak yang live — lihat di bawah.
 
 ## v2: kontraknya upgradeable, dan storage key jadi append-only SELAMANYA
+
+**Sudah dipakai dua kali** untuk mengubah kontrak yang live tanpa mengganti alamat: RaceRecord
+v2.0.1 (optimasi internal) dan EventRegistry v2.1.0 (allowlist organiser, STE-36). Yang kedua
+menambah varian `DataKey` ke kontrak yang sudah menyimpan event orang, jadi aturan di bawah
+berhenti jadi teori di sana. Buktinya bukan cuma prosedur: wasm yang live sebelum upgrade
+ter-commit di `contracts/event_registry/testdata/`, dan
+`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` men-deploy kode itu, menulis
+state dengannya, lalu menggantinya dengan build sekarang dan membaca semuanya kembali. Kalau
+kamu menambah varian `DataKey` lagi, tiru pola itu — dan refresh fixture-nya **setelah**
+upgrade-mu mendarat, bukan dengan hasil build lokal.
 
 Kedua kontrak mengekspor `upgrade(new_wasm_hash)` yang admin-gated dan memanggil
 `env.deployer().update_current_contract_wasm`. Ini mekanisme **native Soroban**: bytecode diganti
