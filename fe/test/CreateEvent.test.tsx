@@ -13,9 +13,17 @@ const setEventStatus = vi.hoisted(() =>
   vi.fn(async () => ({ value: undefined, txHash: "tx3", ledger: 1 })),
 );
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
+/*
+ * Mocked rather than left to run. The real hook fetches the backend index, and
+ * `NEXT_PUBLIC_API_URL` in vitest.config.ts is the live API: left alone, every
+ * test in this file would put a request on the network, and typescript.yml is
+ * built so that a testnet or a VPS being down cannot turn CI red.
+ */
+const existingNames = vi.hoisted(() => vi.fn(() => [] as string[]));
 const uploadEventFile = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sterun", () => ({ readClient: { createEvent, addCategory, setEventStatus } }));
+vi.mock("@/hooks/useExistingEventNames", () => ({ useExistingEventNames: existingNames }));
 vi.mock("@/lib/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/metadata")>()),
   fetchEventMetadata,
@@ -560,6 +568,39 @@ describe("CreateEvent", () => {
       expect(await screen.findByText(/give the race a name/i)).toBeInTheDocument();
       // Still on step one.
       expect(screen.getByLabelText(/Event name/)).toBeInTheDocument();
+    });
+
+    it("names the race it thinks this one clashes with, while the name is typed", async () => {
+      existingNames.mockReturnValue(["Lari Jateng 2026"]);
+      const { user } = renderWizard();
+
+      await user.type(screen.getByLabelText(/Event name/), "lari jateng 2026");
+
+      // The existing name is quoted back rather than described, because
+      // "that name is taken" leaves an organiser hunting for which race.
+      expect(await screen.findByText(/Lari Jateng 2026/)).toBeInTheDocument();
+    });
+
+    it("lets a clashing name through, because two races may share one honestly", async () => {
+      // Annual editions repeat their name, and two cities can hold a race
+      // called the same thing. Blocking would stop the organiser who is right
+      // along with the one who is confused, and the contract does not care.
+      existingNames.mockReturnValue(["Lari Jateng 2026"]);
+      const { user } = renderWizard();
+
+      await user.type(screen.getByLabelText(/Event name/), "Lari Jateng 2026");
+
+      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+      expect(screen.queryByText(/give the race a name/i)).not.toBeInTheDocument();
+    });
+
+    it("says nothing when the index knows no race by that name", async () => {
+      existingNames.mockReturnValue(["Borobudur Marathon 2026"]);
+      const { user } = renderWizard();
+
+      await user.type(screen.getByLabelText(/Event name/), "Lari Jateng 2026");
+
+      expect(screen.queryByText(/already on the public list/i)).not.toBeInTheDocument();
     });
 
     it("marks a backwards registration window as soon as both dates exist", async () => {

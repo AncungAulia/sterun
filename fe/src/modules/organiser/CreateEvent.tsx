@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { WalletGate } from "@/components/layouts/WalletGate";
 import { useEventRun } from "@/hooks/useEventRun";
+import { useExistingEventNames } from "@/hooks/useExistingEventNames";
 import { buildEventDocument, documentHash } from "@/lib/event-document";
 import { countryName, provinceName } from "@/lib/places";
 
@@ -48,6 +49,8 @@ import {
   categoryProblem,
   type PlannedCategory,
 } from "./component/StepCategoryPlan";
+import { findNameClash } from "@/lib/event-names";
+
 import { StepAddOns, addOnProblem, type PlannedAddOn } from "./component/StepAddOns";
 import { StepDone } from "./component/StepDone";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
@@ -210,6 +213,9 @@ function Wizard() {
 
   const run = useEventRun({ name: details.name, plan, startsAt, documentText, hash });
 
+  const existingNames = useExistingEventNames();
+  const nameClash = findNameClash(details.name, existingNames);
+
 
   /*
     Done is derived, not navigated to. Finishing the run is not a move the
@@ -238,7 +244,12 @@ function Wizard() {
       <Card className="px-6">
         {shownStep === "details" ? (
           <>
-            <StepDetails details={details} onChange={setDetails} errors={errors} />
+            <StepDetails
+              details={details}
+              onChange={setDetails}
+              errors={errors}
+              nameClash={nameClash}
+            />
             <div className="mt-8 flex justify-end">
               <Button onClick={continueFromDetails}>Continue</Button>
             </div>

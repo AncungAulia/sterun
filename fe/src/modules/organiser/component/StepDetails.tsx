@@ -112,9 +112,22 @@ interface StepDetailsProps {
   onChange: (details: EventDetails) => void;
   /** Field keys to mark, shown only after somebody has pressed Continue. */
   errors?: Record<string, string>;
+  /**
+   * An existing race with the same name, if the index knows one.
+   *
+   * Separate from `errors` because it must not behave like one: it does not
+   * gate Continue, it appears while typing rather than after a press, and the
+   * organiser is allowed to be right about it.
+   */
+  nameClash?: string | null;
 }
 
-export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps) {
+export function StepDetails({
+  details,
+  onChange,
+  errors = {},
+  nameClash = null,
+}: StepDetailsProps) {
   const set = (patch: Partial<EventDetails>) => onChange({ ...details, ...patch });
 
   return (
@@ -130,6 +143,21 @@ export function StepDetails({ details, onChange, errors = {} }: StepDetailsProps
           placeholder="Jakarta Sunrise 10K"
           help="This is the name on the public list of races and on every runner's pass. It is stored with the event, and there is no way to rename it afterwards."
         />
+        {/*
+         * Below the field rather than inside it: `Field` shows an error or a
+         * hint, and this is neither. It is also not hidden behind the help
+         * tooltip, because a duplicate event costs a signature and cannot be
+         * undone, and warnings that cost something are not allowed to hide.
+         */}
+        {nameClash === null ? null : (
+          <div className="rounded-lg border border-warning-border bg-warning-surface px-4 py-3">
+            <p className="text-base text-warning">
+              A race called <span className="font-medium">{nameClash}</span> is already on the
+              public list. Carry on if this is a different race, but check first: an event cannot
+              be renamed or removed once it is created.
+            </p>
+          </div>
+        )}
         <DateTimeField
           id="race-date"
           label="Race date"
