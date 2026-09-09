@@ -1890,6 +1890,34 @@ mod upgrade {
         })
     }
 
+    /// The executable that is RUNNING on testnet at
+    /// `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` as this
+    /// change is written — fetched with `stellar contract fetch`, byte for
+    /// byte. Provenance and refresh instructions: `testdata/README.md`.
+    ///
+    /// It is here because the interesting upgrade is not "wasm X replaced by
+    /// wasm X". It is "the code that wrote the live events is replaced by the
+    /// code in this branch", and that is the only pair that can prove
+    /// `DataKey::Organiser` was appended safely.
+    const LIVE_PRE_ALLOWLIST_WASM: &[u8] =
+        include_bytes!("../testdata/event_registry_live_pre_allowlist.wasm");
+
+    /// sha256 of the artifact above, which is also the wasm hash the ledger
+    /// reports for the live contract and the one INTERFACE.md §0 freezes for
+    /// v2.0.1.
+    const LIVE_PRE_ALLOWLIST_HASH: &str =
+        "22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f";
+
+    /// Lowercase hex, so a mismatch prints the two hashes instead of two byte
+    /// arrays.
+    fn hex32(bytes: &BytesN<32>) -> std::string::String {
+        let mut out = std::string::String::new();
+        for b in bytes.to_array() {
+            out.push_str(&std::format!("{b:02x}"));
+        }
+        out
+    }
+
     /// Registry deployed from its own wasm, plus its admin.
     fn deploy_from_wasm(env: &Env) -> (Address, Address) {
         let admin = Address::generate(env);
@@ -2048,5 +2076,101 @@ mod upgrade {
             }
             .to_xdr(&env, &registry)]
         );
+    }
+
+    /// STE-36 — the in-place upgrade this branch actually ships, rehearsed.
+    ///
+    /// The old executable writes the state (it has no allowlist and no gate,
+    /// so it can); the new one replaces it; then every entry the old one wrote
+    /// is read back through the new code, and the gate that did not exist when
+    /// they were written is exercised on top of them.
+    ///
+    /// This is the checklist OpenZeppelin's upgrade guidance gives for a live
+    /// contract — write state with V1, upgrade, verify the reads, verify the
+    /// new behaviour, confirm the access control, confirm V2 is still
+    /// upgradeable — run against the exact bytes on testnet rather than
+    /// against a copy of today's build.
+    #[test]
+    fn state_written_by_the_live_wasm_survives_the_allowlist_upgrade() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let registry = env.register(LIVE_PRE_ALLOWLIST_WASM, (admin.clone(),));
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+        let scanner = Address::generate(&env);
+
+        // The fixture is the live artifact, not a lookalike: the host hashes
+        // it on upload, and that hash is what the ledger reports for
+        // CAPB6NQP… today.
+        let live_hash = env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&env, LIVE_PRE_ALLOWLIST_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_ALLOWLIST_HASH);
+
+        // -- written by the OLD code, which has no allowlist to satisfy ------
+        env.mock_all_auths();
+        let event_id =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let category_id =
+            client.add_category(&event_id, &symbol_short!("10K"), &10_000, &50, &50_000_000);
+        let jersey = client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &5);
+        client.set_event_status(&event_id, &EventStatus::Open);
+        client.add_scanner(&event_id, &scanner);
+        let race_record = wire_race_record(&env, &client);
+        MockRaceRecordClient::new(&env, &race_record).reserve(&registry, &event_id, &category_id);
+
+        let event_before = client.get_event(&event_id);
+        let category_before = client.get_category(&event_id, &category_id);
+        let addon_before = client.get_addon(&event_id, &jersey);
+        // The old code does not export the view at all.
+        assert!(client.try_is_organiser(&organiser).is_err());
+
+        // -- the upgrade ----------------------------------------------------
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        // -- everything the old code wrote still decodes ---------------------
+        assert_eq!(client.get_event(&event_id), event_before);
+        assert_eq!(
+            client.get_category(&event_id, &category_id),
+            category_before
+        );
+        assert_eq!(client.get_addon(&event_id, &jersey), addon_before);
+        assert_eq!(category_before.entered_count, 1);
+        assert_eq!(client.category_count(&event_id), 1);
+        assert_eq!(client.addon_count(&event_id), 1);
+        assert_eq!(client.event_count(), 1);
+        assert_eq!(client.get_admin(), admin);
+        assert_eq!(client.get_race_record(), race_record);
+        assert!(client.is_scanner(&event_id, &scanner));
+        // The event is still Open, so entries keep working across the upgrade:
+        // a race mid-registration does not stop selling because the admin
+        // shipped a gate for NEW events.
+        MockRaceRecordClient::new(&env, &race_record).reserve(&registry, &event_id, &category_id);
+        assert_eq!(
+            client.get_category(&event_id, &category_id).entered_count,
+            2
+        );
+
+        // -- and the gate is live, and starts closed ------------------------
+        // Nothing migrated the existing organiser onto the allowlist, which is
+        // why seeding it is a step in the deploy runbook and not an
+        // afterthought.
+        assert!(!client.is_organiser(&organiser));
+        assert_eq!(
+            client.try_create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+            Err(Ok(Error::NotAllowlistedOrganiser))
+        );
+
+        env.mock_all_auths();
+        client.add_organiser(&organiser);
+        assert_eq!(
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+            event_id + 1
+        );
+
+        // Still upgradeable — losing that would be permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
     }
 }
