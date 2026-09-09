@@ -7,12 +7,15 @@ STE-17/18/21/22) supaya tidak ada yang mengetik ulang signature kontrak.
 
 | Paket | Kontrak | Dari wasm | sha256 wasm |
 | --- | --- | --- | --- |
-| [`event-registry/`](event-registry/) | EventRegistry (C1, STE-5) | `event_registry.wasm` | `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` |
-| [`race-record/`](race-record/) | RaceRecord (C2, STE-9) | `race_record.wasm` | `75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` |
+| [`event-registry/`](event-registry/) | EventRegistry (C1, v2) | `event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` |
+| [`race-record/`](race-record/) | RaceRecord (C2, v2) | `race_record.wasm` | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` |
 
 Kontrak beku yang mereka wakili: **[`docs/specs/INTERFACE.md`](../../docs/specs/INTERFACE.md)
-v1.0.0**. Kalau ada beda antara dokumen itu dan file di sini, **dokumen itu yang
-benar** — dan bedanya itu sendiri sebuah bug (lihat "Penjaga" di bawah).
+v2.0.0**. Bindings ini bicara ke **pasangan alamat v2**; alamat v1 yang masih live menjalankan wasm
+v1 dengan signature `enter` yang berbeda, jadi jangan menyilangkan keduanya.
+
+Kalau ada beda antara dokumen itu dan file di sini, **dokumen itu yang benar** — dan bedanya itu
+sendiri sebuah bug (lihat "Penjaga" di bawah).
 
 ---
 
@@ -137,7 +140,7 @@ Sudah dibuktikan: paket probe dengan dua `file:` dependency di atas lolos
 3. **`version` di `package.json` tertulis `0.0.0`.** Itu yang dikeluarkan
    generator, dan sengaja **tidak** kita ubah supaya output tetap byte-identical
    dengan hasil regenerate. Versi yang bermakna adalah versi spec yang mereka
-   wakili — **v1.0.0**, tercatat di `docs/specs/CHANGELOG.md` — plus sha256 wasm
+   wakili — **v2.0.0**, tercatat di `docs/specs/CHANGELOG.md` — plus sha256 wasm
    di tabel paling atas. Itu dua-duanya identitas yang bisa diverifikasi;
    nomor di `package.json` tidak.
 
@@ -148,8 +151,8 @@ dan §2.4:
 
 | Paket | Export | Band |
 | --- | --- | --- |
-| `event-registry` | `Errors` | `1..=13` (EventRegistry, C1) |
-| `race-record` | `Errors` | `100..=105` (RaceRecord, C2) |
+| `event-registry` | `Errors` | `1..=15` (EventRegistry, C1) |
+| `race-record` | `Errors` | `100..=107` (RaceRecord, C2) |
 | `race-record` | `NonFungibleTokenError` | `200..=214` (OpenZeppelin) |
 
 `enter` memanggil EventRegistry dan SAC secara cross-contract, dan revert mereka
@@ -181,11 +184,17 @@ Wasm yang menghasilkan bindings ini **persis** wasm yang akan di-deploy STE-33 �
 sha256-nya ada di tabel paling atas dan di `sc/README.md`. Contract id hasil
 deploy mendarat di **`docs/deployments.md`** beserta link stellar.expert-nya.
 
-Contract id yang sudah live (STE-33), siap dipakai `new Client({ contractId })`:
+Contract id yang sudah live, siap dipakai `new Client({ contractId })`. Bindings di folder ini
+di-generate dari wasm **v2**, jadi yang cocok adalah pasangan v2:
 
 ```
-EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
-RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+# v2 (STE-35) — yang cocok dengan bindings ini
+EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
+
+# v1 (STE-33) — masih live, `enter` tanpa `addon_ids`. Butuh bindings v1.
+# EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+# RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
 ```
 
 Hash wasm on-chain kedua kontrak itu **sama persis** dengan hash di tabel paling

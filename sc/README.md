@@ -10,7 +10,7 @@ Cargo workspace untuk kontrak Sterun (Stellar/Soroban, Rust `#![no_std]`, target
 ## Spec BEKU (STE-10) — baca sebelum konsumsi kontrak ini
 
 Interface kedua kontrak, layout event, dan kode error **sudah dibekukan** di
-`docs/specs/` (beku sejak v1.0.0, 2026-08-31; folder sekarang di **v1.0.1** — patch dokumen,
+`docs/specs/` (beku, folder sekarang di **v2.0.0** — add-on + upgradeable + `Cancelled`;
 nol perubahan perilaku). Kalau kamu bikin backend, indexer, SDK, atau
 frontend, itu sumber kebenarannya — bukan file `lib.rs` ini:
 
@@ -50,8 +50,12 @@ STE-33, dan yang menjadi sumber TS bindings di [`bindings/`](bindings/):
 
 | Kontrak | Wasm | sha256 | Ukuran |
 | --- | --- | --- | ---: |
-| EventRegistry (C1) | `target/wasm32v1-none/release/event_registry.wasm` | `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` | 14.964 B |
-| RaceRecord (C2) | `target/wasm32v1-none/release/race_record.wasm` | `75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` | 19.435 B |
+| EventRegistry (C1, v2) | `target/wasm32v1-none/release/event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
+| RaceRecord (C2, v2) | `target/wasm32v1-none/release/race_record.wasm` | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21.795 B |
+
+Angka v1 (`61d85dd5…578474` / `75d38045…07919f`) masih dipakai oleh pasangan alamat
+v1 yang tetap live; keduanya tercatat di `docs/deployments.md` dan
+`docs/specs/INTERFACE.md` §0.
 
 Toolchain yang menghasilkan angka di atas:
 
@@ -213,10 +217,14 @@ Dicek mekanis dari dua sisi:
 2. `cargo test` — test `exports::…` di `contracts/race_record/src/test.rs`
    mem-parse export section wasm-nya langsung.
 
-Export surface RaceRecord yang sah (18 fungsi): `__constructor`, `enter`,
-`claim_racepack`, `record_finish`, `record_dnf`, `extend_record_ttl`,
+Export surface RaceRecord yang sah (19 fungsi): `__constructor`, `upgrade`,
+`enter`, `claim_racepack`, `record_finish`, `record_dnf`, `extend_record_ttl`,
 `record_of`, `records_of`, `verify`, `owner_of`, `balance`, `token_uri`,
 `total_supply`, `name`, `symbol`, `get_admin`, `get_registry`, `get_token`.
+
+`upgrade` (v2) memindahkan batas klaim non-transferable: yang dibuktikan
+mekanis adalah wasm yang **ter-deploy**, dan bahwa kunci admin tidak memasang
+wasm lain adalah asumsi kepercayaan. Tabelnya di `docs/specs/INTERFACE.md` §4.
 
 ## Cara RaceRecord memanggil EventRegistry
 
