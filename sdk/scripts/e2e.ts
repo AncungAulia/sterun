@@ -64,6 +64,9 @@ const HORIZON_URL = process.env.STELLAR_HORIZON_URL ?? "https://horizon-testnet.
 const FRIENDBOT = process.env.STELLAR_FRIENDBOT_URL ?? "https://friendbot.stellar.org";
 const PASSPHRASE = process.env.STELLAR_NETWORK_PASSPHRASE ?? Networks.TESTNET;
 const ENTRY_FEE = 50_000_000n; // 5 sUSD, the rehearsal event's own price
+const ADDON_FEE = 20_000_000n; // 2 sUSD for the jersey — enough to prove `enter`
+//                                charges category + add-ons in ONE transfer, which is
+//                                invisible if the add-on happens to be free.
 
 const log = (message: string) => console.log(message);
 const step = (message: string) => console.log(`\n▸ ${message}`);
@@ -192,6 +195,40 @@ async function main(): Promise<void> {
     )
   ).value;
   log(`  ✓ category ${freeCategory} free, category ${paidCategory} at ${formatStroops(ENTRY_FEE)} sUSD`);
+
+  step("addAddon ×2, and read them back (STE-37)");
+  /**
+   * Quota 1 on the jersey on purpose: it is the only way to reach
+   * AddOnQuotaFull without buying a hundred of them, and the sold-out path is
+   * the one an organiser actually meets on race week.
+   */
+  const jersey = (
+    await sterun.addAddon(
+      { eventId, code: "JERSEY_L", priceStroops: ADDON_FEE, quota: 1 },
+      asOrganiser,
+    )
+  ).value;
+  const cap = (
+    await sterun.addAddon({ eventId, code: "CAP", priceStroops: 0n, quota: 5 }, asOrganiser)
+  ).value;
+
+  assert((await sterun.addonCount(eventId)) === 2, "addonCount did not see both add-ons");
+  const addOns = await sterun.listAddOns(eventId);
+  assert(addOns.length === 2, `listAddOns returned ${addOns.length}, expected 2`);
+  assert(
+    addOns.map((a) => a.addonId).join(",") === `${jersey},${cap}`,
+    "listAddOns did not return them in id order",
+  );
+  const jerseyData = addOns[0];
+  assert(jerseyData?.code === "JERSEY_L", `add-on 0 is ${jerseyData?.code}, expected JERSEY_L`);
+  assert(jerseyData?.priceStroops === ADDON_FEE, "jersey price did not round-trip");
+  assert(jerseyData?.unitsLeft === 1, "a fresh add-on should have its whole quota left");
+  log(`  ✓ add-on ${jersey} ${formatStroops(ADDON_FEE)} sUSD (quota 1), add-on ${cap} free (quota 5)`);
+
+  step("Negative: an add-on id this event never sold");
+  await expectRevert("getAddon(99)", "AddOnNotFound", "event-registry", () =>
+    sterun.getAddon(eventId, 99),
+  );
 
   const participant = {
     name: "Sri Wahyuni",

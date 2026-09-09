@@ -28,6 +28,7 @@ export {
   type SterunSigner,
   type CallOptions,
   type CreateEventArgs,
+  type AddAddonArgs,
   type AddCategoryArgs,
   type EnterArgs,
 } from "./client.js";
@@ -41,6 +42,7 @@ export {
   toHex,
   type EventStatus,
   type RecordState,
+  type SterunAddOn,
   type SterunCategory,
   type SterunEvent,
   type SterunRecord,
