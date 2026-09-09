@@ -1586,6 +1586,280 @@ fn add_on_writes_extend_the_persistent_ttl() {
 }
 
 // ---------------------------------------------------------------------------
+// Organiser allowlist (v2.1, STE-36)
+//
+// The gate `create_event` gained, from both sides: who may open it, who may
+// close it, and what an address that is not on it can and cannot do.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn organiser_allowlist_add_then_remove() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    // Never added.
+    assert!(!client.is_organiser(&organiser));
+
+    client.add_organiser(&organiser);
+    assert!(client.is_organiser(&organiser));
+
+    client.remove_organiser(&organiser);
+    assert!(!client.is_organiser(&organiser));
+}
+
+#[test]
+fn organiser_allowlist_rejects_duplicate_and_unknown() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    assert_eq!(
+        client.try_remove_organiser(&organiser),
+        Err(Ok(Error::OrganiserNotFound))
+    );
+
+    client.add_organiser(&organiser);
+    assert_eq!(
+        client.try_add_organiser(&organiser),
+        Err(Ok(Error::OrganiserAlreadyAdded))
+    );
+
+    client.remove_organiser(&organiser);
+    assert_eq!(
+        client.try_remove_organiser(&organiser),
+        Err(Ok(Error::OrganiserNotFound))
+    );
+}
+
+/// The allowlist is the admin's, and only the admin's. An organiser who could
+/// add organisers would be able to grant away the exact thing the gate exists
+/// to withhold.
+#[test]
+fn organiser_allowlist_is_admin_only() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let impostor = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    macro_rules! signed_by_impostor {
+        ($fn_name:literal) => {
+            env.mock_auths(&[MockAuth {
+                address: &impostor,
+                invoke: &MockAuthInvoke {
+                    contract: &registry,
+                    fn_name: $fn_name,
+                    args: (target.clone(),).into_val(&env),
+                    sub_invokes: &[],
+                },
+            }]);
+        };
+    }
+
+    signed_by_impostor!("add_organiser");
+    assert_eq!(
+        client.try_add_organiser(&target),
+        Err(Err(InvokeError::Abort))
+    );
+    assert!(!client.is_organiser(&target));
+
+    // Same from the other direction: put someone on as admin, then try to take
+    // them off as a stranger.
+    env.mock_all_auths();
+    client.add_organiser(&target);
+
+    signed_by_impostor!("remove_organiser");
+    assert_eq!(
+        client.try_remove_organiser(&target),
+        Err(Err(InvokeError::Abort))
+    );
+    assert!(client.is_organiser(&target));
+}
+
+/// The point of the whole ticket: holding the keypair is not enough.
+#[test]
+fn create_event_rejects_an_organiser_who_is_not_allowlisted() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let impersonator = Address::generate(&env);
+    // `mock_all_auths` satisfies `organiser.require_auth()` for ANY address —
+    // which is precisely the situation the allowlist exists to survive.
+    env.mock_all_auths();
+
+    assert_eq!(
+        client.try_create_event(
+            &impersonator,
+            &String::from_str(&env, "Jakarta Marathon 2026"),
+            &hash(&env),
+            &uri(&env),
+            &STARTS_AT
+        ),
+        Err(Ok(Error::NotAllowlistedOrganiser))
+    );
+    // Nothing was written: no id was burned and no event exists.
+    assert_eq!(client.event_count(), 0);
+    assert_eq!(client.try_get_event(&0), Err(Ok(Error::EventNotFound)));
+}
+
+#[test]
+fn create_event_succeeds_once_the_admin_allowlists_the_organiser() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    assert_eq!(event_id, 0);
+    assert_eq!(client.get_organiser(&event_id), organiser);
+}
+
+#[test]
+fn revoking_an_organiser_closes_create_event_again() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    client.remove_organiser(&organiser);
+
+    assert_eq!(
+        client.try_create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+        Err(Ok(Error::NotAllowlistedOrganiser))
+    );
+    assert_eq!(client.event_count(), 1);
+}
+
+/// Revocation is forward-looking. The race an organiser is already running
+/// has entrants who paid, and pulling its organiser out from under it would
+/// strand them — so every per-event power keeps working on events that
+/// already exist. Only NEW events are refused.
+#[test]
+fn a_revoked_organiser_still_runs_the_events_it_already_created() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let scanner = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    client.remove_organiser(&organiser);
+
+    client.add_category(&event_id, &symbol_short!("10K"), &10_000, &50, &50_000_000);
+    client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &10);
+    client.set_event_status(&event_id, &EventStatus::Open);
+    client.add_scanner(&event_id, &scanner);
+
+    assert_eq!(client.get_event(&event_id).status, EventStatus::Open);
+    assert_eq!(client.category_count(&event_id), 1);
+    assert_eq!(client.addon_count(&event_id), 1);
+    assert!(client.is_scanner(&event_id, &scanner));
+    assert!(!client.is_organiser(&organiser));
+}
+
+/// One grant is one address. Being on the allowlist says nothing about anybody
+/// else, which is the property that makes it a gate rather than a switch.
+#[test]
+fn the_allowlist_is_per_address() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let allowed = Address::generate(&env);
+    let stranger = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&allowed);
+
+    assert!(client.is_organiser(&allowed));
+    assert!(!client.is_organiser(&stranger));
+    assert_eq!(
+        client.try_create_event(&stranger, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+        Err(Ok(Error::NotAllowlistedOrganiser))
+    );
+    client.create_event(&allowed, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    assert_eq!(client.event_count(), 1);
+}
+
+#[test]
+fn emits_organiser_added_and_removed() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    assert_eq!(
+        env.events().all(),
+        std::vec![crate::OrganiserAdded {
+            organiser: organiser.clone(),
+        }
+        .to_xdr(&env, &registry)]
+    );
+
+    client.remove_organiser(&organiser);
+    assert_eq!(
+        env.events().all(),
+        std::vec![crate::OrganiserRemoved {
+            organiser: organiser.clone(),
+        }
+        .to_xdr(&env, &registry)]
+    );
+}
+
+#[test]
+fn allowlisting_extends_the_persistent_ttl() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+
+    assert_eq!(
+        persistent_ttl(&env, &registry, DataKey::Organiser(organiser.clone())),
+        BUMP_TO
+    );
+    assert_eq!(
+        env.as_contract(&registry, || env.storage().instance().get_ttl()),
+        BUMP_TO
+    );
+}
+
+/// Removing really removes: the entry is gone, not set to `false`, so the
+/// contract stops paying rent for a revoked address.
+#[test]
+fn removing_an_organiser_drops_the_entry_rather_than_falsifying_it() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    client.remove_organiser(&organiser);
+
+    let key = DataKey::Organiser(organiser.clone());
+    assert!(!env.as_contract(&registry, || env.storage().persistent().has(&key)));
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // These tests deploy the registry from the BUILT WASM rather than from the
