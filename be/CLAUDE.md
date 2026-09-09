@@ -253,7 +253,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-782 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+783 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -328,7 +328,10 @@ ditegakkan database. v1 tidak bisa memancarkan `Cancelled`, jadi melebarkan cons
 tidak mengubah apa pun yang bisa terjadi hari ini — dia cuma menghapus satu cara perpindahan itu
 gagal.
 
-**Mengganti env ke alamat v2 BUKAN pekerjaan satu baris.** Tidak ada kolom yang membedakan kontrak:
+**Sudah pindah ke v2** (2026-09-09). Alamatnya berpindah lewat `docs/deployments.md`, bukan env var:
+nama tanpa sufiks sekarang berarti v2, yang lama dilabeli `v1`, dan ada test yang gagal kalau parser
+me-resolve pasangan v1. Index dan vault di produksi **di-truncate** saat perpindahan, karena tidak
+ada kolom pembeda kontrak. Tidak ada kolom yang membedakan kontrak:
 `events.event_id` dan `records.token_id` primary key telanjang, dan v2 menomori event dari 0 lagi —
 jadi v2 event 0 **menimpa** v1 event 0. Yang paling berbahaya bukan index-nya (itu bisa di-`rebuild`)
 tapi `participants`, yang menautkan dokumen identitas asli ke `token_id` yang sama; roster memetakan
