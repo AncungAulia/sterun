@@ -422,6 +422,56 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
     });
   });
 
+  describe("the Cancelled status v2 can emit", () => {
+    /**
+     * `Cancelled` is a v2-only variant (STE-35). Nothing points at a v2 address
+     * yet, so these prove the path is ready rather than that it is used — and
+     * they are worth having early precisely because the alternative is finding
+     * out from a poller that stopped.
+     *
+     * Three layers have to agree and each fails differently: the decoder throws
+     * on a variant it does not know, Postgres rejects one its CHECK constraint
+     * does not list, and the route schema silently omits a field it cannot
+     * express. The database was the one INTERFACE.md §8 did not mention.
+     */
+    it("decodes, stores and serves an event whose status is Cancelled", async () => {
+      // Event 0: `rebuild` walks 0..eventCount-1, so a gap would fail for a
+      // reason that has nothing to do with the status being tested.
+      chain.addEvent({
+        eventId: 0,
+        organiser: ORGANISER,
+        name: "Cancelled Run",
+        status: "Cancelled",
+      });
+      await build(new FakeEventSource([])).rebuild();
+
+      const stored = await store.getEvent(pool, 0);
+      expect(stored).toMatchObject({ status: "Cancelled" });
+    });
+
+    it("is accepted by the database constraint, not only by the decoder", async () => {
+      // The layer §8 missed. Asserted directly so a future migration that
+      // rewrites the constraint cannot quietly drop the variant again.
+      await expect(
+        pool.query(
+          `INSERT INTO events (event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger)
+           VALUES (99, $1, 'x', '\\x00', 'u', 0, 'Cancelled', 'state', 1)`,
+          [ORGANISER],
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it("still refuses a status no contract can emit", async () => {
+      await expect(
+        pool.query(
+          `INSERT INTO events (event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger)
+           VALUES (98, $1, 'x', '\\x00', 'u', 0, 'Postponed', 'state', 1)`,
+          [ORGANISER],
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
   describe("rebuild from contract state", () => {
     it("reconstructs everything from state alone, with no events at all", async () => {
       seedFullRace();

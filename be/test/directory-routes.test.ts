@@ -120,8 +120,14 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect((await app.inject({ url: "/events?status=Draft" })).json().count).toBe(0);
     });
 
-    it("rejects a status that is not one of the four", async () => {
-      const res = await app.inject({ url: "/events?status=Cancelled" });
+    it("accepts Cancelled, which the v2 registry can emit", async () => {
+      // Was the negative example until STE-35 made it a real status. Kept as a
+      // positive so the filter is proven to know about it.
+      expect((await app.inject({ url: "/events?status=Cancelled" })).statusCode).toBe(200);
+    });
+
+    it("rejects a status no contract defines", async () => {
+      const res = await app.inject({ url: "/events?status=Postponed" });
       expect(res.statusCode).toBe(400);
     });
 

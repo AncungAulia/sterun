@@ -57,7 +57,7 @@ const eventSchema = {
     metadata_hash: { type: "string", pattern: HEX_64 },
     uri: { type: "string" },
     starts_at: { type: "string", pattern: DIGITS },
-    status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed"] },
+    status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed", "Cancelled"] },
     source: { type: "string", enum: ["event", "state"] },
     last_ledger: { type: "integer" },
   },
@@ -263,7 +263,7 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
           additionalProperties: false,
           properties: {
             ...pageQuery.properties,
-            status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed"] },
+            status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed", "Cancelled"] },
           },
         },
         response: eventListResponse,

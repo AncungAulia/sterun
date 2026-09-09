@@ -253,7 +253,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-777 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+782 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -309,6 +309,31 @@ mana yang masuk ke tas.
 **Yang v1 tidak bisa: stok per ukuran.** Kuota di kontrak dihitung per kategori dan tidak tahu apa
 itu M atau L, jadi "M habis" tidak bisa ditegakkan. Cara panitia menjualnya adalah kategori terpisah
 (`10K` vs `10K_JERSEY`), dan kuota kategori jersey itulah jumlah kaos yang dipesan.
+
+## Kontrak v2 (STE-35): siap menerima, belum dipakai
+
+Kontrak v2 live dengan alamat baru. `be/` **masih menunjuk v1**, dan itu disengaja.
+
+Yang sudah dikerjakan supaya perpindahan nanti tidak gagal karena hal sepele — status `Cancelled`
+diterima di **tiga** lapis yang masing-masing gagal beda:
+
+| Lapis | Kalau tertinggal |
+| --- | --- |
+| `EVENT_STATUSES` di `src/chain/decode.ts` | decoder melempar, poller berhenti |
+| dua JSON schema di `src/routes/directory.ts` | field-nya diam-diam hilang dari response |
+| **CHECK constraint `events_status_check`** (migrasi 006) | INSERT ditolak Postgres |
+
+Lapis ketiga itu yang **tidak** disebut checklist `INTERFACE.md` §8, dan justru satu-satunya yang
+ditegakkan database. v1 tidak bisa memancarkan `Cancelled`, jadi melebarkan constraint sekarang
+tidak mengubah apa pun yang bisa terjadi hari ini — dia cuma menghapus satu cara perpindahan itu
+gagal.
+
+**Mengganti env ke alamat v2 BUKAN pekerjaan satu baris.** Tidak ada kolom yang membedakan kontrak:
+`events.event_id` dan `records.token_id` primary key telanjang, dan v2 menomori event dari 0 lagi —
+jadi v2 event 0 **menimpa** v1 event 0. Yang paling berbahaya bukan index-nya (itu bisa di-`rebuild`)
+tapi `participants`, yang menautkan dokumen identitas asli ke `token_id` yang sama; roster memetakan
+`token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah. Tiga opsi dan biayanya:
+[`OPERATIONS.md`](OPERATIONS.md) bagian "Pindah ke kontrak v2".
 
 ## Results CSV (STE-20, C7)
 
