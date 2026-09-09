@@ -137,6 +137,9 @@ echo "SUSD_SAC=$SAC"
 # --------------------------------------------------------------------------
 org() { stellar contract invoke --id "$1" --source-account "$ORG_ID" --network "$NETWORK" -- "${@:2}" 2>/dev/null | tail -1; }
 run() { stellar contract invoke --id "$1" --source-account "$RUNNER_ID" --network "$NETWORK" -- "${@:2}" 2>/dev/null | tail -1; }
+# An i128 comes back as a JSON string ("330000000"), which `$(( ))` refuses.
+# Every balance this script does arithmetic on goes through here.
+bal() { run "$SAC" balance --id "$1" | tr -d '"'; }
 # Expect a specific contract error code; the band tells you which contract it
 # came from (1..=99 EventRegistry, 100..=199 RaceRecord, 200+ OpenZeppelin).
 expect_err() {
@@ -152,14 +155,28 @@ expect_err() {
 
 # An auth failure is NOT a contract error: `require_auth` on the wrong signer
 # fails the host's auth check, so there is no `Error(Contract, #n)` to grep for.
+#
+# In practice the CLI usually does not even get as far as submitting. It
+# simulates first, the simulation reports that the STORED admin must sign, and
+# the CLI stops with "Missing signing key for account G…" naming that admin.
+# That message is the rejection — the gate reading authority out of storage
+# rather than off the caller — so it counts, and the account it names is
+# asserted rather than waved past.
 expect_auth_fail() {
+  local must_sign="$1"; shift
   if "$@" >/dev/null 2>/tmp/sterun-deploy-auth.$$; then
     echo "FAIL: expected an authorization failure but the call succeeded" >&2; exit 1
   fi
-  grep -qiE 'auth|unauthorized|InvalidAction' /tmp/sterun-deploy-auth.$$ \
-    || { echo "FAIL: the call failed, but not on authorization:" >&2; tail -3 /tmp/sterun-deploy-auth.$$ >&2; exit 1; }
+  if grep -qiE 'unauthorized|InvalidAction|Error\(Auth' /tmp/sterun-deploy-auth.$$; then
+    echo "  rejected by the host's auth check, as designed"
+  elif grep -q "Missing signing key for account ${must_sign}" /tmp/sterun-deploy-auth.$$; then
+    echo "  rejected: the call requires ${must_sign:0:8}… (the stored admin) to sign, as designed"
+  else
+    echo "FAIL: the call failed, but not on authorization:" >&2
+    tail -3 /tmp/sterun-deploy-auth.$$ >&2
+    exit 1
+  fi
   rm -f /tmp/sterun-deploy-auth.$$
-  echo "  rejected on authorization, as designed"
 }
 
 say "sanity: create_event -> add_category -> add_addon -> Open"
@@ -188,7 +205,7 @@ echo "  runner holds $(run "$SAC" balance --id "$RUNNER") stroops of sUSD"
 # log: slot_reserved (registry) -> transfer (SAC) -> mint -> record_entered.
 say "sanity: enter — one invocation, quota + add-ons + payment + mint"
 PH=feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29  # vector ph-04
-ORG_BEFORE="$(run "$SAC" balance --id "$ORG")"
+ORG_BEFORE="$(bal "$ORG")"
 TOKEN_ID="$(run "$RR" enter --runner "$RUNNER" --event_id "$EVENT_ID" --category_id "$CATEGORY_ID" \
   --addon_ids "[$JERSEY_ID,$TUMBLER_ID]" --participant_hash "$PH")"
 echo "  token_id=$TOKEN_ID"
@@ -196,7 +213,7 @@ echo "  record_of  $(run "$RR" record_of --token_id "$TOKEN_ID")"
 echo "  verify(correct hash) $(run "$RR" verify --token_id "$TOKEN_ID" --participant_hash "$PH")"
 echo "  verify(wrong hash)   $(run "$RR" verify --token_id "$TOKEN_ID" --participant_hash 0000000000000000000000000000000000000000000000000000000000000000)"
 echo "  runner sUSD    $(run "$SAC" balance --id "$RUNNER")"
-ORG_AFTER="$(run "$SAC" balance --id "$ORG")"
+ORG_AFTER="$(bal "$ORG")"
 echo "  organiser sUSD $ORG_AFTER"
 
 # The whole point of v2: ONE transfer, for category + every add-on. 5 + 5 + 3.
@@ -242,11 +259,11 @@ echo "  runner-b sUSD $(run "$SAC" balance --id "$RUNNER_B") (unchanged: nothing
 
 # ...and the stock that is left is really still buyable.
 say "sanity: a second runner buys the remaining jersey"
-ORG_BEFORE_B="$(run "$SAC" balance --id "$ORG")"
+ORG_BEFORE_B="$(bal "$ORG")"
 TOKEN_B="$(stellar contract invoke --id "$RR" --source-account "$RUNNER_B_ID" --network "$NETWORK" \
   -- enter --runner "$RUNNER_B" --event_id "$EVENT_ID" --category_id "$CATEGORY_ID" \
      --addon_ids "[$JERSEY_ID]" --participant_hash "$PH_B" 2>/dev/null | tail -1)"
-ORG_AFTER_B="$(run "$SAC" balance --id "$ORG")"
+ORG_AFTER_B="$(bal "$ORG")"
 CHARGED_B=$(( ORG_AFTER_B - ORG_BEFORE_B ))
 [ "$CHARGED_B" -eq 100000000 ] || { echo "FAIL: charged $CHARGED_B, expected 100000000 (5 + 5 sUSD)" >&2; exit 1; }
 echo "  token_id=$TOKEN_B charged $CHARGED_B stroops = category 5 + jersey 5 sUSD"
@@ -305,7 +322,7 @@ expect_err 11 stellar contract invoke --id "$ER" --source-account "$ORG_ID" --ne
 # --------------------------------------------------------------------------
 say "sanity: upgrade both contracts, admin-gated, state preserved"
 echo -n "  a non-admin upgrading EventRegistry: "
-expect_auth_fail stellar contract invoke --id "$ER" --source-account "$ORG_ID" --network "$NETWORK" \
+expect_auth_fail "$ADMIN" stellar contract invoke --id "$ER" --source-account "$ORG_ID" --network "$NETWORK" \
   -- upgrade --new_wasm_hash "$ER_HASH"
 
 stellar contract invoke --id "$ER" --source-account "$ADMIN_ID" --network "$NETWORK" \

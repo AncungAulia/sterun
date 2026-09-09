@@ -61,11 +61,22 @@ Sudah tercatat, semuanya **live di testnet**:
 | Apa | Address | Tiket |
 | --- | --- | --- |
 | SAC sUSD | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` | STE-30 |
-| EventRegistry | `CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64` | STE-33 |
-| RaceRecord | `CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4` | STE-33 |
+| EventRegistry v1 | `CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64` | STE-33 |
+| RaceRecord v1 | `CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4` | STE-33 |
+| EventRegistry v2 | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` | STE-35 |
+| RaceRecord v2 | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | STE-35 |
+
+**Dua pasang, dan keduanya hidup.** v1 non-upgradeable jadi tidak bisa diganti di tempat; v2 punya
+add-on berbayar, status `Cancelled`, dan `upgrade`. `be/` masih dijalankan terhadap v1 — dan
+`be/src/deployments.ts` **mem-parse file ini** untuk mendapat alamatnya, dengan aturan "semua baris
+berlabel sama harus sepakat". Jadi baris v2 diberi label `**EventRegistry v2**` / `**RaceRecord
+v2**`, bukan label yang sama: kalau tidak, `pnpm test` merah dengan pesan tentang alamat yang
+bentrok. Kalau kamu menambahkan pasangan berikutnya, ikuti pola itu.
 
 Entri STE-33 juga memuat rehearsal on-chain penuh (`enter` → `claim_racepack` → `record_finish`)
-berikut kasus negatifnya. Kalau kamu perlu contoh bentuk bukti yang cukup, itu contohnya.
+berikut kasus negatifnya. Kalau kamu perlu contoh bentuk bukti yang cukup, itu contohnya. Entri
+STE-35 (v2) menambah pola yang layak ditiru: angka yang di-*assert* script, bukan cuma dicetak —
+saldo organiser dibaca sebelum dan sesudah `enter`, dan selisih yang salah menggagalkan deploy.
 
 Klaim "sudah deploy" tanpa entri di file ini dianggap tidak terjadi. Reviewer grant memverifikasi
 dari sini.

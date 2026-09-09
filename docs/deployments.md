@@ -26,6 +26,14 @@ di section-section di bawah.
 | **EventRegistry** (C1) | event, kategori, kuota, harga, scanner allowlist, `reserve_slot` | [`CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64`](https://stellar.expert/explorer/testnet/contract/CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64) | STE-33 |
 | **RaceRecord** (C2) | record lari non-transferable + lifecycle, `enter` atomik | [`CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4`](https://stellar.expert/explorer/testnet/contract/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4) | STE-33 |
 | **SAC sUSD** | token biaya pendaftaran (SEP-41) yang dipanggil `enter` | [`CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU`](https://stellar.expert/explorer/testnet/contract/CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU) | STE-30 |
+| **EventRegistry v2** (C1) | v1 + add-on berbayar, status `Cancelled`, `upgrade` | [`CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`](https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU) | STE-35 |
+| **RaceRecord v2** (C2) | v1 + `enter(addon_ids)` tagih atomik, `upgrade` | [`CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW`](https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW) | STE-35 |
+
+> **Dua pasang alamat hidup berdampingan, dan itu disengaja.** v1 non-upgradeable, jadi add-on tidak
+> bisa dipasang di tempat — v2 adalah pasangan baru. Baris **EventRegistry**/**RaceRecord** tanpa
+> "v2" tetap menunjuk v1 karena `be/` masih dijalankan terhadap alamat itu (parser-nya membaca baris
+> ini; lihat `be/src/deployments.ts`). Migrasi client-nya belum dikerjakan — checklist-nya di
+> `docs/specs/INTERFACE.md` §8. Kalau kamu memulai integrasi **baru**, pakai yang v2.
 
 ### Account
 
@@ -53,11 +61,18 @@ Env var untuk client (SDK STE-15, indexer STE-16, apps STE-17/18/21/22):
 STELLAR_NETWORK=testnet
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+# v1 — yang sekarang dipakai be/ dan fe/
 EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
 RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+# v2 — add-on + upgradeable + Cancelled (STE-35). Interface: docs/specs/INTERFACE.md v2.0.0
+# EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+# RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 SUSD_ISSUER=GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW
 ```
+
+`enter` v2 memakai signature yang berbeda (`addon_ids` argumen ke-4), jadi **jangan** menunjuk
+bindings v2 ke alamat v1 atau sebaliknya — panggilannya akan ditolak host, bukan gagal anggun.
 
 ---
 
@@ -602,6 +617,173 @@ $ stellar contract info interface \
 Nol. Kontrak yang benar-benar dipanggil orang mengekspor **18 fungsi**, dan tidak satu pun di
 antaranya bisa memindahkan record. Bukan karena ada guard yang menolak — karena fungsinya memang
 tidak ada. (EventRegistry: 16 fungsi.)
+
+---
+
+## Kontrak v2 — LIVE di testnet (STE-35, 2026-09-09)
+
+Pasangan **kedua**, bukan pengganti di tempat: v1 tidak punya fungsi `upgrade`, jadi menambahkan
+add-on berbayar yang diminta Ancung (STE-35) **harus** lewat alamat baru. Sekalian dipasangi
+mekanisme upgrade, supaya ini terakhir kalinya alamat berganti.
+
+| Kontrak | Address | Wasm hash on-chain (sha256) | Explorer |
+| --- | --- | --- | --- |
+| **EventRegistry v2** (C1) | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | <https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU> |
+| **RaceRecord v2** (C2) | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | <https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW> |
+
+Interface beku yang berlaku untuk pasangan ini: **`docs/specs/INTERFACE.md` v2.0.0**.
+Yang di-deploy adalah `bash sc/scripts/deploy-testnet.sh` apa adanya, dan **seluruh** output di
+bawah ini disalin dari satu run script itu.
+
+### Parameter deploy
+
+| Kontrak | Argumen constructor |
+| --- | --- |
+| EventRegistry v2 | `admin = GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` |
+| RaceRecord v2 | `admin = GA5CC…HNYP`, `registry = CAPB6…SHJU`, `token = CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` (SAC sUSD), `name = "Sterun Race Record"`, `symbol = "STERUN"`, `base_uri = "https://sterun.xyz/record/"` |
+
+Wiring `set_race_record` (admin, sekali seumur hidup):
+<https://stellar.expert/explorer/testnet/tx/1d518f9d1701d0283605e9a6dcf4e57b43da94d3d995db2d3db5f32fc6ed27b8>
+
+```
+EventRegistry.get_admin        "GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP"
+EventRegistry.get_race_record  "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"
+RaceRecord.get_registry        "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU"
+RaceRecord.get_token           "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU"
+```
+
+### 1. Add-on berbayar, ditagih dalam SATU transfer
+
+Event rehearsal `event_id 0`: kategori `10K` seharga 5 sUSD, plus dua add-on — jersey 5 sUSD kuota
+2, tumbler 3 sUSD kuota 1.
+
+```
+event_id=0 category_id=0 quota=5 price=5 sUSD
+addon jersey=0 (5 sUSD, quota 2)  tumbler=1 (3 sUSD, quota 1)
+addon_count=2
+```
+
+`enter` dengan kedua add-on:
+
+```
+token_id=0
+record_of  {"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":null,
+            "entered_at":1788925832,"event_id":0,"finish_time_s":null,
+            "participant_hash":"feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29",
+            "result_at":null,"state":"Entered"}
+organiser received 130000000 stroops = category 5 + jersey 5 + tumbler 3 sUSD, in one transfer
+jersey  {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":1}
+tumbler {"code":"TUMBLER","price_usdc":"30000000","quota":1,"reserved_count":1}
+```
+
+Angka `130000000` itu **di-assert script**, bukan cuma dicetak: saldo organiser dibaca sebelum dan
+sesudah, dan selisih yang bukan 5+5+3 sUSD menggagalkan deploy. Record-nya membawa `addon_ids`
+`[0,1]`, jadi meja merch bisa memverifikasi pembelian dari chain, bukan dari email pesanan.
+
+### 2. Guard add-on menyala di network nyata
+
+```
+the same add-on id twice:                       reverted with #107, as designed
+more add-on ids than the event has:             reverted with #106, as designed
+the tumbler, whose quota of 1 is already gone:  reverted with #15, as designed
+```
+
+`#106`/`#107` milik RaceRecord (band `100..=199`), `#15` milik EventRegistry (band `1..=99`) yang
+merambat keluar dari `enter` apa adanya — persis gunanya band error.
+
+**All-or-nothing, dibaca balik dari chain** setelah tiga penolakan di atas:
+
+```
+category {"code":"10K","distance_m":10000,"entered_count":1,"price_usdc":"50000000","quota":5}
+jersey   {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":1}
+runner-b sUSD "975000000" (unchanged: nothing was charged)
+```
+
+`entered_count` masih 1 (cuma entry pertama), stok jersey masih 1 terpakai, dan saldo runner-b tidak
+bergerak sama sekali. Tidak ada slot yang hangus dan tidak ada uang yang diambil.
+
+Stok yang tersisa memang masih bisa dibeli:
+
+```
+token_id=1 charged 100000000 stroops = category 5 + jersey 5 sUSD
+record {"addon_ids":[0],"bib_no":1,...,"state":"Entered"}
+jersey {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":2} (sold out now)
+a third buyer for the jersey:  reverted with #15, as designed
+```
+
+### 3. `Cancelled`
+
+Event `event_id 1` dibuat, dibuka, lalu dibatalkan:
+
+```
+{"metadata_hash":"a4ea685c…","name":"Sterun Cancelled Rehearsal",
+ "organiser":"GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN",
+ "starts_at":1789000000,"status":"Cancelled","uri":"https://sterun.xyz/events/cancelled.json"}
+
+entering a cancelled event:    reverted with #4, as designed
+re-opening a cancelled event:  reverted with #11, as designed
+```
+
+`#4` = `EventNotOpen` milik EventRegistry: `reserve_slot` menuntut `Open`, jadi tidak ada guard
+tambahan yang perlu ditulis untuk membatalkan pendaftaran. `#11` = `InvalidStatus`: `Cancelled`
+terminal.
+
+### 4. Upgrade — dijalankan beneran di testnet, bukan cuma di `cargo test`
+
+Non-admin ditolak sebelum transaksinya bahkan terbentuk (CLI mensimulasikan, simulasi bilang yang
+harus tanda tangan adalah admin **yang tersimpan**, bukan pemanggil):
+
+```
+a non-admin upgrading EventRegistry:
+  rejected: the call requires GA5CCSCQ… (the stored admin) to sign, as designed
+```
+
+Lalu admin meng-upgrade **kedua** kontrak. Event `contract_upgraded` terbit di masing-masing:
+
+| Kontrak | Tx upgrade | Event |
+| --- | --- | --- |
+| EventRegistry v2 | <https://stellar.expert/explorer/testnet/tx/0785274b240b43625abb6270b94d392e2ac234e503e85cffb55c9dfc2f1892a9> | `ContractUpgraded new_wasm_hash: "22bb432e…"` |
+| RaceRecord v2 | <https://stellar.expert/explorer/testnet/tx/c89d4f7cde7633ca15fada634ec0fd84e8523156bf2ef383ee6d770f86593280> | `ContractUpgraded new_wasm_hash: "c90a4281…"` |
+
+State yang ditulis **sebelum** upgrade, dibaca **sesudah**:
+
+```
+event      {"…","name":"Sterun Testnet Rehearsal","status":"Open",…}
+category   {"code":"10K","distance_m":10000,"entered_count":2,"price_usdc":"50000000","quota":5}
+jersey     {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":2}
+record     {"addon_ids":[0,1],"bib_no":0,…,"finish_time_s":3161,"state":"Finished"}
+owner_of   "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR"
+verify     true
+addon_count 2
+```
+
+Termasuk key milik OpenZeppelin (`owner_of`) dan record yang sudah `Finished` — utuh, dan `verify`
+masih `true` terhadap `participant_hash` yang sama.
+
+Upgrade-nya memasang wasm yang **sama** dengan yang sedang jalan. Itu bukan test yang lebih lemah:
+yang diuji adalah mekanismenya, gate admin-nya, dan bertahannya storage. Memasang wasm berbeda
+berarti men-deploy artefak kedua yang tidak direview cuma untuk dibuang.
+
+### 5. Non-transferable, dicek pada kontrak yang sudah di-upgrade
+
+```
+0 transfer-ish exports on the upgraded RaceRecord
+```
+
+Dibaca dari `stellar contract info interface --contract-id` terhadap network live, **sesudah**
+upgrade. Perhatikan batas klaimnya sekarang (`docs/specs/INTERFACE.md` §4): yang dibuktikan adalah
+wasm yang **terpasang**; bahwa kunci admin tidak akan memasang wasm lain adalah asumsi kepercayaan,
+dan itulah sebabnya tiap upgrade meninggalkan `contract_upgraded` di ledger.
+
+### 6. Lifecycle v1 tetap utuh
+
+Guard lama diuji ulang di pasangan baru dan hasilnya sama:
+
+```
+record_finish before the racepack is claimed:  reverted with #103, as designed
+set_race_record a second time:                 reverted with #7, as designed
+claim_racepack a second time:                  reverted with #102, as designed
+```
 
 ---
 
