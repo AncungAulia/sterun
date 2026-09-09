@@ -1,4 +1,4 @@
-# INTERFACE — kontrak Sterun yang DIBEKUKAN (v2.0.0)
+# INTERFACE — kontrak Sterun yang DIBEKUKAN (v2.0.1)
 
 > **Status: FROZEN 2026-09-09 (v2 — upgradeable + paid add-ons + `Cancelled`).**
 > Dokumen ini adalah *handoff contract* nomor 1 di `docs/SYSTEM_DESIGN.md` §9: signature fungsi
@@ -58,7 +58,11 @@ Artefak yang dipakai saat pembekuan ini:
 | Kontrak | Wasm | Wasm hash (sha256) | Ukuran |
 | --- | --- | --- | ---: |
 | EventRegistry (C1, v2) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
-| RaceRecord (C2, v2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21.795 B |
+| RaceRecord (C2, v2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
+
+Artefak RaceRecord v2.0.0 (`c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc`, 21.795 B) sudah **digantikan di alamat yang
+sama** lewat `upgrade` — interface-nya identik, isinya beda satu optimasi internal. Riwayatnya di
+`docs/deployments.md`; itu contoh pertama v2 mengganti kode tanpa mengganti alamat.
 
 Artefak v1 yang dibekukan sebelumnya (masih live di alamat v1, lihat `docs/deployments.md`):
 `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` (C1, 14.964 B) dan

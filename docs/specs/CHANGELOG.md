@@ -50,6 +50,31 @@ migrasi tertulis, bukan patch.
 
 ---
 
+## [2.0.1] — 2026-09-09
+
+**PATCH — artefaknya berganti, interface-nya tidak.** `RaceRecord.enter` melewati panggilan
+cross-contract `addon_count` ketika `addon_ids` kosong, jadi entry tanpa add-on berbiaya persis
+seperti v1 — yang memang yang dijanjikan `INTERFACE.md` §2.1 kepada pemanggil yang mengirim `[]`.
+
+Yang **tidak** berubah, dan itulah kenapa ini PATCH: nol perubahan signature, layout event, kode
+error, tipe, maupun definisi hash/TOTP. **Bindings TS byte-identical** — generator membaca
+interface, dan interface-nya sama persis. Client yang sudah jalan tidak perlu melakukan apa pun.
+
+Yang berubah cuma tabel provenance `INTERFACE.md` §0:
+
+| | sha256 | Ukuran |
+| --- | --- | ---: |
+| RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21.795 B |
+| RaceRecord v2.0.1 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
+
+EventRegistry **tidak** ikut berubah (`22bb432e…` tetap).
+
+Dipasang ke alamat yang sudah live lewat `upgrade` — **bukan** alamat baru. Ini pemakaian pertama
+mekanisme v2 untuk apa yang memang dirancangnya, dan buktinya (tx, state sebelum/sesudah, plus
+satu `enter` di kode baru) ada di `docs/deployments.md` section 7.
+
+---
+
 ## [2.0.0] — 2026-09-09
 
 **MAJOR — signature `enter` berubah, dan kedua kontrak sekarang upgradeable.** v1 tetap live di

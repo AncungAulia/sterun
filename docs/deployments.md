@@ -629,7 +629,11 @@ mekanisme upgrade, supaya ini terakhir kalinya alamat berganti.
 | Kontrak | Address | Wasm hash on-chain (sha256) | Explorer |
 | --- | --- | --- | --- |
 | **EventRegistry v2** (C1) | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | <https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU> |
-| **RaceRecord v2** (C2) | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | <https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW> |
+| **RaceRecord v2** (C2) | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | <https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW> |
+
+> Hash RaceRecord di tabel ini **bukan** hash saat deploy. Alamatnya di-upgrade sekali setelah
+> deploy, ke wasm yang benar-benar berbeda — section 7 di bawah. Itu memang gunanya v2: alamat
+> tetap, kode berganti.
 
 Interface beku yang berlaku untuk pasangan ini: **`docs/specs/INTERFACE.md` v2.0.0**.
 Yang di-deploy adalah `bash sc/scripts/deploy-testnet.sh` apa adanya, dan **seluruh** output di
@@ -784,6 +788,66 @@ record_finish before the racepack is claimed:  reverted with #103, as designed
 set_race_record a second time:                 reverted with #7, as designed
 claim_racepack a second time:                  reverted with #102, as designed
 ```
+
+### 7. Upgrade in-place — wasm yang BEDA, alamat yang sama
+
+Bagian 4 di atas meng-upgrade ke wasm yang sama dengan yang sedang jalan. Yang ini beda: satu
+optimasi internal di `RaceRecord.enter` (melewati panggilan cross-contract `addon_count` kalau
+`addon_ids` kosong, jadi entry tanpa add-on berbiaya persis seperti v1) menghasilkan wasm baru, dan
+wasm itu dipasang ke **alamat yang sudah live** dengan `bash sc/scripts/upgrade-testnet.sh`.
+
+```
+=== EventRegistry (CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU) ===
+  live  22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f
+  built 22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f
+  identical — skipped, so the ledger records no upgrade that did not happen
+
+=== RaceRecord (CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW) ===
+  live  c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc
+  built 27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b
+  uploaded 27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b
+  now running 27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b
+```
+
+EventRegistry **dilewati** karena wasm-nya tidak berubah. Itu bukan malas-malasan: upgrade ke hash
+yang identik tetap memakan satu transaksi dan tetap menulis `contract_upgraded` ke ledger, yang
+membuat jejak audit mengklaim perubahan kode yang tidak pernah terjadi.
+
+Tx upgrade RaceRecord:
+<https://stellar.expert/explorer/testnet/tx/db3a27434e1e5da9f5eac38b3ca23c7670d0c773137b46fa13e5262697420488>
+
+```
+Event: ContractUpgraded (contract_upgraded),
+new_wasm_hash: "27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b"
+```
+
+State yang ditulis kode lama, dibaca kode baru:
+
+```
+event 0     {…,"name":"Sterun Testnet Rehearsal","status":"Open",…}
+category 0  {"code":"10K","distance_m":10000,"entered_count":2,"price_usdc":"50000000","quota":5}
+addon 0     {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":2}
+addon_count 2
+record 0    {"addon_ids":[0,1],"bib_no":0,…,"finish_time_s":3161,"state":"Finished"}
+owner_of 0  "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR"
+supply      2
+0 transfer-ish exports
+```
+
+Dan jalur yang justru diubah optimasinya dijalankan **sesudah** upgrade — `enter` dengan
+`addon_ids: []` di kontrak yang sudah berganti kode:
+
+```
+participant_hash = 764ec34cb935be1954e1205cac16b650d9f4ab100e421c97453ced4bdfb67243
+token_id = 2   charged = 50000000 stroops (harga kategori saja, tanpa add-on)
+record   {"addon_ids":[],"bib_no":2,"category_id":0,"entered_at":1788926622,"event_id":0,
+          "state":"Entered",…}
+addon 0  {"code":"JERSEY",…,"quota":2,"reserved_count":2}   ← stok tidak tersentuh
+```
+
+Record ke-3 lahir dari kode yang **berbeda** dari kode yang melahirkan record 0 dan 1, di kontrak
+dan alamat yang sama, dengan `total_supply` yang menyambung. Itu bukti paling langsung bahwa
+janji "ini terakhir kalinya alamat berganti" bisa ditagih.
 
 ---
 

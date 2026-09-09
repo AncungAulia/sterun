@@ -8,14 +8,18 @@ STE-17/18/21/22) supaya tidak ada yang mengetik ulang signature kontrak.
 | Paket | Kontrak | Dari wasm | sha256 wasm |
 | --- | --- | --- | --- |
 | [`event-registry/`](event-registry/) | EventRegistry (C1, v2) | `event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` |
-| [`race-record/`](race-record/) | RaceRecord (C2, v2) | `race_record.wasm` | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` |
+| [`race-record/`](race-record/) | RaceRecord (C2, v2) | `race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` |
 
 Kontrak beku yang mereka wakili: **[`docs/specs/INTERFACE.md`](../../docs/specs/INTERFACE.md)
-v2.0.0**. Bindings ini bicara ke **pasangan alamat v2**; alamat v1 yang masih live menjalankan wasm
+v2.0.1**. Bindings ini bicara ke **pasangan alamat v2**; alamat v1 yang masih live menjalankan wasm
 v1 dengan signature `enter` yang berbeda, jadi jangan menyilangkan keduanya.
 
 Kalau ada beda antara dokumen itu dan file di sini, **dokumen itu yang benar** — dan bedanya itu
 sendiri sebuah bug (lihat "Penjaga" di bawah).
+
+> Hash wasm RaceRecord pernah berubah sekali **tanpa** bindings ikut berubah (optimasi internal,
+> `c90a4281…` → `27749180…`). Itu wajar: generator membaca *interface*, dan interface-nya identik.
+> Jadi `git diff` kosong setelah regenerate bukan berarti kamu lupa build — cek hash-nya.
 
 ---
 
@@ -140,7 +144,7 @@ Sudah dibuktikan: paket probe dengan dua `file:` dependency di atas lolos
 3. **`version` di `package.json` tertulis `0.0.0`.** Itu yang dikeluarkan
    generator, dan sengaja **tidak** kita ubah supaya output tetap byte-identical
    dengan hasil regenerate. Versi yang bermakna adalah versi spec yang mereka
-   wakili — **v2.0.0**, tercatat di `docs/specs/CHANGELOG.md` — plus sha256 wasm
+   wakili — **v2.0.1**, tercatat di `docs/specs/CHANGELOG.md` — plus sha256 wasm
    di tabel paling atas. Itu dua-duanya identitas yang bisa diverifikasi;
    nomor di `package.json` tidak.
 

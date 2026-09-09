@@ -353,7 +353,13 @@ impl RaceRecord {
         bump_instance(&env);
 
         let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
-        check_addon_ids(&addon_ids, registry.addon_count(&event_id))?;
+        // `addon_count` is a cross-contract call, and an entry with no add-ons
+        // has nothing to check it against. Skipping it keeps the empty-list path
+        // costing exactly what v1 cost — which is what INTERFACE.md §2.1 tells
+        // callers to expect when they send `[]`.
+        if !addon_ids.is_empty() {
+            check_addon_ids(&addon_ids, registry.addon_count(&event_id))?;
+        }
 
         // Quota before money: a closed event, a full category or a sold-out
         // add-on costs the runner nothing but the failed transaction's fee.
@@ -622,11 +628,15 @@ fn bump_persistent(env: &Env, key: &DataKey) {
         .extend_ttl(key, BUMP_THRESHOLD, BUMP_TO);
 }
 
-/// Rejects an `addon_ids` list before `enter` touches any state.
+/// Rejects a non-empty `addon_ids` list before `enter` touches any state.
 ///
 /// Both bounds are checked before the duplicate scan, so the quadratic scan can
 /// only ever run over at most [`MAX_ADDONS_PER_ENTRY`] entries. A `Vec` compare
 /// is the whole scan: at these sizes a set would cost more than it saves.
+///
+/// An empty list never reaches here — see the caller. It would pass every check
+/// trivially, and reading `addon_count` to prove that costs a cross-contract
+/// call on the most common entry there is.
 fn check_addon_ids(addon_ids: &Vec<u32>, addon_count: u32) -> Result<(), Error> {
     let requested = addon_ids.len();
     if requested > MAX_ADDONS_PER_ENTRY || requested > addon_count {

@@ -79,7 +79,7 @@ Kontrak **sudah hidup di testnet**, dan sekarang ada **dua pasang**. Alamat + bu
 lengkap ada di [`docs/deployments.md`](docs/deployments.md):
 
 ```
-# v2 (STE-35) — add-on berbayar, Cancelled, upgradeable. Interface: docs/specs/INTERFACE.md v2.0.0
+# v2 (STE-35) — add-on berbayar, Cancelled, upgradeable. Interface: docs/specs/INTERFACE.md v2.0.1
 EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
 RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 
