@@ -39,7 +39,6 @@
  * happens cannot drift apart.
  */
 import { CheckIcon } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -130,24 +129,6 @@ export function StepReview({
         </div>
       )}
 
-      {run.isComplete && run.eventId !== null ? (
-        <div className="rounded-lg border border-success-border bg-success-surface px-5 py-4">
-          <p className="heading-strong text-lg text-success">
-            The event is open. Write down number <span className="numeric">{run.eventId}</span>.
-          </p>
-          <p className="mt-1 text-base text-foreground">
-            It is on the public list of races now, and people can enter.
-          </p>
-          <div className="mt-3">
-            <Link
-              href={`/events/${run.eventId}`}
-              className="text-base text-teal-500 underline underline-offset-4"
-            >
-              Open the event page
-            </Link>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

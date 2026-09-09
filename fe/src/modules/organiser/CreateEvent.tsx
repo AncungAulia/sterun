@@ -49,6 +49,7 @@ import {
   type PlannedCategory,
 } from "./component/StepCategoryPlan";
 import { StepAddOns, addOnProblem, type PlannedAddOn } from "./component/StepAddOns";
+import { StepDone } from "./component/StepDone";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepReview } from "./component/StepReview";
 import { focusField, incoherentDates, missingDetails, type Missing } from "./missing";
@@ -58,6 +59,7 @@ const STEPS = [
   { id: "distances", label: "Distances" },
   { id: "add-ons", label: "Add-ons" },
   { id: "review", label: "Review" },
+  { id: "done", label: "Done" },
 ] as const;
 type Step = (typeof STEPS)[number]["id"];
 
@@ -208,6 +210,16 @@ function Wizard() {
 
   const run = useEventRun({ name: details.name, plan, startsAt, documentText, hash });
 
+
+  /*
+    Done is derived, not navigated to. Finishing the run is not a move the
+    organiser made, and there is no way back out of it, so storing it as
+    another value of `step` would mean two sources of truth for one fact that
+    the run already owns. It also keeps Review from having to know there is a
+    step after it.
+  */
+  const shownStep: Step = run.isComplete && run.eventId !== null ? "done" : step;
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-12">
       <header>
@@ -221,10 +233,10 @@ function Wizard() {
         </p>
       </header>
 
-      <Stepper steps={STEPS} current={step} />
+      <Stepper steps={STEPS} current={shownStep} />
 
       <Card className="px-6">
-        {step === "details" ? (
+        {shownStep === "details" ? (
           <>
             <StepDetails details={details} onChange={setDetails} errors={errors} />
             <div className="mt-8 flex justify-end">
@@ -233,7 +245,7 @@ function Wizard() {
           </>
         ) : null}
 
-        {step === "distances" ? (
+        {shownStep === "distances" ? (
           <>
             <StepCategoryPlan
               categories={plan}
@@ -249,7 +261,7 @@ function Wizard() {
           </>
         ) : null}
 
-        {step === "add-ons" ? (
+        {shownStep === "add-ons" ? (
           <>
             <StepAddOns
               addOns={addOns}
@@ -266,7 +278,7 @@ function Wizard() {
           </>
         ) : null}
 
-        {step === "review" ? (
+        {shownStep === "review" ? (
           <>
             <StepReview
               details={details}
@@ -286,6 +298,10 @@ function Wizard() {
               onBack={() => setStep("add-ons")}
             />
           </>
+        ) : null}
+
+        {shownStep === "done" && run.eventId !== null ? (
+          <StepDone eventId={run.eventId} eventName={details.name.trim()} />
         ) : null}
       </Card>
     </div>

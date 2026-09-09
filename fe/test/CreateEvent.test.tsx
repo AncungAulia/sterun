@@ -201,12 +201,12 @@ describe("CreateEvent", () => {
 
       await startRun(user);
 
-      expect(await screen.findByText(/the event is open/i)).toBeInTheDocument();
+      expect(await screen.findByText(/your race is live/i)).toBeInTheDocument();
       expect(uploadEventFile).toHaveBeenCalledTimes(1);
       expect(createEvent).toHaveBeenCalledTimes(1);
       expect(addCategory).toHaveBeenCalledTimes(1);
       expect(setEventStatus).toHaveBeenCalledWith(4, "Open", expect.anything());
-      expect(screen.getByText(/write down number/i)).toHaveTextContent("4");
+      expect(screen.getByText(/knows this race as number/i)).toHaveTextContent("4");
     });
 
     it("records the address the store put the details file at", async () => {
@@ -217,7 +217,7 @@ describe("CreateEvent", () => {
       await reachReview(user);
 
       await startRun(user);
-      await screen.findByText(/the event is open/i);
+      await screen.findByText(/your race is live/i);
 
       expect(createEvent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -233,7 +233,7 @@ describe("CreateEvent", () => {
       await reachReview(user);
 
       await startRun(user);
-      await screen.findByText(/the event is open/i);
+      await screen.findByText(/your race is live/i);
 
       expect(uploadEventFile).toHaveBeenCalledWith(
         expect.objectContaining({ address: ORGANISER, contentType: "application/json" }),
@@ -264,7 +264,7 @@ describe("CreateEvent", () => {
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
       await startRun(user);
-      await screen.findByText(/the event is open/i);
+      await screen.findByText(/your race is live/i);
 
       expect(addCategory).toHaveBeenCalledWith(
         expect.objectContaining({ priceStroops: 255_000_000n, distanceM: 10_000, quota: 300 }),
@@ -279,7 +279,7 @@ describe("CreateEvent", () => {
       await reachReview(user);
 
       await startRun(user);
-      await screen.findByText(/the event is open/i);
+      await screen.findByText(/your race is live/i);
 
       const expected = BigInt(Math.floor(new Date("2026-09-28T06:00").getTime() / 1000));
       expect(createEvent).toHaveBeenCalledWith(
@@ -305,7 +305,7 @@ describe("CreateEvent", () => {
 
       await user.click(screen.getByRole("button", { name: "Carry on" }));
 
-      expect(await screen.findByText(/the event is open/i)).toBeInTheDocument();
+      expect(await screen.findByText(/your race is live/i)).toBeInTheDocument();
       // The event and the distance were not signed a second time.
       expect(createEvent).toHaveBeenCalledTimes(1);
       expect(addCategory).toHaveBeenCalledTimes(1);
@@ -369,7 +369,7 @@ describe("CreateEvent", () => {
       await waitFor(() => expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument());
       await user.click(screen.getByRole("button", { name: "Carry on" }));
 
-      await screen.findByText(/the event is open/i);
+      await screen.findByText(/your race is live/i);
       expect(createEvent).toHaveBeenCalledWith(
         expect.objectContaining({ uri: "https://example.test/event.json" }),
         expect.anything(),
