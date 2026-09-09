@@ -25,6 +25,26 @@
 //! function cannot be called. `sc/scripts/check-exports.sh` asserts this
 //! mechanically against the built wasm, and the `exports` test module runs the
 //! same assertion from `cargo test`.
+//!
+//! ## v2: the claim is now about the deployed wasm, not about the address
+//!
+//! v1 was non-upgradeable, so "this contract cannot move a record" was true
+//! forever, of the address itself. v2 carries [`RaceRecord::upgrade`], and an
+//! admin upgrade could install a wasm that does export `transfer`. Say it
+//! plainly rather than let the old sentence quietly become a half-truth:
+//!
+//! * **What is still mechanically true:** the wasm that is deployed exports no
+//!   function that can move, destroy or delegate a record. That is checked
+//!   against the artifact, not against the source, on every build and again on
+//!   the live contract during deploy.
+//! * **What is now a trust assumption:** that the admin key does not install a
+//!   wasm which changes that. It is the same trust the upgrade buys us
+//!   everywhere else, and it is why the upgrade emits [`ContractUpgraded`] —
+//!   a code change under a stable address has to be visible on the ledger.
+//!
+//! The alternative was leaving RaceRecord frozen while EventRegistry gained
+//! add-ons, which would mean the next `enter` change needs new addresses again.
+//! `docs/specs/INTERFACE.md` §4 carries the same wording for D2/D3 consumers.
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
@@ -51,6 +71,19 @@ const BUMP_THRESHOLD: u32 = 120 * DAY_IN_LEDGERS;
 const BUMP_TO: u32 = 180 * DAY_IN_LEDGERS;
 
 // ---------------------------------------------------------------------------
+// Add-ons (v2, STE-35)
+// ---------------------------------------------------------------------------
+
+/// Hard ceiling on add-ons bought in one [`RaceRecord::enter`].
+///
+/// `enter` already refuses more add-ons than the event actually has, which
+/// bounds the loop for any honest event. This is the bound that does not depend
+/// on registry state at all: an organiser who publishes a thousand add-ons
+/// cannot turn one entry into a thousand cross-contract calls plus a quadratic
+/// duplicate scan. Sixteen is far past any real race-day merch table.
+const MAX_ADDONS_PER_ENTRY: u32 = 16;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -75,6 +108,13 @@ pub struct RecordData {
     pub category_id: u32,
     /// The category sequence handed out by `EventRegistry::reserve_slot`.
     pub bib_no: u32,
+    /// The add-ons this entry paid for, in the order they were reserved (v2).
+    /// Empty for an entry that bought none.
+    ///
+    /// This is what makes a purchase checkable rather than merely claimed: the
+    /// merch desk reads the record, not an order email, to decide whether this
+    /// runner gets a jersey.
+    pub addon_ids: Vec<u32>,
     pub participant_hash: BytesN<32>,
     pub state: RecordState,
     pub entered_at: u64,
@@ -140,6 +180,12 @@ pub enum Error {
     NotAuthorized = 104,
     /// `finish_time_s == 0`.
     InvalidFinishTime = 105,
+    /// `enter` asked for more add-ons than the event has, or more than
+    /// `MAX_ADDONS_PER_ENTRY` (v2).
+    TooManyAddOns = 106,
+    /// `enter` listed the same `addon_id` twice (v2). Buying two jerseys is two
+    /// add-ons with two quotas, not one id repeated.
+    DuplicateAddOn = 107,
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +201,15 @@ pub struct RecordEntered {
     pub event_id: u32,
     pub token_id: u32,
     pub bib_no: u32,
+}
+
+/// Emitted by [`RaceRecord::upgrade`]. The export surface is the product claim
+/// here, so a change to it must leave a trace on the ledger.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUpgraded {
+    #[topic]
+    pub new_wasm_hash: BytesN<32>,
 }
 
 #[contractevent]
@@ -218,6 +273,38 @@ impl RaceRecord {
         bump_instance(&env);
     }
 
+    // -- upgrade -------------------------------------------------------------
+
+    /// Replaces this contract's own wasm. **Admin only.**
+    ///
+    /// See the module docs for what this does to the non-transferable claim:
+    /// the guarantee becomes one about the deployed artifact plus a trusted
+    /// admin key, instead of one about the address forever.
+    ///
+    /// Storage rules, which the compiler cannot enforce across an upgrade:
+    ///
+    /// * [`DataKey`] is **append-only** — never remove, rename, or retype a
+    ///   variant. The enum travels as its variant name.
+    /// * [`RecordData`] is **field-append-only in the `Option` sense only**. A
+    ///   `#[contracttype]` struct is a map keyed by field name, and decoding a
+    ///   stored value into a struct that gained a *required* field fails. A
+    ///   future version that needs more per-record data must either put it
+    ///   behind a new [`DataKey`] variant or accept that old records cannot be
+    ///   read. This is why `addon_ids` was added now, while no v2 record
+    ///   exists, rather than later.
+    /// * The OpenZeppelin owner, balance and enumeration keys belong to
+    ///   `stellar-tokens` and move with its version. Changing that dependency's
+    ///   major version in an upgrade is a storage migration, not a bump.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        read_instance_addr(&env, DataKey::Admin)?.require_auth();
+        bump_instance(&env);
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+
+        ContractUpgraded { new_wasm_hash }.publish(&env);
+        Ok(())
+    }
+
     // -- entry ---------------------------------------------------------------
 
     /// Registers `runner` for a category and mints their record. **One
@@ -232,32 +319,57 @@ impl RaceRecord {
     ///    the registry's stored `RaceRecordAddr` authorizes implicitly. Its
     ///    reverts (`QuotaFull`, `EventNotOpen`, `CategoryNotFound`, …)
     ///    propagate out of this call untouched — see the error-code note above.
-    /// 3. Pay `price_usdc` straight from the runner to the organiser. **A free
-    ///    category (`price_usdc == 0`) skips the transfer entirely**, so a free
-    ///    entry never needs the runner to hold the token — or, for a classic
-    ///    `G...` account, to carry a trustline for it at all.
-    /// 4. Mint the non-transferable record and store its [`RecordData`].
+    /// 3. Reserve every requested add-on, each of which returns the price to
+    ///    charge for the unit it took (v2, STE-35). A full add-on reverts the
+    ///    whole entry with `AddOnQuotaFull` — the runner does not get a place
+    ///    without the jersey they asked for and paid for.
+    /// 4. Pay `category.price_usdc + the add-on prices` from the runner to the
+    ///    organiser in **one transfer**. **A total of 0 skips the transfer
+    ///    entirely**, so a free entry never needs the runner to hold the token —
+    ///    or, for a classic `G...` account, to carry a trustline for it at all.
+    /// 5. Mint the non-transferable record and store its [`RecordData`],
+    ///    including which add-ons it bought.
+    ///
+    /// `addon_ids` is validated **before** any state is touched: at most
+    /// [`MAX_ADDONS_PER_ENTRY`], never more ids than the event has add-ons, and
+    /// no id twice. Wanting two jerseys means two add-ons with two quotas, not
+    /// the same id listed twice — accepting a repeat would let one entry take
+    /// two units of stock while the record only records one.
     pub fn enter(
         env: Env,
         runner: Address,
         event_id: u32,
         category_id: u32,
+        addon_ids: Vec<u32>,
         participant_hash: BytesN<32>,
     ) -> Result<u32, Error> {
         runner.require_auth();
         bump_instance(&env);
 
         let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
-        // Quota before money: a closed event or a full category costs the
-        // runner nothing but the failed transaction's fee.
+        check_addon_ids(&addon_ids, registry.addon_count(&event_id))?;
+
+        // Quota before money: a closed event, a full category or a sold-out
+        // add-on costs the runner nothing but the failed transaction's fee.
         let bib_no = registry.reserve_slot(&event_id, &category_id);
-        let price = registry.get_category(&event_id, &category_id).price_usdc;
+        let mut total = registry.get_category(&event_id, &category_id).price_usdc;
+        for addon_id in addon_ids.iter() {
+            // Reserving returns the price of the unit just taken, so the amount
+            // billed cannot drift from the stock consumed. `overflow-checks` in
+            // the release profile turns an absurd sum into a revert rather than
+            // a wrap.
+            total += registry.reserve_addon(&event_id, &addon_id);
+        }
         let organiser = registry.get_organiser(&event_id);
 
-        if price > 0 {
+        // One transfer for the whole basket. Splitting it per line item would
+        // mean a runner could be charged for the entry and then fail on the
+        // jersey — the rollback covers that either way, but a single transfer
+        // is also a single thing for the runner's wallet to show and approve.
+        if total > 0 {
             let token = read_instance_addr(&env, DataKey::TokenAddr)?;
             let to: MuxedAddress = organiser.into();
-            TokenClient::new(&env, &token).transfer(&runner, &to, &price);
+            TokenClient::new(&env, &token).transfer(&runner, &to, &total);
         }
 
         let token_id = Enumerable::sequential_mint(&env, &runner);
@@ -268,6 +380,7 @@ impl RaceRecord {
                 event_id,
                 category_id,
                 bib_no,
+                addon_ids,
                 participant_hash,
                 state: RecordState::Entered,
                 entered_at: env.ledger().timestamp(),
@@ -501,6 +614,26 @@ fn bump_persistent(env: &Env, key: &DataKey) {
     env.storage()
         .persistent()
         .extend_ttl(key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+/// Rejects an `addon_ids` list before `enter` touches any state.
+///
+/// Both bounds are checked before the duplicate scan, so the quadratic scan can
+/// only ever run over at most [`MAX_ADDONS_PER_ENTRY`] entries. A `Vec` compare
+/// is the whole scan: at these sizes a set would cost more than it saves.
+fn check_addon_ids(addon_ids: &Vec<u32>, addon_count: u32) -> Result<(), Error> {
+    let requested = addon_ids.len();
+    if requested > MAX_ADDONS_PER_ENTRY || requested > addon_count {
+        return Err(Error::TooManyAddOns);
+    }
+    for i in 0..requested {
+        for j in (i + 1)..requested {
+            if addon_ids.get_unchecked(i) == addon_ids.get_unchecked(j) {
+                return Err(Error::DuplicateAddOn);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn read_instance_addr(env: &Env, key: DataKey) -> Result<Address, Error> {

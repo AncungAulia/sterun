@@ -153,6 +153,9 @@
                   "u32": 0
                 },
                 {
+                  "vec": []
+                },
+                {
                   "bytes": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
                 }
               ]
@@ -731,6 +734,14 @@
               "durability": "persistent",
               "val": {
                 "map": [
+                  {
+                    "key": {
+                      "symbol": "addon_ids"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
                   {
                     "key": {
                       "symbol": "bib_no"
