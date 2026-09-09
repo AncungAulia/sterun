@@ -7,6 +7,22 @@
 //! devices).
 //!
 //! See `docs/SYSTEM_DESIGN.md` section 3.1 for the authoritative design.
+//!
+//! ## v2 — upgradeable
+//!
+//! Unlike v1 (deployed 2026-09-04, permanently frozen at its address), this
+//! contract carries [`EventRegistry::upgrade`]: the admin can replace the
+//! contract's own wasm in place with `update_current_contract_wasm`. Soroban
+//! upgrades are protocol-level bytecode replacement — no proxy, no
+//! `delegatecall`, and storage stays where it is and is simply reinterpreted by
+//! the new code.
+//!
+//! That last part is the whole risk, so it is a hard rule here: **storage keys
+//! are append-only, forever**. Never remove a [`DataKey`] variant, never rename
+//! one, never change the type stored under one. A `#[contracttype]` enum is
+//! encoded as a vector whose first element is the *variant name*, so adding
+//! variants is safe and renaming one silently orphans every entry written under
+//! the old name.
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
@@ -167,6 +183,16 @@ pub struct ScannerRemoved {
     pub scanner: Address,
 }
 
+/// Emitted by [`EventRegistry::upgrade`]. An indexer that has to explain why a
+/// contract's behaviour changed under a stable address needs the ledger to say
+/// so; this is that record.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUpgraded {
+    #[topic]
+    pub new_wasm_hash: BytesN<32>,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlotReserved {
@@ -205,6 +231,36 @@ impl EventRegistry {
         env.storage()
             .instance()
             .set(&DataKey::RaceRecordAddr, &race_record);
+        Ok(())
+    }
+
+    // -- upgrade -------------------------------------------------------------
+
+    /// Replaces this contract's own wasm. **Admin only.**
+    ///
+    /// Soroban upgrades are protocol-level: the executable is swapped in place
+    /// and the contract keeps its address, its storage and its balances. There
+    /// is no proxy and no `delegatecall`, so there is also no storage-slot
+    /// aliasing to get wrong — but the new code does reinterpret the *existing*
+    /// entries, which is why [`DataKey`] is append-only forever (see the module
+    /// docs).
+    ///
+    /// Two consequences worth knowing before calling this:
+    ///
+    /// * The swap takes effect **after** this invocation finishes, so the new
+    ///   code cannot run in the same transaction. A migration therefore needs a
+    ///   second call.
+    /// * `new_wasm_hash` must already be uploaded to the ledger, and nothing
+    ///   checks that it is a *Sterun* contract, or that it kept an `upgrade`
+    ///   function of its own. Upgrading to a wasm without one ends
+    ///   upgradeability permanently.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        read_admin(&env)?.require_auth();
+        bump_instance(&env);
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+
+        ContractUpgraded { new_wasm_hash }.publish(&env);
         Ok(())
     }
 

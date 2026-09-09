@@ -1119,3 +1119,168 @@ fn a_later_write_re_extends_a_decayed_ttl() {
         BUMP_TO
     );
 }
+
+// ---------------------------------------------------------------------------
+// Upgrade (v2)
+//
+// These tests deploy the registry from the BUILT WASM rather than from the
+// native `EventRegistry` type, because that is the only form
+// `update_current_contract_wasm` can actually replace. They therefore need
+// `stellar contract build` to have run first — the same ordering requirement
+// the RaceRecord export test documents.
+// ---------------------------------------------------------------------------
+mod upgrade {
+    use super::*;
+    use soroban_sdk::Bytes;
+    use std::path::PathBuf;
+
+    fn wasm_path(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/wasm32v1-none/release")
+            .join(name)
+    }
+
+    fn wasm_bytes(name: &str) -> std::vec::Vec<u8> {
+        let path = wasm_path(name);
+        std::fs::read(&path).unwrap_or_else(|e| {
+            panic!(
+                "cannot read {}: {e}\nRun `cd sc && stellar contract build` first — the upgrade \
+                 tests replace a real executable, so they need one.",
+                path.display()
+            )
+        })
+    }
+
+    /// Registry deployed from its own wasm, plus its admin.
+    fn deploy_from_wasm(env: &Env) -> (Address, Address) {
+        let admin = Address::generate(env);
+        let wasm = wasm_bytes("event_registry.wasm");
+        let registry = env.register(wasm.as_slice(), (admin.clone(),));
+        (admin, registry)
+    }
+
+    fn upload(env: &Env, name: &str) -> BytesN<32> {
+        let wasm = wasm_bytes(name);
+        env.deployer()
+            .upload_contract_wasm(Bytes::from_slice(env, &wasm))
+    }
+
+    /// The point of the whole exercise: state written by the old executable is
+    /// read back, unchanged, by the new one.
+    #[test]
+    fn state_written_before_an_upgrade_reads_back_after_it() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+        env.mock_all_auths();
+        let scanner = Address::generate(&env);
+        client.add_scanner(&event_id, &scanner);
+        let event_before = client.get_event(&event_id);
+        let category_before = client.get_category(&event_id, &category_id);
+
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        assert_eq!(client.get_event(&event_id), event_before);
+        assert_eq!(
+            client.get_category(&event_id, &category_id),
+            category_before
+        );
+        assert_eq!(client.category_count(&event_id), 1);
+        assert_eq!(client.event_count(), 1);
+        assert!(client.is_scanner(&event_id, &scanner));
+        // And the new executable is still upgradeable — losing that would be
+        // permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+    }
+
+    /// The executable really is replaced, not merely re-pointed at itself: after
+    /// upgrading to a DIFFERENT contract's wasm the registry's own functions are
+    /// gone, while every storage entry it wrote is still sitting there intact.
+    ///
+    /// Nobody would ship this upgrade. It is the cheapest way to prove that the
+    /// two halves — code and state — really are independent, which is exactly
+    /// the property the append-only storage rule exists to protect.
+    #[test]
+    fn upgrading_swaps_the_code_and_leaves_the_storage_alone() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+        let event_before = client.get_event(&event_id);
+
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "race_record.wasm"));
+
+        // EventRegistry's surface is gone with its code.
+        assert!(client.try_event_count().is_err());
+
+        // The entry it wrote is untouched and still decodes as `EventData`.
+        let after: EventData = env
+            .as_contract(&registry, || {
+                env.storage().persistent().get(&DataKey::Event(event_id))
+            })
+            .expect("the event entry survived the executable swap");
+        assert_eq!(after, event_before);
+    }
+
+    #[test]
+    fn upgrade_rejects_a_non_admin() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let stranger = Address::generate(&env);
+        let hash = upload(&env, "event_registry.wasm");
+
+        // The stranger signs for itself; the contract requires the *stored* admin.
+        env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &registry,
+                fn_name: "upgrade",
+                args: (hash.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert_eq!(client.try_upgrade(&hash), Err(Err(InvokeError::Abort)));
+    }
+
+    /// An unknown hash cannot be installed, so a typo cannot brick the contract.
+    #[test]
+    fn upgrade_rejects_a_wasm_hash_that_was_never_uploaded() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+
+        env.mock_all_auths();
+        let result = client.try_upgrade(&BytesN::from_array(&env, &[9u8; 32]));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn emits_contract_upgraded() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let hash = upload(&env, "event_registry.wasm");
+
+        env.mock_all_auths();
+        client.upgrade(&hash);
+
+        assert_eq!(
+            env.events().all(),
+            std::vec![crate::ContractUpgraded {
+                new_wasm_hash: hash,
+            }
+            .to_xdr(&env, &registry)]
+        );
+    }
+}
