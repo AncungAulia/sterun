@@ -1722,6 +1722,24 @@ mod upgrade {
     }
 
     /// An unknown hash cannot be installed, so a typo cannot brick the contract.
+    /// The same call against a NATIVELY registered contract.
+    ///
+    /// The tests above are the ones that mean something on a real network, but
+    /// they execute the contract as wasm, so the Rust source is never
+    /// instrumented and `upgrade` reads as dead code in the coverage report.
+    /// Running it natively too keeps the report honest about what is exercised.
+    #[test]
+    fn upgrade_runs_natively_too() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        assert_eq!(client.event_count(), 0);
+    }
+
     #[test]
     fn upgrade_rejects_a_wasm_hash_that_was_never_uploaded() {
         let env = Env::default();

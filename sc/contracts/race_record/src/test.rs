@@ -1996,6 +1996,19 @@ mod upgrade {
         w.records().upgrade(&upload(&w.env, "race_record.wasm"));
     }
 
+    /// The same call against the NATIVELY registered contract the rest of this
+    /// file uses. The wasm tests above are the ones that mean something on a
+    /// real network, but they execute the contract as wasm, so the Rust source
+    /// is never instrumented and `upgrade` reads as dead code in the coverage
+    /// report. Running it natively too keeps the report honest.
+    #[test]
+    fn upgrade_runs_natively_too() {
+        let w = World::new();
+        w.env.mock_all_auths();
+        w.records().upgrade(&upload(&w.env, "race_record.wasm"));
+        assert_eq!(w.records().total_supply(), 0);
+    }
+
     #[test]
     fn upgrade_rejects_a_non_admin() {
         let w = wasm_world();
