@@ -131,7 +131,9 @@ describe("primitives", () => {
   });
 
   it.each([
-    ["an unknown variant", ["Cancelled"]],
+    // Not "Cancelled": that is a real EventStatus now (STE-35), and using it
+    // here would read as though it were invalid everywhere.
+    ["an unknown variant", ["Postponed"]],
     ["a two-element vec", ["Entered", "Finished"]],
     ["an empty vec", []],
     ["a number", 0],
