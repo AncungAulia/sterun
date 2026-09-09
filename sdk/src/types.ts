@@ -25,7 +25,12 @@
  * enough to make `enter` fail with an error the caller cannot act on. The names
  * carry the unit so nobody has to guess.
  */
-import type { EventData, CategoryData, EventStatus as BindingEventStatus } from "../vendor-dist/event-registry.js";
+import type {
+  AddOnData,
+  EventData,
+  CategoryData,
+  EventStatus as BindingEventStatus,
+} from "../vendor-dist/event-registry.js";
 import type { RecordData, RecordState as BindingRecordState } from "../vendor-dist/race-record.js";
 
 /**
@@ -91,6 +96,30 @@ export interface SterunCategory {
   priceStroops: bigint;
   /** `quota - enteredCount`, never negative. Convenience, not chain state. */
   slotsLeft: number;
+}
+
+/**
+ * One paid extra a runner can buy with their entry — a jersey, a cap, a tumbler.
+ *
+ * Deliberately the same shape as {@link SterunCategory}: both are per-event,
+ * id-addressed, priced in stroops and stock-limited, so giving them different
+ * shapes would be inventing a second vocabulary for one idea.
+ *
+ * `unitsLeft` rather than `slotsLeft` is the one word that differs. A category
+ * sells a place in a race; an add-on sells a thing off a shelf, and calling a
+ * jersey a slot reads as a copy-paste rather than a decision.
+ */
+export interface SterunAddOn {
+  eventId: number;
+  addonId: number;
+  /** Soroban `Symbol`, e.g. `JERSEY_L`. */
+  code: string;
+  /** Price in token stroops (7 decimals). Never a float — see sdk/CLAUDE.md. */
+  priceStroops: bigint;
+  quota: number;
+  reservedCount: number;
+  /** `quota - reservedCount`, never negative. Convenience, not chain state. */
+  unitsLeft: number;
 }
 
 /** One race record. The verifiable thing this whole protocol exists to produce. */
@@ -169,6 +198,18 @@ export function toSterunEvent(eventId: number, data: EventData): SterunEvent {
     uri: data.uri,
     startsAt: data.starts_at,
     status: toEventStatus(data.status),
+  };
+}
+
+export function toSterunAddOn(eventId: number, addonId: number, data: AddOnData): SterunAddOn {
+  return {
+    eventId,
+    addonId,
+    code: data.code,
+    priceStroops: data.price_usdc,
+    quota: data.quota,
+    reservedCount: data.reserved_count,
+    unitsLeft: Math.max(0, data.quota - data.reserved_count),
   };
 }
 

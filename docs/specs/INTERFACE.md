@@ -580,12 +580,35 @@ James dan Ancung — jadi dicatat di sini supaya tidak ada yang menemukannya lew
 
 | Paket | Yang harus berubah | Kalau tidak diubah |
 | --- | --- | --- |
-| `sdk/` | `EventStatus` menerima `"Cancelled"` (`src/types.ts`, `eventStatusSchema` di `src/schema.ts`) | `SterunClient` menolak event yang dibatalkan saat parsing |
-| `sdk/` | `EnterArgs.addOnIds` diteruskan ke `enter` — **sudah dikerjakan** di PR ini, karena tanpa itu `pnpm typecheck` merah | — |
-| `be/` | `EVENT_STATUSES` (`src/chain/decode.ts`) + dua JSON schema di `src/routes/directory.ts` | indexer gagal men-decode event yang dibatalkan |
+| `sdk/` | ~~`EventStatus` menerima `"Cancelled"`~~ — **selesai** | — |
+| `sdk/` | ~~`EnterArgs.addOnIds` diteruskan ke `enter`~~ — **selesai** | — |
+| `sdk/` | ~~Method add-on di `SterunClient`~~ — **selesai (STE-37)**: `addAddon`, `getAddon`, `listAddOns`, `addonCount`, tipe `SterunAddOn` | — |
+| `be/` | ~~`EVENT_STATUSES` + JSON schema `directory.ts`~~ — **selesai**, plus CHECK constraint `events_status_check` (migrasi 006) yang baris ini dulu tidak sebut | — |
+| `be/` | ~~alamat v2~~ — **selesai**: `be/` dan `fe/` menunjuk pasangan v2, index + vault di-truncate | — |
 | `be/` | opsional: index `add_on_reserved` untuk laporan penjualan add-on | tidak ada data add-on di roster |
-| `fe/` | `EventStatusBadge` butuh warna untuk `Cancelled` | badge kosong / lookup `undefined` |
+| `fe/` | ~~`EventStatusBadge` butuh warna untuk `Cancelled`~~ — **selesai** | — |
 | `fe/` | UI pilih add-on di alur entry (STE-21) | add-on tidak bisa dibeli lewat web app |
+| `fe/` | UI harga + kuota add-on di organiser console (STE-17) | console masih model v1: add-on sebagai deskripsi, tanpa harga dan tanpa stok |
+
+> **Baris `fe/` punya prasyarat yang dulu tidak tertulis di sini, dan itu menahan STE-21 diam-diam.**
+> Untuk menampilkan add-on yang bisa dipilih, `fe/` harus bisa **membaca** add-on sebuah event — dan
+> sampai STE-37 `SterunClient` tidak punya satu pun method add-on. Bukan hanya membuatnya yang
+> terhalang; membacanya juga. Yang membuat itu tidak kelihatan: `sdk/vendor/event-registry.ts`
+> **punya** semua fungsinya, jadi sekilas terlihat siap — padahal itu cetakan otomatis dari wasm,
+> bukan permukaan yang boleh dipakai (`registry` dan `record` private, bindings tidak di-export dari
+> `src/index.ts`).
+>
+> Sekarang tersedia:
+>
+> ```ts
+> const addOns = await sterun.listAddOns(eventId);   // SterunAddOn[]
+> // { addonId, code, priceStroops, quota, reservedCount, unitsLeft }
+> await sterun.enter({ runner, eventId, categoryId, addOnIds: [0, 2], participantHash }, asRunner);
+> ```
+>
+> `reserve_addon` **tidak** di-wrap dan tidak akan: dia memanggil `race_record.require_auth()`, jadi
+> itu langkah antar-kontrak di dalam `enter`, bukan sesuatu yang boleh dipanggil client. Mem-wrap-nya
+> cuma memberi orang cara memanggil sesuatu yang selalu revert.
 
 `be/` men-decode `RecordData` per nama field, jadi `addon_ids` yang baru **tidak** merusaknya —
 field itu hanya diabaikan sampai ada yang memakainya.

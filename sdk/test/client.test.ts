@@ -213,6 +213,99 @@ describe("reads convert the contract's shape into the caller's", () => {
     expect(registry.calls[2]?.args).toEqual({ event_id: 4, category_id: 1 });
   });
 
+  // --- add-ons (STE-37) -----------------------------------------------------
+
+  it("addAddon maps its arguments onto add_addon the right way round", async () => {
+    // The failure this catches is the same shape as the addCategory one: a
+    // price and a quota are both numbers, and swapping them puts a 50-unit
+    // jersey on sale for 50 stroops without anything looking wrong.
+    const { client, registry } = clientWith({ add_addon: good(ok(2)) });
+
+    const sent = await client.addAddon({
+      eventId: 4,
+      code: "JERSEY_L",
+      priceStroops: 500_000_000n,
+      quota: 50,
+    });
+
+    expect(sent.value).toBe(2);
+    expect(registry.calls[0]?.method).toBe("add_addon");
+    expect(registry.calls[0]?.args).toEqual({
+      event_id: 4,
+      code: "JERSEY_L",
+      price_usdc: 500_000_000n,
+      quota: 50,
+    });
+  });
+
+  it("getAddon maps AddOnData onto the SDK shape, units left included", async () => {
+    const { client } = clientWith({
+      get_addon: good(ok({ code: "CAP", price_usdc: 120_000_000n, quota: 40, reserved_count: 37 })),
+    });
+
+    await expect(client.getAddon(4, 1)).resolves.toEqual({
+      eventId: 4,
+      addonId: 1,
+      code: "CAP",
+      priceStroops: 120_000_000n,
+      quota: 40,
+      reservedCount: 37,
+      unitsLeft: 3,
+    });
+  });
+
+  it("never reports negative units left", async () => {
+    // quota can be lowered under a reserved_count that already passed it, and
+    // "-2 left" on a race-day screen is worse than "0 left".
+    const { client } = clientWith({
+      get_addon: good(ok({ code: "CAP", price_usdc: 0n, quota: 5, reserved_count: 9 })),
+    });
+    await expect(client.getAddon(4, 0)).resolves.toMatchObject({ unitsLeft: 0 });
+  });
+
+  it("listAddOns walks the count and returns them in id order", async () => {
+    const { client, registry } = clientWith({
+      addon_count: good(2),
+      get_addon: good(ok({ code: "JERSEY_L", price_usdc: 0n, quota: 10, reserved_count: 1 })),
+    });
+
+    const addOns = await client.listAddOns(4);
+
+    expect(addOns.map((a) => a.addonId)).toEqual([0, 1]);
+    expect(registry.calls.map((c) => c.method)).toEqual([
+      "addon_count",
+      "get_addon",
+      "get_addon",
+    ]);
+    expect(registry.calls[1]?.args).toEqual({ event_id: 4, addon_id: 0 });
+    expect(registry.calls[2]?.args).toEqual({ event_id: 4, addon_id: 1 });
+  });
+
+  it("listAddOns returns [] for an event selling nothing, without asking further", async () => {
+    // The edge that a fan-out gets wrong by looping from 0 to -1 or by asking
+    // for add-on 0 anyway and surfacing AddOnNotFound as though it were a bug.
+    const { client, registry } = clientWith({ addon_count: good(0) });
+
+    await expect(client.listAddOns(4)).resolves.toEqual([]);
+    expect(registry.calls.map((c) => c.method)).toEqual(["addon_count"]);
+  });
+
+  it("surfaces AddOnNotFound(14) as a contract error, not a decode failure", async () => {
+    const { client } = clientWith({ get_addon: reverting(14) });
+    await expect(client.getAddon(4, 99)).rejects.toThrow(SterunContractError);
+    await expect(client.getAddon(4, 99)).rejects.toThrow(/AddOnNotFound/);
+  });
+
+  it("surfaces AddOnQuotaFull(15) from the registry band, not the record band", async () => {
+    // 15 is in 1..=99, so it must resolve against EventRegistry's map. The same
+    // number read against RaceRecord's would name a different error entirely,
+    // which is the whole reason the bands exist.
+    const { client } = clientWith({ add_addon: reverting(15) });
+    await expect(
+      client.addAddon({ eventId: 4, code: "JERSEY_S", priceStroops: 0n, quota: 1 }),
+    ).rejects.toThrow(/AddOnQuotaFull/);
+  });
+
   it("recordsOfDetailed resolves each id it was given", async () => {
     const { client, record } = clientWith(
       {},
