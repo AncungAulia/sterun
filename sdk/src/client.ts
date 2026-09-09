@@ -248,6 +248,43 @@ export class SterunClient {
   }
 
   // ---------------------------------------------------------------------------
+  // EventRegistry (C1) — admin side: the organiser allowlist (STE-36)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Put an address on the organiser allowlist. **The contract's admin
+   * authorizes**, not the organiser.
+   *
+   * `createEvent` needs this. `organiser.require_auth()` proves the caller
+   * holds the keypair and says nothing about `name`, which is a free string —
+   * so without the allowlist anyone can publish "Jakarta Marathon 2026". An
+   * address that is not on it gets `NotAllowlistedOrganiser(18)`.
+   *
+   * Reverts `OrganiserAlreadyAdded(16)` if the address is already on it.
+   */
+  async addOrganiser(organiser: string, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "addOrganiser",
+      () => this.registry.add_organiser({ organiser }, this.callOptions(options)),
+    );
+  }
+
+  /**
+   * Take an address off the allowlist. **Admin authorizes.** Reverts
+   * `OrganiserNotFound(17)` if it was not on it.
+   *
+   * Forward-looking only: events the address already created keep it as their
+   * organiser, with every per-event power intact. What it loses is the ability
+   * to create new ones.
+   */
+  async removeOrganiser(organiser: string, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "removeOrganiser",
+      () => this.registry.remove_organiser({ organiser }, this.callOptions(options)),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // EventRegistry (C1) — organiser side
   // ---------------------------------------------------------------------------
 
@@ -426,6 +463,15 @@ export class SterunClient {
   }
 
   /** Never reverts: `false` for an unknown event or an address never added. */
+  /**
+   * Whether the address may call `createEvent` at all (STE-36). This is the
+   * read a console uses to decide whether to show the form; the contract is
+   * what enforces it, so skipping this check gets a revert, not an event.
+   */
+  async isOrganiser(address: string): Promise<boolean> {
+    return runRead("isOrganiser", () => this.registry.is_organiser({ addr: address }));
+  }
+
   async isScanner(eventId: number, address: string): Promise<boolean> {
     return runRead("isScanner", () => this.registry.is_scanner({ event_id: eventId, addr: address }));
   }

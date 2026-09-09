@@ -371,8 +371,13 @@ Itu yang dicatat di event metadata supaya hasil yang ter-publish tetap tamper-ev
 (SYSTEM_DESIGN §11 risiko 4).
 
 ```bash
-pnpm --filter be e2e:results   # butuh DATABASE_URL + PII_KEYS; bikin event baru di testnet
+pnpm --filter be e2e:results   # butuh DATABASE_URL + PII_KEYS + STERUN_ADMIN_SECRET
 ```
+
+`STERUN_ADMIN_SECRET` sejak STE-36: kedua script e2e (`e2e:results`, `e2e:addons`) membuat
+organiser sekali-pakai, dan `create_event` sekarang gated allowlist organiser milik admin. Jadi
+script-nya meng-`addOrganiser` dulu dengan kunci admin. Tanpa secret-nya mereka gagal keras di
+langkah itu, bukan di tengah flow.
 
 ## File metadata event (untuk STE-17)
 

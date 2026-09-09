@@ -126,7 +126,7 @@ sesuatu yang berbeda dari yang disimulasikan.
 - **Unit + integration**: `test/`, nol network, lewat seam struktural
   (`AssembledLike` di `tx.ts` dan opsi `bindings` di `SterunClient`) — pola yang
   sama dengan `ContractCaller` di `be/`. Ini yang jalan di `typescript.yml`.
-- **E2E**: `scripts/e2e.ts` melawan testnet live, plus **7 negative case** yang
+- **E2E**: `scripts/e2e.ts` melawan testnet live, plus **8 negative case** yang
   masing-masing memastikan varian **dan** band-nya benar. Buktinya di-commit ke
   `docs/deployments.md`.
 
@@ -196,3 +196,11 @@ kaos sebagai "slot" terbaca seperti hasil salin-tempel, bukan keputusan.
 - **Leg `enter` berbayar di e2e** — butuh `SUSD_DISTRIBUTOR_SECRET` di `be/.env`.
   Script-nya sudah menangani, dan kalau secret tidak ada dia **bilang** dia
   melewatinya, bukan diam-diam lulus dengan test yang lebih lemah.
+- **`STERUN_ADMIN_SECRET` sekarang WAJIB untuk e2e** (STE-36). `create_event`
+  gated allowlist organiser milik admin, dan organiser tidak bisa memberi izin
+  ke dirinya sendiri — itu justru gunanya gerbang itu. Jadi script-nya
+  meng-`addOrganiser` dulu untuk wallet sekali-pakai yang dia buat, lalu
+  membuktikan gerbangnya dari sisi negatif: satu address yang tidak
+  di-allowlist ditolak `NotAllowlistedOrganiser(18)`. Tanpa secret-nya script
+  **gagal keras**, bukan melewati langkah — tidak ada event berarti tidak ada
+  apa pun setelahnya.

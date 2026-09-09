@@ -46,6 +46,24 @@ async function friendbot(address: string, url: string): Promise<void> {
   if (!res.ok) throw new Error(`friendbot failed for ${address}: ${res.status}`);
 }
 
+/**
+ * The contract admin. Since STE-36 `create_event` is gated on the admin's
+ * organiser allowlist, so a throwaway organiser has to be granted access
+ * before it can create anything — an organiser cannot grant it to itself,
+ * which is the point of the gate.
+ */
+function adminKeypair(): Keypair {
+  const secret = process.env.STERUN_ADMIN_SECRET;
+  if (!secret) {
+    throw new Error(
+      "STERUN_ADMIN_SECRET is not set. Since STE-36 `create_event` needs the admin's " +
+        "organiser allowlist, so this script cannot create an event without it. It is the " +
+        "sterun-admin secret from the repo root .env (testnet only).",
+    );
+  }
+  return Keypair.fromSecret(secret);
+}
+
 async function main(): Promise<void> {
   loadEnvFile();
   const config = loadConfig();
@@ -68,6 +86,13 @@ async function main(): Promise<void> {
 
   const sterun = new SterunClient({ ...TESTNET, contracts });
   const asOrganiser = SterunClient.as(organiser);
+
+  step("Allowlisting the throwaway organiser (admin, STE-36)");
+  await sterun.addOrganiser(organiser.publicKey(), SterunClient.as(adminKeypair()));
+  assert(
+    await sterun.isOrganiser(organiser.publicKey()),
+    "the organiser is still not on the allowlist after add_organiser",
+  );
 
   step("Creating an event with one free category");
   const { value: eventId } = await sterun.createEvent(
