@@ -28,6 +28,15 @@ const badgeVariants = cva(
         warning:
           "border-warning-border bg-warning-surface text-warning [a&]:hover:bg-warning-surface/80",
         accent: "border-teal-200 bg-teal-50 text-teal-700 [a&]:hover:bg-teal-100",
+        /**
+         * Added for Sterun. `secondary` maps to n-100, which is a shade off the
+         * page itself, so a chip using it reads as an outline chip with the
+         * border missing. This is the filled grey the "you cannot enter this,
+         * and nothing is wrong" states need in order to sit apart from
+         * `outline` — see EventStatusBadge on why Draft and Closed must not
+         * look alike.
+         */
+        muted: "border-n-300 bg-n-200 text-n-600 [a&]:hover:bg-n-300",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
       },
     },

@@ -5,29 +5,34 @@
  * directory turns on, so it is the only status that gets the positive tone. The
  * other four are all "you cannot enter this", and differ only in why:
  *
- *   Draft      the organiser has not opened it yet
- *   Closed     entries were open and are not any more, but the race is still on
+ *   Draft      the organiser has not opened it yet — outline, the faintest
+ *   Closed     entries are shut, but the race is still on — filled grey
  *   Completed  the race has been run and results published (terminal)
  *   Cancelled  the race is off (terminal) — contracts v2
  *
- * `Cancelled` borrows `Closed`'s tone for now, and those two are exactly the
- * pair a runner must not confuse, since one of them means the race is still on.
- * Since the shadcn migration this badge also has `destructive`, so giving
- * Cancelled a tone of its own is a design call still open rather than something
- * the palette forbids.
+ * Two pairs have to stay apart, and neither is about looking nice:
  *
- * Colour alone never carries that, which is why the status word is written out
- * and repeated in `data-status`.
+ * `Draft` and `Closed` are both grey because nothing is wrong in either, but
+ * they point opposite ways in time — Draft is "not yet", Closed is "no longer".
+ * Outline against filled keeps that readable without spending a hue on a state
+ * a runner can do nothing about.
+ *
+ * `Closed` and `Cancelled` are the pair a runner must not confuse, because one
+ * of them still has a race at the end of it. Cancelled is the only status that
+ * gets the destructive tone; it is the only one that is genuinely bad news.
+ *
+ * Colour alone never carries any of that, which is why the status word is
+ * written out and repeated in `data-status`.
  */
 import { Badge } from "@/components/ui/badge";
 import type { EventStatus } from "@sterun/sdk";
 
 const VARIANTS = {
   Open: "success",
-  Draft: "secondary",
-  Closed: "warning",
+  Draft: "outline",
+  Closed: "muted",
   Completed: "accent",
-  Cancelled: "warning",
+  Cancelled: "destructive",
 } as const satisfies Record<EventStatus, string>;
 
 export function EventStatusBadge({ status }: { status: EventStatus }) {
