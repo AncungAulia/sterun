@@ -60,6 +60,9 @@ export const EVENT_REGISTRY_ERRORS = {
   13: "ScannerNotFound",
   14: "AddOnNotFound",
   15: "AddOnQuotaFull",
+  16: "OrganiserAlreadyAdded",
+  17: "OrganiserNotFound",
+  18: "NotAllowlistedOrganiser",
 } as const satisfies Readonly<Record<number, string>>;
 
 /** INTERFACE.md §2.4 — RaceRecord (C2). */

@@ -24,7 +24,13 @@
  * that event's only category has one slot left, and spending it here would take
  * it from STE-25's mock race.
  *
- * ## The one leg that needs a secret
+ * ## The secrets it needs
+ *
+ * **STERUN_ADMIN_SECRET is now required** (STE-36). `create_event` is gated on
+ * an admin-held organiser allowlist, so a throwaway organiser has to be put on
+ * it before it can create anything. There is no way around that from the
+ * organiser's side — being able to grant yourself the right would be the same
+ * as there being no gate.
  *
  * A *paid* entry moves sUSD, and sUSD comes from the distributor. Without
  * SUSD_DISTRIBUTOR_SECRET the script runs everything else and says clearly that
@@ -33,7 +39,7 @@
  * balance rose by exactly the entry fee, which is what proves the SEP-41
  * transfer really happened inside the same atomic invocation.
  *
- *     pnpm --filter @sterun/sdk e2e
+ *     STERUN_ADMIN_SECRET=S… pnpm --filter @sterun/sdk e2e
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -107,6 +113,24 @@ async function friendbot(address: string): Promise<void> {
   }
 }
 
+/**
+ * The contract admin, which since STE-36 is the only account that can let a
+ * fresh organiser create anything. Fails loudly rather than running a weaker
+ * script: without it there is no event, and every step after this one is about
+ * an event.
+ */
+function adminKeypair(): Keypair {
+  const secret = process.env.STERUN_ADMIN_SECRET;
+  if (!secret) {
+    throw new Error(
+      "STERUN_ADMIN_SECRET is not set. Since STE-36 `create_event` is gated on the " +
+        "admin's organiser allowlist, so this script cannot create an event without it. " +
+        "It is the sterun-admin secret from the repo root .env (testnet only).",
+    );
+  }
+  return Keypair.fromSecret(secret);
+}
+
 async function newAccount(label: string): Promise<Keypair> {
   const kp = Keypair.random();
   await friendbot(kp.publicKey());
@@ -156,6 +180,34 @@ async function main(): Promise<void> {
   const asOrganiser = SterunClient.as(organiser);
   const asRunner = SterunClient.as(runner);
   const asScanner = SterunClient.as(scanner);
+
+  step("Allowlisting the throwaway organiser (admin, STE-36)");
+  const admin = adminKeypair();
+  await sterun.addOrganiser(organiser.publicKey(), SterunClient.as(admin));
+  assert(
+    await sterun.isOrganiser(organiser.publicKey()),
+    "the organiser is still not on the allowlist after add_organiser",
+  );
+  log(`  ✓ ${organiser.publicKey()} may create events; admin ${admin.publicKey()}`);
+
+  step("Negative: an address the admin never allowlisted cannot create an event");
+  const impersonator = await newAccount("outsider");
+  await expectRevert(
+    "createEvent by a non-allowlisted address",
+    "NotAllowlistedOrganiser",
+    "event-registry",
+    () =>
+      sterun.createEvent(
+        {
+          organiser: impersonator.publicKey(),
+          name: "Jakarta Marathon 2026",
+          metadataHash: randomBytes(32).toString("hex"),
+          uri: "https://sterun.xyz/events/impersonation.json",
+          startsAt: BigInt(Math.floor(Date.now() / 1000) + 86_400),
+        },
+        SterunClient.as(impersonator),
+      ),
+  );
 
   step("Sanity: the RaceRecord we are about to use is wired to this registry");
   const wired = await sterun.wiredRegistry();

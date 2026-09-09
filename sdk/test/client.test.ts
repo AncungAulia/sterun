@@ -152,6 +152,33 @@ describe("organiser flow maps onto EventRegistry", () => {
     });
   });
 
+  it("adds and removes an organiser on the admin allowlist", async () => {
+    const { client, registry } = clientWith({
+      add_organiser: good(ok(undefined)),
+      remove_organiser: good(ok(undefined)),
+    });
+    await client.addOrganiser(ORGANISER);
+    await client.removeOrganiser(ORGANISER);
+    // Contract-wide, so no event_id — the grant precedes the event.
+    expect(registry.calls.map(({ method, args }) => ({ method, args }))).toEqual([
+      { method: "add_organiser", args: { organiser: ORGANISER } },
+      { method: "remove_organiser", args: { organiser: ORGANISER } },
+    ]);
+  });
+
+  it("surfaces NotAllowlistedOrganiser(18) when createEvent is refused", async () => {
+    const { client } = clientWith({ create_event: reverting(18) });
+    await expect(
+      client.createEvent({
+        organiser: ORGANISER,
+        name: "Jakarta Marathon 2026",
+        metadataHash: HASH,
+        uri: "https://sterun.xyz/e.json",
+        startsAt: 1789000000,
+      }),
+    ).rejects.toThrow(/NotAllowlistedOrganiser/);
+  });
+
   it("adds and removes a scanner on the right event", async () => {
     const { client, registry } = clientWith({
       add_scanner: good(ok(undefined)),
@@ -167,6 +194,15 @@ describe("organiser flow maps onto EventRegistry", () => {
 });
 
 describe("reads convert the contract's shape into the caller's", () => {
+  it("isOrganiser asks about the address, not an event", async () => {
+    const { client, registry } = clientWith({ is_organiser: good(true) });
+    expect(await client.isOrganiser(ORGANISER)).toBe(true);
+    expect(registry.calls[0]).toMatchObject({
+      method: "is_organiser",
+      args: { addr: ORGANISER },
+    });
+  });
+
   it("getEvent returns the caller-facing event", async () => {
     const { client } = clientWith({
       get_event: good(
