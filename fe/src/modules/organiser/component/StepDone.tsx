@@ -30,6 +30,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 
+import { Receipt } from "@/components/elements/Receipt";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -48,9 +49,18 @@ function tealRamp(): string[] {
 export interface StepDoneProps {
   eventId: number;
   eventName: string;
+  /**
+   * What was signed, in the order it landed.
+   *
+   * These used to live only inside the run dialog, which this step replaces
+   * the moment the run finishes, so they went off screen before anybody could
+   * read them. In a product whose whole claim is that a record can be checked,
+   * the transactions that made the record are the last thing to hide.
+   */
+  receipts?: { id: string; label: string; txHash: string }[];
 }
 
-export function StepDone({ eventId, eventName }: StepDoneProps) {
+export function StepDone({ eventId, eventName, receipts = [] }: StepDoneProps) {
   const fired = useRef(false);
 
   useEffect(() => {
@@ -118,6 +128,25 @@ export function StepDone({ eventId, eventName }: StepDoneProps) {
           <Link href="/org/new">Create another race</Link>
         </Button>
       </div>
+
+      {/*
+       * Under the buttons and quiet on purpose. Most organisers will never
+       * open one, and the ones who do are checking something specific, so this
+       * is a place to come back to rather than the headline.
+       */}
+      {receipts.length === 0 ? null : (
+        <div className="mx-auto grid w-full max-w-md gap-2 border-t border-n-200 pt-4 text-left">
+          <p className="text-sm text-n-500">Signed on chain</p>
+          <ul className="grid gap-1.5">
+            {receipts.map((receipt) => (
+              <li key={receipt.id} className="flex items-center justify-between gap-4">
+                <span className="text-sm text-foreground">{receipt.label}</span>
+                <Receipt txHash={receipt.txHash} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

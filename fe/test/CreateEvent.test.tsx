@@ -221,6 +221,14 @@ describe("CreateEvent", () => {
         "href",
         "/events/4",
       );
+
+      // The receipts used to live only in the run dialog, which this step
+      // replaces the moment the run finishes. Losing them there meant the
+      // proof went off screen before anybody could read it.
+      const receipts = screen.getAllByRole("link", { name: /receipt/i });
+      expect(receipts).toHaveLength(3);
+      expect(receipts[0]).toHaveAttribute("href", expect.stringContaining("tx1"));
+      expect(receipts[2]).toHaveAttribute("href", expect.stringContaining("tx3"));
     });
 
     it("records the address the store put the details file at", async () => {

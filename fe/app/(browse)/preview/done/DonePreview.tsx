@@ -25,6 +25,14 @@ const STEPS = [
 
 const LONG_NAME = "Borobudur Marathon Presented by Bank Jateng and Friends 2026";
 
+/* Shaped like a real run: publish the document, create, one distance, open. */
+const RECEIPTS = [
+  { id: "document", label: "Publish the event details", txHash: "" },
+  { id: "event", label: 'Create "LARI TEKNIK (TESTING)"', txHash: "a".repeat(64) },
+  { id: "category:5K", label: "Add the 5K", txHash: "b".repeat(64) },
+  { id: "open", label: "Open registration", txHash: "c".repeat(64) },
+].filter((receipt) => receipt.txHash !== "");
+
 export function DonePreview() {
   const [name, setName] = useState("LARI TEKNIK (TESTING)");
   const [eventId, setEventId] = useState("3");
@@ -86,6 +94,7 @@ export function DonePreview() {
           key={run}
           eventId={Number.isNaN(parsed) ? 0 : parsed}
           eventName={name.trim() === "" ? "Untitled race" : name}
+          receipts={RECEIPTS}
         />
       </Card>
     </div>

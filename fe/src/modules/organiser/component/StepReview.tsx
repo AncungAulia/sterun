@@ -41,6 +41,7 @@
 import { CheckIcon } from "lucide-react";
 import { useState } from "react";
 
+import { Receipt } from "@/components/elements/Receipt";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,7 +52,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EXPLORER_BASE } from "@/lib/env";
 import { countryName, provinceName } from "@/lib/places";
 import { formatEventDateTimeLong, formatPrice, parseStroops } from "@/utils/format";
 import type { useEventRun } from "@/hooks/useEventRun";
@@ -425,22 +425,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="text-foreground">{children}</dd>
     </>
-  );
-}
-
-function Receipt({ txHash }: { txHash: string }) {
-  if (!EXPLORER_BASE) {
-    return <span className="numeric text-sm text-muted-foreground">{txHash.slice(0, 12)}</span>;
-  }
-  return (
-    <a
-      href={`${EXPLORER_BASE}/tx/${txHash}`}
-      target="_blank"
-      rel="noreferrer"
-      className="text-sm text-teal-500 underline underline-offset-4"
-    >
-      Receipt
-    </a>
   );
 }
 

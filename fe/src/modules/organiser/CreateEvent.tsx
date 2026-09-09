@@ -312,7 +312,18 @@ function Wizard() {
         ) : null}
 
         {shownStep === "done" && run.eventId !== null ? (
-          <StepDone eventId={run.eventId} eventName={details.name.trim()} />
+          <StepDone
+            eventId={run.eventId}
+            eventName={details.name.trim()}
+            /*
+              Built from the run's own step list rather than from the receipt
+              map alone, so the order is the order things were signed and the
+              labels are the ones the organiser watched go past.
+            */
+            receipts={run.steps
+              .filter((step) => run.receipts[step.id])
+              .map((step) => ({ id: step.id, label: step.label, txHash: run.receipts[step.id]! }))}
+          />
         ) : null}
       </Card>
     </div>
