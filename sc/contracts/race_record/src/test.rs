@@ -82,7 +82,13 @@ impl World {
         );
 
         env.mock_all_auths();
-        RegistryClient::new(&env, &registry).set_race_record(&contract);
+        let registry_client = RegistryClient::new(&env, &registry);
+        registry_client.set_race_record(&contract);
+        // STE-36: the registry gates `create_event` on an admin allowlist, so
+        // a world whose organiser is not on it cannot create the event every
+        // test here starts from. This is the seeding step the deploy runbook
+        // does on testnet, done once at fixture setup.
+        registry_client.add_organiser(&organiser);
 
         World {
             env,
@@ -1946,7 +1952,10 @@ mod upgrade {
             ),
         );
         w.env.mock_all_auths();
-        RegistryClient::new(&w.env, &registry).set_race_record(&contract);
+        let registry_client = RegistryClient::new(&w.env, &registry);
+        registry_client.set_race_record(&contract);
+        // A second registry means a second allowlist (STE-36).
+        registry_client.add_organiser(&w.organiser);
         World {
             contract,
             registry,
@@ -2239,7 +2248,7 @@ mod exports {
     ///
     /// `upgrade` is deliberately absent from this list — both contracts export
     /// one of their own (v2), so finding it here is correct, not a leak.
-    const REGISTRY_ONLY: [&str; 16] = [
+    const REGISTRY_ONLY: [&str; 19] = [
         "create_event",
         "add_category",
         "set_event_status",
@@ -2256,6 +2265,9 @@ mod exports {
         "reserve_addon",
         "get_addon",
         "addon_count",
+        "add_organiser",
+        "remove_organiser",
+        "is_organiser",
     ];
 
     fn wasm_path() -> PathBuf {
