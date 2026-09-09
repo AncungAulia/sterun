@@ -307,34 +307,40 @@ impl RaceRecord {
 
     // -- entry ---------------------------------------------------------------
 
-    /// Registers `runner` for a category and mints their record. **One
-    /// invocation, one atomicity boundary**: the quota reservation, the entry
-    /// fee and the mint either all land or all roll back, so a failed payment
-    /// can never leave a slot consumed or a record without a fee.
+    // NOTE: keep the doc comment below SHORT. `#[contractimpl]` copies it into
+    // the contract spec, which caps the string — an over-long doc lands in the
+    // generated TypeScript truncated mid-word. Reasoning goes in comments like
+    // this one, which the spec never sees.
+    //
+    // Steps, in order:
+    //   1. `runner.require_auth()` — one auth tree, which also covers the
+    //      nested SEP-41 `transfer` sub-invocation.
+    //   2. `reserve_slot` on the registry. RaceRecord is the direct caller, so
+    //      the stored `RaceRecordAddr` authorizes implicitly. Registry reverts
+    //      (`QuotaFull`, `EventNotOpen`, `CategoryNotFound`, `AddOnQuotaFull`)
+    //      propagate out of this call untouched — see the error-band note above.
+    //   3. Reserve every requested add-on; each returns the price of the unit it
+    //      took. A sold-out add-on reverts the whole entry: the runner asked for
+    //      a place AND a jersey, and a place alone is a different purchase from
+    //      the one they signed.
+    //   4. Transfer the summed total, once.
+    //   5. Mint the record and store what was bought.
+    //
+    // The `addon_ids` bounds are not redundant. `<= addon_count` keeps an honest
+    // event's loop short; `<= MAX_ADDONS_PER_ENTRY` keeps it bounded no matter
+    // what an organiser publishes. A repeated id is rejected because it would
+    // take two units of stock while the record recorded one.
+
+    /// Registers `runner` for a category, charges the entry fee plus any
+    /// add-ons as ONE transfer, and mints their record.
     ///
-    /// Steps, in order:
-    /// 1. `runner.require_auth()` — the runner signs one auth tree that also
-    ///    covers the nested SEP-41 `transfer` sub-invocation.
-    /// 2. `reserve_slot` on the registry. RaceRecord is the direct caller, so
-    ///    the registry's stored `RaceRecordAddr` authorizes implicitly. Its
-    ///    reverts (`QuotaFull`, `EventNotOpen`, `CategoryNotFound`, …)
-    ///    propagate out of this call untouched — see the error-code note above.
-    /// 3. Reserve every requested add-on, each of which returns the price to
-    ///    charge for the unit it took (v2, STE-35). A full add-on reverts the
-    ///    whole entry with `AddOnQuotaFull` — the runner does not get a place
-    ///    without the jersey they asked for and paid for.
-    /// 4. Pay `category.price_usdc + the add-on prices` from the runner to the
-    ///    organiser in **one transfer**. **A total of 0 skips the transfer
-    ///    entirely**, so a free entry never needs the runner to hold the token —
-    ///    or, for a classic `G...` account, to carry a trustline for it at all.
-    /// 5. Mint the non-transferable record and store its [`RecordData`],
-    ///    including which add-ons it bought.
+    /// **One invocation, one atomicity boundary**: the category slot, every
+    /// add-on unit, the payment and the mint either all land or all roll back.
+    /// A total of `0` skips the token call entirely, so a free entry needs
+    /// neither a balance nor a trustline.
     ///
-    /// `addon_ids` is validated **before** any state is touched: at most
-    /// [`MAX_ADDONS_PER_ENTRY`], never more ids than the event has add-ons, and
-    /// no id twice. Wanting two jerseys means two add-ons with two quotas, not
-    /// the same id listed twice — accepting a repeat would let one entry take
-    /// two units of stock while the record only records one.
+    /// `addon_ids` must hold at most [`MAX_ADDONS_PER_ENTRY`] ids, no more than
+    /// the event has add-ons, and no id twice.
     pub fn enter(
         env: Env,
         runner: Address,
