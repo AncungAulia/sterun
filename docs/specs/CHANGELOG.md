@@ -17,7 +17,7 @@ terakhir berubah, jadi header yang berbeda antar file itu disengaja: `INTERFACE.
 sebelah `HASH_AND_TOTP.md (v1.0.1)` berarti dokumen interface-nya memang tidak tersentuh sejak
 pembekuan. Yang berlaku untuk konsumen selalu entri paling atas di daftar versi bawah.
 
-Sejak v2.0.0 keduanya memang berbeda: `INTERFACE.md` di **v2.0.0**, `HASH_AND_TOTP.md` masih di
+Sejak v2.0.0 keduanya memang berbeda: `INTERFACE.md` di **v2.1.0**, `HASH_AND_TOTP.md` masih di
 **v1.0.1** karena definisi hash dan TOTP tidak tersentuh sama sekali oleh v2.
 
 ---
@@ -47,6 +47,83 @@ OZ); nomor varian yang dihapus **tidak boleh** dipakai ulang.
 **Perubahan definisi hash membatalkan setiap `participant_hash` yang sudah ada on-chain** —
 record lama tidak bisa diverifikasi ulang dengan aturan baru. Jadi itu minimal MAJOR, plus rencana
 migrasi tertulis, bukan patch.
+
+---
+
+## [2.1.0] — 2026-09-10
+
+**MINOR — EventRegistry dapat allowlist organiser (STE-36).** Tiga fungsi baru, dua event baru,
+tiga kode error baru. Tidak ada signature yang berubah dan tidak ada kode error yang di-renumber,
+jadi client yang sudah jalan tetap compile dan tetap jalan — dengan **satu** pengecualian yang
+harus dibaca, di bawah.
+
+### Kenapa
+
+`create_event` menerima `name: String` bebas dan gerbangnya cuma `organiser.require_auth()`.
+Auth membuktikan pemanggil memegang keypair-nya; dia tidak bisa mengatakan apa pun tentang apakah
+keypair itu milik lomba yang barusan dinamai dengan namanya. Siapa pun bisa membuat
+"Jakarta Marathon 2026" dan menjual entry ke sana. Keputusan Axel (Opsi A di STE-36): gerbang
+keras berupa allowlist address yang dipegang **admin**, dengan pengajuan akses off-chain. KYC
+adalah urusan pasca-pilot dan **bukan** bagian dari versi ini.
+
+### Yang bertambah
+
+| | |
+| --- | --- |
+| `add_organiser(organiser: Address) -> Result<(), Error>` | admin-gated |
+| `remove_organiser(organiser: Address) -> Result<(), Error>` | admin-gated |
+| `is_organiser(addr: Address) -> bool` | view, tidak pernah revert |
+| `OrganiserAdded` / `OrganiserRemoved` | topic: nama event + `organiser` |
+| `OrganiserAlreadyAdded(16)`, `OrganiserNotFound(17)`, `NotAllowlistedOrganiser(18)` | nomor bebas berikutnya di band C1; 14/15 sudah dipakai add-on |
+
+Storage: `DataKey::Organiser(Address) -> bool`, **di-append** di ujung enum. `DataKey` tidak
+didokumentasikan di `INTERFACE.md` (dia skema storage, bukan surface client), tapi disebut di
+sini karena versi ini dipasang lewat `upgrade` ke kontrak yang sudah hidup — lihat di bawah.
+
+### Perubahan perilaku yang tidak terlihat di signature
+
+**`create_event` sekarang bisa revert `NotAllowlistedOrganiser(18)`.** Argumen dan return-nya
+tidak berubah, jadi tidak ada yang gagal compile; yang berubah adalah kapan dia sukses. Client
+yang menampilkan pesan error per-kode wajib menambah 16/17/18 ke tabelnya (`be/src/chain/errors.ts`
+dan `sdk/src/errors.ts` sudah).
+
+### Dampak ke data yang sudah ada
+
+Nol untuk yang sudah tertulis. Versi ini dipasang lewat `upgrade` ke **alamat yang sama**
+(`CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`), jadi tidak ada alamat baru dan
+tidak ada database yang perlu di-truncate. Dibuktikan sebelum deploy oleh
+`state_written_by_the_live_wasm_survives_the_allowlist_upgrade`, yang men-deploy **wasm yang
+benar-benar live** (`22bb432e…`, ter-commit di `sc/contracts/event_registry/testdata/`), menulis
+event/kategori/add-on/scanner/bib dengannya, meng-upgrade ke build v2.1, lalu membaca semuanya
+kembali.
+
+**Yang perlu tindakan: allowlist-nya mulai KOSONG.** `upgrade` mengganti kode, bukan storage, dan
+tidak ada migrasi yang memasukkan organiser event yang sudah ada ke dalamnya. Sampai admin
+memanggil `add_organiser`, tidak ada `create_event` yang lolos — termasuk milik organiser yang
+sudah punya event. Seeding adalah langkah deploy; wallet yang di-seed tercatat di
+`docs/deployments.md`.
+
+Pencabutan bersifat **maju saja**: `remove_organiser` tidak menyentuh event yang sudah dibuat.
+Organisernya tetap organiser dan tetap memegang semua wewenang per-event, di sini maupun di C2.
+Lomba yang entry-nya sudah terjual tidak dibatalkan oleh satu penulisan storage.
+
+### Artefak
+
+| | sha256 | Ukuran |
+| --- | --- | ---: |
+| EventRegistry v2.0.1 | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
+| EventRegistry v2.1.0 | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26.948 B |
+
+RaceRecord **tidak berubah** (`27749180…` tetap) dan alamatnya tidak di-upgrade. Bindings TS
+event-registry di-regenerate; race-record byte-identical.
+
+Vector: tidak ada yang berubah nilainya. `HASH_AND_TOTP.md` tidak tersentuh.
+
+### Prosedur
+
+Perubahan spec ini di-**pre-authorize Axel (PM)** lewat brief STE-36 yang ter-commit di
+`ALLOWLIST_BRIEF.md` ("Axel pre-authorize, TANPA gate ACC"), dan tetap mendarat lewat PR, bukan
+push langsung ke `main`.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Semua yang ada di folder ini sudah dibekukan.** Ini *handoff contract* C4 (STE-10): yang dipegang
 **James** (backend + indexer) dan **Ancung** (web app + QR pass + scanner PWA) supaya bisa jalan
-paralel tanpa membaca `lib.rs` siapa pun. Versi folder sekarang: **v2.0.1**.
+paralel tanpa membaca `lib.rs` siapa pun. Versi folder sekarang: **v2.1.0**.
 
 | File | Isi |
 | --- | --- |
@@ -50,7 +50,7 @@ kalau implementasi tidak setuju dengannya, implementasinya yang salah sampai ter
 ## Versi per file
 
 Versinya satu untuk seluruh folder; judul tiap file membawa versi di mana **file itu** terakhir
-berubah. Jadi `INTERFACE.md (v2.0.1)` di sebelah `HASH_AND_TOTP.md (v1.0.1)` itu disengaja: v2
+berubah. Jadi `INTERFACE.md (v2.1.0)` di sebelah `HASH_AND_TOTP.md (v1.0.1)` itu disengaja: v2
 mengubah interface kontrak dan **tidak menyentuh satu byte pun** definisi hash/TOTP. Yang berlaku
 selalu entri paling atas di `CHANGELOG.md`.
 

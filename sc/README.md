@@ -10,8 +10,8 @@ Cargo workspace untuk kontrak Sterun (Stellar/Soroban, Rust `#![no_std]`, target
 ## Spec BEKU (STE-10) — baca sebelum konsumsi kontrak ini
 
 Interface kedua kontrak, layout event, dan kode error **sudah dibekukan** di
-`docs/specs/` (beku, folder sekarang di **v2.0.1** — add-on + upgradeable + `Cancelled`;
-nol perubahan perilaku). Kalau kamu bikin backend, indexer, SDK, atau
+`docs/specs/` (beku, folder sekarang di **v2.1.0** — allowlist organiser di C1, di atas
+add-on + upgradeable + `Cancelled`). Kalau kamu bikin backend, indexer, SDK, atau
 frontend, itu sumber kebenarannya — bukan file `lib.rs` ini:
 
 | File | Isi |
@@ -50,11 +50,13 @@ STE-33, dan yang menjadi sumber TS bindings di [`bindings/`](bindings/):
 
 | Kontrak | Wasm | sha256 | Ukuran |
 | --- | --- | --- | ---: |
-| EventRegistry (C1, v2) | `target/wasm32v1-none/release/event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
-| RaceRecord (C2, v2) | `target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
+| EventRegistry (C1, v2.1) | `target/wasm32v1-none/release/event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26.948 B |
+| RaceRecord (C2, v2.0.1) | `target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
 
-Angka v1 (`61d85dd5…578474` / `75d38045…07919f`) masih dipakai oleh pasangan alamat
-v1 yang tetap live; keduanya tercatat di `docs/deployments.md` dan
+Angka EventRegistry sebelum allowlist (`22bb432e…032a2f`) dan angka v1 (`61d85dd5…578474` /
+`75d38045…07919f`) masih relevan: yang pertama adalah wasm yang di-upgrade STE-36 (ter-commit
+sebagai fixture di `contracts/event_registry/testdata/`), yang kedua dipakai pasangan alamat v1
+yang tetap live; keduanya tercatat di `docs/deployments.md` dan
 `docs/specs/INTERFACE.md` §0.
 
 Toolchain yang menghasilkan angka di atas:
