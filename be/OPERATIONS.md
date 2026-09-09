@@ -548,47 +548,69 @@ allowlist dari chain (`reader.isScanner`) tiap request, jadi index yang under-re
 bisa memberi akses ke orang yang salah — paling buruk dia bikin console tidak menampilkan seseorang
 yang sebenarnya berhak.
 
-### Pindah ke kontrak v2 — BUKAN sekadar ganti env
+### Pindah ke kontrak v2 — sudah dilakukan, dan begini caranya
 
-Kontrak v2 sudah live (STE-35) dan alamatnya ada di `docs/deployments.md`. Instruksi pendeknya
-"ganti `EVENT_REGISTRY` + `RACE_RECORD` ke alamat v2" **tidak cukup**, dan menjalankannya apa adanya
-di box yang sekarang akan merusak data.
+Dilakukan 2026-09-09. Keputusannya James: pindah sekarang, karena makin lama makin banyak data yang
+harus dibuang. Saat itu isinya 3 participants (**semuanya `token_id` NULL** — tidak ada PII yang
+tertaut ke record on-chain), 7 event, 14 record.
 
-**Alasannya satu dan bisa diperiksa:** tidak ada kolom yang membedakan kontrak.
+**Kenapa ini tidak pernah bisa jadi "ganti env lalu restart":** tidak ada kolom yang membedakan
+kontrak.
 
-| Tabel | Primary key | Membedakan v1/v2? |
+| Tabel | Primary key | Bisa bedakan v1/v2? |
 | --- | --- | --- |
 | `events` | `event_id` | tidak |
 | `categories` | `(event_id, category_id)` | tidak |
 | `records` | `token_id` | tidak |
-| `event_scanners` | `(event_id, scanner_address)` | tidak |
-| `participants` | `id` (uuid), tapi menyimpan `event_id`/`category_id`/`token_id` | tidak |
+| `participants` | `id` uuid, tapi menyimpan `event_id`/`token_id` | tidak |
 | `chain_events` | punya `contract_id` | **ya** — cuma log mentah |
 
-Kontrak v2 menomori event dari 0 lagi. Jadi begitu poller diarahkan ke v2:
+v2 menomori event dari 0 lagi, jadi v2 event 0 **menimpa** baris v1 event 0. Index bisa dibangun
+ulang dari state; `participants` tidak — dia menautkan dokumen identitas ke `token_id` yang sama, dan
+roster memetakan `token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah.
 
-1. **v2 event 0 menimpa baris v1 event 0.** Bukan menambah — `upsert` pada primary key yang sama.
-2. **`records` bertabrakan dengan cara yang sama** lewat `token_id`.
-3. Yang terburuk: **`participants` menautkan dokumen identitas asli ke `token_id`**. Baris PII yang
-   dibuat untuk record v1 akan menunjuk ke record v2 milik orang lain — dan roster memetakan
-   `token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah.
+**Cara alamatnya berpindah:** bukan env var. `docs/deployments.md` sekarang memakai nama **tanpa
+sufiks** untuk pasangan v2 (`| **EventRegistry** (C1) |`) dan melabeli yang lama `v1`. Parser di
+`src/deployments.ts` mencocokkan nama tanpa sufiks, jadi dokumen tetap satu-satunya sumber alamat —
+dan ada test yang gagal kalau parser me-resolve pasangan v1.
 
-Nomor 3 bukan kerusakan index yang bisa diperbaiki `rebuild`. `rebuild` membangun ulang dari state
-kontrak; dia tidak tahu baris vault mana milik kontrak yang mana.
+#### Prosedur (urutannya penting)
 
-**Jadi pilihannya tiga, dan tidak ada yang "ganti env lalu restart":**
+```bash
+# 1. BACKUP dulu. Tidak ada backup terjadwal; ini satu-satunya salinan.
+mkdir -p /opt/sterun/backups
+docker exec sterun-postgres-1 pg_dump -U sterun -d sterun \
+  | gzip > /opt/sterun/backups/pre-v2-$(date -u +%Y%m%dT%H%M%SZ).sql.gz
 
-| Cara | Kapan masuk akal | Biaya |
-| --- | --- | --- |
-| **Deployment terpisah** — database baru, instance baru untuk v2 | v1 masih melayani event yang berjalan | dua backend hidup sementara |
-| **Kolom pembeda** — tambah `contract_id` ke tabel materialisasi + vault, jadikan bagian dari key | mau satu backend melayani keduanya | migrasi menyentuh setiap query |
-| **Bersihkan total** — truncate index **dan** vault, mulai dari nol di v2 | hanya kalau tidak ada PII sungguhan yang perlu dipertahankan | semua pendaftaran lama hilang |
+# 2. Hentikan yang menulis. Poller yang jalan saat truncate akan mengisi
+#    ulang tabel dari kontrak LAMA di tengah proses.
+docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel stop indexer keeper api
 
-Yang **sudah** disiapkan supaya perpindahan tidak gagal karena hal sepele: decoder, JSON schema
-route, dan constraint database sudah menerima status `Cancelled` (migrasi 006). v1 tidak bisa
-memancarkannya, jadi itu murni persiapan.
+# 3. Kode baru (alamatnya ikut di image lewat docs/deployments.md).
+git pull --ff-only origin main
+docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel up -d --build api
 
-**Sebelum menyentuh env di box mana pun**, putuskan dulu yang di atas dan tulis keputusannya di sini.
+# 4. Kosongkan index DAN vault. `indexer rebuild` TIDAK menyentuh participants —
+#    itu tabel yang tidak bisa dibangun ulang dari chain, jadi harus manual.
+docker exec sterun-postgres-1 psql -U sterun -d sterun -c \
+  'TRUNCATE participants, records, events RESTART IDENTITY CASCADE'
+
+# 5. Bangun ulang dari state kontrak v2.
+docker compose -f compose.prod.yml -f compose.homelab.yml run --rm indexer \
+  node dist/cli/indexer.js rebuild
+
+# 6. Nyalakan lagi.
+docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel up -d
+```
+
+`chain_events` sengaja **tidak** di-truncate: dia punya `contract_id`, jadi log mentah v1 tetap jadi
+bukti yang bisa dibaca tanpa mencemari tabel materialisasi.
+
+#### Kalau harus mundur ke v1
+
+Balikkan label di `docs/deployments.md`, deploy ulang, lalu `psql -f` backup dari langkah 1 ke
+database kosong. Jangan me-restore backup ke atas data v2 — hasilnya persis pencampuran yang
+seluruh prosedur ini hindari.
 
 ### R2: object storage untuk file metadata
 

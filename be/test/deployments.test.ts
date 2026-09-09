@@ -14,15 +14,30 @@ const real = readFileSync(DEPLOYMENTS_MD, "utf8");
 describe("parseDeployments — the committed document", () => {
   it("resolves all five addresses from docs/deployments.md", () => {
     // Not asserted against constants copied from the document: that would test
-    // the copy, not the parse. These are the values STE-30 and STE-33 put
+    // the copy, not the parse. These are the values STE-30 and STE-35 put
     // on-chain, and the point is that the parser recovers exactly them.
+    //
+    // The contract pair is v2 as of STE-35. The v1 addresses are still in the
+    // document — recorded, and labelled `v1` — so this doubles as the check
+    // that the parser resolves the CURRENT pair rather than the first one it
+    // finds. Getting that wrong would point the whole backend at a dead
+    // contract without a single test noticing.
     expect(loadDeployments()).toEqual({
       susdIssuer: "GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW",
       susdDistributor: "GBDMKNY7GNUNF7WKUYKNW4HKCQJUHXXBXS7OSD2DSLKRIR5TI6EF3JPO",
       susdSac: "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU",
-      eventRegistry: "CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64",
-      raceRecord: "CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4",
+      eventRegistry: "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+      raceRecord: "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
     });
+  });
+
+  it("does not resolve the v1 pair, which is still in the document", () => {
+    // The failure this guards against is silent: both pairs are valid contract
+    // ids in the same file, so a regex that matched `**EventRegistry v1**` too
+    // would parse cleanly and point at a contract nobody is using any more.
+    const { eventRegistry, raceRecord } = loadDeployments();
+    expect(eventRegistry).not.toBe("CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64");
+    expect(raceRecord).not.toBe("CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4");
   });
 
   it("caches, so the server does not re-read the file per request", () => {
