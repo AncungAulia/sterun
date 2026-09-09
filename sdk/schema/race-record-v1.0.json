@@ -95,7 +95,8 @@
             "Draft",
             "Open",
             "Closed",
-            "Completed"
+            "Completed",
+            "Cancelled"
           ]
         }
       },

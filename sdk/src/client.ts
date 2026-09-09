@@ -118,6 +118,16 @@ export interface EnterArgs {
   runner: string;
   eventId: number;
   categoryId: number;
+  /**
+   * Paid add-ons to buy alongside the entry (contracts v2, STE-35). Omit it, or
+   * pass `[]`, for an entry with none — that is the pre-v2 behaviour exactly.
+   *
+   * At most 16 ids, no more than the event has add-ons, and no id twice; the
+   * contract rejects the rest with `TooManyAddOns(106)` / `DuplicateAddOn(107)`
+   * before it touches any quota. Wanting two of something is two add-ons, not
+   * one id listed twice.
+   */
+  addOnIds?: number[];
   /** `sha256(name || national_id || emergency_contact || salt)`, 64 hex chars. */
   participantHash: string;
 }
@@ -364,14 +374,19 @@ export class SterunClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * Enter a race: reserve a slot, pay the entry fee, mint the record — as **one
-   * transaction**.
+   * Enter a race: reserve a slot, buy any add-ons, pay for the lot, mint the
+   * record — as **one transaction**.
    *
    * The runner signs a single auth tree that also covers the nested SEP-41
    * `transfer` sub-invocation, so the fee cannot be paid without the entry
-   * being created and the entry cannot be created without the fee. A free
-   * category (`priceStroops === 0n`) skips the token call entirely, which means
-   * the runner needs neither a balance nor a trustline.
+   * being created and the entry cannot be created without the fee. The amount
+   * transferred is the category price plus every add-on price, once; a total of
+   * zero skips the token call entirely, which means the runner needs neither a
+   * balance nor a trustline.
+   *
+   * A sold-out add-on takes the whole entry down with it (`AddOnQuotaFull(15)`,
+   * from EventRegistry): the runner asked for a place *and* the add-on, and a
+   * place alone is a different purchase from the one they signed.
    *
    * Returns the new `token_id`.
    *
@@ -385,9 +400,10 @@ export class SterunClient {
       () =>
         this.record.enter(
           {
-            runner: args.runner,
+              runner: args.runner,
             event_id: args.eventId,
             category_id: args.categoryId,
+            addon_ids: args.addOnIds ?? [],
             participant_hash: fromHex32(args.participantHash, "participantHash"),
           },
           this.callOptions(options),
