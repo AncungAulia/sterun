@@ -139,6 +139,13 @@ pub enum DataKey {
     AddOn(u32, u32),
     /// persistent -> `u32`, keyed by `event_id` (v2)
     AddOnCount(u32),
+    /// persistent -> `bool`, keyed by the organiser address (v2.1)
+    ///
+    /// Appended last, like every variant before it. This one landed on a
+    /// contract that was already live and already holding events, so the
+    /// append-only rule stopped being advice here and started being the reason
+    /// `event_id` 0 still decodes.
+    Organiser(Address),
 }
 
 // ---------------------------------------------------------------------------
@@ -170,6 +177,12 @@ pub enum Error {
     AddOnNotFound = 14,
     /// `reserved_count >= quota` on an add-on (v2).
     AddOnQuotaFull = 15,
+    /// The address is already on the organiser allowlist (v2.1).
+    OrganiserAlreadyAdded = 16,
+    /// `remove_organiser` on an address that is not on the allowlist (v2.1).
+    OrganiserNotFound = 17,
+    /// `create_event` from an address the admin never allowlisted (v2.1).
+    NotAllowlistedOrganiser = 18,
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +242,23 @@ pub struct ScannerRemoved {
     pub event_id: u32,
     #[topic]
     pub scanner: Address,
+}
+
+/// Emitted when the admin puts an address on the organiser allowlist (v2.1).
+/// There is no `event_id` here on purpose: the allowlist is contract-wide, and
+/// it is granted before the grantee has any event to name.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrganiserAdded {
+    #[topic]
+    pub organiser: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrganiserRemoved {
+    #[topic]
+    pub organiser: Address,
 }
 
 /// Emitted by [`EventRegistry::upgrade`]. An indexer that has to explain why a
@@ -328,12 +358,79 @@ impl EventRegistry {
         Ok(())
     }
 
+    // -- admin: the organiser allowlist (v2.1) -------------------------------
+
+    /// Puts `organiser` on the allowlist, which is what [`Self::create_event`]
+    /// checks. **Admin only.**
+    ///
+    /// The allowlist exists because `create_event` takes the event's `name` as
+    /// a free `String`. `organiser.require_auth()` proves the caller controls
+    /// that keypair and nothing more — it cannot say whether the keypair
+    /// belongs to the race it just named itself after. Anyone could create
+    /// "Jakarta Marathon 2026" and start selling entries to it. The allowlist
+    /// is the missing half: a keypair the admin has actually vetted off-chain.
+    ///
+    /// Access is granted per address, not per event, and the grant is what an
+    /// organiser gets *before* they have an event. Per-event authority stays
+    /// where it already lives — in `EventData.organiser`.
+    pub fn add_organiser(env: Env, organiser: Address) -> Result<(), Error> {
+        read_admin(&env)?.require_auth();
+        bump_instance(&env);
+        let key = DataKey::Organiser(organiser.clone());
+        if env.storage().persistent().has(&key) {
+            return Err(Error::OrganiserAlreadyAdded);
+        }
+
+        env.storage().persistent().set(&key, &true);
+        bump_persistent(&env, &key);
+
+        OrganiserAdded { organiser }.publish(&env);
+        Ok(())
+    }
+
+    /// Revokes an organiser. **Admin only.**
+    ///
+    /// Like [`Self::remove_scanner`], the entry is removed rather than set to
+    /// `false`, so the contract stops paying rent for a revoked address.
+    ///
+    /// Revoking is forward-looking only: events the address already created
+    /// keep their organiser, and it keeps every per-event power over them
+    /// (`add_category`, `set_event_status`, the scanner allowlist, and
+    /// `record_finish` over in RaceRecord). What it loses is the ability to
+    /// create *new* events. Taking a running race away from the organiser
+    /// mid-event would strand its entrants, and a race whose entries are
+    /// already sold cannot be un-run by a storage write.
+    pub fn remove_organiser(env: Env, organiser: Address) -> Result<(), Error> {
+        read_admin(&env)?.require_auth();
+        bump_instance(&env);
+        let key = DataKey::Organiser(organiser.clone());
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::OrganiserNotFound);
+        }
+
+        env.storage().persistent().remove(&key);
+
+        OrganiserRemoved { organiser }.publish(&env);
+        Ok(())
+    }
+
     // -- organiser surface ---------------------------------------------------
 
     /// Creates an event owned by `organiser`. Ids are assigned from a
     /// monotonic counter and never reused. The event starts in
     /// [`EventStatus::Draft`] so categories can be added before registration
     /// opens.
+    ///
+    /// **Two gates, and they answer different questions** (v2.1).
+    /// `organiser.require_auth()` answers "does the caller hold this keypair";
+    /// the allowlist check answers "is this keypair one the admin vetted".
+    /// Without the second, `name` is an unchecked `String` and the first gate
+    /// happily lets a stranger sign for their own address while calling their
+    /// event "Jakarta Marathon 2026". Hence
+    /// [`Error::NotAllowlistedOrganiser`] — see [`Self::add_organiser`].
+    ///
+    /// The auth check runs first so a caller who does not hold the key learns
+    /// nothing about who is on the allowlist.
     pub fn create_event(
         env: Env,
         organiser: Address,
@@ -344,6 +441,9 @@ impl EventRegistry {
     ) -> Result<u32, Error> {
         organiser.require_auth();
         bump_instance(&env);
+        if !is_allowlisted(&env, &organiser) {
+            return Err(Error::NotAllowlistedOrganiser);
+        }
 
         let event_id: u32 = env
             .storage()
@@ -671,6 +771,18 @@ impl EventRegistry {
         Ok(read_event(&env, event_id)?.organiser)
     }
 
+    /// `false` when the address was never allowlisted, or was removed (v2.1).
+    ///
+    /// This is the read a console uses to decide whether to show the "create
+    /// event" form at all. It is not the enforcement — [`Self::create_event`]
+    /// is — so a client that skips it gets a revert, not an event.
+    pub fn is_organiser(env: Env, addr: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Organiser(addr))
+            .unwrap_or(false)
+    }
+
     /// `false` when the address was never added, or was removed.
     pub fn is_scanner(env: Env, event_id: u32, addr: Address) -> bool {
         env.storage()
@@ -724,6 +836,17 @@ fn read_admin(env: &Env) -> Result<Address, Error> {
         .instance()
         .get(&DataKey::Admin)
         .ok_or(Error::NotInitialized)
+}
+
+/// The organiser allowlist read, as `create_event` uses it. A missing entry is
+/// `false`, which is what makes the allowlist empty — and `create_event`
+/// closed — the instant this code is upgraded into a contract that never had
+/// one.
+fn is_allowlisted(env: &Env, organiser: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Organiser(organiser.clone()))
+        .unwrap_or(false)
 }
 
 fn read_event(env: &Env, event_id: u32) -> Result<EventData, Error> {

@@ -7,11 +7,11 @@ STE-17/18/21/22) supaya tidak ada yang mengetik ulang signature kontrak.
 
 | Paket | Kontrak | Dari wasm | sha256 wasm |
 | --- | --- | --- | --- |
-| [`event-registry/`](event-registry/) | EventRegistry (C1, v2) | `event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` |
-| [`race-record/`](race-record/) | RaceRecord (C2, v2) | `race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` |
+| [`event-registry/`](event-registry/) | EventRegistry (C1, v2.1) | `event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` |
+| [`race-record/`](race-record/) | RaceRecord (C2, v2.0.1) | `race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` |
 
 Kontrak beku yang mereka wakili: **[`docs/specs/INTERFACE.md`](../../docs/specs/INTERFACE.md)
-v2.0.1**. Bindings ini bicara ke **pasangan alamat v2**; alamat v1 yang masih live menjalankan wasm
+v2.1.0**. Bindings ini bicara ke **pasangan alamat v2**; alamat v1 yang masih live menjalankan wasm
 v1 dengan signature `enter` yang berbeda, jadi jangan menyilangkan keduanya.
 
 Kalau ada beda antara dokumen itu dan file di sini, **dokumen itu yang benar** — dan bedanya itu
@@ -144,7 +144,7 @@ Sudah dibuktikan: paket probe dengan dua `file:` dependency di atas lolos
 3. **`version` di `package.json` tertulis `0.0.0`.** Itu yang dikeluarkan
    generator, dan sengaja **tidak** kita ubah supaya output tetap byte-identical
    dengan hasil regenerate. Versi yang bermakna adalah versi spec yang mereka
-   wakili — **v2.0.1**, tercatat di `docs/specs/CHANGELOG.md` — plus sha256 wasm
+   wakili — **v2.1.0**, tercatat di `docs/specs/CHANGELOG.md` — plus sha256 wasm
    di tabel paling atas. Itu dua-duanya identitas yang bisa diverifikasi;
    nomor di `package.json` tidak.
 
@@ -155,7 +155,7 @@ dan §2.4:
 
 | Paket | Export | Band |
 | --- | --- | --- |
-| `event-registry` | `Errors` | `1..=15` (EventRegistry, C1) |
+| `event-registry` | `Errors` | `1..=18` (EventRegistry, C1) |
 | `race-record` | `Errors` | `100..=107` (RaceRecord, C2) |
 | `race-record` | `NonFungibleTokenError` | `200..=214` (OpenZeppelin) |
 

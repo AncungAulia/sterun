@@ -126,7 +126,7 @@ sesuatu yang berbeda dari yang disimulasikan.
 - **Unit + integration**: `test/`, nol network, lewat seam struktural
   (`AssembledLike` di `tx.ts` dan opsi `bindings` di `SterunClient`) — pola yang
   sama dengan `ContractCaller` di `be/`. Ini yang jalan di `typescript.yml`.
-- **E2E**: `scripts/e2e.ts` melawan testnet live, plus **7 negative case** yang
+- **E2E**: `scripts/e2e.ts` melawan testnet live, plus **8 negative case** yang
   masing-masing memastikan varian **dan** band-nya benar. Buktinya di-commit ke
   `docs/deployments.md`.
 
@@ -155,6 +155,37 @@ untuk diserahkan ke orang asing.
 IEEE-754; di atas 2^53 presisinya hilang diam-diam, dan `price_stroops` itu
 `i128`. Field `u32` tetap number.
 
+## Add-on berbayar (STE-37)
+
+Empat method, sengaja **kembar** dengan pasangan category yang sudah ada, karena keduanya ide yang
+sama: per-event, dialamati id, berharga stroops, berkuota.
+
+| tulis | baca |
+| --- | --- |
+| `addAddon({ eventId, code, priceStroops, quota }, actor)` | `getAddon(eventId, addonId)` |
+| | `listAddOns(eventId)` · `addonCount(eventId)` |
+
+Dua keputusan yang layak ditulis supaya tidak dibahas ulang:
+
+**Harga dalam stroops, bukan desimal.** Sama seperti `addCategory`, dan alasannya sama dengan aturan
+3 di `be/CLAUDE.md`: uang tidak pernah lewat float. Jersey 50 sUSD adalah `500_000_000n`. Round-trip
+lewat `double` yang diundang oleh `50.0` meleset satu stroop cukup sering untuk membuat `enter`
+revert tanpa penjelasan.
+
+**`listAddOns` fan-out N+1, dan itu bukan kemalasan.** EventRegistry cuma mengekspos `addon_count`
+dan `get_addon`; tidak ada view yang mengembalikan semuanya sekaligus — dan itu disengaja di sisi
+kontrak, karena view yang mengembalikan vector tak terbatas makin mahal seiring event tumbuh. Jadi
+biayanya ditaruh di sini, tempat pemanggil bisa melihatnya, bukan disembunyikan di helper.
+
+> **`reserve_addon` TIDAK di-wrap, dan jangan ditambahkan.** Dia memanggil
+> `race_record.require_auth()` (`sc/contracts/event_registry/src/lib.rs`), jadi itu langkah
+> antar-kontrak di dalam `enter` — bukan sesuatu yang boleh dipanggil client. Mem-wrap-nya cuma
+> memberi orang method yang **selalu** revert.
+
+`SterunAddOn` memakai `unitsLeft`, bukan `slotsLeft` milik category. Bentuknya sengaja sama; satu
+kata itu beda karena category menjual tempat di lomba dan add-on menjual barang dari rak — menyebut
+kaos sebagai "slot" terbaca seperti hasil salin-tempel, bukan keputusan.
+
 ## Yang belum
 
 - **`npm publish`** — butuh kredensial npm milik James. Runbook-nya di
@@ -165,3 +196,11 @@ IEEE-754; di atas 2^53 presisinya hilang diam-diam, dan `price_stroops` itu
 - **Leg `enter` berbayar di e2e** — butuh `SUSD_DISTRIBUTOR_SECRET` di `be/.env`.
   Script-nya sudah menangani, dan kalau secret tidak ada dia **bilang** dia
   melewatinya, bukan diam-diam lulus dengan test yang lebih lemah.
+- **`STERUN_ADMIN_SECRET` sekarang WAJIB untuk e2e** (STE-36). `create_event`
+  gated allowlist organiser milik admin, dan organiser tidak bisa memberi izin
+  ke dirinya sendiri — itu justru gunanya gerbang itu. Jadi script-nya
+  meng-`addOrganiser` dulu untuk wallet sekali-pakai yang dia buat, lalu
+  membuktikan gerbangnya dari sisi negatif: satu address yang tidak
+  di-allowlist ditolak `NotAllowlistedOrganiser(18)`. Tanpa secret-nya script
+  **gagal keras**, bukan melewati langkah — tidak ada event berarti tidak ada
+  apa pun setelahnya.

@@ -47,10 +47,12 @@ import type { RaceRecordDocument } from "./schema.js";
 import {
   fromEventStatus,
   fromHex32,
+  toSterunAddOn,
   toSterunCategory,
   toSterunEvent,
   toSterunRecord,
   type EventStatus,
+  type SterunAddOn,
   type SterunCategory,
   type SterunEvent,
   type SterunRecord,
@@ -112,6 +114,24 @@ export interface AddCategoryArgs {
   quota: number;
   /** Entry fee in stroops (7 decimals). `0n` makes the category free. */
   priceStroops: bigint;
+}
+
+/**
+ * A paid extra sold alongside an entry.
+ *
+ * Priced in **stroops**, like {@link AddCategoryArgs} and for the same reason:
+ * money never travels through a float in this codebase. A jersey at 50 sUSD is
+ * `500_000_000n`, and the round trip through a double that `50.0` would invite
+ * is off by a stroop often enough to make `enter` revert with no explanation.
+ */
+export interface AddAddonArgs {
+  eventId: number;
+  /** Soroban `Symbol`: letters, digits and `_`, e.g. `JERSEY_L`. */
+  code: string;
+  /** Price in stroops (7 decimals). `0n` makes the add-on free. */
+  priceStroops: bigint;
+  /** Units available. The contract enforces it; `enter` reverts `AddOnQuotaFull(15)`. */
+  quota: number;
 }
 
 export interface EnterArgs {
@@ -225,6 +245,43 @@ export class SterunClient {
       ...(publicKey === undefined ? {} : { publicKey }),
       ...(signTransaction === undefined ? {} : { signTransaction }),
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // EventRegistry (C1) — admin side: the organiser allowlist (STE-36)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Put an address on the organiser allowlist. **The contract's admin
+   * authorizes**, not the organiser.
+   *
+   * `createEvent` needs this. `organiser.require_auth()` proves the caller
+   * holds the keypair and says nothing about `name`, which is a free string —
+   * so without the allowlist anyone can publish "Jakarta Marathon 2026". An
+   * address that is not on it gets `NotAllowlistedOrganiser(18)`.
+   *
+   * Reverts `OrganiserAlreadyAdded(16)` if the address is already on it.
+   */
+  async addOrganiser(organiser: string, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "addOrganiser",
+      () => this.registry.add_organiser({ organiser }, this.callOptions(options)),
+    );
+  }
+
+  /**
+   * Take an address off the allowlist. **Admin authorizes.** Reverts
+   * `OrganiserNotFound(17)` if it was not on it.
+   *
+   * Forward-looking only: events the address already created keep it as their
+   * organiser, with every per-event power intact. What it loses is the ability
+   * to create new ones.
+   */
+  async removeOrganiser(organiser: string, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "removeOrganiser",
+      () => this.registry.remove_organiser({ organiser }, this.callOptions(options)),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -350,11 +407,71 @@ export class SterunClient {
     return categories;
   }
 
+  /**
+   * Put a paid extra on sale for an event. Organiser-signed, like `addCategory`.
+   *
+   * `reserve_addon` is deliberately NOT wrapped anywhere in this client. It
+   * calls `race_record.require_auth()` on chain, so it is a cross-contract step
+   * inside `enter` rather than something a client may call — wrapping it would
+   * only hand people a method that always reverts.
+   */
+  async addAddon(args: AddAddonArgs, options?: CallOptions): Promise<SentResult<number>> {
+    return runWrite("addAddon", () =>
+      this.registry.add_addon(
+        {
+          event_id: args.eventId,
+          code: args.code,
+          price_usdc: args.priceStroops,
+          quota: args.quota,
+        },
+        this.callOptions(options),
+      ),
+    );
+  }
+
+  /** Reverts `AddOnNotFound(14)` for an id this event never sold. */
+  async getAddon(eventId: number, addonId: number): Promise<SterunAddOn> {
+    const data = await runRead("getAddon", () =>
+      this.registry.get_addon({ event_id: eventId, addon_id: addonId }),
+    );
+    return toSterunAddOn(eventId, addonId, data);
+  }
+
+  async addonCount(eventId: number): Promise<number> {
+    return runRead("addonCount", () => this.registry.addon_count({ event_id: eventId }));
+  }
+
+  /**
+   * Every add-on of an event, in id order. `[]` for an event selling none.
+   *
+   * One call per add-on, the same fan-out `listCategories` performs, and for
+   * the same reason rather than by preference: EventRegistry exposes
+   * `addon_count` and `get_addon` and nothing that returns them together. A
+   * view handing back an unbounded vector gets more expensive as an event
+   * grows, which is why the contract does not offer one — so the cost belongs
+   * here, where a caller can see it, rather than in a helper that hides it.
+   */
+  async listAddOns(eventId: number): Promise<SterunAddOn[]> {
+    const count = await this.addonCount(eventId);
+    const addOns: SterunAddOn[] = [];
+    for (let id = 0; id < count; id += 1) addOns.push(await this.getAddon(eventId, id));
+    return addOns;
+  }
+
   async getOrganiser(eventId: number): Promise<string> {
     return runRead("getOrganiser", () => this.registry.get_organiser({ event_id: eventId }));
   }
 
   /** Never reverts: `false` for an unknown event or an address never added. */
+  /**
+   * Whether the address may call `createEvent` at all (STE-36). This is the
+   * read a console uses to decide whether to show the form; the contract is
+   * what enforces it, so skipping this check gets a revert, not an event.
+   */
+  async isOrganiser(address: string): Promise<boolean> {
+    return runRead("isOrganiser", () => this.registry.is_organiser({ addr: address }));
+  }
+
   async isScanner(eventId: number, address: string): Promise<boolean> {
     return runRead("isScanner", () => this.registry.is_scanner({ event_id: eventId, addr: address }));
   }

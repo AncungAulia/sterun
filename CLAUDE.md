@@ -52,7 +52,7 @@ Versi `@stellar/stellar-sdk` dipaksa satu (`^17.0.1`) lewat `pnpm.overrides` di 
 root: generator bindings menuliskan `^14.5.0`, dan dua copy SDK dalam satu graph berarti dua RPC
 client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 
-## Status sekarang (per 2026-09-07)
+## Status sekarang (per 2026-09-10)
 
 | Tiket | Komponen | Status |
 | --- | --- | --- |
@@ -75,12 +75,14 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | — | object storage **R2** (`sterun-files`, APAC) | selesai — API jadi stateless, blocker replica hilang |
 | STE-35 | **kontrak v2**: upgradeable + add-on berbayar + `Cancelled` | selesai, 114 test, **LIVE di testnet** |
 | — | migrasi `be/` + `fe/` ke alamat v2 | selesai — index & vault di-truncate, e2e v2 lolos, 18/18 |
+| STE-36 | **allowlist organiser** di EventRegistry (C1) | selesai, 66 test, **LIVE lewat `upgrade` in-place — alamat TETAP** |
 
 Kontrak **sudah hidup di testnet**, dan sekarang ada **dua pasang**. Alamat + bukti transaksi
 lengkap ada di [`docs/deployments.md`](docs/deployments.md):
 
 ```
-# v2 (STE-35) — add-on berbayar, Cancelled, upgradeable. Interface: docs/specs/INTERFACE.md v2.0.1
+# v2 (STE-35 + STE-36) — add-on berbayar, Cancelled, upgradeable, allowlist organiser.
+# Interface: docs/specs/INTERFACE.md v2.1.0
 EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
 RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 
@@ -124,7 +126,9 @@ terhadap testnet yang live, dari PII masuk sampai roster keluar: bukti langkah d
 
 Kontrak v1 **non-upgradeable**: alamatnya permanen untuk versi itu, dan itulah kenapa add-on
 STE-35 butuh pasangan baru. **v2 upgradeable** (`upgrade(new_wasm_hash)`, admin-gated, di kedua
-kontrak), jadi seharusnya ini terakhir kalinya alamat berganti.
+kontrak), jadi seharusnya ini terakhir kalinya alamat berganti. **STE-36 sudah membuktikannya**:
+allowlist organiser mendarat di EventRegistry lewat `upgrade` — fungsi baru, storage key baru,
+alamat sama, event lama utuh.
 
 Harganya satu aturan yang tidak bisa dijaga compiler: **storage key append-only selamanya** —
 jangan hapus/rename/ganti tipe varian `DataKey`, dan jangan tambah field wajib ke struct yang sudah
@@ -178,6 +182,11 @@ meng-install Rust sama sekali (mis. reviewer grant yang cuma pegang URL run-nya)
   proxy). Konsekuensi: storage key append-only selamanya.
 - **Add-on berbayar hidup on-chain** (STE-35): `enter` menagih `category.price + Σ addon.price`
   dalam **satu** transfer atomik, dan `RecordData.addon_ids` mencatat yang dibeli.
+- **`create_event` gated allowlist organiser** (STE-36, Opsi A). `require_auth` saja tidak cukup:
+  `name` adalah `String` bebas, jadi tanpa allowlist siapa pun bisa menerbitkan
+  "Jakarta Marathon 2026". Admin = **STERUN_ADMIN**, pengajuan akses off-chain. **B/KYC =
+  pasca-pilot, bukan sekarang.** Allowlist-nya contract-wide dan pencabutannya maju saja —
+  detail di `sc/contracts/event_registry/CLAUDE.md`.
 - **Tanpa escrow.** Refund tetap janji off-chain. Karena v2 upgradeable, escrow bisa ditambahkan
   in-place nanti — jangan dibangun sekarang.
 - **Versi crate kontrak (pinned EXACT di `sc/Cargo.toml`)**: `soroban-sdk = "=26.1.1"` (protocol

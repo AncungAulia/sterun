@@ -16,6 +16,7 @@ otoritatif: `docs/SYSTEM_DESIGN.md` §3.1. Interface beku: `docs/specs/INTERFACE
 | `Scanner(event_id, scanner)` | persistent | `bool` |
 | `AddOn(event_id, addon_id)` | persistent | `AddOnData` (v2) |
 | `AddOnCount(event_id)` | persistent | `u32` (v2) |
+| `Organiser(organiser)` | persistent | `bool` (v2.1) — allowlist admin, **contract-wide** |
 
 `DataKey` **tidak** didokumentasikan di `INTERFACE.md`: dia skema storage, bukan surface yang
 dipanggil client. `check-interface.mjs` menuliskannya sebagai `internalTypes`, jadi
@@ -27,7 +28,7 @@ entry yang ditulis kode lama. Varian `DataKey` dikirim sebagai **nama**-nya, jad
 di ujung aman; menghapus, me-rename, atau mengganti tipe nilainya membuat entry lama jadi yatim
 tanpa satu pun error. Aturan lengkap + kenapa: `sc/CLAUDE.md`.
 
-## Enam hal yang gampang dirusak
+## Tujuh hal yang gampang dirusak
 
 1. **`set_race_record` one-shot.** Panggilan kedua ditolak (`RaceRecordAlreadySet = 7`). Alasan:
    alamat itu satu-satunya caller tepercaya `reserve_slot`. Kalau bisa di-swap, admin yang
@@ -49,7 +50,20 @@ tanpa satu pun error. Aturan lengkap + kenapa: `sc/CLAUDE.md`.
    butuh angka untuk menagih. Membacanya lewat panggilan kedua berarti jumlah yang ditagih dan unit
    yang dipakai datang dari dua pembacaan berbeda. `seq` unitnya tetap terbit di event
    `AddOnReserved` untuk fulfilment. Mengubah return-nya = mengubah cara `enter` menagih.
-6. **`reserved_count` tidak pernah turun.** Membatalkan event tidak "mengembalikan" jersey yang
+6. **`create_event` punya DUA gerbang.** (v2.1, STE-36) `organiser.require_auth()` menjawab
+   "pemanggil memegang keypair ini"; `is_organiser` menjawab "keypair ini sudah divetting admin".
+   `name` adalah `String` bebas, jadi tanpa gerbang kedua siapa pun bisa menerbitkan
+   "Jakarta Marathon 2026". Yang perlu diingat saat menyentuhnya:
+   - allowlist-nya **contract-wide**, bukan per-event, dan **admin-gated**, bukan
+     organiser-gated. Hibahnya adalah hal yang dibutuhkan organiser *sebelum* dia punya event.
+     Otoritas per-event tetap di `EventData.organiser`;
+   - `remove_organiser` **maju saja**: event yang sudah dibuat tetap milik organisernya, lengkap
+     dengan semua wewenangnya di sini maupun di C2. Mencabut lomba yang entry-nya sudah terjual
+     bukan pekerjaan satu penulisan storage;
+   - setelah `upgrade`, allowlist-nya **kosong**. Tidak ada migrasi. Sampai admin
+     `add_organiser`, tidak ada `create_event` yang lolos — itu langkah deploy, bukan pelengkap.
+
+7. **`reserved_count` tidak pernah turun.** Membatalkan event tidak "mengembalikan" jersey yang
    sudah terjual, karena refundnya off-chain. Kalau suatu hari itu berubah, itu fitur baru dengan
    fungsi baru — bukan diam-diam mengurangi counter.
 
@@ -58,7 +72,8 @@ tanpa satu pun error. Aturan lengkap + kenapa: `sc/CLAUDE.md`.
 `NotInitialized=1`, `EventNotFound=2`, `CategoryNotFound=3`, `EventNotOpen=4`, `QuotaFull=5`,
 `RaceRecordNotSet=6`, `RaceRecordAlreadySet=7`, `InvalidQuota=8`, `InvalidPrice=9`,
 `InvalidDistance=10`, `InvalidStatus=11`, `ScannerAlreadyAdded=12`, `ScannerNotFound=13`,
-`AddOnNotFound=14`, `AddOnQuotaFull=15`.
+`AddOnNotFound=14`, `AddOnQuotaFull=15`, `OrganiserAlreadyAdded=16`, `OrganiserNotFound=17`,
+`NotAllowlistedOrganiser=18`.
 
 `add_addon` **memakai ulang** `InvalidQuota=8` dan `InvalidPrice=9` — kondisinya persis sama dengan
 `add_category` (`quota == 0`, `price < 0`), dan kode baru cuma akan memaksa client membedakan hal
@@ -71,7 +86,9 @@ sini dan revert-nya merambat apa adanya: `Error(Contract, #4)` dari `enter` itu 
 ## Event yang dipancarkan
 
 `EventCreated`, `CategoryAdded`, `EventStatusChanged`, `ScannerAdded`, `ScannerRemoved`,
-`SlotReserved`, plus v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`.
+`SlotReserved`, plus v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`, plus v2.1:
+`OrganiserAdded`, `OrganiserRemoved` (topic-nya **tanpa** `event_id` — allowlist-nya
+contract-wide).
 
 Nama topic-nya diturunkan dari nama struct, dan `AddOn` pecah jadi dua kata:
 `AddOnReserved` → `"add_on_reserved"`, **bukan** `"addon_reserved"`. Argumen fungsi tetap
@@ -83,13 +100,20 @@ urutan deklarasi. `#[topic]` yang tetap berurutan deklarasi.
 
 ## Test
 
-`src/test.rs`, 54 test, coverage `lib.rs` 98%. Tiap revert path punya test-nya sendiri. Kalau
+`src/test.rs`, 66 test, coverage `lib.rs` 98%. Tiap revert path punya test-nya sendiri. Kalau
 kamu menambah `pub fn` atau varian error, tambahkan **positive + negative + edge** sekaligus —
 `cargo test` bukan tempat menaruh happy path saja.
 
 `mod upgrade` men-deploy registry **dari wasm** (`env.register(bytes, args)`), karena
 `update_current_contract_wasm` cuma bisa mengganti executable yang benar-benar ada. Jadi
 `stellar contract build` bukan cuma saran di sini: wasm basi = test upgrade menguji kode kemarin.
+
+Satu test di sana tidak memakai build lokal sebagai "kode lama":
+`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` men-deploy wasm yang
+**benar-benar live** sebelum STE-36 (`testdata/event_registry_live_pre_allowlist.wasm`,
+`22bb432e…`), menulis event/kategori/add-on/scanner/bib dengannya, lalu meng-upgrade ke build
+sekarang. Itu satu-satunya pasangan yang bisa membuktikan `DataKey::Organiser` ditambahkan
+dengan aman. Aturan mengganti fixture-nya: `testdata/README.md`.
 
 ```bash
 cd sc && stellar contract build && cargo test -p event_registry

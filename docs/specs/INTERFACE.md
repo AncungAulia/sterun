@@ -1,6 +1,6 @@
-# INTERFACE — kontrak Sterun yang DIBEKUKAN (v2.0.1)
+# INTERFACE — kontrak Sterun yang DIBEKUKAN (v2.1.0)
 
-> **Status: FROZEN 2026-09-09 (v2 — upgradeable + paid add-ons + `Cancelled`).**
+> **Status: FROZEN 2026-09-10 (v2.1 — organiser allowlist di EventRegistry).**
 > Dokumen ini adalah *handoff contract* nomor 1 di `docs/SYSTEM_DESIGN.md` §9: signature fungsi
 > dan layout `#[contractevent]` yang dipegang **James** (backend/indexer) dan **Ancung**
 > (web app, QR pass, scanner PWA) supaya mereka bisa jalan paralel tanpa menunggu kerjaan kontrak.
@@ -8,6 +8,32 @@
 > Setiap perubahan pada signature, layout event, atau kode error setelah PR ini merged wajib:
 > **PR baru + approval Axel (PM) + fable**, entri di `docs/specs/CHANGELOG.md`, dan **regenerate TS
 > bindings** (STE-14). Kode error adalah ABI publik — **jangan pernah di-renumber**.
+
+## Apa yang berubah dari v2.0.1 (MINOR, additive)
+
+STE-36. `create_event` dulu cuma dijaga `organiser.require_auth()`. Itu membuktikan pemanggil
+memegang keypair-nya, dan **tidak** membuktikan apa pun tentang `name` — yang tipenya `String`
+bebas. Siapa pun bisa membuat "Jakarta Marathon 2026" dan menjual entry ke sana. v2.1 menambah
+lapis kedua: **allowlist organiser yang dipegang admin**.
+
+| Perubahan | Dampak ke client |
+| --- | --- |
+| `add_organiser` / `remove_organiser` / `is_organiser` baru di C1 | additive |
+| Event baru: `OrganiserAdded`, `OrganiserRemoved` | additive |
+| Kode error baru: `OrganiserAlreadyAdded(16)`, `OrganiserNotFound(17)`, `NotAllowlistedOrganiser(18)` | additive — tidak ada yang di-renumber |
+| **`create_event` sekarang bisa revert `NotAllowlistedOrganiser(18)`** | **perilaku berubah** — pemanggil yang tidak di-allowlist ditolak; signature-nya tidak berubah |
+| Dipasang lewat `upgrade` ke alamat yang **sama** (`CAPB6NQP…`) | tidak ada alamat baru; event lama utuh |
+
+Dua hal yang wajib dibaca sebelum memakai versi ini:
+
+- **Allowlist-nya mulai KOSONG.** `upgrade` mengganti kode, bukan storage, dan tidak ada
+  migrasi yang memindahkan organiser event yang sudah ada ke dalam allowlist. Sampai admin
+  memanggil `add_organiser`, **tidak ada** `create_event` yang lolos. Seeding adalah langkah
+  deploy, bukan pelengkap.
+- **Pencabutan bersifat maju saja.** `remove_organiser` tidak menyentuh event yang sudah dibuat:
+  organiser-nya tetap organiser dan tetap bisa `add_category`, `set_event_status`, mengelola
+  scanner, dan `record_finish` di C2. Yang hilang cuma kemampuan membuat event **baru**. Lomba
+  yang entry-nya sudah terjual tidak bisa di-batalkan oleh satu penulisan storage.
 
 ## Apa yang berubah dari v1.0.1 (BREAKING)
 
@@ -57,12 +83,24 @@ Artefak yang dipakai saat pembekuan ini:
 
 | Kontrak | Wasm | Wasm hash (sha256) | Ukuran |
 | --- | --- | --- | ---: |
-| EventRegistry (C1, v2) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
-| RaceRecord (C2, v2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
+| EventRegistry (C1, v2.1) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26.948 B |
+| RaceRecord (C2, v2.0.1) | `sc/target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
 
-Artefak RaceRecord v2.0.0 (`c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc`, 21.795 B) sudah **digantikan di alamat yang
-sama** lewat `upgrade` — interface-nya identik, isinya beda satu optimasi internal. Riwayatnya di
-`docs/deployments.md`; itu contoh pertama v2 mengganti kode tanpa mengganti alamat.
+RaceRecord **tidak** ikut berubah di v2.1 — hash-nya sama persis dengan yang dibekukan v2.0.1,
+dan alamatnya tidak di-`upgrade`.
+
+Artefak yang sudah **digantikan di alamat yang sama** lewat `upgrade` (riwayat lengkap +
+tx-nya di `docs/deployments.md`):
+
+| | sha256 | Ukuran |
+| --- | --- | ---: |
+| EventRegistry v2.0.0/v2.0.1 | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
+| RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21.795 B |
+
+Artefak EventRegistry `22bb432e…` juga **ter-commit** di
+`sc/contracts/event_registry/testdata/`, karena test upgrade-nya men-deploy kode itu, menulis
+state dengannya, lalu menggantinya dengan build sekarang — satu-satunya pasangan yang bisa
+membuktikan `DataKey::Organiser` ditambahkan dengan aman.
 
 Artefak v1 yang dibekukan sebelumnya (masih live di alamat v1, lihat `docs/deployments.md`):
 `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` (C1, 14.964 B) dan
@@ -72,7 +110,7 @@ Hash itu **sha256 biasa dari file wasm** — reviewer bisa cek tanpa Stellar CLI
 
 ```bash
 shasum -a 256 sc/target/wasm32v1-none/release/event_registry.wasm
-# 22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f
+# cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0
 ```
 
 Toolchain yang menghasilkannya: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`,
@@ -101,7 +139,9 @@ Semua `Result<T, Error>` berarti: sukses mengembalikan `T`, gagal **revert** den
 | `__constructor` | `admin: Address` | — | — (dijalankan sekali saat deploy) | — |
 | `upgrade` | `new_wasm_hash: BytesN<32>` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(1)`, plus host error kalau hash-nya belum di-upload |
 | `set_race_record` | `race_record: Address` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(1)`, `RaceRecordAlreadySet(7)` |
-| `create_event` | `organiser: Address, name: String, metadata_hash: BytesN<32>, uri: String, starts_at: u64` | `Result<u32, Error>` (event_id) | **`organiser`** (argumen) | `NotInitialized(1)` |
+| `add_organiser` | `organiser: Address` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(1)`, `OrganiserAlreadyAdded(16)` |
+| `remove_organiser` | `organiser: Address` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(1)`, `OrganiserNotFound(17)` |
+| `create_event` | `organiser: Address, name: String, metadata_hash: BytesN<32>, uri: String, starts_at: u64` | `Result<u32, Error>` (event_id) | **`organiser`** (argumen), yang wajib ada di allowlist admin | `NotInitialized(1)`, `NotAllowlistedOrganiser(18)` |
 | `add_category` | `event_id: u32, code: Symbol, distance_m: u32, quota: u32, price_usdc: i128` | `Result<u32, Error>` (category_id) | **organiser event itu** (dari storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)`, `InvalidDistance(10)` |
 | `add_addon` | `event_id: u32, code: Symbol, price_usdc: i128, quota: u32` | `Result<u32, Error>` (addon_id) | **organiser event itu** (dari storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)` |
 | `set_event_status` | `event_id: u32, status: EventStatus` | `Result<(), Error>` | **organiser event itu** | `EventNotFound(2)`, `InvalidStatus(11)` |
@@ -114,6 +154,7 @@ Semua `Result<T, Error>` berarti: sukses mengembalikan `T`, gagal **revert** den
 | `get_event` | `event_id: u32` | `Result<EventData, Error>` | — (view) | `EventNotFound(2)` |
 | `get_category` | `event_id: u32, category_id: u32` | `Result<CategoryData, Error>` | — (view) | `CategoryNotFound(3)` |
 | `get_organiser` | `event_id: u32` | `Result<Address, Error>` | — (view) | `EventNotFound(2)` |
+| `is_organiser` | `addr: Address` | `bool` | — (view) | **tidak pernah revert** (`false` kalau tidak di-allowlist) |
 | `is_scanner` | `event_id: u32, addr: Address` | `bool` | — (view) | **tidak pernah revert** (`false` kalau tidak ada) |
 | `event_count` | — | `u32` | — (view) | **tidak pernah revert** (`0` kalau belum ada) |
 | `category_count` | `event_id: u32` | `u32` | — (view) | **tidak pernah revert** (`0` kalau belum ada) |
@@ -144,6 +185,21 @@ Catatan penting untuk D2/D3:
 - **`add_addon` memakai ulang `InvalidQuota(8)` dan `InvalidPrice(9)`.** Kondisinya identik dengan
   `add_category` (`quota == 0`, `price_usdc < 0`), jadi kode barunya cuma akan memaksa client
   membedakan hal yang sama. `price_usdc == 0` legal: add-on gratis dengan kuota tetap dibatasi.
+- **`create_event` punya DUA gerbang, dan keduanya menjawab pertanyaan berbeda.**
+  `organiser.require_auth()` menjawab "apakah pemanggil memegang keypair ini"; cek allowlist
+  menjawab "apakah keypair ini sudah divetting admin". Tanpa yang kedua, `name` adalah `String`
+  bebas dan gerbang pertama dengan senang hati meloloskan orang asing yang menandatangani untuk
+  address-nya sendiri sambil menamai event-nya "Jakarta Marathon 2026". Urutannya `require_auth`
+  dulu, jadi pemanggil yang tidak memegang key tidak belajar apa pun tentang isi allowlist.
+- **Allowlist itu per-address dan contract-wide, bukan per-event.** Hibahnya adalah hal yang
+  dibutuhkan organiser **sebelum** dia punya event. Otoritas per-event tetap di tempat lamanya:
+  `EventData.organiser`, yang dibaca `add_category`, `set_event_status`, `add_scanner`, dan
+  `record_finish` di C2. `is_organiser(addr)` **tidak** menjawab "apakah addr organiser event
+  X" — untuk itu pakai `get_organiser(event_id)`.
+- **`is_organiser` bukan penegak.** Dia read yang dipakai console untuk memutuskan apakah form
+  "buat event" ditampilkan. Client yang melewatinya tetap dapat revert, bukan event.
+- **Allowlist-nya mulai kosong setelah upgrade** (lihat bagian "Apa yang berubah dari v2.0.1"),
+  dan `remove_organiser` tidak mencabut apa pun dari event yang sudah dibuat.
 - **`upgrade` mengganti wasm kontrak ini di tempat.** Alamat, storage, dan saldo tidak berubah;
   yang berubah cuma kode. Efeknya baru berlaku **setelah** invocation selesai, jadi migrasi
   storage butuh panggilan kedua. Hash-nya wajib sudah ter-upload ke ledger. Lihat §4.
@@ -216,6 +272,8 @@ bukan urutan deklarasi), dan `ScMap` **kosong** kalau semua field jadi topic.
 | `EventStatusChanged` | `"event_status_changed"`, `event_id: u32` | `status: EventStatus` |
 | `ScannerAdded` | `"scanner_added"`, `event_id: u32`, `scanner: Address` | *(kosong)* |
 | `ScannerRemoved` | `"scanner_removed"`, `event_id: u32`, `scanner: Address` | *(kosong)* |
+| `OrganiserAdded` | `"organiser_added"`, `organiser: Address` | *(kosong)* |
+| `OrganiserRemoved` | `"organiser_removed"`, `organiser: Address` | *(kosong)* |
 | `SlotReserved` | `"slot_reserved"`, `event_id: u32`, `category_id: u32` | `seq: u32` |
 | `AddOnReserved` | `"add_on_reserved"`, `event_id: u32`, `addon_id: u32` | `price: i128`, `seq: u32` |
 | `ContractUpgraded` | `"contract_upgraded"`, `new_wasm_hash: BytesN<32>` | *(kosong)* |
@@ -243,6 +301,10 @@ disimpan. `AddOnAdded` mengikuti pola yang sama; `AddOnReserved` **memang** menj
 topic, karena yang ditanya di sana adalah "berapa unit add-on ini yang terjual", bukan "apa saja
 add-on event ini".
 
+`OrganiserAdded` / `OrganiserRemoved` sengaja **tidak** membawa `event_id`: allowlist-nya
+contract-wide, dan hibahnya terjadi sebelum penerimanya punya event untuk disebut. Indexer yang
+mau menampilkan "siapa saja yang boleh membuat event" mem-filter dua nama topic ini saja.
+
 Perhatikan nama topic-nya: `AddOnReserved` → `"add_on_reserved"`, bukan `"addon_reserved"`. Soroban
 menurunkan nama event dari nama struct-nya, dan `AddOn` pecah jadi dua kata. Argumen fungsi dan
 field struct tetap `addon_id` / `addon_ids` — memang tidak konsisten, dan disebut di sini justru
@@ -267,6 +329,9 @@ supaya tidak ada yang menebak.
 | 13 | `ScannerNotFound` | `remove_scanner` untuk address yang tidak ada |
 | 14 | `AddOnNotFound` | `(event_id, addon_id)` tidak dikenal |
 | 15 | `AddOnQuotaFull` | `reserved_count >= quota` pada sebuah add-on |
+| 16 | `OrganiserAlreadyAdded` | `add_organiser` untuk address yang sudah di allowlist |
+| 17 | `OrganiserNotFound` | `remove_organiser` untuk address yang tidak ada di allowlist |
+| 18 | `NotAllowlistedOrganiser` | `create_event` dari address yang tidak di-allowlist admin |
 
 ---
 
@@ -580,12 +645,35 @@ James dan Ancung — jadi dicatat di sini supaya tidak ada yang menemukannya lew
 
 | Paket | Yang harus berubah | Kalau tidak diubah |
 | --- | --- | --- |
-| `sdk/` | `EventStatus` menerima `"Cancelled"` (`src/types.ts`, `eventStatusSchema` di `src/schema.ts`) | `SterunClient` menolak event yang dibatalkan saat parsing |
-| `sdk/` | `EnterArgs.addOnIds` diteruskan ke `enter` — **sudah dikerjakan** di PR ini, karena tanpa itu `pnpm typecheck` merah | — |
-| `be/` | `EVENT_STATUSES` (`src/chain/decode.ts`) + dua JSON schema di `src/routes/directory.ts` | indexer gagal men-decode event yang dibatalkan |
+| `sdk/` | ~~`EventStatus` menerima `"Cancelled"`~~ — **selesai** | — |
+| `sdk/` | ~~`EnterArgs.addOnIds` diteruskan ke `enter`~~ — **selesai** | — |
+| `sdk/` | ~~Method add-on di `SterunClient`~~ — **selesai (STE-37)**: `addAddon`, `getAddon`, `listAddOns`, `addonCount`, tipe `SterunAddOn` | — |
+| `be/` | ~~`EVENT_STATUSES` + JSON schema `directory.ts`~~ — **selesai**, plus CHECK constraint `events_status_check` (migrasi 006) yang baris ini dulu tidak sebut | — |
+| `be/` | ~~alamat v2~~ — **selesai**: `be/` dan `fe/` menunjuk pasangan v2, index + vault di-truncate | — |
 | `be/` | opsional: index `add_on_reserved` untuk laporan penjualan add-on | tidak ada data add-on di roster |
-| `fe/` | `EventStatusBadge` butuh warna untuk `Cancelled` | badge kosong / lookup `undefined` |
+| `fe/` | ~~`EventStatusBadge` butuh warna untuk `Cancelled`~~ — **selesai** | — |
 | `fe/` | UI pilih add-on di alur entry (STE-21) | add-on tidak bisa dibeli lewat web app |
+| `fe/` | UI harga + kuota add-on di organiser console (STE-17) | console masih model v1: add-on sebagai deskripsi, tanpa harga dan tanpa stok |
+
+> **Baris `fe/` punya prasyarat yang dulu tidak tertulis di sini, dan itu menahan STE-21 diam-diam.**
+> Untuk menampilkan add-on yang bisa dipilih, `fe/` harus bisa **membaca** add-on sebuah event — dan
+> sampai STE-37 `SterunClient` tidak punya satu pun method add-on. Bukan hanya membuatnya yang
+> terhalang; membacanya juga. Yang membuat itu tidak kelihatan: `sdk/vendor/event-registry.ts`
+> **punya** semua fungsinya, jadi sekilas terlihat siap — padahal itu cetakan otomatis dari wasm,
+> bukan permukaan yang boleh dipakai (`registry` dan `record` private, bindings tidak di-export dari
+> `src/index.ts`).
+>
+> Sekarang tersedia:
+>
+> ```ts
+> const addOns = await sterun.listAddOns(eventId);   // SterunAddOn[]
+> // { addonId, code, priceStroops, quota, reservedCount, unitsLeft }
+> await sterun.enter({ runner, eventId, categoryId, addOnIds: [0, 2], participantHash }, asRunner);
+> ```
+>
+> `reserve_addon` **tidak** di-wrap dan tidak akan: dia memanggil `race_record.require_auth()`, jadi
+> itu langkah antar-kontrak di dalam `enter`, bukan sesuatu yang boleh dipanggil client. Mem-wrap-nya
+> cuma memberi orang cara memanggil sesuatu yang selalu revert.
 
 `be/` men-decode `RecordData` per nama field, jadi `addon_ids` yang baru **tidak** merusaknya —
 field itu hanya diabaikan sampai ada yang memakainya.

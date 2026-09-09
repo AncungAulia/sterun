@@ -96,6 +96,27 @@ fn deploy(env: &Env) -> (Address, Address) {
     (admin, registry)
 }
 
+/// Puts `organiser` on the admin's allowlist, which `create_event` requires
+/// since v2.1. Idempotent, because a second `add_organiser` for the same
+/// address reverts `OrganiserAlreadyAdded(16)` and fixtures should not have to
+/// track who they already allowlisted.
+fn allowlist(env: &Env, client: &EventRegistryClient, organiser: &Address) {
+    env.mock_all_auths();
+    if !client.is_organiser(organiser) {
+        client.add_organiser(organiser);
+    }
+}
+
+/// Allowlists `organiser` and creates one event owned by them. Every test that
+/// wants an event as a *precondition* goes through here: the allowlist gate is
+/// what `create_event` tests exercise on purpose, and everything else would
+/// otherwise be testing the gate by accident.
+fn create_event(env: &Env, client: &EventRegistryClient, organiser: &Address) -> u32 {
+    allowlist(env, client, organiser);
+    env.mock_all_auths();
+    client.create_event(organiser, &name(env), &hash(env), &uri(env), &STARTS_AT)
+}
+
 /// Creates an event owned by `organiser` with one category, moves it to
 /// `Open`, and returns `(event_id, category_id)`. Uses `mock_all_auths`
 /// because the auth model is not what these callers are testing.
@@ -105,8 +126,8 @@ fn open_event(
     organiser: &Address,
     quota: u32,
 ) -> (u32, u32) {
+    let event_id = create_event(env, client, organiser);
     env.mock_all_auths();
-    let event_id = client.create_event(organiser, &name(env), &hash(env), &uri(env), &STARTS_AT);
     let category_id = client.add_category(
         &event_id,
         &symbol_short!("10K"),
@@ -188,8 +209,8 @@ fn create_event_ids_are_monotonic_and_data_roundtrips() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let first = create_event(&env, &client, &organiser);
+    let second = create_event(&env, &client, &organiser);
 
     assert_eq!(first, 0);
     assert_eq!(second, 1);
@@ -217,8 +238,8 @@ fn add_category_ids_are_per_event_and_data_roundtrips() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_a = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let event_b = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_a = create_event(&env, &client, &organiser);
+    let event_b = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.add_category(&event_a, &symbol_short!("5K"), &5_000, &100, &25_000_000),
@@ -266,8 +287,7 @@ fn set_event_status_walks_the_lifecycle() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     assert_eq!(client.get_event(&event_id).status, EventStatus::Draft);
 
     for status in [
@@ -289,8 +309,7 @@ fn scanner_allowlist_add_then_remove() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     assert!(!client.is_scanner(&event_id, &scanner));
 
     client.add_scanner(&event_id, &scanner);
@@ -335,8 +354,7 @@ fn emits_event_created() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         env.events().all(),
@@ -356,8 +374,7 @@ fn emits_category_added() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     let category_id =
         client.add_category(&event_id, &symbol_short!("10K"), &10_000, &200, &50_000_000);
 
@@ -381,8 +398,7 @@ fn emits_event_status_changed() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     client.set_event_status(&event_id, &EventStatus::Open);
 
     assert_eq!(
@@ -404,8 +420,7 @@ fn emits_scanner_added_and_removed() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     client.add_scanner(&event_id, &scanner);
     assert_eq!(
@@ -515,8 +530,7 @@ fn organiser_only_calls_reject_a_foreign_signer() {
     let scanner = Address::generate(&env);
 
     env.mock_all_auths();
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     client.add_scanner(&event_id, &scanner);
 
     macro_rules! signed_by_impostor {
@@ -651,8 +665,7 @@ fn reserve_slot_requires_status_open() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     let category_id = client.add_category(&event_id, &symbol_short!("10K"), &10_000, &10, &0);
     let race_record = wire_race_record(&env, &client);
     let caller = MockRaceRecordClient::new(&env, &race_record);
@@ -736,8 +749,7 @@ fn add_category_validates_its_inputs() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.try_add_category(&event_id, &symbol_short!("10K"), &10_000, &0, &0),
@@ -769,8 +781,7 @@ fn views_revert_on_unknown_ids() {
         Err(Ok(Error::CategoryNotFound))
     );
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
     assert_eq!(
         client.try_get_category(&event_id, &0),
         Err(Ok(Error::CategoryNotFound))
@@ -790,8 +801,7 @@ fn scanner_allowlist_rejects_duplicate_and_unknown() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.try_remove_scanner(&event_id, &scanner),
@@ -819,8 +829,7 @@ fn set_event_status_rejects_illegal_transitions() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     // Draft cannot jump straight to Completed, nor re-enter Draft.
     assert_eq!(
@@ -871,8 +880,7 @@ fn an_event_can_be_cancelled_from_every_non_terminal_state() {
     env.mock_all_auths();
 
     for reach in [EventStatus::Draft, EventStatus::Open, EventStatus::Closed] {
-        let event_id =
-            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let event_id = create_event(&env, &client, &organiser);
         match reach {
             EventStatus::Draft => {}
             EventStatus::Open => client.set_event_status(&event_id, &EventStatus::Open),
@@ -1030,8 +1038,7 @@ fn free_category_and_extreme_values_are_accepted() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     // price 0 — a free category is legal (only negative prices are not).
     let free = client.add_category(&event_id, &symbol_short!("FUN"), &1, &1, &0);
@@ -1080,8 +1087,8 @@ fn events_of_different_organisers_are_isolated() {
     let bob = Address::generate(&env);
 
     env.mock_all_auths();
-    let alice_event = client.create_event(&alice, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let bob_event = client.create_event(&bob, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let alice_event = create_event(&env, &client, &alice);
+    let bob_event = create_event(&env, &client, &bob);
     assert_eq!(client.get_organiser(&alice_event), alice);
     assert_eq!(client.get_organiser(&bob_event), bob);
 
@@ -1131,8 +1138,8 @@ fn scanner_allowlist_is_per_event() {
     let scanner = Address::generate(&env);
     env.mock_all_auths();
 
-    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let first = create_event(&env, &client, &organiser);
+    let second = create_event(&env, &client, &organiser);
 
     client.add_scanner(&first, &scanner);
     assert!(client.is_scanner(&first, &scanner));
@@ -1240,8 +1247,8 @@ fn add_addon_ids_are_per_event_and_data_roundtrips() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
-    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let first = create_event(&env, &client, &organiser);
+    let second = create_event(&env, &client, &organiser);
 
     assert_eq!(client.addon_count(&first), 0);
     let (jersey, tumbler) = add_two_addons(&env, &client, first);
@@ -1272,8 +1279,7 @@ fn add_addon_validates_its_inputs() {
     let organiser = Address::generate(&env);
     env.mock_all_auths();
 
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     assert_eq!(
         client.try_add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &0),
@@ -1304,8 +1310,7 @@ fn add_addon_rejects_a_foreign_signer() {
     let impostor = Address::generate(&env);
 
     env.mock_all_auths();
-    let event_id =
-        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let event_id = create_event(&env, &client, &organiser);
 
     env.mock_auths(&[MockAuth {
         address: &impostor,
@@ -1581,6 +1586,280 @@ fn add_on_writes_extend_the_persistent_ttl() {
 }
 
 // ---------------------------------------------------------------------------
+// Organiser allowlist (v2.1, STE-36)
+//
+// The gate `create_event` gained, from both sides: who may open it, who may
+// close it, and what an address that is not on it can and cannot do.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn organiser_allowlist_add_then_remove() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    // Never added.
+    assert!(!client.is_organiser(&organiser));
+
+    client.add_organiser(&organiser);
+    assert!(client.is_organiser(&organiser));
+
+    client.remove_organiser(&organiser);
+    assert!(!client.is_organiser(&organiser));
+}
+
+#[test]
+fn organiser_allowlist_rejects_duplicate_and_unknown() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    assert_eq!(
+        client.try_remove_organiser(&organiser),
+        Err(Ok(Error::OrganiserNotFound))
+    );
+
+    client.add_organiser(&organiser);
+    assert_eq!(
+        client.try_add_organiser(&organiser),
+        Err(Ok(Error::OrganiserAlreadyAdded))
+    );
+
+    client.remove_organiser(&organiser);
+    assert_eq!(
+        client.try_remove_organiser(&organiser),
+        Err(Ok(Error::OrganiserNotFound))
+    );
+}
+
+/// The allowlist is the admin's, and only the admin's. An organiser who could
+/// add organisers would be able to grant away the exact thing the gate exists
+/// to withhold.
+#[test]
+fn organiser_allowlist_is_admin_only() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let impostor = Address::generate(&env);
+    let target = Address::generate(&env);
+
+    macro_rules! signed_by_impostor {
+        ($fn_name:literal) => {
+            env.mock_auths(&[MockAuth {
+                address: &impostor,
+                invoke: &MockAuthInvoke {
+                    contract: &registry,
+                    fn_name: $fn_name,
+                    args: (target.clone(),).into_val(&env),
+                    sub_invokes: &[],
+                },
+            }]);
+        };
+    }
+
+    signed_by_impostor!("add_organiser");
+    assert_eq!(
+        client.try_add_organiser(&target),
+        Err(Err(InvokeError::Abort))
+    );
+    assert!(!client.is_organiser(&target));
+
+    // Same from the other direction: put someone on as admin, then try to take
+    // them off as a stranger.
+    env.mock_all_auths();
+    client.add_organiser(&target);
+
+    signed_by_impostor!("remove_organiser");
+    assert_eq!(
+        client.try_remove_organiser(&target),
+        Err(Err(InvokeError::Abort))
+    );
+    assert!(client.is_organiser(&target));
+}
+
+/// The point of the whole ticket: holding the keypair is not enough.
+#[test]
+fn create_event_rejects_an_organiser_who_is_not_allowlisted() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let impersonator = Address::generate(&env);
+    // `mock_all_auths` satisfies `organiser.require_auth()` for ANY address —
+    // which is precisely the situation the allowlist exists to survive.
+    env.mock_all_auths();
+
+    assert_eq!(
+        client.try_create_event(
+            &impersonator,
+            &String::from_str(&env, "Jakarta Marathon 2026"),
+            &hash(&env),
+            &uri(&env),
+            &STARTS_AT
+        ),
+        Err(Ok(Error::NotAllowlistedOrganiser))
+    );
+    // Nothing was written: no id was burned and no event exists.
+    assert_eq!(client.event_count(), 0);
+    assert_eq!(client.try_get_event(&0), Err(Ok(Error::EventNotFound)));
+}
+
+#[test]
+fn create_event_succeeds_once_the_admin_allowlists_the_organiser() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    assert_eq!(event_id, 0);
+    assert_eq!(client.get_organiser(&event_id), organiser);
+}
+
+#[test]
+fn revoking_an_organiser_closes_create_event_again() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    client.remove_organiser(&organiser);
+
+    assert_eq!(
+        client.try_create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+        Err(Ok(Error::NotAllowlistedOrganiser))
+    );
+    assert_eq!(client.event_count(), 1);
+}
+
+/// Revocation is forward-looking. The race an organiser is already running
+/// has entrants who paid, and pulling its organiser out from under it would
+/// strand them — so every per-event power keeps working on events that
+/// already exist. Only NEW events are refused.
+#[test]
+fn a_revoked_organiser_still_runs_the_events_it_already_created() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let scanner = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    client.remove_organiser(&organiser);
+
+    client.add_category(&event_id, &symbol_short!("10K"), &10_000, &50, &50_000_000);
+    client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &10);
+    client.set_event_status(&event_id, &EventStatus::Open);
+    client.add_scanner(&event_id, &scanner);
+
+    assert_eq!(client.get_event(&event_id).status, EventStatus::Open);
+    assert_eq!(client.category_count(&event_id), 1);
+    assert_eq!(client.addon_count(&event_id), 1);
+    assert!(client.is_scanner(&event_id, &scanner));
+    assert!(!client.is_organiser(&organiser));
+}
+
+/// One grant is one address. Being on the allowlist says nothing about anybody
+/// else, which is the property that makes it a gate rather than a switch.
+#[test]
+fn the_allowlist_is_per_address() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let allowed = Address::generate(&env);
+    let stranger = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&allowed);
+
+    assert!(client.is_organiser(&allowed));
+    assert!(!client.is_organiser(&stranger));
+    assert_eq!(
+        client.try_create_event(&stranger, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+        Err(Ok(Error::NotAllowlistedOrganiser))
+    );
+    client.create_event(&allowed, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    assert_eq!(client.event_count(), 1);
+}
+
+#[test]
+fn emits_organiser_added_and_removed() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    assert_eq!(
+        env.events().all(),
+        std::vec![crate::OrganiserAdded {
+            organiser: organiser.clone(),
+        }
+        .to_xdr(&env, &registry)]
+    );
+
+    client.remove_organiser(&organiser);
+    assert_eq!(
+        env.events().all(),
+        std::vec![crate::OrganiserRemoved {
+            organiser: organiser.clone(),
+        }
+        .to_xdr(&env, &registry)]
+    );
+}
+
+#[test]
+fn allowlisting_extends_the_persistent_ttl() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+
+    assert_eq!(
+        persistent_ttl(&env, &registry, DataKey::Organiser(organiser.clone())),
+        BUMP_TO
+    );
+    assert_eq!(
+        env.as_contract(&registry, || env.storage().instance().get_ttl()),
+        BUMP_TO
+    );
+}
+
+/// Removing really removes: the entry is gone, not set to `false`, so the
+/// contract stops paying rent for a revoked address.
+#[test]
+fn removing_an_organiser_drops_the_entry_rather_than_falsifying_it() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.add_organiser(&organiser);
+    client.remove_organiser(&organiser);
+
+    let key = DataKey::Organiser(organiser.clone());
+    assert!(!env.as_contract(&registry, || env.storage().persistent().has(&key)));
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // These tests deploy the registry from the BUILT WASM rather than from the
@@ -1609,6 +1888,34 @@ mod upgrade {
                 path.display()
             )
         })
+    }
+
+    /// The executable that is RUNNING on testnet at
+    /// `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` as this
+    /// change is written — fetched with `stellar contract fetch`, byte for
+    /// byte. Provenance and refresh instructions: `testdata/README.md`.
+    ///
+    /// It is here because the interesting upgrade is not "wasm X replaced by
+    /// wasm X". It is "the code that wrote the live events is replaced by the
+    /// code in this branch", and that is the only pair that can prove
+    /// `DataKey::Organiser` was appended safely.
+    const LIVE_PRE_ALLOWLIST_WASM: &[u8] =
+        include_bytes!("../testdata/event_registry_live_pre_allowlist.wasm");
+
+    /// sha256 of the artifact above, which is also the wasm hash the ledger
+    /// reports for the live contract and the one INTERFACE.md §0 freezes for
+    /// v2.0.1.
+    const LIVE_PRE_ALLOWLIST_HASH: &str =
+        "22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f";
+
+    /// Lowercase hex, so a mismatch prints the two hashes instead of two byte
+    /// arrays.
+    fn hex32(bytes: &BytesN<32>) -> std::string::String {
+        let mut out = std::string::String::new();
+        for b in bytes.to_array() {
+            out.push_str(&std::format!("{b:02x}"));
+        }
+        out
     }
 
     /// Registry deployed from its own wasm, plus its admin.
@@ -1769,5 +2076,101 @@ mod upgrade {
             }
             .to_xdr(&env, &registry)]
         );
+    }
+
+    /// STE-36 — the in-place upgrade this branch actually ships, rehearsed.
+    ///
+    /// The old executable writes the state (it has no allowlist and no gate,
+    /// so it can); the new one replaces it; then every entry the old one wrote
+    /// is read back through the new code, and the gate that did not exist when
+    /// they were written is exercised on top of them.
+    ///
+    /// This is the checklist OpenZeppelin's upgrade guidance gives for a live
+    /// contract — write state with V1, upgrade, verify the reads, verify the
+    /// new behaviour, confirm the access control, confirm V2 is still
+    /// upgradeable — run against the exact bytes on testnet rather than
+    /// against a copy of today's build.
+    #[test]
+    fn state_written_by_the_live_wasm_survives_the_allowlist_upgrade() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let registry = env.register(LIVE_PRE_ALLOWLIST_WASM, (admin.clone(),));
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+        let scanner = Address::generate(&env);
+
+        // The fixture is the live artifact, not a lookalike: the host hashes
+        // it on upload, and that hash is what the ledger reports for
+        // CAPB6NQP… today.
+        let live_hash = env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&env, LIVE_PRE_ALLOWLIST_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_ALLOWLIST_HASH);
+
+        // -- written by the OLD code, which has no allowlist to satisfy ------
+        env.mock_all_auths();
+        let event_id =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let category_id =
+            client.add_category(&event_id, &symbol_short!("10K"), &10_000, &50, &50_000_000);
+        let jersey = client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &5);
+        client.set_event_status(&event_id, &EventStatus::Open);
+        client.add_scanner(&event_id, &scanner);
+        let race_record = wire_race_record(&env, &client);
+        MockRaceRecordClient::new(&env, &race_record).reserve(&registry, &event_id, &category_id);
+
+        let event_before = client.get_event(&event_id);
+        let category_before = client.get_category(&event_id, &category_id);
+        let addon_before = client.get_addon(&event_id, &jersey);
+        // The old code does not export the view at all.
+        assert!(client.try_is_organiser(&organiser).is_err());
+
+        // -- the upgrade ----------------------------------------------------
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        // -- everything the old code wrote still decodes ---------------------
+        assert_eq!(client.get_event(&event_id), event_before);
+        assert_eq!(
+            client.get_category(&event_id, &category_id),
+            category_before
+        );
+        assert_eq!(client.get_addon(&event_id, &jersey), addon_before);
+        assert_eq!(category_before.entered_count, 1);
+        assert_eq!(client.category_count(&event_id), 1);
+        assert_eq!(client.addon_count(&event_id), 1);
+        assert_eq!(client.event_count(), 1);
+        assert_eq!(client.get_admin(), admin);
+        assert_eq!(client.get_race_record(), race_record);
+        assert!(client.is_scanner(&event_id, &scanner));
+        // The event is still Open, so entries keep working across the upgrade:
+        // a race mid-registration does not stop selling because the admin
+        // shipped a gate for NEW events.
+        MockRaceRecordClient::new(&env, &race_record).reserve(&registry, &event_id, &category_id);
+        assert_eq!(
+            client.get_category(&event_id, &category_id).entered_count,
+            2
+        );
+
+        // -- and the gate is live, and starts closed ------------------------
+        // Nothing migrated the existing organiser onto the allowlist, which is
+        // why seeding it is a step in the deploy runbook and not an
+        // afterthought.
+        assert!(!client.is_organiser(&organiser));
+        assert_eq!(
+            client.try_create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+            Err(Ok(Error::NotAllowlistedOrganiser))
+        );
+
+        env.mock_all_auths();
+        client.add_organiser(&organiser);
+        assert_eq!(
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
+            event_id + 1
+        );
+
+        // Still upgradeable — losing that would be permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
     }
 }
