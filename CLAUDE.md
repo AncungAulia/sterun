@@ -83,17 +83,22 @@ lengkap ada di [`docs/deployments.md`](docs/deployments.md):
 EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
 RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 
-# v1 (STE-33) — masih live dan masih dipakai be/ + fe/. `enter` tanpa addon_ids.
+# v1 (STE-33) — masih hidup di chain, TIDAK lagi dipakai be/ maupun fe/.
+# Dicatat sebagai riwayat; jangan diarahkan ke sini lagi.
 EVENT_REGISTRY_V1=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
 RACE_RECORD_V1=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
 
 SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 ```
 
-**Migrasi client ke v2 BELUM dikerjakan** — itu kode James (`be/`, `sdk/`) dan Ancung (`fe/`), dan
-checklist-nya ada di `docs/specs/INTERFACE.md` §8. Yang sudah dikerjakan cuma seminimal supaya
-workspace TS tetap compile (`enter` menerima `addOnIds` opsional, `EventStatus` menerima
-`Cancelled`, peta error dapat kode baru). Integrasi **baru** pakai alamat v2.
+**Migrasi client ke v2 SUDAH dikerjakan.** `be/` dan `fe/` menunjuk pasangan v2; `docs/deployments.md`
+memakai nama tanpa sufiks untuk v2 dan melabeli v1 sebagai `v1`, jadi parser alamat di
+`be/src/deployments.ts` me-resolve v2 dan ada test yang gagal kalau dia me-resolve v1.
+
+Index dan vault di box produksi **di-truncate** saat perpindahan: `events.event_id` dan
+`records.token_id` primary key telanjang tanpa pembeda kontrak, jadi menumpuk data dua kontrak di
+satu database berarti v2 event 0 menimpa v1 event 0 — dan `participants` menautkan PII ke
+`token_id` yang sama. Prosedur + alasannya: `be/OPERATIONS.md` bagian "Pindah ke kontrak v2".
 
 **M1 (D1 — kontrak) SELESAI.** M2 (D2 — `@sterun/sdk` + backend) tinggal satu langkah manual:
 ~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → ~~**STE-15** SterunClient~~ →
