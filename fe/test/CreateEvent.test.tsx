@@ -206,7 +206,13 @@ describe("CreateEvent", () => {
       expect(createEvent).toHaveBeenCalledTimes(1);
       expect(addCategory).toHaveBeenCalledTimes(1);
       expect(setEventStatus).toHaveBeenCalledWith(4, "Open", expect.anything());
-      expect(screen.getByText(/knows this race as number/i)).toHaveTextContent("4");
+      // The id is no longer written out in a sentence, so this is where it has
+      // to be right: the one link out of the wizard has to reach the event the
+      // run just created, not some other one.
+      expect(screen.getByRole("link", { name: /open the event page/i })).toHaveAttribute(
+        "href",
+        "/events/4",
+      );
     });
 
     it("records the address the store put the details file at", async () => {

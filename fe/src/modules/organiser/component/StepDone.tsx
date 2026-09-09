@@ -12,13 +12,13 @@
  * stepper already promised: it counts what is left, and finishing has to be
  * one of the things it can count.
  *
- * ## Why the number is not the headline any more
+ * ## Why the number is not written out
  *
- * The old copy opened with "Write down number 3", which is an errand handed to
- * somebody who has just finished a job, without saying why it matters. The
- * number is still here — it is genuinely the only handle on the event until an
- * organiser dashboard exists — but it sits under the two things a person
- * actually wants next: see it, or make another.
+ * The old copy opened with "Write down number 3", an errand handed to somebody
+ * who has just finished a job. Explaining the errand only made it longer. The
+ * number is not lost by leaving it out: it is in the address the button goes
+ * to, so the way to keep it is to open the event and keep the page, which is
+ * what a person would do anyway.
  *
  * ## Confetti
  *
@@ -118,12 +118,6 @@ export function StepDone({ eventId, eventName }: StepDoneProps) {
           <Link href="/org/new">Create another race</Link>
         </Button>
       </div>
-
-      <p className="text-sm text-n-500">
-        The contract knows this race as number <span className="numeric">{eventId}</span>. Keep it:
-        the scanner list and the results upload both ask for it, and there is nowhere to look it up
-        again yet.
-      </p>
     </div>
   );
 }
