@@ -74,6 +74,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | — | file metadata event (`POST /events/files`) untuk STE-17 | selesai, backend 745 test + e2e live — **belum ada tiket Linear-nya** |
 | — | object storage **R2** (`sterun-files`, APAC) | selesai — API jadi stateless, blocker replica hilang |
 | STE-35 | **kontrak v2**: upgradeable + add-on berbayar + `Cancelled` | selesai, 114 test, **LIVE di testnet** |
+| — | migrasi `be/` + `fe/` ke alamat v2 | selesai — index & vault di-truncate, e2e v2 lolos, 18/18 |
 
 Kontrak **sudah hidup di testnet**, dan sekarang ada **dua pasang**. Alamat + bukti transaksi
 lengkap ada di [`docs/deployments.md`](docs/deployments.md):
