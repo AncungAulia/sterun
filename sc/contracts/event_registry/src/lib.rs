@@ -7,6 +7,22 @@
 //! devices).
 //!
 //! See `docs/SYSTEM_DESIGN.md` section 3.1 for the authoritative design.
+//!
+//! ## v2 — upgradeable
+//!
+//! Unlike v1 (deployed 2026-09-04, permanently frozen at its address), this
+//! contract carries [`EventRegistry::upgrade`]: the admin can replace the
+//! contract's own wasm in place with `update_current_contract_wasm`. Soroban
+//! upgrades are protocol-level bytecode replacement — no proxy, no
+//! `delegatecall`, and storage stays where it is and is simply reinterpreted by
+//! the new code.
+//!
+//! That last part is the whole risk, so it is a hard rule here: **storage keys
+//! are append-only, forever**. Never remove a [`DataKey`] variant, never rename
+//! one, never change the type stored under one. A `#[contracttype]` enum is
+//! encoded as a vector whose first element is the *variant name*, so adding
+//! variants is safe and renaming one silently orphans every entry written under
+//! the old name.
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
@@ -34,6 +50,17 @@ const BUMP_TO: u32 = 180 * DAY_IN_LEDGERS;
 /// Lifecycle of an event. `Draft` -> `Open` -> `Closed` -> `Completed`, with
 /// `Closed` <-> `Open` allowed so an organiser can re-open registration.
 /// `Completed` is terminal.
+///
+/// `Cancelled` (v2) is reachable from every non-terminal state and is itself
+/// terminal. It is **not** the same thing as `Closed`: `Closed` means
+/// registration is shut but the race is still happening, and the organiser can
+/// re-open it. `Cancelled` means the race is off. Nothing on-chain refunds
+/// anybody — refunds stay an off-chain promise (`docs/SYSTEM_DESIGN.md` §11) —
+/// so the value of this status is that the chain, not a website banner, is
+/// where "this race is not happening" is recorded.
+///
+/// The variant is appended last on purpose. A `#[contracttype]` enum travels as
+/// its variant *name*, so every `EventData` already written keeps decoding.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EventStatus {
@@ -41,6 +68,7 @@ pub enum EventStatus {
     Open,
     Closed,
     Completed,
+    Cancelled,
 }
 
 /// One race event. `metadata_hash` commits to the off-chain detail document
@@ -69,6 +97,24 @@ pub struct CategoryData {
     pub entered_count: u32,
 }
 
+/// One paid extra an entrant can buy alongside their category — a jersey, a
+/// tumbler, a bus seat (STE-35). Add-ons are per event and priced independently
+/// of the category, and `quota` is enforced the same way a category's is: an
+/// organiser who has 200 jerseys sells 200, not 201.
+///
+/// `reserved_count` counts units taken. It is bumped by
+/// [`EventRegistry::reserve_addon`] and never goes down — cancelling a race
+/// does not un-sell its jerseys, because the refund is an off-chain promise.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddOnData {
+    pub code: Symbol,
+    /// 7-decimal token representation (sUSD on testnet, USDC on mainnet).
+    pub price_usdc: i128,
+    pub quota: u32,
+    pub reserved_count: u32,
+}
+
 /// Storage schema. `Admin` / `RaceRecordAddr` / `EventCount` live in instance
 /// storage (tiny, global, read on most calls); everything else is persistent
 /// so it survives archival cycles.
@@ -89,6 +135,10 @@ pub enum DataKey {
     CategoryCount(u32),
     /// persistent -> `bool`, keyed by `(event_id, scanner)`
     Scanner(u32, Address),
+    /// persistent -> [`AddOnData`], keyed by `(event_id, addon_id)` (v2)
+    AddOn(u32, u32),
+    /// persistent -> `u32`, keyed by `event_id` (v2)
+    AddOnCount(u32),
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +166,10 @@ pub enum Error {
     InvalidStatus = 11,
     ScannerAlreadyAdded = 12,
     ScannerNotFound = 13,
+    /// `(event_id, addon_id)` is not a known add-on (v2).
+    AddOnNotFound = 14,
+    /// `reserved_count >= quota` on an add-on (v2).
+    AddOnQuotaFull = 15,
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +191,16 @@ pub struct CategoryAdded {
     #[topic]
     pub event_id: u32,
     pub category_id: u32,
+    pub quota: u32,
+    pub price: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddOnAdded {
+    #[topic]
+    pub event_id: u32,
+    pub addon_id: u32,
     pub quota: u32,
     pub price: i128,
 }
@@ -167,6 +231,16 @@ pub struct ScannerRemoved {
     pub scanner: Address,
 }
 
+/// Emitted by [`EventRegistry::upgrade`]. An indexer that has to explain why a
+/// contract's behaviour changed under a stable address needs the ledger to say
+/// so; this is that record.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUpgraded {
+    #[topic]
+    pub new_wasm_hash: BytesN<32>,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlotReserved {
@@ -175,6 +249,22 @@ pub struct SlotReserved {
     #[topic]
     pub category_id: u32,
     pub seq: u32,
+}
+
+/// One unit of an add-on taken. `seq` is that unit's 0-based number, which is
+/// what turns "200 jerseys sold" into "jersey 37" for a fulfilment desk, and
+/// `price` is the amount [`EventRegistry::reserve_addon`] told RaceRecord to
+/// charge for it — recording it here means the ledger shows the price that was
+/// actually applied, not the price the add-on happens to carry today.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddOnReserved {
+    #[topic]
+    pub event_id: u32,
+    #[topic]
+    pub addon_id: u32,
+    pub seq: u32,
+    pub price: i128,
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +295,36 @@ impl EventRegistry {
         env.storage()
             .instance()
             .set(&DataKey::RaceRecordAddr, &race_record);
+        Ok(())
+    }
+
+    // -- upgrade -------------------------------------------------------------
+
+    /// Replaces this contract's own wasm. **Admin only.**
+    ///
+    /// Soroban upgrades are protocol-level: the executable is swapped in place
+    /// and the contract keeps its address, its storage and its balances. There
+    /// is no proxy and no `delegatecall`, so there is also no storage-slot
+    /// aliasing to get wrong — but the new code does reinterpret the *existing*
+    /// entries, which is why [`DataKey`] is append-only forever (see the module
+    /// docs).
+    ///
+    /// Two consequences worth knowing before calling this:
+    ///
+    /// * The swap takes effect **after** this invocation finishes, so the new
+    ///   code cannot run in the same transaction. A migration therefore needs a
+    ///   second call.
+    /// * `new_wasm_hash` must already be uploaded to the ledger, and nothing
+    ///   checks that it is a *Sterun* contract, or that it kept an `upgrade`
+    ///   function of its own. Upgrading to a wasm without one ends
+    ///   upgradeability permanently.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        read_admin(&env)?.require_auth();
+        bump_instance(&env);
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+
+        ContractUpgraded { new_wasm_hash }.publish(&env);
         Ok(())
     }
 
@@ -306,9 +426,63 @@ impl EventRegistry {
         Ok(category_id)
     }
 
+    /// Adds a paid add-on to an event (STE-35). Add-on ids restart at 0 for
+    /// every event, exactly like category ids.
+    ///
+    /// The validation mirrors [`Self::add_category`] and reuses its error codes
+    /// on purpose: `quota == 0` is [`Error::InvalidQuota`] and a negative price
+    /// is [`Error::InvalidPrice`] whether the thing priced is a distance or a
+    /// jersey. A free add-on (`price_usdc == 0`) is legal — a race can hand out
+    /// a bib belt to whoever asks for one and still cap how many it hands out.
+    pub fn add_addon(
+        env: Env,
+        event_id: u32,
+        code: Symbol,
+        price_usdc: i128,
+        quota: u32,
+    ) -> Result<u32, Error> {
+        bump_instance(&env);
+        auth_organiser(&env, event_id)?;
+        if quota == 0 {
+            return Err(Error::InvalidQuota);
+        }
+        if price_usdc < 0 {
+            return Err(Error::InvalidPrice);
+        }
+
+        let addon_id = Self::addon_count(env.clone(), event_id);
+        write_addon(
+            &env,
+            event_id,
+            addon_id,
+            &AddOnData {
+                code,
+                price_usdc,
+                quota,
+                reserved_count: 0,
+            },
+        );
+        write_addon_count(&env, event_id, addon_id + 1);
+
+        AddOnAdded {
+            event_id,
+            addon_id,
+            quota,
+            price: price_usdc,
+        }
+        .publish(&env);
+        Ok(addon_id)
+    }
+
     /// Moves the event through its lifecycle. Only forward moves are legal,
-    /// plus the `Open` <-> `Closed` toggle; `Completed` is terminal and a
-    /// no-op transition is rejected so no misleading event is emitted.
+    /// plus the `Open` <-> `Closed` toggle; `Completed` and `Cancelled` are
+    /// terminal and a no-op transition is rejected so no misleading event is
+    /// emitted.
+    ///
+    /// Cancelling stops entries by itself: [`Self::reserve_slot`] and
+    /// [`Self::reserve_addon`] both require `Open`, so a cancelled event
+    /// rejects every new entry with [`Error::EventNotOpen`] without needing a
+    /// guard of its own.
     pub fn set_event_status(env: Env, event_id: u32, status: EventStatus) -> Result<(), Error> {
         bump_instance(&env);
         let mut event = auth_organiser(&env, event_id)?;
@@ -406,6 +580,65 @@ impl EventRegistry {
         Ok(seq)
     }
 
+    /// Takes one unit of an add-on and returns **the price to charge for it**.
+    ///
+    /// Same gate as [`Self::reserve_slot`]: only the wired RaceRecord contract
+    /// can call this, by invoker-contract authorization. An entrant cannot
+    /// reserve a jersey without paying for it, because the only code path that
+    /// reaches here is `RaceRecord.enter`, which charges what this returns
+    /// inside the same invocation.
+    ///
+    /// **Why it returns the price instead of a sequence number.** The caller
+    /// needs the price, and reading it separately would mean a second
+    /// cross-contract call against state that could, in principle, be a
+    /// different value by then. Returning it from the reserving call makes the
+    /// amount charged and the unit reserved the same read. The sequence number
+    /// is still published on [`AddOnReserved`] for anyone fulfilling the order.
+    ///
+    /// The quota check and the increment happen in this one invocation, so the
+    /// last jersey cannot be sold twice: the second entry reads the
+    /// already-incremented `reserved_count` and reverts with
+    /// [`Error::AddOnQuotaFull`].
+    pub fn reserve_addon(env: Env, event_id: u32, addon_id: u32) -> Result<i128, Error> {
+        let race_record: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RaceRecordAddr)
+            .ok_or(Error::RaceRecordNotSet)?;
+        race_record.require_auth();
+        bump_instance(&env);
+
+        let event = read_event(&env, event_id)?;
+        bump_persistent(&env, &DataKey::Event(event_id));
+        // Redundant in the `enter` path, where `reserve_slot` has already
+        // checked it — and deliberately kept, because this is an entry point of
+        // its own and its guarantees should not depend on the order a caller
+        // happens to use.
+        if event.status != EventStatus::Open {
+            return Err(Error::EventNotOpen);
+        }
+
+        let mut addon = read_addon(&env, event_id, addon_id)?;
+        if addon.reserved_count >= addon.quota {
+            return Err(Error::AddOnQuotaFull);
+        }
+
+        let seq = addon.reserved_count;
+        // Bounded by the guard above: `reserved_count < quota <= u32::MAX`.
+        addon.reserved_count = seq + 1;
+        let price = addon.price_usdc;
+        write_addon(&env, event_id, addon_id, &addon);
+
+        AddOnReserved {
+            event_id,
+            addon_id,
+            seq,
+            price,
+        }
+        .publish(&env);
+        Ok(price)
+    }
+
     // -- views ---------------------------------------------------------------
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
@@ -450,6 +683,19 @@ impl EventRegistry {
         env.storage()
             .persistent()
             .get(&DataKey::CategoryCount(event_id))
+            .unwrap_or(0)
+    }
+
+    pub fn get_addon(env: Env, event_id: u32, addon_id: u32) -> Result<AddOnData, Error> {
+        read_addon(&env, event_id, addon_id)
+    }
+
+    /// How many add-ons this event has. Also the exclusive upper bound on a
+    /// valid `addon_id`, which is what bounds the loop in `RaceRecord.enter`.
+    pub fn addon_count(env: Env, event_id: u32) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AddOnCount(event_id))
             .unwrap_or(0)
     }
 }
@@ -506,6 +752,25 @@ fn write_category(env: &Env, event_id: u32, category_id: u32, category: &Categor
     bump_persistent(env, &key);
 }
 
+fn read_addon(env: &Env, event_id: u32, addon_id: u32) -> Result<AddOnData, Error> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::AddOn(event_id, addon_id))
+        .ok_or(Error::AddOnNotFound)
+}
+
+fn write_addon(env: &Env, event_id: u32, addon_id: u32, addon: &AddOnData) {
+    let key = DataKey::AddOn(event_id, addon_id);
+    env.storage().persistent().set(&key, addon);
+    bump_persistent(env, &key);
+}
+
+fn write_addon_count(env: &Env, event_id: u32, count: u32) {
+    let key = DataKey::AddOnCount(event_id);
+    env.storage().persistent().set(&key, &count);
+    bump_persistent(env, &key);
+}
+
 fn write_category_count(env: &Env, event_id: u32, count: u32) {
     let key = DataKey::CategoryCount(event_id);
     env.storage().persistent().set(&key, &count);
@@ -525,16 +790,25 @@ fn auth_organiser(env: &Env, event_id: u32) -> Result<EventData, Error> {
 }
 
 /// Forward-only lifecycle with an `Open` <-> `Closed` toggle for re-opening
-/// registration. `Completed` is terminal and self-transitions are rejected.
+/// registration. `Completed` and `Cancelled` are terminal and self-transitions
+/// are rejected.
+///
+/// Cancelling is legal from every non-terminal state, including `Draft`: an
+/// event can be called off before it ever opened. It is deliberately NOT legal
+/// from `Completed` — a race that was run and had results published did happen,
+/// and rewriting that is falsifying history, not fixing a typo.
 fn is_valid_transition(from: EventStatus, to: EventStatus) -> bool {
     matches!(
         (from, to),
         (EventStatus::Draft, EventStatus::Open)
             | (EventStatus::Draft, EventStatus::Closed)
+            | (EventStatus::Draft, EventStatus::Cancelled)
             | (EventStatus::Open, EventStatus::Closed)
             | (EventStatus::Open, EventStatus::Completed)
+            | (EventStatus::Open, EventStatus::Cancelled)
             | (EventStatus::Closed, EventStatus::Open)
             | (EventStatus::Closed, EventStatus::Completed)
+            | (EventStatus::Closed, EventStatus::Cancelled)
     )
 }
 

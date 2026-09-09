@@ -175,6 +175,9 @@
                   "u32": 0
                 },
                 {
+                  "vec": []
+                },
+                {
                   "bytes": "11b4bbdb068b470aa79124846c6684b70ad0e5d7b5f7d74fe88cdc9fafdec8fe"
                 }
               ]
@@ -247,6 +250,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "vec": []
                 },
                 {
                   "bytes": "f5f43fc590b0edfbdf7a7b9c8c0751fa9c69329fec716b64afbd829962293f95"
@@ -323,6 +329,9 @@
                   "u32": 0
                 },
                 {
+                  "vec": []
+                },
+                {
                   "bytes": "f5f43fc590b0edfbdf7a7b9c8c0751fa9c69329fec716b64afbd829962293f95"
                 }
               ]
@@ -397,6 +406,9 @@
                   "u32": 0
                 },
                 {
+                  "vec": []
+                },
+                {
                   "bytes": "feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29"
                 }
               ]
@@ -469,6 +481,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "vec": []
                 },
                 {
                   "bytes": "4799814afd98d8cccb1db3f9cd395adc6527fdcb1d3df7a48407f62ef27ab15b"
@@ -1891,6 +1906,14 @@
                 "map": [
                   {
                     "key": {
+                      "symbol": "addon_ids"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "bib_no"
                     },
                     "val": {
@@ -1987,6 +2010,14 @@
               "durability": "persistent",
               "val": {
                 "map": [
+                  {
+                    "key": {
+                      "symbol": "addon_ids"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
                   {
                     "key": {
                       "symbol": "bib_no"
@@ -2087,6 +2118,14 @@
                 "map": [
                   {
                     "key": {
+                      "symbol": "addon_ids"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "bib_no"
                     },
                     "val": {
@@ -2185,6 +2224,14 @@
                 "map": [
                   {
                     "key": {
+                      "symbol": "addon_ids"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "bib_no"
                     },
                     "val": {
@@ -2281,6 +2328,14 @@
               "durability": "persistent",
               "val": {
                 "map": [
+                  {
+                    "key": {
+                      "symbol": "addon_ids"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
                   {
                     "key": {
                       "symbol": "bib_no"

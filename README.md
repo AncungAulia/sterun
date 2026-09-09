@@ -62,7 +62,7 @@ Kontrak (ekosistem terpisah, dari `sc/`):
 ```bash
 cd sc
 stellar contract build            # WAJIB sebelum cargo test — ada test yang membaca wasm-nya
-cargo test                        # 33 + 42 test
+cargo test                        # 54 + 60 test
 node scripts/check-interface.mjs  # spec beku vs wasm vs bindings
 ```
 

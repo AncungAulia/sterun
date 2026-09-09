@@ -32,12 +32,18 @@ import type { RecordData, RecordState as BindingRecordState } from "../vendor-di
  * Event lifecycle. Legal transitions (INTERFACE.md §1.2; anything else reverts
  * `InvalidStatus(11)`, including a transition to the current status):
  *
- *     Draft     -> Open | Closed
- *     Open      -> Closed | Completed
- *     Closed    -> Open | Completed
+ *     Draft     -> Open | Closed | Cancelled
+ *     Open      -> Closed | Completed | Cancelled
+ *     Closed    -> Open | Completed | Cancelled
  *     Completed -> (terminal)
+ *     Cancelled -> (terminal)
+ *
+ * `Cancelled` (contracts v2) is not a synonym for `Closed`. `Closed` means
+ * registration is shut but the race is still on and can be re-opened;
+ * `Cancelled` means the race is off, and there is no way back. Nothing on-chain
+ * refunds anyone — that stays an off-chain promise.
  */
-export type EventStatus = "Draft" | "Open" | "Closed" | "Completed";
+export type EventStatus = "Draft" | "Open" | "Closed" | "Completed" | "Cancelled";
 
 /**
  * Record lifecycle. `Finished` and `Dnf` are terminal — there is no exported
@@ -45,7 +51,13 @@ export type EventStatus = "Draft" | "Open" | "Closed" | "Completed";
  */
 export type RecordState = "Entered" | "RacepackClaimed" | "Finished" | "Dnf";
 
-export const EVENT_STATUSES: readonly EventStatus[] = ["Draft", "Open", "Closed", "Completed"];
+export const EVENT_STATUSES: readonly EventStatus[] = [
+  "Draft",
+  "Open",
+  "Closed",
+  "Completed",
+  "Cancelled",
+];
 export const RECORD_STATES: readonly RecordState[] = [
   "Entered",
   "RacepackClaimed",

@@ -126,6 +126,7 @@ describe("contract shapes become caller shapes", () => {
 
   it("converts a finished record, with its optionals resolved to null or a value", () => {
     const record = toSterunRecord(0, {
+      addon_ids: [],
       bib_no: 0,
       category_id: 0,
       claimed_at: 1788252342n,
@@ -154,6 +155,7 @@ describe("contract shapes become caller shapes", () => {
     // `undefined` disappears from JSON.stringify; `null` survives it. The
     // profile page and the roster bundle both serialise these.
     const record = toSterunRecord(9, {
+      addon_ids: [],
       bib_no: 3,
       category_id: 1,
       claimed_at: undefined,
@@ -176,7 +178,8 @@ describe("contract shapes become caller shapes", () => {
   it("carries every record state across unchanged", () => {
     for (const state of RECORD_STATES) {
       const record = toSterunRecord(0, {
-        bib_no: 0,
+        addon_ids: [],
+      bib_no: 0,
         category_id: 0,
         claimed_at: undefined,
         entered_at: 0n,
@@ -195,6 +198,7 @@ describe("contract shapes become caller shapes", () => {
     // this cannot arrive from chain — but `?? null` on a 0 would be a bug the
     // day anything else produces one, and it costs one test to rule out.
     const record = toSterunRecord(0, {
+      addon_ids: [],
       bib_no: 0,
       category_id: 0,
       claimed_at: 0n,

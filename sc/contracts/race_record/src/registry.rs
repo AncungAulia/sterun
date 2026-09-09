@@ -48,15 +48,21 @@ pub struct CategoryData {
     pub entered_count: u32,
 }
 
-/// The four EventRegistry entry points RaceRecord needs — and nothing else.
+/// The six EventRegistry entry points RaceRecord needs — and nothing else.
 ///
 /// Return types are the plain success types rather than `Result<_, _>`: a
-/// revert inside the registry (`QuotaFull`, `EventNotOpen`, `EventNotFound`, …)
-/// then propagates out of RaceRecord's own invocation untouched, which is what
-/// makes `enter` atomic.
+/// revert inside the registry (`QuotaFull`, `EventNotOpen`, `EventNotFound`,
+/// `AddOnQuotaFull`, …) then propagates out of RaceRecord's own invocation
+/// untouched, which is what makes `enter` atomic.
+///
+/// `reserve_addon` returns the price to charge for the unit it just reserved
+/// (v2, STE-35), so the amount billed and the unit taken come from a single
+/// read inside a single invocation.
 #[contractclient(name = "EventRegistryClient")]
 pub trait EventRegistry {
     fn reserve_slot(env: Env, event_id: u32, category_id: u32) -> u32;
+    fn reserve_addon(env: Env, event_id: u32, addon_id: u32) -> i128;
+    fn addon_count(env: Env, event_id: u32) -> u32;
     fn get_category(env: Env, event_id: u32, category_id: u32) -> CategoryData;
     fn get_organiser(env: Env, event_id: u32) -> Address;
     fn is_scanner(env: Env, event_id: u32, addr: Address) -> bool;

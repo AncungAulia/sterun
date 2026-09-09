@@ -1,6 +1,6 @@
-# INTERFACE — kontrak Sterun yang DIBEKUKAN (v1.0.0)
+# INTERFACE — kontrak Sterun yang DIBEKUKAN (v2.0.1)
 
-> **Status: FROZEN 2026-08-31 (STE-10, komponen C4).**
+> **Status: FROZEN 2026-09-09 (v2 — upgradeable + paid add-ons + `Cancelled`).**
 > Dokumen ini adalah *handoff contract* nomor 1 di `docs/SYSTEM_DESIGN.md` §9: signature fungsi
 > dan layout `#[contractevent]` yang dipegang **James** (backend/indexer) dan **Ancung**
 > (web app, QR pass, scanner PWA) supaya mereka bisa jalan paralel tanpa menunggu kerjaan kontrak.
@@ -8,6 +8,23 @@
 > Setiap perubahan pada signature, layout event, atau kode error setelah PR ini merged wajib:
 > **PR baru + approval Axel (PM) + fable**, entri di `docs/specs/CHANGELOG.md`, dan **regenerate TS
 > bindings** (STE-14). Kode error adalah ABI publik — **jangan pernah di-renumber**.
+
+## Apa yang berubah dari v1.0.1 (BREAKING)
+
+v1 sudah live dan **non-upgradeable**, jadi alamatnya permanen dan versi ini **tidak menggantikan
+kontrak itu di tempat** — v2 adalah pasangan alamat baru. Yang lama tetap tercatat di
+`docs/deployments.md` sebagai arsip; yang berlaku untuk pekerjaan baru adalah dokumen ini.
+
+| Perubahan | Dampak ke client |
+| --- | --- |
+| `enter` menerima `addon_ids: Vec<u32>` (argumen ke-4, sebelum `participant_hash`) | **breaking** — semua pemanggil `enter` wajib diperbarui; kirim `[]` kalau tidak beli add-on |
+| `RecordData` bertambah field `addon_ids: Vec<u32>` | additive — decoder yang membaca per nama field aman |
+| `EventStatus` bertambah varian `Cancelled` | **breaking untuk enum tertutup** — `be/`, `fe/`, dan `sdk/` masih memvalidasi 4 varian saja (lihat §8) |
+| `upgrade(new_wasm_hash)` baru di **kedua** kontrak | additive |
+| `add_addon` / `reserve_addon` / `get_addon` / `addon_count` + tipe `AddOnData` baru di C1 | additive |
+| Event baru: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded` (dua kontrak) | additive |
+| Kode error baru: `AddOnNotFound(14)`, `AddOnQuotaFull(15)`, `TooManyAddOns(106)`, `DuplicateAddOn(107)` | additive — tidak ada yang di-renumber |
+| Kontrak sekarang **upgradeable** | lihat §4 — klaim non-transferable sekarang tentang wasm yang ter-deploy, bukan tentang alamatnya selamanya |
 
 Dokumen sodara:
 
@@ -40,14 +57,22 @@ Artefak yang dipakai saat pembekuan ini:
 
 | Kontrak | Wasm | Wasm hash (sha256) | Ukuran |
 | --- | --- | --- | ---: |
-| EventRegistry (C1, STE-5) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` | 14.964 B |
-| RaceRecord (C2, STE-9) | `sc/target/wasm32v1-none/release/race_record.wasm` | `75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` | 19.435 B |
+| EventRegistry (C1, v2) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
+| RaceRecord (C2, v2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
+
+Artefak RaceRecord v2.0.0 (`c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc`, 21.795 B) sudah **digantikan di alamat yang
+sama** lewat `upgrade` — interface-nya identik, isinya beda satu optimasi internal. Riwayatnya di
+`docs/deployments.md`; itu contoh pertama v2 mengganti kode tanpa mengganti alamat.
+
+Artefak v1 yang dibekukan sebelumnya (masih live di alamat v1, lihat `docs/deployments.md`):
+`61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` (C1, 14.964 B) dan
+`75d380456c6c9cc2d52e2e3beded4e3d84a4b00e9926aeed0eaf9ba3e607919f` (C2, 19.435 B).
 
 Hash itu **sha256 biasa dari file wasm** — reviewer bisa cek tanpa Stellar CLI:
 
 ```bash
 shasum -a 256 sc/target/wasm32v1-none/release/event_registry.wasm
-# 61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474
+# 22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f
 ```
 
 Toolchain yang menghasilkannya: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`,
@@ -74,13 +99,16 @@ Semua `Result<T, Error>` berarti: sukses mengembalikan `T`, gagal **revert** den
 | Fungsi | Argumen | Return | Yang harus authorize | Error yang mungkin |
 | --- | --- | --- | --- | --- |
 | `__constructor` | `admin: Address` | — | — (dijalankan sekali saat deploy) | — |
+| `upgrade` | `new_wasm_hash: BytesN<32>` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(1)`, plus host error kalau hash-nya belum di-upload |
 | `set_race_record` | `race_record: Address` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(1)`, `RaceRecordAlreadySet(7)` |
 | `create_event` | `organiser: Address, name: String, metadata_hash: BytesN<32>, uri: String, starts_at: u64` | `Result<u32, Error>` (event_id) | **`organiser`** (argumen) | `NotInitialized(1)` |
 | `add_category` | `event_id: u32, code: Symbol, distance_m: u32, quota: u32, price_usdc: i128` | `Result<u32, Error>` (category_id) | **organiser event itu** (dari storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)`, `InvalidDistance(10)` |
+| `add_addon` | `event_id: u32, code: Symbol, price_usdc: i128, quota: u32` | `Result<u32, Error>` (addon_id) | **organiser event itu** (dari storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)` |
 | `set_event_status` | `event_id: u32, status: EventStatus` | `Result<(), Error>` | **organiser event itu** | `EventNotFound(2)`, `InvalidStatus(11)` |
 | `add_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **organiser event itu** | `EventNotFound(2)`, `ScannerAlreadyAdded(12)` |
 | `remove_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **organiser event itu** | `EventNotFound(2)`, `ScannerNotFound(13)` |
 | `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (bib seq) | **hanya kontrak RaceRecord** yang di-wire (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
+| `reserve_addon` | `event_id: u32, addon_id: u32` | `Result<i128, Error>` (harga yang ditagih) | **hanya kontrak RaceRecord** yang di-wire (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `AddOnNotFound(14)`, `AddOnQuotaFull(15)` |
 | `get_admin` | — | `Result<Address, Error>` | — (view) | `NotInitialized(1)` |
 | `get_race_record` | — | `Result<Address, Error>` | — (view) | `RaceRecordNotSet(6)` |
 | `get_event` | `event_id: u32` | `Result<EventData, Error>` | — (view) | `EventNotFound(2)` |
@@ -89,6 +117,8 @@ Semua `Result<T, Error>` berarti: sukses mengembalikan `T`, gagal **revert** den
 | `is_scanner` | `event_id: u32, addr: Address` | `bool` | — (view) | **tidak pernah revert** (`false` kalau tidak ada) |
 | `event_count` | — | `u32` | — (view) | **tidak pernah revert** (`0` kalau belum ada) |
 | `category_count` | `event_id: u32` | `u32` | — (view) | **tidak pernah revert** (`0` kalau belum ada) |
+| `get_addon` | `event_id: u32, addon_id: u32` | `Result<AddOnData, Error>` | — (view) | `AddOnNotFound(14)` |
+| `addon_count` | `event_id: u32` | `u32` | — (view) | **tidak pernah revert** (`0` kalau belum ada) |
 
 Catatan penting untuk D2/D3:
 
@@ -105,7 +135,18 @@ Catatan penting untuk D2/D3:
   jadi caller tepercaya `reserve_slot` tidak bisa ditukar setelah wiring.
 - Cek kuota dan increment terjadi **dalam satu invocation**, jadi dua entry bersamaan tidak
   mungkin sama-sama mengambil slot terakhir; yang kedua membaca `entered_count` yang sudah naik
-  dan revert `QuotaFull(5)`.
+  dan revert `QuotaFull(5)`. Hal yang sama berlaku untuk `reserve_addon` dan
+  `AddOnQuotaFull(15)`.
+- **`reserve_addon` mengembalikan HARGA, bukan nomor urut.** Pemanggilnya (`RaceRecord.enter`)
+  butuh harga untuk menagih, dan membacanya lewat panggilan kedua berarti jumlah yang ditagih dan
+  unit yang dipakai datang dari dua pembacaan berbeda. Nomor urut unit-nya tetap terbit di event
+  `AddOnReserved` (field `seq`) untuk keperluan fulfilment.
+- **`add_addon` memakai ulang `InvalidQuota(8)` dan `InvalidPrice(9)`.** Kondisinya identik dengan
+  `add_category` (`quota == 0`, `price_usdc < 0`), jadi kode barunya cuma akan memaksa client
+  membedakan hal yang sama. `price_usdc == 0` legal: add-on gratis dengan kuota tetap dibatasi.
+- **`upgrade` mengganti wasm kontrak ini di tempat.** Alamat, storage, dan saldo tidak berubah;
+  yang berubah cuma kode. Efeknya baru berlaku **setelah** invocation selesai, jadi migrasi
+  storage butuh panggilan kedua. Hash-nya wajib sudah ter-upload ke ledger. Lihat §4.
 
 ### 1.2 Tipe
 
@@ -127,7 +168,14 @@ CategoryData {
   quota: u32,
 }
 
-EventStatus = Draft | Open | Closed | Completed
+AddOnData {
+  code: Symbol,
+  price_usdc: i128,     // representasi 7 desimal
+  quota: u32,
+  reserved_count: u32,  // unit yang sudah diambil, tidak pernah turun
+}
+
+EventStatus = Draft | Open | Closed | Completed | Cancelled
 ```
 
 > Urutan field di atas adalah urutan **yang keluar dari `contractspecv0`** (alfabetis), bukan
@@ -139,11 +187,20 @@ Transisi `EventStatus` yang legal (selain itu → `InvalidStatus(11)`, termasuk 
 sendiri):
 
 ```text
-Draft  -> Open | Closed
-Open   -> Closed | Completed
-Closed -> Open | Completed
+Draft  -> Open | Closed | Cancelled
+Open   -> Closed | Completed | Cancelled
+Closed -> Open | Completed | Cancelled
 Completed -> (terminal)
+Cancelled -> (terminal)
 ```
+
+`Cancelled` **bukan** sinonim `Closed`. `Closed` = pendaftaran ditutup, lombanya tetap jalan, dan
+organiser boleh membukanya lagi. `Cancelled` = lombanya batal, dan tidak ada jalan keluar. Dari
+`Completed` sengaja **tidak** boleh ke `Cancelled`: lomba yang sudah dijalankan dan hasilnya
+terbit memang terjadi. Tidak ada refund on-chain — itu tetap janji off-chain
+(`docs/SYSTEM_DESIGN.md` §11); nilai status ini adalah "batal" jadi tercatat di chain, bukan cuma
+di banner website. `reserve_slot` dan `reserve_addon` sama-sama menuntut `Open`, jadi event yang
+batal otomatis menolak entry baru dengan `EventNotOpen(4)` tanpa guard tambahan.
 
 ### 1.3 Event (`#[contractevent]`)
 
@@ -155,10 +212,13 @@ bukan urutan deklarasi), dan `ScMap` **kosong** kalau semua field jadi topic.
 | --- | --- | --- |
 | `EventCreated` | `"event_created"`, `event_id: u32`, `organiser: Address` | *(kosong)* |
 | `CategoryAdded` | `"category_added"`, `event_id: u32` | `category_id: u32`, `price: i128`, `quota: u32` |
+| `AddOnAdded` | `"add_on_added"`, `event_id: u32` | `addon_id: u32`, `price: i128`, `quota: u32` |
 | `EventStatusChanged` | `"event_status_changed"`, `event_id: u32` | `status: EventStatus` |
 | `ScannerAdded` | `"scanner_added"`, `event_id: u32`, `scanner: Address` | *(kosong)* |
 | `ScannerRemoved` | `"scanner_removed"`, `event_id: u32`, `scanner: Address` | *(kosong)* |
 | `SlotReserved` | `"slot_reserved"`, `event_id: u32`, `category_id: u32` | `seq: u32` |
+| `AddOnReserved` | `"add_on_reserved"`, `event_id: u32`, `addon_id: u32` | `price: i128`, `seq: u32` |
+| `ContractUpgraded` | `"contract_upgraded"`, `new_wasm_hash: BytesN<32>` | *(kosong)* |
 
 Contoh XDR nyata (diambil dari snapshot test `emits_category_added`, disederhanakan):
 
@@ -179,7 +239,14 @@ Nilai enum muncul sebagai vec berisi satu symbol, mis. `status: Open` →
 Untuk STE-16 (indexer): filter `getEvents` berdasarkan topic pertama (nama event) plus topic
 `event_id` untuk halaman per-event. `CategoryAdded` sengaja **tidak** menjadikan `category_id`
 topic — satu event punya sedikit kategori, jadi filter per-event sudah cukup dan slot topic
-disimpan.
+disimpan. `AddOnAdded` mengikuti pola yang sama; `AddOnReserved` **memang** menjadikan `addon_id`
+topic, karena yang ditanya di sana adalah "berapa unit add-on ini yang terjual", bukan "apa saja
+add-on event ini".
+
+Perhatikan nama topic-nya: `AddOnReserved` → `"add_on_reserved"`, bukan `"addon_reserved"`. Soroban
+menurunkan nama event dari nama struct-nya, dan `AddOn` pecah jadi dua kata. Argumen fungsi dan
+field struct tetap `addon_id` / `addon_ids` — memang tidak konsisten, dan disebut di sini justru
+supaya tidak ada yang menebak.
 
 ### 1.4 Error (`#[contracterror]`, `repr(u32)`)
 
@@ -198,6 +265,8 @@ disimpan.
 | 11 | `InvalidStatus` | transisi `EventStatus` ilegal (termasuk ke dirinya sendiri) |
 | 12 | `ScannerAlreadyAdded` | scanner sudah ada di allowlist event itu |
 | 13 | `ScannerNotFound` | `remove_scanner` untuk address yang tidak ada |
+| 14 | `AddOnNotFound` | `(event_id, addon_id)` tidak dikenal |
+| 15 | `AddOnQuotaFull` | `reserved_count >= quota` pada sebuah add-on |
 
 ---
 
@@ -211,7 +280,8 @@ Satu record **non-transferable** per entry, terikat address runner. Design:
 | Fungsi | Argumen | Return | Yang harus authorize | Error yang mungkin |
 | --- | --- | --- | --- | --- |
 | `__constructor` | `admin: Address, registry: Address, token: Address, name: String, symbol: String, base_uri: String` | — | — (sekali saat deploy) | OZ `BaseUriMaxLenExceeded(211)`, `NameMaxLenExceeded(213)`, `SymbolMaxLenExceeded(214)` |
-| `enter` | `runner: Address, event_id: u32, category_id: u32, participant_hash: BytesN<32>` | `Result<u32, Error>` (token_id) | **`runner`** — satu auth tree yang juga menutupi sub-invocation `transfer` SEP-41 | sendiri: `NotInitialized(100)`; **merambat** dari EventRegistry: `2,3,4,5,6`; dari SAC: kode error SAC; OZ: `MathOverflow(205)`, `TokenIDsAreDepleted(206)` |
+| `upgrade` | `new_wasm_hash: BytesN<32>` | `Result<(), Error>` | **`Admin`** yang tersimpan | `NotInitialized(100)`, plus host error kalau hash-nya belum di-upload |
+| `enter` | `runner: Address, event_id: u32, category_id: u32, addon_ids: Vec<u32>, participant_hash: BytesN<32>` | `Result<u32, Error>` (token_id) | **`runner`** — satu auth tree yang juga menutupi sub-invocation `transfer` SEP-41 | sendiri: `NotInitialized(100)`, `TooManyAddOns(106)`, `DuplicateAddOn(107)`; **merambat** dari EventRegistry: `2,3,4,5,6,14,15`; dari SAC: kode error SAC; OZ: `MathOverflow(205)`, `TokenIDsAreDepleted(206)` |
 | `claim_racepack` | `token_id: u32, operator: Address` | `Result<(), Error>` | **`operator`**, yang wajib organiser event itu **atau** scanner ter-allowlist | `NotInitialized(100)`, `RecordNotFound(101)`, `NotAuthorized(104)`, `AlreadyClaimed(102)`, merambat `EventNotFound(2)` |
 | `record_finish` | `token_id: u32, finish_time_s: u32` | `Result<(), Error>` | **organiser event itu** (dibaca dari registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidFinishTime(105)`, `InvalidState(103)`, merambat `EventNotFound(2)` |
 | `record_dnf` | `token_id: u32` | `Result<(), Error>` | **organiser event itu** | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, merambat `EventNotFound(2)` |
@@ -231,13 +301,25 @@ Satu record **non-transferable** per entry, terikat address runner. Design:
 
 Catatan penting untuk D2/D3:
 
-- **`enter` adalah satu batas atomicity.** Urutannya: `runner.require_auth()` → `reserve_slot`
-  ke registry → `transfer(runner, organiser, price)` ke SAC (**dilewati kalau `price == 0`**) →
-  `Enumerable::sequential_mint` → tulis `RecordData{state: Entered}`. Kalau langkah mana pun
-  gagal, semuanya batal: tidak ada slot kuota yang terpakai tanpa bayaran, dan tidak ada record
-  tanpa fee.
-- **Kategori gratis (`price_usdc == 0`) tidak memanggil token sama sekali** — runner tidak perlu
-  punya saldo, dan untuk akun klasik `G...` tidak perlu trustline.
+- **`enter` adalah satu batas atomicity.** Urutannya: `runner.require_auth()` → validasi
+  `addon_ids` (belum menyentuh state) → `reserve_slot` ke registry → satu `reserve_addon` per
+  `addon_id`, masing-masing mengembalikan harganya → `transfer(runner, organiser, total)` ke SAC
+  (**dilewati kalau `total == 0`**) → `Enumerable::sequential_mint` → tulis
+  `RecordData{state: Entered, addon_ids}`. Kalau langkah mana pun gagal, semuanya batal: tidak ada
+  slot kuota atau unit add-on yang terpakai tanpa bayaran, dan tidak ada record tanpa fee.
+- **`total = category.price_usdc + Σ addon.price_usdc`, satu transfer.** Bukan satu transfer per
+  item: dompet runner menyetujui satu angka, dan itu angka yang benar-benar pindah.
+- **`total == 0` yang tidak memanggil token sama sekali**, bukan `price == 0`. Kategori gratis
+  **plus** add-on berbayar tetap menagih. Kategori gratis plus add-on gratis tidak memanggil token
+  sama sekali — runner tidak perlu punya saldo, dan untuk akun klasik `G...` tidak perlu trustline.
+- **Aturan `addon_ids`** (dicek **sebelum** state apa pun disentuh, jadi penolakannya tidak memakan
+  kuota): maksimal **16** id (`MAX_ADDONS_PER_ENTRY`), tidak boleh lebih banyak dari
+  `addon_count(event_id)`, dan **tidak boleh ada id yang sama dua kali**. Dua-duanya
+  `TooManyAddOns(106)`; yang duplikat `DuplicateAddOn(107)`. Mau dua jersey = dua add-on dengan dua
+  kuota, bukan satu id ditulis dua kali. Urutan `addon_ids` dipertahankan apa adanya di
+  `RecordData`.
+- **Kirim `[]` (`Vec` kosong) kalau tidak beli apa-apa.** Itu jalur v1 apa adanya: satu transfer
+  sebesar harga kategori.
 - **`verify` mengembalikan `true`** hanya kalau record ada, hash-nya sama persis, **dan** token
   masih punya owner. Cara menghitung `participant_hash` yang diterima fungsi ini ada di
   `docs/specs/HASH_AND_TOTP.md` — nilai yang di-hash backend adalah tepat yang diterima chain
@@ -253,6 +335,7 @@ Catatan penting untuk D2/D3:
 
 ```text
 RecordData {
+  addon_ids: Vec<u32>,           // add-on yang dibeli entry ini, urut reservasi
   bib_no: u32,                   // seq kategori dari reserve_slot
   category_id: u32,
   claimed_at: Option<u64>,
@@ -290,6 +373,7 @@ mengambil race pack tidak bisa punya hasil.
 | `RacepackClaimed` | `"racepack_claimed"`, `token_id: u32`, `event_id: u32` | `operator: Address` |
 | `RecordFinished` | `"record_finished"`, `token_id: u32`, `event_id: u32` | `finish_time_s: u32` |
 | `RecordDnf` | `"record_dnf"`, `token_id: u32`, `event_id: u32` | *(kosong)* |
+| `ContractUpgraded` | `"contract_upgraded"`, `new_wasm_hash: BytesN<32>` | *(kosong)* |
 
 **`Mint` termasuk dalam surface yang dibekukan.** Dia dipancarkan oleh
 `Enumerable::sequential_mint` di dalam OZ, bukan oleh kode kita, tapi indexer tetap melihatnya
@@ -299,11 +383,18 @@ yang sama.
 Satu `enter` yang berhasil memancarkan, berurutan dan dari tiga emitter berbeda:
 
 1. `slot_reserved` — **contract id EventRegistry**
-2. `transfer` — **contract id SAC** (hanya kalau `price > 0`)
-3. `mint` — contract id RaceRecord
-4. `record_entered` — contract id RaceRecord
+2. `add_on_reserved` × jumlah add-on — **contract id EventRegistry** (v2; tidak ada kalau
+   `addon_ids` kosong), urut sesuai `addon_ids`
+3. `transfer` — **contract id SAC** (hanya kalau `total > 0`)
+4. `mint` — contract id RaceRecord
+5. `record_entered` — contract id RaceRecord
 
-Indexer harus memfilter **per contract id**, bukan hanya per nama topic.
+Indexer harus memfilter **per contract id**, bukan per offset tetap: jumlah event dalam satu
+`enter` sekarang bergantung pada berapa add-on yang dibeli dan apakah totalnya nol.
+
+**`record_entered` tidak membawa `addon_ids`.** Add-on yang dibeli dibaca dari `record_of` (field
+`addon_ids`) atau direkonstruksi dari `add_on_reserved` milik registry, yang malah lebih kaya —
+membawa `seq` unitnya dan `price` yang benar-benar ditagih.
 
 ### 2.4 Error (`#[contracterror]`, `repr(u32)`)
 
@@ -315,6 +406,8 @@ Indexer harus memfilter **per contract id**, bukan hanya per nama topic.
 | 103 | `InvalidState` | `record_finish` saat state ≠ `RacepackClaimed`, atau keluar dari state terminal |
 | 104 | `NotAuthorized` | operator bukan organiser dan bukan scanner ter-allowlist |
 | 105 | `InvalidFinishTime` | `finish_time_s == 0` |
+| 106 | `TooManyAddOns` | `addon_ids` lebih panjang dari `addon_count(event_id)` atau dari 16 |
+| 107 | `DuplicateAddOn` | `addon_ids` memuat id yang sama dua kali |
 
 Plus enum OZ yang ikut ter-embed di spec RaceRecord (bukan milik kita, jangan dipakai ulang):
 
@@ -366,12 +459,24 @@ berikutnya di dalam band kontraknya.
 
 ---
 
-## 4. Non-transferable: fungsinya TIDAK ADA
+## 4. Non-transferable: fungsinya TIDAK ADA — dan apa artinya sekarang v2 upgradeable
 
 **RaceRecord tidak mengekspor `transfer`, `transfer_from`, `approve`, `approve_for_all`, `burn`,
 maupun `burn_from`.** Itulah yang membuat record tidak bisa pindah tangan — bukan guard yang
 revert, tapi ketiadaan jalur kode terekspor yang menulis ulang owner mapping. Guard bisa salah
-konfigurasi atau di-upgrade; fungsi yang tidak ada tidak bisa dipanggil (dan v1 non-upgradeable).
+konfigurasi; fungsi yang tidak ada tidak bisa dipanggil.
+
+**v2 menambah `upgrade`, dan itu mengubah bentuk jaminannya. Jangan dibaca seolah tidak berubah:**
+
+| | v1 (live, non-upgradeable) | v2 |
+| --- | --- | --- |
+| Yang dijamin mekanis | wasm yang ter-deploy tidak punya fungsi pemindah record — **selamanya, untuk alamat itu** | wasm yang ter-deploy tidak punya fungsi pemindah record — **untuk kode yang terpasang sekarang** |
+| Yang jadi asumsi kepercayaan | tidak ada | **kunci admin tidak memasang wasm yang menambahkannya** |
+| Cara mengeceknya | `check-exports.sh` + test wasm + cek kontrak live saat deploy | sama persis, plus `contract_upgraded` di ledger tiap kali kode berganti |
+
+Alternatifnya adalah membekukan RaceRecord sementara EventRegistry dapat add-on — artinya
+perubahan `enter` berikutnya butuh alamat baru lagi. Itu pertukaran yang diambil sadar, dan
+`ContractUpgraded` ada supaya perubahan kode di bawah alamat yang sama tetap terlihat di chain.
 
 Secara teknis: kontrak Soroban mengekspos persis fungsi di `#[contractimpl]`-nya — tidak ada
 fallback dispatch, tidak ada `delegatecall`. Modul non-fungible OZ memisahkan *storage primitive*
@@ -380,10 +485,10 @@ fallback dispatch, tidak ada `delegatecall`. Modul non-fungible OZ memisahkan *s
 yang akan mengekspor fungsi-fungsi terlarang itu. RaceRecord **tidak meng-implement trait
 tersebut** dan hanya memanggil storage primitive-nya.
 
-Export surface RaceRecord yang sah — **18 fungsi, tidak lebih**:
+Export surface RaceRecord yang sah — **19 fungsi, tidak lebih**:
 
 ```text
-__constructor  enter  claim_racepack  record_finish  record_dnf  extend_record_ttl
+__constructor  upgrade  enter  claim_racepack  record_finish  record_dnf  extend_record_ttl
 record_of  records_of  verify  owner_of  balance  token_uri  total_supply
 name  symbol  get_admin  get_registry  get_token
 ```
@@ -392,7 +497,8 @@ Ditegakkan dari dua sisi, keduanya wajib hijau sebelum PR/deploy:
 
 1. **`sc/scripts/check-exports.sh`** — build, `stellar contract info interface`, lalu grep. Exit
    non-zero kalau ada nama terlarang, kalau surface EventRegistry bocor ke RaceRecord, atau
-   kalau wasm > 128KB.
+   kalau wasm > 128KB. `upgrade` sengaja **tidak** masuk daftar "surface EventRegistry": kedua
+   kontrak punya `upgrade` sendiri-sendiri, jadi menemukannya di sini benar, bukan bocor.
 2. **`cargo test`** — test `exports::race_record_wasm_exports_nothing_that_could_move_a_record`
    mem-parse export section wasm-nya langsung (bukan source-nya).
 
@@ -422,8 +528,9 @@ Keduanya classic Stellar asset **7 desimal** yang diekspos ke kontrak lewat SAC,
 sUSD → USDC hanya mengganti nilai config saat deploy. Tidak ada perubahan logika kontrak, tidak
 ada perubahan interface, tidak ada regenerate bindings.
 
-`price_usdc` di `CategoryData` adalah `i128` dalam representasi 7 desimal
-(mis. 5,00 sUSD = `50000000`).
+`price_usdc` di `CategoryData` **dan `AddOnData`** adalah `i128` dalam representasi 7 desimal
+(mis. 5,00 sUSD = `50000000`). Yang benar-benar pindah dalam satu `enter` adalah **jumlahnya**:
+`category.price_usdc + Σ addon.price_usdc`.
 
 ---
 
@@ -438,6 +545,7 @@ ada perubahan interface, tidak ada regenerate bindings.
 | STE-17 | Organiser console (Ancung) | `create_event`, `add_category`, `set_event_status`, scanner, `record_finish` |
 | STE-18 / 21 / 22 | QR pass + scanner PWA (Ancung) | `claim_racepack`, `is_scanner`, `record_of`, plus TOTP di `HASH_AND_TOTP.md` |
 | STE-33 | Deploy testnet | wasm hash + parameter constructor (§0, §5) |
+| STE-35 | Add-on berbayar (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
 
 ---
 
@@ -461,3 +569,23 @@ wajib melalui:
 
 Kode error **tidak pernah di-renumber**. Menambah varian baru boleh; mengubah angka varian lama
 tidak.
+
+---
+
+## 8. Checklist migrasi client ke v2 (BELUM dikerjakan — buat tiketnya)
+
+Kontrak v2 sudah live (alamatnya di `docs/deployments.md`), tapi `be/`, `fe/`, dan `sdk/` masih
+ditulis untuk v1. Yang di bawah ini **sengaja tidak** dikerjakan bersama PR kontrak ini — itu kode
+James dan Ancung — jadi dicatat di sini supaya tidak ada yang menemukannya lewat runtime error.
+
+| Paket | Yang harus berubah | Kalau tidak diubah |
+| --- | --- | --- |
+| `sdk/` | `EventStatus` menerima `"Cancelled"` (`src/types.ts`, `eventStatusSchema` di `src/schema.ts`) | `SterunClient` menolak event yang dibatalkan saat parsing |
+| `sdk/` | `EnterArgs.addOnIds` diteruskan ke `enter` — **sudah dikerjakan** di PR ini, karena tanpa itu `pnpm typecheck` merah | — |
+| `be/` | `EVENT_STATUSES` (`src/chain/decode.ts`) + dua JSON schema di `src/routes/directory.ts` | indexer gagal men-decode event yang dibatalkan |
+| `be/` | opsional: index `add_on_reserved` untuk laporan penjualan add-on | tidak ada data add-on di roster |
+| `fe/` | `EventStatusBadge` butuh warna untuk `Cancelled` | badge kosong / lookup `undefined` |
+| `fe/` | UI pilih add-on di alur entry (STE-21) | add-on tidak bisa dibeli lewat web app |
+
+`be/` men-decode `RecordData` per nama field, jadi `addon_ids` yang baru **tidak** merusaknya —
+field itu hanya diabaikan sampai ada yang memakainya.

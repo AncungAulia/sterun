@@ -2,7 +2,7 @@
 //
 // STE-14 (C3) — the freeze regression guard.
 //
-// `docs/specs/INTERFACE.md` is FROZEN at v1.0.0. A frozen document that nobody
+// `docs/specs/INTERFACE.md` is FROZEN at v2.0.1. A frozen document that nobody
 // re-checks is just a document: the wasm can drift away from it in one commit
 // and nothing goes red. This script closes that gap by reading BOTH sides
 // mechanically and diffing them:
@@ -487,5 +487,5 @@ if (problems.length) {
 
 console.log("==============================================================");
 console.log(" INTERFACE OK — built wasm and generated bindings still match");
-console.log(" the frozen docs/specs/INTERFACE.md v1.0.0.");
+console.log(" the frozen docs/specs/INTERFACE.md v2.0.1.");
 console.log("==============================================================");
