@@ -1750,3 +1750,138 @@ dokumen dan pengecekan di sisi halaman — belum dikerjakan, kandidat untuk STE-
 > Kunci rahasia organiser event ini **tidak** disimpan di repo. Ia hanya ada di log sesi
 > pembuatannya. Kalau event ini perlu diubah (mis. `set_event_status`), dan kuncinya sudah hilang,
 > event-nya tidak bisa disentuh siapa pun — termasuk kita. Itu memang bagaimana kontraknya bekerja.
+
+---
+
+## STE-36 — allowlist organiser, dipasang lewat `upgrade` IN-PLACE (2026-09-09/10)
+
+**Alamat tidak berubah.** Ini upgrade pertama yang menambah *fungsi* dan *storage key* ke kontrak
+yang sudah menyimpan event orang lain — bukan deploy pasangan baru. `EventRegistry` di
+`CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` tetap alamat yang sama sebelum dan
+sesudah; tujuh event yang sudah ada di dalamnya tetap utuh.
+
+`RaceRecord` **tidak** ikut di-upgrade: wasm-nya tidak berubah satu byte pun, dan
+`upgrade-testnet.sh` melewatinya dengan sengaja supaya ledger tidak mencatat perubahan kode yang
+tidak terjadi.
+
+### Kenapa
+
+`create_event` menerima `name: String` bebas dan gerbangnya cuma `organiser.require_auth()`. Auth
+membuktikan pemanggil memegang keypair-nya, dan tidak bisa mengatakan apa pun tentang apakah
+keypair itu berhak atas nama yang barusan dipakai. Siapa pun bisa menerbitkan "Jakarta Marathon
+2026" dan menjual entry ke sana. STE-36 Opsi A: allowlist address yang dipegang admin.
+
+### Wasm — lama → baru
+
+| | sha256 | Ukuran |
+| --- | --- | ---: |
+| sebelum (v2.0.1) | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22.952 B |
+| sesudah (v2.1.0) | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26.948 B |
+
+Toolchain: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`. Interface beku yang
+diwakilinya: `docs/specs/INTERFACE.md` **v2.1.0**.
+
+Wasm yang lama **ter-commit** di `sc/contracts/event_registry/testdata/`, diambil dengan
+`stellar contract fetch` sebelum upgrade. Bukan nostalgia: test
+`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` men-deploy byte itu, menulis
+event + kategori + add-on + scanner + bib dengannya, lalu meng-upgrade ke build v2.1 dan membaca
+semuanya kembali. Itu satu-satunya pasangan wasm yang bisa membuktikan `DataKey::Organiser`
+di-append dengan aman, dan test-nya jalan tanpa network.
+
+### Transaksi (testnet)
+
+| Langkah | Ledger | Waktu (UTC) | Hash |
+| --- | ---: | --- | --- |
+| `upgrade` EventRegistry → `cf009033…` | 4592124 | 2026-09-09T20:03:27Z | [`f6beac51…`](https://stellar.expert/explorer/testnet/tx/f6beac513006cc186e3b15f020be763bc82ad0dc2aadfdcd96c15e6df8ae4d13) |
+| `add_organiser` `GBGUI5MP…` (sterun-organiser) | 4592130 | 2026-09-09T20:03:57Z | [`a7888574…`](https://stellar.expert/explorer/testnet/tx/a7888574b28a189d63d350817f39c198b5f1319a54e1c799f4afe349c0945e81) |
+| `add_organiser` `GA5VKC7Q…` (organiser demo `fe/`) | 4592132 | 2026-09-09T20:04:07Z | [`4074d74f…`](https://stellar.expert/explorer/testnet/tx/4074d74f6b34789e39690d1452a47df194eb2ba73cc55d98ed95a730081fa1b3) |
+| `create_event` sanity oleh organiser yang di-allowlist → `event_id` 7 | 4592134 | 2026-09-09T20:04:17Z | [`f758b116…`](https://stellar.expert/explorer/testnet/tx/f758b11622e235e6fa10c27b68c6b41fc6eb688a54f195b23b471c0af37df58a) |
+
+Admin yang menandatangani `upgrade` dan kedua `add_organiser`:
+`GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` (sterun-admin, `STERUN_ADMIN` di
+`.env` yang gitignored).
+
+### Wallet yang di-allowlist, dan kenapa
+
+| Address | Peran | Alasan |
+| --- | --- | --- |
+| `GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN` | `sterun-organiser` | organiser pilot; pemilik event 0 dan 1 |
+| `GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7` | organiser demo dari web app | pemilik event 3 dan 4 (`LARI TEKNIK (TESTING)` / `… 2`), dibuat lewat `fe/`. Tanpa ini demo itu berhenti bisa membuat event baru |
+
+Wallet e2e yang sekali pakai (`GA7OMUVJ…`, `GDRQFV4Z…`, `GCIRTDFY…`) **tidak** di-allowlist: tiap
+run membuat keypair baru, jadi script-nya yang meng-`add_organiser` sendiri dengan kunci admin.
+
+Mencabut salah satunya satu panggilan:
+
+```bash
+stellar contract invoke --id CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU \
+  --source-account sterun-admin --network testnet -- remove_organiser --organiser G…
+```
+
+Pencabutan **maju saja**: event yang sudah dibuat tetap milik organisernya, lengkap dengan semua
+wewenang per-event. Yang hilang cuma kemampuan membuat event baru.
+
+### Sanity on-chain — dua negatif, satu positif
+
+`bash sc/scripts/allowlist-testnet.sh`, dijalankan setelah upgrade:
+
+```
+=== negative: an address the admin never allowlisted cannot create an event ===
+  ✓ GDHETLPDEWV4KLGNY6GZ4OWMP2I23EMX3SEBBHCQTFWFKR3SOP45PADF → Error(Contract, #18) NotAllowlistedOrganiser
+
+=== positive: the seeded organiser can ===
+  ✓ event_id 7 created by GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN (event_count 7 -> 8)
+
+=== state written before the upgrade, read after it ===
+  event 0  Sterun Testnet Rehearsal
+  event 1  Sterun Cancelled Rehearsal
+  event 2  Sterun add-ons e2e 2026-09-09
+  event 3  LARI TEKNIK (TESTING)
+  event 4  LARI TEKNIK (TESTING 2)
+  event 5  Sterun SDK e2e 2026-09-09
+  event 6  Sterun SDK e2e 2026-09-09
+  category 0/0 {"code":"10K","distance_m":10000,"entered_count":3,"price_usdc":"50000000","quota":5}
+  addon 0/0    {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":2}
+```
+
+Kasus negatifnya **tidak punya tx hash**, dan itu memang benar: `create_event` yang ditolak gagal
+di **simulasi**, jadi tidak ada transaksi yang mendarat di ledger sama sekali. Address
+`GDHETLPD…` (sterun-test-a) transaksi terakhirnya masih tertanggal 2026-08-31. Gerbangnya menolak
+sebelum ada yang perlu dibayar.
+
+`upgrade-testnet.sh` juga membaca ulang sisi RaceRecord terhadap kode yang sudah di-upgrade —
+`record_of 0` masih `Finished` dengan `addon_ids [0,1]`, `owner_of 0` masih runner yang sama,
+`total_supply` 7, dan **0 export transfer-ish**.
+
+### E2E lengkap setelah upgrade — tiga script, semuanya hijau
+
+| Script | Hasil |
+| --- | --- |
+| `pnpm --filter @sterun/sdk e2e` | ✅ event 9, token 7 (gratis) + 8 (bayar 5 sUSD), **8 kasus negatif** termasuk `NotAllowlistedOrganiser(18)` |
+| `pnpm --filter be e2e:results` | ✅ event 10, token 9/10/11, 8 baris CSV, 2 publishable, `source_sha256 2d090634…` |
+| `pnpm --filter be e2e:addons` | ✅ event 11, token 12/13, jersey order `{"L":1,"S":1}`, roster tanpa PII |
+
+Bukti SDK e2e (run kedua, terhadap wasm yang sudah di-upgrade):
+
+```
+▸ Allowlisting the throwaway organiser (admin, STE-36)
+  ✓ GDWDABONMVS6I33CEQMPGNTWEIZVEEZEKE5LB45TGMCYKJFQHPXBUYXC may create events
+
+▸ Negative: an address the admin never allowlisted cannot create an event
+  ✓ createEvent by a non-allowlisted address → NotAllowlistedOrganiser #18 (event-registry)
+```
+
+Ketiga script sekarang **wajib** `STERUN_ADMIN_SECRET`: semuanya membuat organiser sekali pakai,
+dan organiser tidak bisa memberi izin kepada dirinya sendiri — persis gunanya gerbang ini.
+
+### Yang harus diingat operator
+
+**Setelah upgrade, allowlist-nya KOSONG.** `upgrade` mengganti kode, bukan storage, dan tidak ada
+migrasi yang memindahkan organiser event lama ke dalamnya. Di antara tx `f6beac51…` (20:03:27Z)
+dan `a7888574…` (20:03:57Z) — tiga puluh detik — **tidak ada satu pun** address di jaringan ini
+yang bisa membuat event. Kalau kamu meng-upgrade lagi ke wasm yang menambah gerbang serupa,
+jadwalkan seeding-nya di menit yang sama, bukan besok.
+
+Index `be/` **tidak** perlu di-truncate kali ini: alamatnya tidak berubah, `event_id` tidak
+dipakai ulang, dan tidak ada satu pun entry lama yang berubah arti. Itu bedanya upgrade in-place
+dengan pindah alamat (bandingkan `be/OPERATIONS.md` bagian "Pindah ke kontrak v2").
