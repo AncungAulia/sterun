@@ -401,6 +401,129 @@ describe("negative", () => {
   });
 });
 
+describe("retrying what R2 says is temporary", () => {
+  /**
+   * These exist because of a 500 served to a real upload in production. R2
+   * answered `InternalError` with the body "We encountered an internal error.
+   * Please try again." — an instruction this store was ignoring, so a blip on
+   * Cloudflare's side became a failed upload for an organiser.
+   */
+  const flaky = (failures: number, status: number) => {
+    let calls = 0;
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      if (String(input).includes("list-type=2")) {
+        return new Response("<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>", { status: 200 });
+      }
+      if ((init?.method ?? "GET") === "HEAD") return new Response(null, { status: 404 });
+      calls += 1;
+      return calls <= failures
+        ? new Response("<Error><Code>InternalError</Code></Error>", { status })
+        : new Response("", { status: 200 });
+    }) as typeof globalThis.fetch;
+    return { fetchImpl, puts: () => calls };
+  };
+
+  const storeOver = (fetchImpl: typeof globalThis.fetch, attempts = 3) =>
+    new R2FileStore({
+      accountId: "acct",
+      bucket: "b",
+      credentials: CREDS,
+      maxTotalBytes: 1024 * 1024,
+      fetch: fetchImpl,
+      now: () => AT,
+      attempts,
+      sleep: async () => {}, // no real waiting in tests
+    });
+
+  it("succeeds when R2 fails once and then works", async () => {
+    const f = flaky(1, 500);
+    await expect(storeOver(f.fetchImpl).put(PNG, "image/png")).resolves.toMatchObject({
+      created: true,
+    });
+    expect(f.puts()).toBe(2);
+  });
+
+  it("retries a 429, which is a rate limit and therefore temporary by definition", async () => {
+    const f = flaky(1, 429);
+    await expect(storeOver(f.fetchImpl).put(PNG, "image/png")).resolves.toMatchObject({
+      created: true,
+    });
+  });
+
+  it("gives up after the configured number of attempts rather than hanging on", async () => {
+    const f = flaky(99, 500);
+    await expect(storeOver(f.fetchImpl).put(PNG, "image/png")).rejects.toThrow(R2Error);
+    expect(f.puts()).toBe(3);
+  });
+
+  it("does NOT retry a 403, because bad credentials do not improve with time", async () => {
+    const f = flaky(99, 403);
+    await expect(storeOver(f.fetchImpl).put(PNG, "image/png")).rejects.toThrow(/403/);
+    expect(f.puts()).toBe(1);
+  });
+
+  it("does NOT retry a 404 on read — an absent object is an answer, not a failure", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return new Response("<Error><Code>NoSuchKey</Code></Error>", { status: 404 });
+    }) as typeof globalThis.fetch;
+    expect(await storeOver(fetchImpl).get(PNG_SHA)).toBeUndefined();
+    expect(calls).toBe(1);
+  });
+
+  it("retries a refused connection too, not only an HTTP status", async () => {
+    let calls = 0;
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      if (String(input).includes("list-type=2")) {
+        return new Response("<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>", { status: 200 });
+      }
+      if ((init?.method ?? "GET") === "HEAD") return new Response(null, { status: 404 });
+      calls += 1;
+      if (calls === 1) throw new TypeError("fetch failed");
+      return new Response("", { status: 200 });
+    }) as typeof globalThis.fetch;
+
+    await expect(storeOver(fetchImpl).put(PNG, "image/png")).resolves.toMatchObject({ created: true });
+    expect(calls).toBe(2);
+  });
+
+  it("marks a 5xx as transient and a 403 as not, which is what drives the 503", async () => {
+    expect(new R2Error(500, "PUT x", "").transient).toBe(true);
+    expect(new R2Error(429, "PUT x", "").transient).toBe(true);
+    expect(new R2Error(403, "PUT x", "").transient).toBe(false);
+  });
+
+  it("waits the Retry-After R2 asked for instead of guessing", async () => {
+    const waited: number[] = [];
+    let calls = 0;
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      if (String(input).includes("list-type=2")) {
+        return new Response("<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>", { status: 200 });
+      }
+      if ((init?.method ?? "GET") === "HEAD") return new Response(null, { status: 404 });
+      calls += 1;
+      return calls === 1
+        ? new Response("", { status: 429, headers: { "retry-after": "2" } })
+        : new Response("", { status: 200 });
+    }) as typeof globalThis.fetch;
+
+    const store = new R2FileStore({
+      accountId: "acct",
+      bucket: "b",
+      credentials: CREDS,
+      maxTotalBytes: 1024 * 1024,
+      fetch: fetchImpl,
+      now: () => AT,
+      sleep: async (ms) => {
+        waited.push(ms);
+      },
+    });
+    await store.put(PNG, "image/png");
+    expect(waited).toEqual([2000]);
+  });
+});
+
 describe("edge", () => {
   it("pages through a truncated listing instead of stopping at the first page", async () => {
     let page = 0;

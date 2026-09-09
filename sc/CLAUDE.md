@@ -16,7 +16,7 @@ pegang **sebelum** menulis kode di sini.
 ```bash
 cd sc
 stellar contract build            # WAJIB duluan — test membaca wasm hasilnya
-cargo test                        # 33 (event_registry) + 42 (race_record)
+cargo test                        # 54 (event_registry) + 60 (race_record)
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 ./scripts/check-exports.sh        # non-transferable dibuktikan dari wasm
@@ -27,6 +27,16 @@ node scripts/check-interface.mjs  # spec beku vs wasm vs bindings
 `race_record::test::exports::race_record_wasm_exports_nothing_that_could_move_a_record` membongkar
 export section `target/wasm32v1-none/release/race_record.wasm`. Kalau wasm-nya belum ada, test
 **gagal** (sengaja, bukan skip diam-diam).
+
+Sejak v2 ada alasan kedua, dan lebih tajam: modul `mod upgrade` di **kedua** crate men-deploy
+kontraknya **dari wasm** (`env.register(bytes, args)`) karena `update_current_contract_wasm` cuma
+bisa mengganti executable yang memang ada. Wasm yang basi berarti test upgrade menguji kode
+kemarin. Kalau kamu mengubah `lib.rs` lalu langsung `cargo test`, kamu sedang menguji build lama —
+build dulu.
+
+Coverage juga terpengaruh: kontrak yang dijalankan sebagai wasm **tidak** ter-instrumentasi, jadi
+`upgrade` akan tampak 0% kalau cuma diuji lewat wasm. Itu sebabnya ada `upgrade_runs_natively_too`
+di kedua crate — laporan coverage-nya jadi jujur soal apa yang benar-benar dijalankan.
 
 Coverage — floor 80%, sekarang 99%:
 
@@ -49,12 +59,12 @@ menghasilkan hash wasm tercatat di `README.md`; CI mem-pin angka yang sama.
 
 ## Band kode error — konvensi paling mudah dilanggar di repo ini
 
-| Band | Pemilik |
-| --- | --- |
-| `1..=99` | `event_registry` (C1) |
-| `100..=199` | `race_record` (C2) |
-| `200+` | OpenZeppelin `NonFungibleTokenError` (200–214 di stellar-tokens 0.7.2) |
-| kelipatan 100 berikutnya | kontrak baru |
+| Band | Pemilik | Terpakai sekarang |
+| --- | --- | --- |
+| `1..=99` | `event_registry` (C1) | `1..=15` |
+| `100..=199` | `race_record` (C2) | `100..=107` |
+| `200+` | OpenZeppelin `NonFungibleTokenError` (200–214 di stellar-tokens 0.7.2) | `200..=214` |
+| kelipatan 100 berikutnya | kontrak baru | — |
 
 `ScError` Soroban cuma membawa `u32` **tanpa identitas kontrak**, dan revert dari sub-invocation
 merambat ke pemanggil apa adanya. `enter` cross-call ke EventRegistry **dan** SAC, jadi tanpa band
@@ -97,8 +107,33 @@ assertion gate auth pakai `env.mock_auths(&[...])` (enforcing).
 - **Sanity check-nya menjalankan kasus negatif juga.** Deploy yang cuma membuktikan happy path
   belum membuktikan guard-nya selamat sampai network nyata — dan guard itulah produknya.
 
-Kontrak v1 **non-upgradeable**: menjalankan ulang script ini menghasilkan pasangan alamat **baru**
-(deploy memakai salt acak), bukan upgrade.
+Menjalankan ulang script ini menghasilkan pasangan alamat **baru** (deploy memakai salt acak).
+Sejak v2 itu bukan lagi satu-satunya cara mengubah kontrak yang live — lihat di bawah.
+
+## v2: kontraknya upgradeable, dan storage key jadi append-only SELAMANYA
+
+Kedua kontrak mengekspor `upgrade(new_wasm_hash)` yang admin-gated dan memanggil
+`env.deployer().update_current_contract_wasm`. Ini mekanisme **native Soroban**: bytecode diganti
+di tempat, alamat/storage/saldo tidak pindah, tidak ada proxy dan tidak ada `delegatecall`. Jadi
+tidak ada slot storage yang bisa salah-alias — tapi kode baru **menafsirkan ulang entry lama**,
+dan itu risikonya seluruhnya:
+
+- **Jangan hapus, rename, atau ganti tipe varian `DataKey`.** Enum `#[contracttype]` dikirim
+  sebagai **nama varian**, jadi menambah varian aman; me-rename satu varian membuat setiap entry
+  yang ditulis dengan nama lama jadi yatim, diam-diam, tanpa error.
+- **Jangan tambah field WAJIB ke struct yang sudah tersimpan** (`RecordData`, `EventData`,
+  `CategoryData`, `AddOnData`). Struct `#[contracttype]` adalah map berkunci nama field: nilai
+  lama gagal di-decode ke struct yang bertambah field wajib. Butuh data baru per record? Pakai
+  varian `DataKey` baru.
+- **`stellar-tokens` memiliki key owner/balance/enumeration OZ.** Menaikkan major-nya lewat
+  upgrade = migrasi storage, bukan bump versi.
+- Efek `upgrade` baru berlaku **setelah** invocation selesai, jadi migrasi butuh panggilan kedua.
+  Hash wasm-nya wajib sudah ter-upload, dan tidak ada yang mengecek bahwa wasm barunya masih punya
+  `upgrade` — upgrade ke wasm tanpa itu menghabiskan upgradeability permanen.
+
+Konsekuensi yang paling gampang salah dibaca ada di RaceRecord: klaim "record tidak bisa pindah
+tangan" sekarang tentang **wasm yang ter-deploy** plus kunci admin, bukan tentang alamat itu
+selamanya. Tabelnya di `docs/specs/INTERFACE.md` §4. Jangan tulis ulang klaim v1 apa adanya.
 
 ## Sebelum bilang "selesai"
 

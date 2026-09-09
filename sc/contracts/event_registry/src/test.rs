@@ -11,9 +11,9 @@ use soroban_sdk::{
 };
 
 use crate::{
-    CategoryAdded, CategoryData, DataKey, Error, EventCreated, EventData, EventRegistry,
-    EventRegistryClient, EventStatus, EventStatusChanged, ScannerAdded, ScannerRemoved,
-    SlotReserved, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
+    AddOnAdded, AddOnData, AddOnReserved, CategoryAdded, CategoryData, DataKey, Error,
+    EventCreated, EventData, EventRegistry, EventRegistryClient, EventStatus, EventStatusChanged,
+    ScannerAdded, ScannerRemoved, SlotReserved, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
 };
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,26 @@ impl MockRaceRecord {
         category_id: u32,
     ) -> Result<u32, crate::Error> {
         Ok(EventRegistryClient::new(&env, &registry).reserve_slot(&event_id, &category_id))
+    }
+
+    /// Single add-on reservation. Returns the price the registry says to
+    /// charge, which is what `RaceRecord.enter` bills the runner.
+    pub fn reserve_addon(
+        env: Env,
+        registry: Address,
+        event_id: u32,
+        addon_id: u32,
+    ) -> Result<i128, crate::Error> {
+        Ok(EventRegistryClient::new(&env, &registry).reserve_addon(&event_id, &addon_id))
+    }
+
+    /// Two entries racing for the last unit of the same add-on inside ONE
+    /// invocation. Returns `(first_succeeded, second_succeeded)`.
+    pub fn race_addon(env: Env, registry: Address, event_id: u32, addon_id: u32) -> (bool, bool) {
+        let client = EventRegistryClient::new(&env, &registry);
+        let first = client.try_reserve_addon(&event_id, &addon_id).is_ok();
+        let second = client.try_reserve_addon(&event_id, &addon_id).is_ok();
+        (first, second)
     }
 
     /// Two entries racing for the same category inside ONE invocation.
@@ -822,13 +842,15 @@ fn set_event_status_rejects_illegal_transitions() {
     client.set_event_status(&event_id, &EventStatus::Closed);
     client.set_event_status(&event_id, &EventStatus::Open);
 
-    // Completed is terminal.
+    // Completed is terminal — including against Cancelled: a race that was run
+    // and had results published did happen.
     client.set_event_status(&event_id, &EventStatus::Completed);
     for status in [
         EventStatus::Draft,
         EventStatus::Open,
         EventStatus::Closed,
         EventStatus::Completed,
+        EventStatus::Cancelled,
     ] {
         assert_eq!(
             client.try_set_event_status(&event_id, &status),
@@ -836,6 +858,81 @@ fn set_event_status_rejects_illegal_transitions() {
         );
     }
     assert_eq!(client.get_event(&event_id).status, EventStatus::Completed);
+}
+
+/// Cancelling is reachable from each of the three non-terminal states, and is
+/// itself terminal.
+#[test]
+fn an_event_can_be_cancelled_from_every_non_terminal_state() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    for reach in [EventStatus::Draft, EventStatus::Open, EventStatus::Closed] {
+        let event_id =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        match reach {
+            EventStatus::Draft => {}
+            EventStatus::Open => client.set_event_status(&event_id, &EventStatus::Open),
+            _ => {
+                client.set_event_status(&event_id, &EventStatus::Open);
+                client.set_event_status(&event_id, &EventStatus::Closed);
+            }
+        }
+        assert_eq!(client.get_event(&event_id).status, reach);
+
+        client.set_event_status(&event_id, &EventStatus::Cancelled);
+        assert_eq!(client.get_event(&event_id).status, EventStatus::Cancelled);
+
+        // Terminal: there is no way back out, not even to Cancelled again.
+        for status in [
+            EventStatus::Draft,
+            EventStatus::Open,
+            EventStatus::Closed,
+            EventStatus::Completed,
+            EventStatus::Cancelled,
+        ] {
+            assert_eq!(
+                client.try_set_event_status(&event_id, &status),
+                Err(Ok(Error::InvalidStatus))
+            );
+        }
+    }
+}
+
+/// A cancelled event stops taking entries without needing a guard of its own:
+/// `reserve_slot` already demands `Open`.
+#[test]
+fn a_cancelled_event_refuses_new_entries() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    // While Open, an entry lands.
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Ok(Ok(0))
+    );
+
+    env.mock_all_auths();
+    client.set_event_status(&event_id, &EventStatus::Cancelled);
+
+    assert_eq!(
+        caller.try_reserve(&registry, &event_id, &category_id),
+        Err(Ok(Error::EventNotOpen))
+    );
+    // The slot already taken is untouched — cancelling is not a rollback.
+    assert_eq!(
+        client.get_category(&event_id, &category_id).entered_count,
+        1
+    );
 }
 
 #[test]
@@ -1118,4 +1215,559 @@ fn a_later_write_re_extends_a_decayed_ttl() {
         env.as_contract(&registry, || env.storage().instance().get_ttl()),
         BUMP_TO
     );
+}
+
+// ---------------------------------------------------------------------------
+// Paid add-ons (v2, STE-35)
+// ---------------------------------------------------------------------------
+
+const JERSEY: i128 = 50_000_000; // 5.0 sUSD
+const TUMBLER: i128 = 30_000_000; // 3.0 sUSD
+
+/// Adds two add-ons to `event_id` and returns their ids.
+fn add_two_addons(env: &Env, client: &EventRegistryClient, event_id: u32) -> (u32, u32) {
+    env.mock_all_auths();
+    let jersey = client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &2);
+    let tumbler = client.add_addon(&event_id, &symbol_short!("TUMBLER"), &TUMBLER, &1);
+    (jersey, tumbler)
+}
+
+#[test]
+fn add_addon_ids_are_per_event_and_data_roundtrips() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    let first = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+    let second = client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    assert_eq!(client.addon_count(&first), 0);
+    let (jersey, tumbler) = add_two_addons(&env, &client, first);
+    assert_eq!((jersey, tumbler), (0, 1));
+    assert_eq!(client.addon_count(&first), 2);
+
+    // Ids restart at 0 for the next event, exactly like category ids.
+    let other = client.add_addon(&second, &symbol_short!("JERSEY"), &JERSEY, &10);
+    assert_eq!(other, 0);
+    assert_eq!(client.addon_count(&second), 1);
+
+    assert_eq!(
+        client.get_addon(&first, &jersey),
+        AddOnData {
+            code: symbol_short!("JERSEY"),
+            price_usdc: JERSEY,
+            quota: 2,
+            reserved_count: 0,
+        }
+    );
+}
+
+#[test]
+fn add_addon_validates_its_inputs() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    env.mock_all_auths();
+
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    assert_eq!(
+        client.try_add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &0),
+        Err(Ok(Error::InvalidQuota))
+    );
+    assert_eq!(
+        client.try_add_addon(&event_id, &symbol_short!("JERSEY"), &-1, &10),
+        Err(Ok(Error::InvalidPrice))
+    );
+    assert_eq!(
+        client.try_add_addon(&7, &symbol_short!("JERSEY"), &JERSEY, &10),
+        Err(Ok(Error::EventNotFound))
+    );
+    // A free add-on with a cap is legal: hand out a bib belt to whoever asks,
+    // but only 100 of them.
+    let free = client.add_addon(&event_id, &symbol_short!("BIBBELT"), &0, &100);
+    assert_eq!(client.get_addon(&event_id, &free).price_usdc, 0);
+    // Nothing was written by the rejected calls.
+    assert_eq!(client.addon_count(&event_id), 1);
+}
+
+#[test]
+fn add_addon_rejects_a_foreign_signer() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+    let impostor = Address::generate(&env);
+
+    env.mock_all_auths();
+    let event_id =
+        client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+
+    env.mock_auths(&[MockAuth {
+        address: &impostor,
+        invoke: &MockAuthInvoke {
+            contract: &registry,
+            fn_name: "add_addon",
+            args: (event_id, symbol_short!("JERSEY"), JERSEY, 10u32).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+
+    assert_eq!(
+        client.try_add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &10),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.addon_count(&event_id), 0);
+}
+
+#[test]
+fn reserve_addon_returns_the_price_and_counts_units() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (jersey, tumbler) = add_two_addons(&env, &client, event_id);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(caller.reserve_addon(&registry, &event_id, &jersey), JERSEY);
+    assert_eq!(
+        caller.reserve_addon(&registry, &event_id, &tumbler),
+        TUMBLER
+    );
+    assert_eq!(caller.reserve_addon(&registry, &event_id, &jersey), JERSEY);
+
+    assert_eq!(client.get_addon(&event_id, &jersey).reserved_count, 2);
+    assert_eq!(client.get_addon(&event_id, &tumbler).reserved_count, 1);
+}
+
+#[test]
+fn reserve_addon_reverts_when_the_quota_is_full() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (_jersey, tumbler) = add_two_addons(&env, &client, event_id);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    // Quota is 1.
+    caller.reserve_addon(&registry, &event_id, &tumbler);
+    assert_eq!(
+        caller.try_reserve_addon(&registry, &event_id, &tumbler),
+        Err(Ok(Error::AddOnQuotaFull))
+    );
+    assert_eq!(client.get_addon(&event_id, &tumbler).reserved_count, 1);
+}
+
+/// The last unit of an add-on, contested inside ONE invocation: check and
+/// increment happen together, so the loser reads the already-bumped count.
+#[test]
+fn exactly_one_entry_wins_the_last_add_on_unit() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (_jersey, tumbler) = add_two_addons(&env, &client, event_id);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(
+        caller.race_addon(&registry, &event_id, &tumbler),
+        (true, false)
+    );
+    assert_eq!(client.get_addon(&event_id, &tumbler).reserved_count, 1);
+}
+
+#[test]
+fn reserve_addon_rejects_a_direct_eoa_call() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (jersey, _tumbler) = add_two_addons(&env, &client, event_id);
+    let race_record = wire_race_record(&env, &client);
+    let eoa = Address::generate(&env);
+
+    // A plain account signing for itself is not the wired contract, and the
+    // wired contract has no `__check_auth` for anyone to sign on its behalf.
+    env.mock_auths(&[MockAuth {
+        address: &eoa,
+        invoke: &MockAuthInvoke {
+            contract: &registry,
+            fn_name: "reserve_addon",
+            args: (event_id, jersey).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+
+    assert_eq!(
+        client.try_reserve_addon(&event_id, &jersey),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.get_addon(&event_id, &jersey).reserved_count, 0);
+    // Sanity: the wired contract itself is accepted for the same call.
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+    assert_eq!(caller.reserve_addon(&registry, &event_id, &jersey), JERSEY);
+}
+
+#[test]
+fn reserve_addon_rejects_unknown_ids_and_non_open_events() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (jersey, _tumbler) = add_two_addons(&env, &client, event_id);
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+
+    assert_eq!(
+        caller.try_reserve_addon(&registry, &event_id, &99),
+        Err(Ok(Error::AddOnNotFound))
+    );
+    assert_eq!(
+        caller.try_reserve_addon(&registry, &7, &jersey),
+        Err(Ok(Error::EventNotFound))
+    );
+
+    // Closing registration stops add-on sales as well as entries.
+    env.mock_all_auths();
+    client.set_event_status(&event_id, &EventStatus::Closed);
+    assert_eq!(
+        caller.try_reserve_addon(&registry, &event_id, &jersey),
+        Err(Ok(Error::EventNotOpen))
+    );
+
+    env.mock_all_auths();
+    client.set_event_status(&event_id, &EventStatus::Cancelled);
+    assert_eq!(
+        caller.try_reserve_addon(&registry, &event_id, &jersey),
+        Err(Ok(Error::EventNotOpen))
+    );
+}
+
+#[test]
+fn reserve_addon_before_wiring_reverts() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (jersey, _tumbler) = add_two_addons(&env, &client, event_id);
+
+    let unwired = env.register(MockRaceRecord, ());
+    let caller = MockRaceRecordClient::new(&env, &unwired);
+    assert_eq!(
+        caller.try_reserve_addon(&registry, &event_id, &jersey),
+        Err(Ok(Error::RaceRecordNotSet))
+    );
+}
+
+/// Add-ons of two events never share ids or quota.
+#[test]
+fn add_ons_are_isolated_per_event() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (first, _c1) = open_event(&env, &client, &organiser, 5);
+    let (second, _c2) = open_event(&env, &client, &organiser, 5);
+    env.mock_all_auths();
+    let a = client.add_addon(&first, &symbol_short!("JERSEY"), &JERSEY, &1);
+    let b = client.add_addon(&second, &symbol_short!("JERSEY"), &TUMBLER, &1);
+    assert_eq!((a, b), (0, 0));
+
+    let race_record = wire_race_record(&env, &client);
+    let caller = MockRaceRecordClient::new(&env, &race_record);
+    caller.reserve_addon(&registry, &first, &a);
+
+    assert_eq!(client.get_addon(&first, &a).reserved_count, 1);
+    assert_eq!(client.get_addon(&second, &b).reserved_count, 0);
+    // Different events, different prices, no cross-talk.
+    assert_eq!(caller.reserve_addon(&registry, &second, &b), TUMBLER);
+}
+
+#[test]
+fn get_addon_reverts_on_unknown_ids() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+
+    assert_eq!(client.try_get_addon(&0, &0), Err(Ok(Error::AddOnNotFound)));
+    assert_eq!(client.addon_count(&0), 0);
+}
+
+#[test]
+fn emits_addon_added_and_addon_reserved() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let race_record = wire_race_record(&env, &client);
+
+    env.mock_all_auths();
+    let addon_id = client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &2);
+    assert_eq!(
+        env.events().all(),
+        std::vec![AddOnAdded {
+            event_id,
+            addon_id,
+            quota: 2,
+            price: JERSEY,
+        }
+        .to_xdr(&env, &registry)]
+    );
+
+    MockRaceRecordClient::new(&env, &race_record).reserve_addon(&registry, &event_id, &addon_id);
+    assert_eq!(
+        env.events().all(),
+        std::vec![AddOnReserved {
+            event_id,
+            addon_id,
+            seq: 0,
+            price: JERSEY,
+        }
+        .to_xdr(&env, &registry)]
+    );
+}
+
+/// Add-on entries pay rent like every other persistent entry.
+#[test]
+fn add_on_writes_extend_the_persistent_ttl() {
+    let env = Env::default();
+    let (_admin, registry) = deploy(&env);
+    let client = EventRegistryClient::new(&env, &registry);
+    let organiser = Address::generate(&env);
+
+    let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+    let (jersey, _tumbler) = add_two_addons(&env, &client, event_id);
+    let race_record = wire_race_record(&env, &client);
+
+    let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + aged_by);
+
+    let key = DataKey::AddOn(event_id, jersey);
+    let decayed = persistent_ttl(&env, &registry, key.clone());
+    assert_eq!(decayed, BUMP_TO - aged_by);
+    assert!(decayed < BUMP_THRESHOLD);
+
+    MockRaceRecordClient::new(&env, &race_record).reserve_addon(&registry, &event_id, &jersey);
+
+    assert_eq!(persistent_ttl(&env, &registry, key), BUMP_TO);
+    assert_eq!(
+        persistent_ttl(&env, &registry, DataKey::AddOnCount(event_id)),
+        BUMP_TO - aged_by,
+        "reserve_addon does not rewrite the count, so its rent is untouched"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade (v2)
+//
+// These tests deploy the registry from the BUILT WASM rather than from the
+// native `EventRegistry` type, because that is the only form
+// `update_current_contract_wasm` can actually replace. They therefore need
+// `stellar contract build` to have run first — the same ordering requirement
+// the RaceRecord export test documents.
+// ---------------------------------------------------------------------------
+mod upgrade {
+    use super::*;
+    use soroban_sdk::Bytes;
+    use std::path::PathBuf;
+
+    fn wasm_path(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/wasm32v1-none/release")
+            .join(name)
+    }
+
+    fn wasm_bytes(name: &str) -> std::vec::Vec<u8> {
+        let path = wasm_path(name);
+        std::fs::read(&path).unwrap_or_else(|e| {
+            panic!(
+                "cannot read {}: {e}\nRun `cd sc && stellar contract build` first — the upgrade \
+                 tests replace a real executable, so they need one.",
+                path.display()
+            )
+        })
+    }
+
+    /// Registry deployed from its own wasm, plus its admin.
+    fn deploy_from_wasm(env: &Env) -> (Address, Address) {
+        let admin = Address::generate(env);
+        let wasm = wasm_bytes("event_registry.wasm");
+        let registry = env.register(wasm.as_slice(), (admin.clone(),));
+        (admin, registry)
+    }
+
+    fn upload(env: &Env, name: &str) -> BytesN<32> {
+        let wasm = wasm_bytes(name);
+        env.deployer()
+            .upload_contract_wasm(Bytes::from_slice(env, &wasm))
+    }
+
+    /// The point of the whole exercise: state written by the old executable is
+    /// read back, unchanged, by the new one.
+    #[test]
+    fn state_written_before_an_upgrade_reads_back_after_it() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+        env.mock_all_auths();
+        let scanner = Address::generate(&env);
+        client.add_scanner(&event_id, &scanner);
+        let (jersey, _tumbler) = add_two_addons(&env, &client, event_id);
+        let race_record = wire_race_record(&env, &client);
+        MockRaceRecordClient::new(&env, &race_record).reserve_addon(&registry, &event_id, &jersey);
+        let event_before = client.get_event(&event_id);
+        let category_before = client.get_category(&event_id, &category_id);
+        let addon_before = client.get_addon(&event_id, &jersey);
+
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        assert_eq!(client.get_event(&event_id), event_before);
+        assert_eq!(
+            client.get_category(&event_id, &category_id),
+            category_before
+        );
+        // The keys v2 added survive too, half-sold quota and all.
+        assert_eq!(client.get_addon(&event_id, &jersey), addon_before);
+        assert_eq!(addon_before.reserved_count, 1);
+        assert_eq!(client.addon_count(&event_id), 2);
+        assert_eq!(client.category_count(&event_id), 1);
+        assert_eq!(client.event_count(), 1);
+        assert_eq!(client.get_race_record(), race_record);
+        assert!(client.is_scanner(&event_id, &scanner));
+        // And the new executable is still upgradeable — losing that would be
+        // permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+    }
+
+    /// The executable really is replaced, not merely re-pointed at itself: after
+    /// upgrading to a DIFFERENT contract's wasm the registry's own functions are
+    /// gone, while every storage entry it wrote is still sitting there intact.
+    ///
+    /// Nobody would ship this upgrade. It is the cheapest way to prove that the
+    /// two halves — code and state — really are independent, which is exactly
+    /// the property the append-only storage rule exists to protect.
+    #[test]
+    fn upgrading_swaps_the_code_and_leaves_the_storage_alone() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, _category_id) = open_event(&env, &client, &organiser, 5);
+        let event_before = client.get_event(&event_id);
+
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "race_record.wasm"));
+
+        // EventRegistry's surface is gone with its code.
+        assert!(client.try_event_count().is_err());
+
+        // The entry it wrote is untouched and still decodes as `EventData`.
+        let after: EventData = env
+            .as_contract(&registry, || {
+                env.storage().persistent().get(&DataKey::Event(event_id))
+            })
+            .expect("the event entry survived the executable swap");
+        assert_eq!(after, event_before);
+    }
+
+    #[test]
+    fn upgrade_rejects_a_non_admin() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let stranger = Address::generate(&env);
+        let hash = upload(&env, "event_registry.wasm");
+
+        // The stranger signs for itself; the contract requires the *stored* admin.
+        env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &registry,
+                fn_name: "upgrade",
+                args: (hash.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert_eq!(client.try_upgrade(&hash), Err(Err(InvokeError::Abort)));
+    }
+
+    /// An unknown hash cannot be installed, so a typo cannot brick the contract.
+    /// The same call against a NATIVELY registered contract.
+    ///
+    /// The tests above are the ones that mean something on a real network, but
+    /// they execute the contract as wasm, so the Rust source is never
+    /// instrumented and `upgrade` reads as dead code in the coverage report.
+    /// Running it natively too keeps the report honest about what is exercised.
+    #[test]
+    fn upgrade_runs_natively_too() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        assert_eq!(client.event_count(), 0);
+    }
+
+    #[test]
+    fn upgrade_rejects_a_wasm_hash_that_was_never_uploaded() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+
+        env.mock_all_auths();
+        let result = client.try_upgrade(&BytesN::from_array(&env, &[9u8; 32]));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn emits_contract_upgraded() {
+        let env = Env::default();
+        let (_admin, registry) = deploy_from_wasm(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let hash = upload(&env, "event_registry.wasm");
+
+        env.mock_all_auths();
+        client.upgrade(&hash);
+
+        assert_eq!(
+            env.events().all(),
+            std::vec![crate::ContractUpgraded {
+                new_wasm_hash: hash,
+            }
+            .to_xdr(&env, &registry)]
+        );
+    }
 }

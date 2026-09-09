@@ -58,6 +58,8 @@ export const EVENT_REGISTRY_ERRORS = {
   11: "InvalidStatus",
   12: "ScannerAlreadyAdded",
   13: "ScannerNotFound",
+  14: "AddOnNotFound",
+  15: "AddOnQuotaFull",
 } as const satisfies Readonly<Record<number, string>>;
 
 /** INTERFACE.md §2.4 — RaceRecord (C2). */
@@ -68,6 +70,8 @@ export const RACE_RECORD_ERRORS = {
   103: "InvalidState",
   104: "NotAuthorized",
   105: "InvalidFinishTime",
+  106: "TooManyAddOns",
+  107: "DuplicateAddOn",
 } as const satisfies Readonly<Record<number, string>>;
 
 /** INTERFACE.md §2.4 — OpenZeppelin, embedded in the RaceRecord spec. */

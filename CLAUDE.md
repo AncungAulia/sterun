@@ -10,7 +10,7 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 | Folder | Isi `CLAUDE.md`-nya |
 | --- | --- |
 | [`sc/`](sc/CLAUDE.md) | cargo workspace kontrak: build, test, gate, versi pinned, band error |
-| [`sc/contracts/event_registry/`](sc/contracts/event_registry/CLAUDE.md) | C1 — storage, kuota, scanner allowlist, `reserve_slot` |
+| [`sc/contracts/event_registry/`](sc/contracts/event_registry/CLAUDE.md) | C1 — storage, kuota, add-on, scanner allowlist, `reserve_slot` |
 | [`sc/contracts/race_record/`](sc/contracts/race_record/CLAUDE.md) | C2 — non-transferable, lifecycle, `enter` atomik, TTL |
 | [`docs/`](docs/CLAUDE.md) | SYSTEM_DESIGN + `deployments.md` (bukti deploy) |
 | [`docs/specs/`](docs/specs/CLAUDE.md) | spec BEKU C4: aturan mengubahnya, cara memverifikasinya |
@@ -73,15 +73,27 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-13 | directory + detail event dari chain (C9) | selesai, fe 161 test + e2e testnet live |
 | — | file metadata event (`POST /events/files`) untuk STE-17 | selesai, backend 745 test + e2e live — **belum ada tiket Linear-nya** |
 | — | object storage **R2** (`sterun-files`, APAC) | selesai — API jadi stateless, blocker replica hilang |
+| STE-35 | **kontrak v2**: upgradeable + add-on berbayar + `Cancelled` | selesai, 114 test, **LIVE di testnet** |
 
-Kontrak **sudah hidup di testnet**. Alamat + bukti transaksi lengkap ada di
-[`docs/deployments.md`](docs/deployments.md):
+Kontrak **sudah hidup di testnet**, dan sekarang ada **dua pasang**. Alamat + bukti transaksi
+lengkap ada di [`docs/deployments.md`](docs/deployments.md):
 
 ```
-EVENT_REGISTRY=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
-RACE_RECORD=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+# v2 (STE-35) — add-on berbayar, Cancelled, upgradeable. Interface: docs/specs/INTERFACE.md v2.0.1
+EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
+
+# v1 (STE-33) — masih live dan masih dipakai be/ + fe/. `enter` tanpa addon_ids.
+EVENT_REGISTRY_V1=CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64
+RACE_RECORD_V1=CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4
+
 SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 ```
+
+**Migrasi client ke v2 BELUM dikerjakan** — itu kode James (`be/`, `sdk/`) dan Ancung (`fe/`), dan
+checklist-nya ada di `docs/specs/INTERFACE.md` §8. Yang sudah dikerjakan cuma seminimal supaya
+workspace TS tetap compile (`enter` menerima `addOnIds` opsional, `EventStatus` menerima
+`Cancelled`, peta error dapat kode baru). Integrasi **baru** pakai alamat v2.
 
 **M1 (D1 — kontrak) SELESAI.** M2 (D2 — `@sterun/sdk` + backend) tinggal satu langkah manual:
 ~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → ~~**STE-15** SterunClient~~ →
@@ -104,8 +116,15 @@ Backend sudah bisa dijalankan: API (`pnpm dev`), poller (`pnpm indexer follow`),
 terhadap testnet yang live, dari PII masuk sampai roster keluar: bukti langkah demi langkah ada di
 [`docs/deployments.md`](docs/deployments.md) section "Bukti e2e STE-16".
 
-Kontrak v1 **non-upgradeable**: alamat di atas permanen untuk versi ini. Deploy ulang =
-pasangan alamat baru, bukan upgrade.
+Kontrak v1 **non-upgradeable**: alamatnya permanen untuk versi itu, dan itulah kenapa add-on
+STE-35 butuh pasangan baru. **v2 upgradeable** (`upgrade(new_wasm_hash)`, admin-gated, di kedua
+kontrak), jadi seharusnya ini terakhir kalinya alamat berganti.
+
+Harganya satu aturan yang tidak bisa dijaga compiler: **storage key append-only selamanya** —
+jangan hapus/rename/ganti tipe varian `DataKey`, dan jangan tambah field wajib ke struct yang sudah
+tersimpan. Alasan lengkap di [`sc/CLAUDE.md`](sc/CLAUDE.md). Dan klaim non-transferable RaceRecord
+sekarang tentang wasm yang **ter-deploy** plus kunci admin, bukan tentang alamat selamanya —
+tabelnya di `docs/specs/INTERFACE.md` §4, jangan menyalin kalimat v1 apa adanya ke materi grant.
 
 ## Workflow (berlaku sejak 2026-09-01, override aturan lama "tunggu approval sebelum merge")
 
@@ -148,7 +167,13 @@ meng-install Rust sama sekali (mis. reviewer grant yang cuma pegang URL run-nya)
 
 ## Keputusan FINAL (jangan diputuskan ulang)
 - Asset testnet = **sUSD (Sterun USD)** issue sendiri via SAC/SEP-41; mainnet = USDC (Circle).
-- **TOTP 6 digit**. v1 non-upgradeable. PII off-chain (cuma `participant_hash` on-chain).
+- **TOTP 6 digit**. PII off-chain (cuma `participant_hash` on-chain).
+- **v1 non-upgradeable, v2 upgradeable** (native Soroban `update_current_contract_wasm`, bukan
+  proxy). Konsekuensi: storage key append-only selamanya.
+- **Add-on berbayar hidup on-chain** (STE-35): `enter` menagih `category.price + Σ addon.price`
+  dalam **satu** transfer atomik, dan `RecordData.addon_ids` mencatat yang dibeli.
+- **Tanpa escrow.** Refund tetap janji off-chain. Karena v2 upgradeable, escrow bisa ditambahkan
+  in-place nanti — jangan dibangun sekarang.
 - **Versi crate kontrak (pinned EXACT di `sc/Cargo.toml`)**: `soroban-sdk = "=26.1.1"` (protocol
   26), OZ `stellar-tokens`/`stellar-access`/`stellar-contract-utils`/`stellar-macros` = `"=0.7.2"`.
   Alasan + syarat menaikkannya: `sc/CLAUDE.md`.

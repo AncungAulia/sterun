@@ -20,11 +20,15 @@ WASM="${SC_DIR}/target/wasm32v1-none/release/race_record.wasm"
 
 # Anything that could move, destroy or delegate a record.
 BANNED_FNS=(transfer transfer_from approve approve_for_all burn burn_from)
-# EventRegistry's own surface (C1, STE-5).
+# EventRegistry's own surface (C1, STE-5 + the v2 add-ons of STE-35).
+#
+# `upgrade` is deliberately NOT here: both contracts export one of their own
+# (v2), so seeing it in race_record.wasm is correct rather than a leak.
 REGISTRY_FNS=(
   create_event add_category set_event_status add_scanner remove_scanner
   reserve_slot set_race_record get_race_record get_event get_organiser
   is_scanner event_count
+  add_addon reserve_addon get_addon addon_count
 )
 
 cd "${SC_DIR}"

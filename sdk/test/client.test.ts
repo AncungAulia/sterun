@@ -270,8 +270,29 @@ describe("race flow maps onto RaceRecord", () => {
       runner: RUNNER,
       event_id: 2,
       category_id: 1,
+      // Omitting addOnIds must send an empty vec, not `undefined`: the v2
+      // contract takes the argument either way and `undefined` would encode as
+      // something the host rejects.
+      addon_ids: [],
       participant_hash: Buffer.from(HASH, "hex"),
     });
+  });
+
+  it("passes add-on ids through in the order they were given", async () => {
+    const { client, record } = clientWith({}, { enter: good(ok(13)) });
+
+    await client.enter({
+      runner: RUNNER,
+      eventId: 2,
+      categoryId: 1,
+      addOnIds: [1, 0],
+      participantHash: HASH,
+    });
+
+    // Order is preserved on-chain (RecordData.addon_ids keeps it), so it must
+    // not be sorted or de-duplicated on the way out — the contract is the one
+    // that rejects a repeat, and it should get the chance to.
+    expect(record.calls[0]?.args).toMatchObject({ addon_ids: [1, 0] });
   });
 
   it("surfaces QuotaFull from enter as EventRegistry's, not RaceRecord's", async () => {

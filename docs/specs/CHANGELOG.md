@@ -17,6 +17,9 @@ terakhir berubah, jadi header yang berbeda antar file itu disengaja: `INTERFACE.
 sebelah `HASH_AND_TOTP.md (v1.0.1)` berarti dokumen interface-nya memang tidak tersentuh sejak
 pembekuan. Yang berlaku untuk konsumen selalu entri paling atas di daftar versi bawah.
 
+Sejak v2.0.0 keduanya memang berbeda: `INTERFACE.md` di **v2.0.0**, `HASH_AND_TOTP.md` masih di
+**v1.0.1** karena definisi hash dan TOTP tidak tersentuh sama sekali oleh v2.
+
 ---
 
 ## Aturan perubahan (WAJIB, berlaku sejak v1.0.0 merged)
@@ -44,6 +47,99 @@ OZ); nomor varian yang dihapus **tidak boleh** dipakai ulang.
 **Perubahan definisi hash membatalkan setiap `participant_hash` yang sudah ada on-chain** —
 record lama tidak bisa diverifikasi ulang dengan aturan baru. Jadi itu minimal MAJOR, plus rencana
 migrasi tertulis, bukan patch.
+
+---
+
+## [2.0.1] — 2026-09-09
+
+**PATCH — artefaknya berganti, interface-nya tidak.** `RaceRecord.enter` melewati panggilan
+cross-contract `addon_count` ketika `addon_ids` kosong, jadi entry tanpa add-on berbiaya persis
+seperti v1 — yang memang yang dijanjikan `INTERFACE.md` §2.1 kepada pemanggil yang mengirim `[]`.
+
+Yang **tidak** berubah, dan itulah kenapa ini PATCH: nol perubahan signature, layout event, kode
+error, tipe, maupun definisi hash/TOTP. **Bindings TS byte-identical** — generator membaca
+interface, dan interface-nya sama persis. Client yang sudah jalan tidak perlu melakukan apa pun.
+
+Yang berubah cuma tabel provenance `INTERFACE.md` §0:
+
+| | sha256 | Ukuran |
+| --- | --- | ---: |
+| RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21.795 B |
+| RaceRecord v2.0.1 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21.814 B |
+
+EventRegistry **tidak** ikut berubah (`22bb432e…` tetap).
+
+Dipasang ke alamat yang sudah live lewat `upgrade` — **bukan** alamat baru. Ini pemakaian pertama
+mekanisme v2 untuk apa yang memang dirancangnya, dan buktinya (tx, state sebelum/sesudah, plus
+satu `enter` di kode baru) ada di `docs/deployments.md` section 7.
+
+---
+
+## [2.0.0] — 2026-09-09
+
+**MAJOR — signature `enter` berubah, dan kedua kontrak sekarang upgradeable.** v1 tetap live di
+alamatnya sendiri dan tidak tersentuh (v1 non-upgradeable, jadi memang tidak bisa disentuh); v2
+adalah **pasangan alamat baru**, tercatat di `docs/deployments.md`. Client yang masih bicara ke
+alamat v1 tidak rusak oleh entri ini — yang rusak adalah client yang memakai bindings baru untuk
+memanggil kontrak lama, atau sebaliknya.
+
+Approval: brief tertulis Axel (PM) di `V2_BRIEF.md`, yang juga memberi pre-authorisation untuk
+merge tanpa gate ACC per PR kali ini. Itu pengganti sah dari "PR + approval @Axel + @fable" di
+aturan perubahan di atas, dan disebut di sini supaya jejaknya ada.
+
+### Kenapa
+
+Ancung minta add-on berbayar (STE-35): jersey +5, tumbler +3, dijual bersama entry. `enter` v1
+menagih **persis satu** `category.price_usdc`, jadi uang add-on terpaksa pindah off-chain — dan
+chain tidak bisa menjawab dua pertanyaan yang justru penting di meja merch: *"runner ini sudah
+bayar jersey belum"* dan *"jerseynya masih ada berapa"*.
+
+Karena v1 tidak punya jalur upgrade, memenuhi permintaan itu **harus** lewat alamat baru. Jadi
+sekalian dipasangi mekanisme upgrade, supaya ini terakhir kalinya alamat berganti.
+
+### Breaking
+
+- **`RaceRecord.enter`** menerima `addon_ids: Vec<u32>` sebagai argumen **ke-4**, sebelum
+  `participant_hash`. Pemanggil yang tidak menjual add-on mengirim `[]` dan mendapat perilaku v1
+  apa adanya.
+- **`EventStatus` bertambah `Cancelled`.** Enum-nya terbuka di sisi kontrak, tapi `be/`, `fe/`,
+  dan `sdk/` memvalidasi daftar tertutup berisi 4 varian — checklist migrasinya ada di
+  `INTERFACE.md` §8.
+- **Klaim non-transferable berubah bentuk** (bukan berubah isi): tetap dibuktikan mekanis dari
+  wasm yang ter-deploy, tapi sekarang bergantung pada kunci admin tidak memasang wasm lain.
+  Tabelnya ada di `INTERFACE.md` §4. Ini satu-satunya bagian v2 yang **mengurangi** jaminan, dan
+  ditulis eksplisit supaya tidak lolos sebagai catatan kaki.
+
+### Ditambahkan
+
+- `EventRegistry.upgrade(new_wasm_hash)` dan `RaceRecord.upgrade(new_wasm_hash)`, admin-gated,
+  memakai `env.deployer().update_current_contract_wasm` (mekanisme upgrade native Soroban —
+  bukan proxy, bukan `delegatecall`).
+- `EventRegistry`: `add_addon`, `reserve_addon`, `get_addon`, `addon_count`, tipe `AddOnData`,
+  dan storage key `AddOn(event_id, addon_id)` + `AddOnCount(event_id)`.
+- `RecordData.addon_ids: Vec<u32>` — add-on yang dibeli entry itu, urut reservasi.
+- Event: `AddOnAdded`, `AddOnReserved` (C1), `ContractUpgraded` (**kedua** kontrak).
+- Kode error, semuanya nomor bebas berikutnya di band-nya, **nol renumber**:
+  `AddOnNotFound(14)`, `AddOnQuotaFull(15)`, `TooManyAddOns(106)`, `DuplicateAddOn(107)`.
+
+### Vector
+
+**Tidak ada vector yang berubah.** `participant_hash` dan TOTP tidak tersentuh sama sekali —
+`HASH_AND_TOTP.md` tetap di v1.0.1 dan `docs/specs/verify.sh` hijau tanpa perubahan.
+
+### Aturan baru yang lahir dari upgradeability
+
+Storage sekarang harus bertahan melintasi pergantian kode, dan itu tidak bisa dijaga compiler:
+
+- **`DataKey` append-only selamanya.** Jangan hapus, jangan rename, jangan ganti tipe nilainya.
+  Enum `#[contracttype]` dikirim sebagai **nama varian**, jadi menambah varian aman dan
+  me-rename satu varian membuat setiap entry lama jadi yatim tanpa error.
+- **`RecordData` tidak boleh menambah field wajib lagi setelah ada record.** Struct
+  `#[contracttype]` adalah map berkunci nama field, jadi nilai lama gagal di-decode ke struct
+  yang bertambah field wajib. Itulah alasan `addon_ids` masuk **sekarang**, saat belum ada satu
+  pun record v2, bukan di upgrade berikutnya.
+- **`stellar-tokens` memiliki key owner/balance/enumeration OZ.** Menaikkan major-nya lewat
+  upgrade adalah migrasi storage, bukan bump versi.
 
 ---
 

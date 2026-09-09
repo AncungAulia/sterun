@@ -72,7 +72,26 @@ export interface R2FileStoreOptions {
   readonly fetch?: typeof globalThis.fetch;
   /** Injectable so a signature can be asserted against a fixed timestamp. */
   readonly now?: () => Date;
+  /**
+   * Attempts per operation, including the first. Three is deliberate: it covers
+   * a single blip without turning a real outage into a request that hangs for
+   * a minute before failing anyway.
+   */
+  readonly attempts?: number;
+  /** Injectable so retry tests do not actually wait. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
+
+/**
+ * Statuses worth trying again, and nothing else.
+ *
+ * 5xx because R2 says so in its own error body — the InternalError it returns
+ * reads "We encountered an internal error. Please try again." 429 because that
+ * is a rate limit, which is by definition temporary. A 403 is bad credentials
+ * and a 404 is a missing object; retrying either just spends time before
+ * reporting the same thing.
+ */
+const isRetryable = (status: number): boolean => status === 429 || status >= 500;
 
 /** Raised when R2 answers something this code cannot interpret as success. */
 export class R2Error extends Error {
@@ -87,6 +106,14 @@ export class R2Error extends Error {
     super(`R2 ${operation} failed with ${status}: ${body.slice(0, 400)}`);
     this.name = "R2Error";
   }
+
+  /**
+   * True when the caller should tell the client to try again rather than that
+   * something is broken. Drives the 503 in `routes/files.ts`.
+   */
+  get transient(): boolean {
+    return isRetryable(this.status);
+  }
 }
 
 export class R2FileStore implements FileStore {
@@ -96,6 +123,8 @@ export class R2FileStore implements FileStore {
   readonly #maxTotalBytes: number;
   readonly #fetch: typeof globalThis.fetch;
   readonly #now: () => Date;
+  readonly #attempts: number;
+  readonly #sleep: (ms: number) => Promise<void>;
   /**
    * Same caching reasoning as the local store, with one honest difference:
    * behind several replicas each process caches its own total, so the ceiling
@@ -112,6 +141,9 @@ export class R2FileStore implements FileStore {
     this.#maxTotalBytes = options.maxTotalBytes;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#now = options.now ?? (() => new Date());
+    this.#attempts = options.attempts ?? 3;
+    this.#sleep =
+      options.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   }
 
   async put(
@@ -235,6 +267,26 @@ export class R2FileStore implements FileStore {
     throw new R2Error(response.status, `HEAD ${keyFor(sha256)}`, await response.text());
   }
 
+  /**
+   * One request, retried while R2 says the failure is its own and temporary.
+   *
+   * This exists because of a 500 served to a real upload: R2 answered
+   * `InternalError` with the body "We encountered an internal error. Please try
+   * again." — an explicit instruction this code was ignoring, turning a blip on
+   * Cloudflare's side into a failed upload for an organiser.
+   *
+   * **Retrying is unusually safe here, and that is not luck.** Every operation
+   * this store performs is idempotent by construction: PUT writes bytes at the
+   * hash of those same bytes, so a duplicate write is the same write; GET, HEAD
+   * and LIST change nothing. There is no operation whose repetition could
+   * double anything, which is exactly the property that makes blind retries
+   * dangerous elsewhere.
+   *
+   * The request is re-signed on each attempt rather than reusing the headers:
+   * the signature covers `x-amz-date`, so a retry that crossed into the next
+   * clock skew window would fail authentication for a reason that has nothing
+   * to do with why it was retried.
+   */
   async #send(
     method: "GET" | "PUT" | "HEAD" | "DELETE",
     key: string,
@@ -247,22 +299,54 @@ export class R2FileStore implements FileStore {
   ): Promise<Response> {
     const path = `/${this.#bucket}${key ? `/${uriEncode(key, false)}` : ""}`;
     const url = `${this.#endpoint}${path}${options.query ? `?${options.query}` : ""}`;
+    const label = `${method} ${key || "(bucket)"}`;
 
-    const headers = signRequest(
-      {
-        method,
-        url,
-        headers: options.headers ?? {},
-        payloadSha256: options.payloadSha256,
-      },
-      this.#credentials,
-      this.#now(),
-    );
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= this.#attempts; attempt += 1) {
+      let response: Response;
+      try {
+        const headers = signRequest(
+          { method, url, headers: options.headers ?? {}, payloadSha256: options.payloadSha256 },
+          this.#credentials,
+          this.#now(),
+        );
+        response = await this.#fetch(url, {
+          method,
+          headers,
+          ...(options.body ? { body: new Uint8Array(options.body) } : {}),
+        });
+      } catch (e) {
+        // A refused connection or a reset socket is the same class of problem
+        // as a 500 and gets the same treatment.
+        lastError = e;
+        if (attempt === this.#attempts) throw e;
+        await this.#sleep(backoffMs(attempt, undefined));
+        continue;
+      }
 
-    return this.#fetch(url, {
-      method,
-      headers,
-      ...(options.body ? { body: new Uint8Array(options.body) } : {}),
-    });
+      if (!isRetryable(response.status) || attempt === this.#attempts) return response;
+
+      // `Retry-After` is R2 telling us how long to wait; honouring it beats
+      // guessing, and ignoring it on a 429 is how a rate limit gets worse.
+      await this.#sleep(backoffMs(attempt, response.headers.get("retry-after")));
+    }
+
+    // Unreachable: the loop either returns or throws. Present so the compiler
+    // does not have to be told to trust a comment.
+    throw lastError ?? new Error(`R2 ${label} exhausted its attempts`);
   }
+}
+
+/**
+ * Exponential, with jitter so a burst of clients that failed together does not
+ * come back together. Capped: a request that has already failed twice should
+ * report that, not sit for a minute first.
+ */
+function backoffMs(attempt: number, retryAfter: string | null | undefined): number {
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 5_000);
+  }
+  const base = Math.min(100 * 2 ** (attempt - 1), 2_000);
+  return base + Math.floor(Math.random() * 100);
 }

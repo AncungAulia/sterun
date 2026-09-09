@@ -548,6 +548,48 @@ allowlist dari chain (`reader.isScanner`) tiap request, jadi index yang under-re
 bisa memberi akses ke orang yang salah — paling buruk dia bikin console tidak menampilkan seseorang
 yang sebenarnya berhak.
 
+### Pindah ke kontrak v2 — BUKAN sekadar ganti env
+
+Kontrak v2 sudah live (STE-35) dan alamatnya ada di `docs/deployments.md`. Instruksi pendeknya
+"ganti `EVENT_REGISTRY` + `RACE_RECORD` ke alamat v2" **tidak cukup**, dan menjalankannya apa adanya
+di box yang sekarang akan merusak data.
+
+**Alasannya satu dan bisa diperiksa:** tidak ada kolom yang membedakan kontrak.
+
+| Tabel | Primary key | Membedakan v1/v2? |
+| --- | --- | --- |
+| `events` | `event_id` | tidak |
+| `categories` | `(event_id, category_id)` | tidak |
+| `records` | `token_id` | tidak |
+| `event_scanners` | `(event_id, scanner_address)` | tidak |
+| `participants` | `id` (uuid), tapi menyimpan `event_id`/`category_id`/`token_id` | tidak |
+| `chain_events` | punya `contract_id` | **ya** — cuma log mentah |
+
+Kontrak v2 menomori event dari 0 lagi. Jadi begitu poller diarahkan ke v2:
+
+1. **v2 event 0 menimpa baris v1 event 0.** Bukan menambah — `upsert` pada primary key yang sama.
+2. **`records` bertabrakan dengan cara yang sama** lewat `token_id`.
+3. Yang terburuk: **`participants` menautkan dokumen identitas asli ke `token_id`**. Baris PII yang
+   dibuat untuk record v1 akan menunjuk ke record v2 milik orang lain — dan roster memetakan
+   `token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah.
+
+Nomor 3 bukan kerusakan index yang bisa diperbaiki `rebuild`. `rebuild` membangun ulang dari state
+kontrak; dia tidak tahu baris vault mana milik kontrak yang mana.
+
+**Jadi pilihannya tiga, dan tidak ada yang "ganti env lalu restart":**
+
+| Cara | Kapan masuk akal | Biaya |
+| --- | --- | --- |
+| **Deployment terpisah** — database baru, instance baru untuk v2 | v1 masih melayani event yang berjalan | dua backend hidup sementara |
+| **Kolom pembeda** — tambah `contract_id` ke tabel materialisasi + vault, jadikan bagian dari key | mau satu backend melayani keduanya | migrasi menyentuh setiap query |
+| **Bersihkan total** — truncate index **dan** vault, mulai dari nol di v2 | hanya kalau tidak ada PII sungguhan yang perlu dipertahankan | semua pendaftaran lama hilang |
+
+Yang **sudah** disiapkan supaya perpindahan tidak gagal karena hal sepele: decoder, JSON schema
+route, dan constraint database sudah menerima status `Cancelled` (migrasi 006). v1 tidak bisa
+memancarkannya, jadi itu murni persiapan.
+
+**Sebelum menyentuh env di box mana pun**, putuskan dulu yang di atas dan tulis keputusannya di sini.
+
 ### R2: object storage untuk file metadata
 
 Byte file event disimpan di **Cloudflare R2** kalau keempat variabel ini ada; kalau kosong, jatuh ke

@@ -24,7 +24,17 @@ export const RECORD_STATES = ["Entered", "RacepackClaimed", "Finished", "Dnf"] a
 export type RecordState = (typeof RECORD_STATES)[number];
 
 /** Event statuses — INTERFACE.md §1.2. */
-export const EVENT_STATUSES = ["Draft", "Open", "Closed", "Completed"] as const;
+/**
+ * The four v1 statuses plus `Cancelled`, which only the v2 EventRegistry can
+ * produce (STE-35).
+ *
+ * Listed here before anything points at v2 on purpose. This decoder throws on a
+ * variant it does not know, so the day someone switches an env var to a v2
+ * address, the failure would be the indexer refusing to decode an event — at
+ * runtime, on a poller, with the reason buried. Accepting a status v1 can never
+ * emit costs nothing; discovering this later costs an outage.
+ */
+export const EVENT_STATUSES = ["Draft", "Open", "Closed", "Completed", "Cancelled"] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
 export class ChainDecodeError extends Error {

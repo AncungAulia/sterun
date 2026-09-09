@@ -75,6 +75,14 @@ penjelasan. Pakai `BigInt`; `parseFloat` diblokir eslint di paket ini.
 `PII_KEYS` membuka seluruh PII. `.env` di-gitignore, `.env.example` yang di-commit. Jangan pernah
 menaruh `S...` atau kunci PII di file lain, di tiket, di chat, atau di log.
 
+> **`maxLength` di response schema itu DOKUMENTASI, bukan penegakan.** Diuji, bukan diasumsikan:
+> `fast-json-stringify` mengabaikannya saat serialisasi dan mengirim string apa adanya. Yang
+> ditegakkan cuma **daftar propertinya** — field yang tidak disebut schema memang tidak bisa lewat.
+> Panjangnya harus dibatasi di nilainya, sebelum masuk object response (`bounded()` di
+> `routes/roster.ts`). Komentar lama di sana mengklaim sebaliknya; klaim keamanan yang dipercaya
+> tapi tidak ada lebih buruk daripada yang diketahui tidak ada, karena tidak ada yang mencari
+> penggantinya.
+
 **5. Response tidak boleh bisa membawa PII.** Tiap response punya JSON schema eksplisit dengan
 `additionalProperties: false`. Fastify men-serialisasi **hanya** properti yang disebut schema, jadi
 field yang tidak ada di schema **tidak bisa** sampai ke client walaupun ada di object-nya. Ini
@@ -245,7 +253,7 @@ supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
 
 ## Test
 
-757 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
+782 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
 negatif — di situ kerusakannya.
 Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
 memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
@@ -301,6 +309,31 @@ mana yang masuk ke tas.
 **Yang v1 tidak bisa: stok per ukuran.** Kuota di kontrak dihitung per kategori dan tidak tahu apa
 itu M atau L, jadi "M habis" tidak bisa ditegakkan. Cara panitia menjualnya adalah kategori terpisah
 (`10K` vs `10K_JERSEY`), dan kuota kategori jersey itulah jumlah kaos yang dipesan.
+
+## Kontrak v2 (STE-35): siap menerima, belum dipakai
+
+Kontrak v2 live dengan alamat baru. `be/` **masih menunjuk v1**, dan itu disengaja.
+
+Yang sudah dikerjakan supaya perpindahan nanti tidak gagal karena hal sepele — status `Cancelled`
+diterima di **tiga** lapis yang masing-masing gagal beda:
+
+| Lapis | Kalau tertinggal |
+| --- | --- |
+| `EVENT_STATUSES` di `src/chain/decode.ts` | decoder melempar, poller berhenti |
+| dua JSON schema di `src/routes/directory.ts` | field-nya diam-diam hilang dari response |
+| **CHECK constraint `events_status_check`** (migrasi 006) | INSERT ditolak Postgres |
+
+Lapis ketiga itu yang **tidak** disebut checklist `INTERFACE.md` §8, dan justru satu-satunya yang
+ditegakkan database. v1 tidak bisa memancarkan `Cancelled`, jadi melebarkan constraint sekarang
+tidak mengubah apa pun yang bisa terjadi hari ini — dia cuma menghapus satu cara perpindahan itu
+gagal.
+
+**Mengganti env ke alamat v2 BUKAN pekerjaan satu baris.** Tidak ada kolom yang membedakan kontrak:
+`events.event_id` dan `records.token_id` primary key telanjang, dan v2 menomori event dari 0 lagi —
+jadi v2 event 0 **menimpa** v1 event 0. Yang paling berbahaya bukan index-nya (itu bisa di-`rebuild`)
+tapi `participants`, yang menautkan dokumen identitas asli ke `token_id` yang sama; roster memetakan
+`token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah. Tiga opsi dan biayanya:
+[`OPERATIONS.md`](OPERATIONS.md) bagian "Pindah ke kontrak v2".
 
 ## Results CSV (STE-20, C7)
 
@@ -464,6 +497,26 @@ yang menerima signature-nya (dicatat di `docs/deployments.md`, tidak bisa jalan 
 
 Satu detail yang enak: SigV4 butuh sha256 dari body, dan content-addressing sudah menghitung angka
 yang persis sama untuk dijadikan key. Satu hash, dua kegunaan.
+
+**Kegagalan R2 yang sementara di-retry, dan itu bukan hiasan.** Upload sungguhan pernah dapat 500
+karena R2 menjawab `InternalError` dengan badan pesan *"We encountered an internal error. Please try
+again."* — instruksi eksplisit yang kode ini abaikan, jadi gangguan sesaat di sisi Cloudflare jadi
+upload gagal buat panitia. Sekarang: 3 percobaan, backoff eksponensial + jitter, menghormati
+`Retry-After`, dan **cuma untuk 5xx/429**. 403 (kredensial salah) dan 404 (objek tidak ada) tidak
+di-retry — keduanya tidak membaik dengan waktu.
+
+Retry di sini aman dengan cara yang tidak berlaku di kebanyakan tempat, dan itu bukan keberuntungan:
+**semua operasi store ini idempoten by construction.** PUT menulis byte di alamat hash byte itu
+sendiri, jadi tulis ganda adalah tulis yang sama; GET/HEAD/LIST tidak mengubah apa pun. Tidak ada
+operasi yang pengulangannya bisa menggandakan sesuatu.
+
+Request **ditandatangani ulang tiap percobaan**, bukan memakai header yang sama: signature mencakup
+`x-amz-date`, jadi retry yang menyeberang jendela clock skew akan gagal autentikasi karena alasan
+yang tidak ada hubungannya dengan kenapa dia di-retry.
+
+Kalau retry-nya habis, route menjawab **503 + `Retry-After`**, bukan 500 — "upstream lagi sakit,
+coba lagi" itu jawaban jujur yang menentukan apa yang orang lakukan berikutnya, dan aman diiklankan
+justru karena upload-nya idempoten.
 
 **Tipe objek dicek ulang saat dibaca**, tidak dipercaya karena kita yang menulisnya. Token yang
 menjangkau bucket bisa menulis objek apa pun dengan content type apa pun, dan bucket itu bukan milik

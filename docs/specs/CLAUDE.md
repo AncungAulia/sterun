@@ -2,7 +2,7 @@
 
 **Semua yang ada di folder ini sudah dibekukan.** Ini *handoff contract* C4 (STE-10): yang dipegang
 **James** (backend + indexer) dan **Ancung** (web app + QR pass + scanner PWA) supaya bisa jalan
-paralel tanpa membaca `lib.rs` siapa pun. Versi folder sekarang: **v1.0.1**.
+paralel tanpa membaca `lib.rs` siapa pun. Versi folder sekarang: **v2.0.1**.
 
 | File | Isi |
 | --- | --- |
@@ -50,9 +50,20 @@ kalau implementasi tidak setuju dengannya, implementasinya yang salah sampai ter
 ## Versi per file
 
 Versinya satu untuk seluruh folder; judul tiap file membawa versi di mana **file itu** terakhir
-berubah. Jadi `INTERFACE.md (v1.0.0)` di sebelah `HASH_AND_TOTP.md (v1.0.1)` itu disengaja: berarti
-dokumen interface-nya memang belum tersentuh sejak pembekuan. Yang berlaku selalu entri paling
-atas di `CHANGELOG.md`.
+berubah. Jadi `INTERFACE.md (v2.0.1)` di sebelah `HASH_AND_TOTP.md (v1.0.1)` itu disengaja: v2
+mengubah interface kontrak dan **tidak menyentuh satu byte pun** definisi hash/TOTP. Yang berlaku
+selalu entri paling atas di `CHANGELOG.md`.
+
+## v2 dan alamat kontrak
+
+v1 non-upgradeable, jadi v2 adalah **pasangan alamat baru** — bukan pengganti di tempat.
+`INTERFACE.md` mendokumentasikan v2; alamat v1 tetap ada dan tetap dijalankan oleh wasm v1-nya
+sendiri. Kalau kamu men-debug sesuatu yang bicara ke alamat lama, dokumen yang berlaku adalah
+entri `[1.0.1]` di `CHANGELOG.md`, bukan `INTERFACE.md` yang sekarang.
+
+Mulai v2 kedua kontrak **upgradeable**, dan itu menambah satu aturan yang tidak bisa dijaga gate
+mana pun di sini: **storage key append-only selamanya**. Alasan dan konsekuensinya ada di entri
+`[2.0.0]` `CHANGELOG.md` dan di `sc/CLAUDE.md`.
 
 ## Verifikasi
 

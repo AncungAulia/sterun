@@ -236,7 +236,10 @@ describe("what is refused", () => {
   });
 
   it("throws when an enum carries a variant the spec does not define", () => {
-    expect(() => decode(eventStatusChanged(registry, 1, "Cancelled"))).toThrow(/unknown variant/);
+    // "Cancelled" WAS the example here and is now a real v2 status (STE-35).
+    // Replaced with one no contract defines, so the test keeps asserting what
+    // it was written to assert rather than passing by accident.
+    expect(() => decode(eventStatusChanged(registry, 1, "Postponed"))).toThrow(/unknown variant/);
   });
 });
 
