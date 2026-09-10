@@ -34,7 +34,13 @@ salah satunya salah dan harus disamakan di commit yang sama.
 > Sterun turns every race entry into a verified race record on Stellar. It stays bound to the
 > runner who signed up, and it stays readable after the organiser is gone.
 
-Tombol: **Launch app** (utama) · **View the contracts on testnet** (sekunder)
+Tombol: **Launch app** saja, di header.
+
+Baris `Live on Stellar testnet. No wallet needed to look.` dan tautan
+**View the contracts on testnet** semula ada di hero, lalu dipindah ke section
+[Proof](#proof). Alasannya: tugas hero adalah menyebut ini apa, dan ajakan
+memverifikasi baru masuk akal setelah pembaca tahu apa yang akan diverifikasi.
+Layar pertama sekarang cuma punya satu hal untuk ditekan.
 
 Catatan implementasi:
 
@@ -129,6 +135,17 @@ Catatan kecil di bawahnya:
 | sUSD | `CBQ6444F…MOOU` → stellar.expert |
 | Source | `github.com/AncungAulia/sterun` |
 | Updates | `@sterunxyz` |
+
+Tautan yang turun dari hero tinggal di sini:
+
+> View the contracts on testnet →
+>
+> *Live on Stellar testnet. No wallet needed to look.*
+
+Baris kedua itu menjual sesuatu yang jarang dimiliki produk blockchain: directory dan halaman
+event di `fe/` **benar-benar bisa dibuka tanpa wallet** (diverifikasi di kode, `Directory.tsx`
+tidak menyentuh wallet kit sama sekali). Kebanyakan produk sejenis memaksa connect dulu sebelum
+boleh melihat apa pun, jadi ini pembeda yang layak disebut.
 
 Section ini **tidak diminta tiket**, tapi ini yang paling berbicara ke reviewer Instawards.
 Sebagian besar landing page proyek baru berjanji; halaman ini menyuruh orang memeriksa.

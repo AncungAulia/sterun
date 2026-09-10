@@ -1,5 +1,3 @@
-import { CONTRACTS } from "@/lib/links";
-
 const VIDEO_SRC = "/videos/20260908_230806_1.mp4";
 
 /**
@@ -57,20 +55,11 @@ export function Hero() {
           the runner who signed up, and it stays readable after the organiser is gone.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4 sm:mt-10">
-          <a
-            href={CONTRACTS.raceRecord.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-2 border-b border-paper/40 pb-1 text-base text-paper transition-colors duration-200 hover:border-paper"
-          >
-            View the contracts on testnet
-            <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
-              &rarr;
-            </span>
-          </a>
-          <p className="text-sm text-paper/60">Live on Stellar testnet. No wallet needed to look.</p>
-        </div>
+        {/* No secondary line and no contracts link here. Both moved down to the
+            Proof section: the hero's job is to say what this is, and the link
+            asking a reader to go verify it lands better once they know what
+            they would be verifying. The header's Launch app is the only thing
+            to press on this screen. */}
       </div>
     </section>
   );

@@ -37,11 +37,21 @@ function ArrowRight() {
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const hasOpened = useRef(false);
 
   // Send focus back where it came from, so closing with the keyboard does not
   // dump the caret at the top of the document.
+  //
+  // Guarded by hasOpened because the effect also runs on mount, where `open` is
+  // already false: every visitor arrived to find MENU focused and outlined,
+  // which reads as a stray selection on a page nobody has touched yet. Restore
+  // focus only to someone who actually opened the menu.
   useEffect(() => {
-    if (!open) menuButtonRef.current?.focus({ preventScroll: true });
+    if (open) {
+      hasOpened.current = true;
+      return;
+    }
+    if (hasOpened.current) menuButtonRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   return (
