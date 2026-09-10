@@ -160,10 +160,22 @@ export function StepDetails({
           id="description"
           label="Description"
           required
+          /*
+            Tall, because four rows was sized for a sentence and races do not
+            write one. A real fun run description runs to a page: a story, the
+            schedule, what is in the pack, sometimes a price list. Scrolling
+            inside a four line box to reread what you wrote is how a typo
+            survives into a document that can never be edited.
+          */
+          rows={16}
           error={errors.description}
           value={details.description}
           onChange={(description) => set({ description })}
-          placeholder="Two laps of the park, flat, water at every 2 km."
+          placeholder={
+            "ARTERUN: PACE OF JOY\nRun Together. Share the Joy.\n\n" +
+            "A 5K fun run opening the closing ceremony of ARTEFAC UNS 2026.\n\n" +
+            "Race pack\n1. Jersey\n2. Bib number\n3. Refreshment\n4. Medal"
+          }
           help="The only part of the page that says what the race is actually like. Without it a runner has a name, a date, and nothing to decide on."
         />
       </Section>

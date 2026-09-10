@@ -113,10 +113,13 @@ export function PlaceFields({
               aria-label="Province"
               value={place.provinceId}
               onChange={(e) => onChange({ ...place, provinceId: e.target.value })}
-              placeholder={provinceReady ? "Province or state" : "Pick a country first"}
+              placeholder={provinceReady ? "Type the province or state" : "Pick a country first"}
               disabled={!provinceReady}
             />
           )}
+          {provinces.length === 0 && provinceReady ? (
+            <FieldMessage hint="No province list for this country yet, so type it." />
+          ) : null}
           <FieldMessage error={errors.province} />
         </div>
 
@@ -140,10 +143,19 @@ export function PlaceFields({
               aria-label="City"
               value={place.city}
               onChange={(e) => onChange({ ...place, city: e.target.value })}
-              placeholder={cityReady ? "City" : "Pick a province first"}
+              placeholder={cityReady ? "Type the city" : "Pick a province first"}
               disabled={!cityReady}
             />
           )}
+          {/*
+            Said, not left to be worked out. Country and province are lists
+            with a chevron on them, so a city that quietly turns into a plain
+            box reads as a dropdown that failed to load rather than as a field
+            waiting to be typed in. It cost somebody a bug report.
+          */}
+          {!cityIsAList && cityReady ? (
+            <FieldMessage hint="No city list for this country yet, so type it." />
+          ) : null}
           <FieldMessage error={errors.city} />
         </div>
       </div>
