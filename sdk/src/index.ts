@@ -1,12 +1,12 @@
 /**
- * `@sterun/sdk` — call the Sterun race-record contracts from TypeScript.
+ * `@sterunxyz/sdk` — call the Sterun race-record contracts from TypeScript.
  *
  * STE-15, component C5 of docs/SYSTEM_DESIGN.md. The contracts are frozen at
  * docs/specs/INTERFACE.md v1.0.0; everything exported here is a client for
  * exactly that surface and nothing more.
  *
  * ```ts
- * import { SterunClient, TESTNET } from "@sterun/sdk";
+ * import { SterunClient, TESTNET } from "@sterunxyz/sdk";
  *
  * const sterun = new SterunClient({
  *   ...TESTNET,

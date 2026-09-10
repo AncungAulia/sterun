@@ -1,7 +1,7 @@
 /**
  * Pure formatting helpers. No chain coupling, no React, no side effects.
  */
-import { STROOPS_PER_UNIT, formatStroops } from "@sterun/sdk";
+import { STROOPS_PER_UNIT, formatStroops } from "@sterunxyz/sdk";
 
 const GROUPED = new Intl.NumberFormat("en-US");
 

@@ -39,7 +39,7 @@
  * balance rose by exactly the entry fee, which is what proves the SEP-41
  * transfer really happened inside the same atomic invocation.
  *
- *     STERUN_ADMIN_SECRET=S… pnpm --filter @sterun/sdk e2e
+ *     STERUN_ADMIN_SECRET=S… pnpm --filter @sterunxyz/sdk e2e
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";

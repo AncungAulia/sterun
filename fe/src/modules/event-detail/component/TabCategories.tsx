@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/elements/EmptyState";
 import { NonRefundableNotice } from "@/components/elements/NonRefundableNotice";
 import { formatPrice } from "@/utils/format";
-import type { SterunCategory } from "@sterun/sdk";
+import type { SterunCategory } from "@sterunxyz/sdk";
 
 export function TabCategories({
   categories,

@@ -15,7 +15,7 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 | [`docs/`](docs/CLAUDE.md) | SYSTEM_DESIGN + `deployments.md` (bukti deploy) |
 | [`docs/specs/`](docs/specs/CLAUDE.md) | spec BEKU C4: aturan mengubahnya, cara memverifikasinya |
 | [`be/`](be/CLAUDE.md) | backend Node/TS (James) — API + PII vault + indexer + TTL keeper |
-| [`sdk/`](sdk/CLAUDE.md) | `@sterun/sdk` (James) — C5 `SterunClient` + C6 JSON Schema v1.0, packaging |
+| [`sdk/`](sdk/CLAUDE.md) | `@sterunxyz/sdk` (James) — C5 `SterunClient` + C6 JSON Schema v1.0, packaging |
 | [`fe/`](fe/CLAUDE.md) | web app Next.js (Ancung) — scaffolded |
 | [`landing-page/`](landing-page/CLAUDE.md) | landing (Nabil) — scaffolded |
 
@@ -27,7 +27,7 @@ berisi hal yang **cuma** berlaku di folder itu — baca yang folder-nya kamu sen
 ```
 sc/            smart contracts (Soroban Rust) + bindings TS hasil generate — cargo workspace
 be/            backend (Node/TS, Fastify) — API + helper Stellar + faucet sUSD
-sdk/           @sterun/sdk (Node/TS) — SterunClient di atas bindings (C5)
+sdk/           @sterunxyz/sdk (Node/TS) — SterunClient di atas bindings (C5)
 fe/            web app (Next.js) — scaffolded
 landing-page/  landing (Next.js) — scaffolded
 deploy/        Caddyfile + verify-deployment.sh (STE-31)
@@ -46,7 +46,7 @@ workspace — itu output generator, dikonsumsi lewat `file:` dependency. Dari ro
 `sdk/` **tidak** memakai `file:` dependency: `sc/bindings/*/src/index.ts` di-*vendor* ke
 `sdk/vendor/` sebagai salinan byte-identical (paket yang di-publish ke npm tidak bisa membawa
 `file:` dep). `sdk/test/vendor.test.ts` gagal kalau salinannya melenceng, jadi regenerate bindings
-tanpa me-refresh SDK = test merah. Refresh: `pnpm --filter @sterun/sdk vendor`.
+tanpa me-refresh SDK = test merah. Refresh: `pnpm --filter @sterunxyz/sdk vendor`.
 
 Versi `@stellar/stellar-sdk` dipaksa satu (`^17.0.1`) lewat `pnpm.overrides` di `package.json`
 root: generator bindings menuliskan `^14.5.0`, dan dua copy SDK dalam satu graph berarti dua RPC
@@ -65,7 +65,7 @@ client plus objek signer lintas-mayor. Bindings-nya sendiri **jangan** diedit.
 | STE-6 | monorepo pnpm + CI TS + backend skeleton + faucet sUSD | selesai |
 | STE-11 | PII vault + hash/TOTP backend (C7) | selesai |
 | STE-16 | indexer + TTL keeper + roster bundle (C8) | selesai, backend 479 test |
-| STE-15 | `@sterun/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
+| STE-15 | `@sterunxyz/sdk` — SterunClient (C5) | selesai, 84 test + e2e testnet live |
 | STE-19 | JSON Schema v1.0 + packaging (C6) | kode selesai, 134 test — **`npm publish` menunggu kredensial npm** |
 | STE-20 | results CSV + API hardening (C7/j6) | selesai, backend 586 test + e2e testnet live |
 | STE-31 | deploy backend ke VPS | **SELESAI** — live di `https://api-sterun.jameshub.fun` (jameserver / pve02 / ct-sterun), Cloudflare Tunnel, verifikasi 14/14 |
@@ -103,9 +103,9 @@ Index dan vault di box produksi **di-truncate** saat perpindahan: `events.event_
 satu database berarti v2 event 0 menimpa v1 event 0 — dan `participants` menautkan PII ke
 `token_id` yang sama. Prosedur + alasannya: `be/OPERATIONS.md` bagian "Pindah ke kontrak v2".
 
-**M1 (D1 — kontrak) SELESAI.** M2 (D2 — `@sterun/sdk` + backend) tinggal satu langkah manual:
+**M1 (D1 — kontrak) SELESAI.** M2 (D2 — `@sterunxyz/sdk` + backend) tinggal satu langkah manual:
 ~~**STE-11** PII vault~~ → ~~**STE-16** indexer + TTL keeper~~ → ~~**STE-15** SterunClient~~ →
-~~**STE-19** JSON Schema + packaging~~ → **`npm publish @sterun/sdk`** (butuh akun npm James).
+~~**STE-19** JSON Schema + packaging~~ → **`npm publish @sterunxyz/sdk`** (butuh akun npm James).
 
 Seluruh rantai publish sudah diverifikasi tanpa registry: `npm pack` menghasilkan tarball yang
 dipasang di project TypeScript kosong di luar repo, typecheck bersih, quickstart jalan ke testnet

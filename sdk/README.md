@@ -1,4 +1,4 @@
-# `@sterun/sdk`
+# `@sterunxyz/sdk`
 
 Call the Sterun race-record contracts from TypeScript. No Rust, no Stellar CLI,
 no hand-built XDR.
@@ -8,7 +8,7 @@ the runner who registered. This package is the client for the two contracts that
 do it, frozen at [`docs/specs/INTERFACE.md`](../docs/specs/INTERFACE.md) v1.0.0.
 
 ```bash
-npm install @sterun/sdk
+npm install @sterunxyz/sdk
 ```
 
 Ships with **RaceRecord JSON Schema v1.0** — the public format a runner profile
@@ -20,7 +20,7 @@ Reading needs no wallet at all — no signer, no funded account, no browser
 extension. That is what makes a public runner profile public.
 
 ```ts
-import { SterunClient, TESTNET } from "@sterun/sdk";
+import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 
 const sterun = new SterunClient({
   ...TESTNET,
@@ -53,7 +53,7 @@ device checks them in, the organiser publishes the result.
 
 ```ts
 import { Keypair } from "@stellar/stellar-sdk";
-import { SterunClient, TESTNET } from "@sterun/sdk";
+import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 
 const organiser = Keypair.fromSecret(process.env.ORGANISER_SECRET!);
 const sterun = new SterunClient({ ...TESTNET, contracts });
@@ -116,7 +116,7 @@ Every failure is a typed error. A revert is a `SterunContractError` carrying the
 variant, the code, and which contract it came from:
 
 ```ts
-import { SterunContractError } from "@sterun/sdk";
+import { SterunContractError } from "@sterunxyz/sdk";
 
 try {
   await sterun.enter(args, actor);
@@ -150,7 +150,7 @@ stands alone. A stranger reading it does not have to ask what `event_id 2,
 category_id 1` was.
 
 ```ts
-import { parseRaceRecordDocument } from "@sterun/sdk";
+import { parseRaceRecordDocument } from "@sterunxyz/sdk";
 
 const doc = await sterun.raceRecordDocument(tokenId);   // no wallet needed
 ```
@@ -179,7 +179,7 @@ const record = parseRaceRecordDocument(untrusted);   // throws ZodError, listing
 ```
 
 The JSON Schema itself ships in the package at
-`node_modules/@sterun/sdk/schema/race-record-v1.0.json`, so you can hand it to
+`node_modules/@sterunxyz/sdk/schema/race-record-v1.0.json`, so you can hand it to
 any validator in any language. `raceRecordJsonSchema()` returns the same
 document.
 
@@ -242,11 +242,11 @@ format that keeps moving is not a format. The two move independently;
 
 ```bash
 pnpm install
-pnpm --filter @sterun/sdk test   # 134 tests, no network
-pnpm --filter @sterun/sdk e2e    # the full flow against live testnet
+pnpm --filter @sterunxyz/sdk test   # 134 tests, no network
+pnpm --filter @sterunxyz/sdk e2e    # the full flow against live testnet
 ```
 
 The generated contract bindings are vendored into `vendor/` and compiled by a
 `prebuild` hook, so a fresh clone needs no extra step. `pnpm --filter
-@sterun/sdk vendor` refreshes them after the contracts are regenerated; a test
+@sterunxyz/sdk vendor` refreshes them after the contracts are regenerated; a test
 fails if the copies drift. See [`CLAUDE.md`](CLAUDE.md).

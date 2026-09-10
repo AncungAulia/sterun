@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useEvent, useEvents } from "@/hooks/useEvents";
 import type { EventSummary } from "@/lib/events";
-import type { SterunEvent } from "@sterun/sdk";
+import type { SterunEvent } from "@sterunxyz/sdk";
 
 const listEvents = vi.hoisted(() => vi.fn());
 const getEventSummary = vi.hoisted(() => vi.fn());

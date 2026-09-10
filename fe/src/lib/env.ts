@@ -5,7 +5,7 @@
  * are non-upgradeable, so a redeploy produces a *new pair* of addresses rather
  * than a new version of the old pair; a hardcoded address would keep talking to
  * the dead pair until somebody noticed. The same rule is enforced in
- * `@sterun/sdk` (see sdk/src/network.ts) and in the backend
+ * `@sterunxyz/sdk` (see sdk/src/network.ts) and in the backend
  * (be/src/deployments.ts). docs/deployments.md is the source of truth.
  *
  * Next.js inlines `process.env.NEXT_PUBLIC_*` at build time, so these must be

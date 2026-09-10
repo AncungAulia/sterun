@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
-import { EVENT_STATUSES } from "@sterun/sdk";
+import { EVENT_STATUSES } from "@sterunxyz/sdk";
 
 describe("EventStatusBadge", () => {
   describe("positive", () => {

@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatPrice } from "@/utils/format";
 import type { MetadataAddOn } from "@/lib/metadata";
-import type { SterunAddOn } from "@sterun/sdk";
+import type { SterunAddOn } from "@sterunxyz/sdk";
 
 /** One item as the page shows it: the description, joined to its chain rows. */
 export interface JoinedAddOn {

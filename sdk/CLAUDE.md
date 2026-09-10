@@ -1,4 +1,4 @@
-# `sdk/` — `@sterun/sdk` (CLAUDE.md)
+# `sdk/` — `@sterunxyz/sdk` (CLAUDE.md)
 
 Client TypeScript untuk kedua kontrak. Komponen **C5** (STE-15) + **C6** (STE-19:
 RaceRecord JSON Schema v1.0, packaging, publish npm). Owner: **James**.
@@ -10,16 +10,16 @@ PWA, public profile — sesuai aturan design "clients never talk to contracts ra
 
 ```bash
 pnpm install
-pnpm --filter @sterun/sdk test        # 134 test, nol network
-pnpm --filter @sterun/sdk typecheck
-pnpm --filter @sterun/sdk lint
-pnpm --filter @sterun/sdk vendor      # refresh salinan bindings setelah regenerate
-pnpm --filter @sterun/sdk e2e         # flow penuh melawan testnet live
+pnpm --filter @sterunxyz/sdk test        # 134 test, nol network
+pnpm --filter @sterunxyz/sdk typecheck
+pnpm --filter @sterunxyz/sdk lint
+pnpm --filter @sterunxyz/sdk vendor      # refresh salinan bindings setelah regenerate
+pnpm --filter @sterunxyz/sdk e2e         # flow penuh melawan testnet live
 ```
 
 ## Bindings di-vendor, bukan di-`file:`
 
-`@sterun/sdk` di-publish ke npm, dan **`file:` dependency tidak bisa di-publish**.
+`@sterunxyz/sdk` di-publish ke npm, dan **`file:` dependency tidak bisa di-publish**.
 Jadi kode bindings ikut masuk ke dalam paket: `vendor/` berisi salinan
 **byte-identical** dari `sc/bindings/*/src/index.ts`, di-compile
 `tsconfig.vendor.json` dengan setelan milik generator.
