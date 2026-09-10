@@ -134,6 +134,34 @@ describe("EventDetail", () => {
       expect(panel.getByText(/60 of 100 entries left/)).toBeInTheDocument();
     });
 
+    it("calls an add-on the entry fee already covers Included, not Free", async () => {
+      // "Free" next to a jersey reads as a giveaway, or as something still to
+      // be claimed. Zero on an add-on means the ticket paid for it.
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0)]));
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            { name: "Event jersey", includedIn: ["10K"], code: "EVENT_JERSEY" },
+            { name: "Tumbler", includedIn: ["10K"], code: "TUMBLER" },
+          ],
+        },
+      } satisfies MetadataResult);
+      const row = { eventId: 2, quota: 50, reservedCount: 0, unitsLeft: 50 };
+      listAddOns.mockResolvedValue([
+        { ...row, addonId: 0, code: "EVENT_JERSEY", priceStroops: 0n },
+        { ...row, addonId: 1, code: "TUMBLER", priceStroops: 300_000_000n },
+      ]);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      const panel = within(screen.getByRole("tabpanel"));
+      expect(await panel.findByText("Included")).toBeInTheDocument();
+      expect(panel.getByText("sUSD 30")).toBeInTheDocument();
+      expect(panel.queryByText("Free")).not.toBeInTheDocument();
+    });
+
     it("offers entry per category while the event is open", async () => {
       getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0), category(1)]));
 

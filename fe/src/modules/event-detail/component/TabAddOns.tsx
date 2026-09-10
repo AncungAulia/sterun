@@ -60,6 +60,18 @@ function priceOf(joined: JoinedAddOn): bigint | undefined {
   return joined.rows[0]?.priceStroops;
 }
 
+/**
+ * What the card says the item costs.
+ *
+ * A zero price is not "Free". On a distance it is, because a free distance
+ * really costs nothing. On an add-on it means the entry fee already paid for
+ * it, and "Free" next to a jersey reads as a giveaway nobody has to enter the
+ * race to get, or as something a runner still has to go and claim.
+ */
+function priceLabel(price: bigint): string {
+  return price === 0n ? "Included" : formatPrice(price);
+}
+
 function unitsLeft(joined: JoinedAddOn): number {
   return joined.rows.reduce((sum, row) => sum + row.unitsLeft, 0);
 }
@@ -116,7 +128,7 @@ function AddOnCard({ joined }: { joined: JoinedAddOn }) {
         {price === undefined ? (
           <p className="text-sm text-muted-foreground">Part of the race pack</p>
         ) : (
-          <p className="numeric text-lg text-ink">{formatPrice(price)}</p>
+          <p className="numeric text-lg text-ink">{priceLabel(price)}</p>
         )}
       </div>
 
@@ -145,7 +157,9 @@ function AddOnDialog({ joined }: { joined: JoinedAddOn }) {
           <DialogDescription>
             {priceOf(joined) === undefined
               ? "Part of the race pack for the distances below."
-              : `${formatPrice(priceOf(joined)!)}, bought with your entry.`}
+              : priceOf(joined) === 0n
+                ? "Included with your entry for the distances below."
+                : `${formatPrice(priceOf(joined)!)}, bought with your entry.`}
           </DialogDescription>
         </DialogHeader>
 
