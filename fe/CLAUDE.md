@@ -230,6 +230,14 @@ membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
   Pengecualian yang disengaja: **halaman event publik** tetap menyebut hash dan chain, karena
   kalimat "dokumen ini cocok dengan hash di chain" itu justru klaim yang jadi alasan produk ini ada,
   dan pembacanya memang orang yang sedang mengecek.
+- **Tiap jalan menuju bayar wajib melewati `NonRefundableNotice`** (STE-38, dari keputusan Axel di
+  STE-34). `enter` mentransfer biaya langsung runner → organiser tanpa escrow, jadi kontrak tidak
+  pernah memegang uangnya dan tidak ada refund yang bisa dipaksakan siapa pun. Teksnya berdiri
+  tepat di atas tombol/link yang mengambil uang, bukan di footer dan bukan di modal yang bisa
+  ditutup tanpa dibaca. Sekarang tempatnya `TabCategories`; **halaman `/events/[id]/enter` di
+  STE-21 harus memasangnya lagi** di dekat tombol tanda tangan. Ditampilkan cuma kalau memang ada
+  jalan masuk (`Open` dan masih ada slot) — peringatan yang muncul di tempat yang tidak berlaku
+  adalah cara peringatan berhenti dibaca.
 - **Jangan pernah memakai em dash (`—`) atau en dash (`–`) di teks UI.** Pecah jadi dua kalimat,
   pakai koma, atau tanda kurung. Kalau benar-benar perlu pemisah, pakai tanda hubung biasa.
   Larangan ini khusus teks UI; komentar kode dan `.md` tidak terpengaruh.

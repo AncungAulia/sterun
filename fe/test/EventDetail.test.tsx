@@ -146,6 +146,19 @@ describe("EventDetail", () => {
       expect(links[1]).toHaveAttribute("href", "/events/2/enter?category=1");
     });
 
+    it("says entry is non-refundable above the links that take the money", async () => {
+      // STE-38. Not a footer and not a modal: it has to be on the way in, and
+      // the way in is the per-distance link, so the notice sits before it.
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0)]));
+
+      renderDetail();
+      await showTab(/distances/i);
+
+      const notice = await screen.findByText(/non-refundable/i);
+      const link = screen.getByRole("link", { name: /enter/i });
+      expect(notice.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it("links the location to a map when the document carries a pin", async () => {
       getEventSummary.mockResolvedValue(summary());
       fetchEventMetadata.mockResolvedValue({
@@ -371,6 +384,44 @@ describe("EventDetail", () => {
 
       expect(await screen.findAllByText(/sold out/i)).not.toHaveLength(0);
       expect(screen.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
+    });
+
+    it("tells a cancelled race apart from a closed one, and offers no way in", async () => {
+      // STE-38. `Cancelled` is terminal and rejects entry on chain, so a
+      // button here would spend a wallet prompt to be told EventNotOpen. The
+      // pair a runner must never confuse is this one: Closed still has a race
+      // at the end of it.
+      getEventSummary.mockResolvedValue(summary({ status: "Cancelled" }, [category(0)]));
+
+      renderDetail();
+
+      expect(await screen.findByText(/this race has been cancelled/i)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
+      expect(screen.getByText("Cancelled")).toHaveAttribute("data-status", "Cancelled");
+    });
+
+    it("says nothing about refunds where there is no way in", async () => {
+      // The notice belongs to the act of paying. On a race nobody can enter it
+      // is noise, and noise is how a warning stops being read.
+      getEventSummary.mockResolvedValue(summary({ status: "Cancelled" }, [category(0)]));
+
+      renderDetail();
+      await showTab(/distances/i);
+
+      await screen.findByText(/entries left/i);
+      expect(screen.queryByText(/non-refundable/i)).not.toBeInTheDocument();
+    });
+
+    it("says nothing about refunds when every distance is full", async () => {
+      getEventSummary.mockResolvedValue(
+        summary({ status: "Open" }, [category(0, { quota: 5, enteredCount: 5 })]),
+      );
+
+      renderDetail();
+      await showTab(/distances/i);
+
+      await screen.findAllByText(/sold out/i);
+      expect(screen.queryByText(/non-refundable/i)).not.toBeInTheDocument();
     });
 
     it("says an event has no categories rather than showing an empty list", async () => {
