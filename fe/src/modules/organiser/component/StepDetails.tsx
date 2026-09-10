@@ -106,7 +106,7 @@ export function StepDetails({
           error={errors.name}
           value={details.name}
           onChange={(e) => set({ name: e.target.value })}
-          placeholder="Jakarta Sunrise 10K"
+          placeholder="Your race name"
           help="This is the name on the public list of races and on every runner's pass. It is stored with the event, and there is no way to rename it afterwards."
         />
         {/*
@@ -171,9 +171,14 @@ export function StepDetails({
           error={errors.description}
           value={details.description}
           onChange={(description) => set({ description })}
+          /*
+            The shape of a description, not somebody's race. A real event's
+            name in here reads as an endorsement, or as a race this organiser
+            is being nudged to copy.
+          */
           placeholder={
-            "ARTERUN: PACE OF JOY\nRun Together. Share the Joy.\n\n" +
-            "A 5K fun run opening the closing ceremony of ARTEFAC UNS 2026.\n\n" +
+            "What the race is, who it is for, and why it is worth running.\n\n" +
+            "Schedule\n05:00 Gates open\n05:30 Flag off\n09:00 Finish line closes\n\n" +
             "Race pack\n1. Jersey\n2. Bib number\n3. Refreshment\n4. Medal"
           }
           help="The only part of the page that says what the race is actually like. Without it a runner has a name, a date, and nothing to decide on."
@@ -266,7 +271,7 @@ export function StepDetails({
           label="Instagram"
           value={details.instagram}
           onChange={(e) => set({ instagram: e.target.value })}
-          placeholder="@jakartarun"
+          placeholder="@yourrace"
           hint="A handle, or paste the profile link."
           help="The handle is stored rather than the address, because Instagram has changed the shape of its URLs before and this cannot be edited afterwards."
         />
