@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreateEvent } from "@/modules/organiser/CreateEvent";
 import { useWallet } from "@/hooks/useWallet";
+import { provincesOf } from "@/lib/places";
 
 const createEvent = vi.hoisted(() => vi.fn(async () => ({ value: 4, txHash: "tx1", ledger: 1 })));
 const addCategory = vi.hoisted(() => vi.fn(async () => ({ value: 0, txHash: "tx2", ledger: 1 })));
@@ -23,11 +24,22 @@ const existingNames = vi.hoisted(() => vi.fn(() => [] as string[]));
 /* The organiser allowlist (STE-36). Allowed unless a test says otherwise. */
 const isOrganiser = vi.hoisted(() => vi.fn(async () => true));
 const uploadEventFile = vi.hoisted(() => vi.fn());
+/*
+ * Cities are a static file per country now, fetched when the country is picked
+ * (`public/places/<ISO2>.json`). jsdom has no origin to resolve `/places/...`
+ * against, so left alone the real fetch fails, the city field falls back to a
+ * text input, and every `combobox` named City in this file stops existing.
+ */
+const fetchCities = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sterun", () => ({
   readClient: { createEvent, addCategory, setEventStatus, isOrganiser },
 }));
 vi.mock("@/hooks/useExistingEventNames", () => ({ useExistingEventNames: existingNames }));
+vi.mock("@/lib/places", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/places")>()),
+  fetchCities,
+}));
 vi.mock("@/lib/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/metadata")>()),
   fetchEventMetadata,
@@ -237,6 +249,10 @@ beforeEach(() => {
     created: true,
   }));
   isOrganiser.mockResolvedValue(true);
+  const jakarta = provincesOf("ID").find((province) => province.name === "DKI Jakarta")!;
+  fetchCities.mockResolvedValue({
+    [jakarta.id]: ["Jakarta Barat", "Jakarta Pusat", "Jakarta Selatan"],
+  });
   useWallet.setState({ address: ORGANISER, isRestoring: false, isConnecting: false, error: null });
 });
 

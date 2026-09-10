@@ -13,9 +13,11 @@
  *
  * ## Why the city falls back to typing
  *
- * The committed dataset carries cities for one country. Rather than showing an
- * empty list everywhere else, the field becomes a text input, which is honest
- * about what we have and still lets anybody enter a race.
+ * The cities of one country are fetched when that country is picked, because
+ * every country's cities at once is 2.1 MB. Any way that fetch can come back
+ * empty, a country with no file, a province the data covers no cities for, a
+ * request that failed, ends in a text input rather than an empty dropdown. A
+ * missing list should cost an organiser a convenience, never the form.
  *
  * ## What this is not for
  *
@@ -27,7 +29,8 @@ import { Field, FieldMessage, LabelText } from "@/components/elements/Field";
 import { SearchableSelect } from "@/components/elements/SearchableSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { citiesOf, countries, hasCities, provincesOf } from "@/lib/places";
+import { useCities } from "@/hooks/useCities";
+import { countries, hasCities, provincesOf } from "@/lib/places";
 
 export interface Place {
   venue: string;
@@ -58,8 +61,15 @@ export function PlaceFields({
   errors = {},
 }: PlaceFieldsProps) {
   const provinces = provincesOf(place.country);
-  const cities = citiesOf(place.provinceId ? Number(place.provinceId) : null);
-  const cityIsAList = hasCities(place.country) && cities.length > 0;
+  const { data: cities, isPending } = useCities(place.country);
+  const cityOptions = cities?.[place.provinceId] ?? [];
+  /*
+    The select is shown while the file is still coming as well as once it is
+    here. Swapping a text box for a dropdown under somebody's cursor is worse
+    than a dropdown that says it is loading for a moment.
+  */
+  const loadingCities = hasCities(place.country) && place.provinceId.length > 0 && isPending;
+  const cityIsAList = cityOptions.length > 0 || loadingCities;
 
   /**
    * A province means nothing without its country and a city means nothing
@@ -131,11 +141,11 @@ export function PlaceFields({
             <SearchableSelect
               id="city"
               ariaLabel="City"
-              options={cities.map((city) => ({ value: city, label: city }))}
+              options={cityOptions.map((city) => ({ value: city, label: city }))}
               value={place.city}
               onChange={(city) => onChange({ ...place, city })}
-              placeholder="Search cities"
-              disabled={!cityReady}
+              placeholder={loadingCities ? "Loading cities" : "Search cities"}
+              disabled={!cityReady || loadingCities}
             />
           ) : (
             <Input

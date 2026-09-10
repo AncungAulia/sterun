@@ -8,9 +8,16 @@
  * day, and these names end up in an event document that is hashed and can never
  * be edited, so we want to know exactly which version of the data wrote them.
  *
- * Cities exist for one country. Worldwide cities are a 46 MB file, the pilot is
- * Indonesian, and a city list that covers one country honestly is worth more
- * than one that half-covers all of them. Everywhere else the city is typed.
+ * Countries and provinces are in this bundle because nothing can be picked
+ * before them. Cities are not: they are one static file per country under
+ * `public/places/`, fetched when a country is chosen. Names alone for the whole
+ * world are 2.1 MB across 223 files, so shipping them all would cost every
+ * visitor 2.1 MB to read a list of races, while fetching one costs the
+ * organiser filling in the form about 10 KB.
+ *
+ * Nothing here caches. `useCities` holds the result in the query cache the rest
+ * of the app already uses, and a fetch layer that also caches is a second
+ * cache to reason about for no gain.
  */
 import places from "@/data/places.json";
 
@@ -24,14 +31,18 @@ export interface Province {
   name: string;
 }
 
+/** Province id to the city names in it. The shape of one `public/places` file. */
+export type CitiesByProvince = Record<string, readonly string[]>;
+
 const data = places as {
   attribution: string;
   generatedAt: string;
-  citiesFor: string;
   countries: Country[];
   states: Record<string, Province[]>;
-  cities: Record<string, string[]>;
+  hasCities: string[];
 };
+
+const COUNTRIES_WITH_CITIES = new Set(data.hasCities);
 
 /** ODbL requires this to be shown wherever the data is. */
 export const PLACES_ATTRIBUTION = data.attribution;
@@ -43,19 +54,32 @@ export function provincesOf(iso2: string): readonly Province[] {
   return data.states[iso2] ?? [];
 }
 
-/**
- * Cities of a province, or an empty list. Empty means "type it", not "there
- * are none", which is why callers fall back to a text field rather than
- * blocking.
- */
-export function citiesOf(provinceId: number | null): readonly string[] {
-  if (provinceId === null) return [];
-  return data.cities[String(provinceId)] ?? [];
+/** Whether this country has a city file worth fetching. 223 of 250 do. */
+export function hasCities(iso2: string): boolean {
+  return COUNTRIES_WITH_CITIES.has(iso2);
 }
 
-/** Whether this country has a city list at all. */
-export function hasCities(iso2: string): boolean {
-  return iso2 === data.citiesFor;
+/**
+ * One country's cities, or an empty map.
+ *
+ * Empty always means "type the city", never "this country has no cities", and
+ * every way this can go wrong ends there: no file, a refused request, a body
+ * that is not the shape it should be. A dropped list costs an organiser a
+ * dropdown; a thrown error would cost them the form, and the form is the thing
+ * that must not break.
+ */
+export async function fetchCities(iso2: string): Promise<CitiesByProvince> {
+  if (!hasCities(iso2)) return {};
+
+  try {
+    const response = await fetch(`/places/${iso2}.json`);
+    if (!response.ok) return {};
+    const body: unknown = await response.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) return {};
+    return body as CitiesByProvince;
+  } catch {
+    return {};
+  }
 }
 
 export function countryName(iso2: string): string | null {

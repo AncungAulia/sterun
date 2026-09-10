@@ -1,14 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   PLACES_ATTRIBUTION,
-  citiesOf,
   countries,
   countryName,
+  fetchCities,
   hasCities,
   provinceName,
   provincesOf,
 } from "@/lib/places";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** Stands in for the static file the browser would fetch from `public/`. */
+function servingCities(body: unknown, ok = true) {
+  const fetcher = vi.fn(async () => ({
+    ok,
+    status: ok ? 200 : 404,
+    json: async () => body,
+  }));
+  vi.stubGlobal("fetch", fetcher);
+  return fetcher;
+}
 
 describe("places", () => {
   describe("positive", () => {
@@ -24,10 +39,14 @@ describe("places", () => {
       expect(provinces.map((p) => p.name)).toContain("DKI Jakarta");
     });
 
-    it("lists cities for a province", () => {
-      const jakarta = provincesOf("ID").find((p) => p.name === "DKI Jakarta");
+    it("fetches one country's cities, keyed by province", async () => {
+      const jakarta = provincesOf("ID").find((p) => p.name === "DKI Jakarta")!;
+      const fetcher = servingCities({ [jakarta.id]: ["Jakarta Pusat", "Jakarta Selatan"] });
 
-      expect(citiesOf(jakarta!.id).length).toBeGreaterThan(0);
+      const cities = await fetchCities("ID");
+
+      expect(fetcher).toHaveBeenCalledWith("/places/ID.json");
+      expect(cities[String(jakarta.id)]).toEqual(["Jakarta Pusat", "Jakarta Selatan"]);
     });
 
     it("resolves ids back to names, which is what goes in the document", () => {
@@ -51,9 +70,13 @@ describe("places", () => {
   });
 
   describe("edge", () => {
-    it("says which country has cities, and which do not", () => {
+    it("says which countries have cities, which is now nearly all of them", () => {
+      // Was Indonesia alone. The per-country split (2.1 MB across 223 files,
+      // one fetched at a time) is what made the rest affordable.
       expect(hasCities("ID")).toBe(true);
-      expect(hasCities("US")).toBe(false);
+      expect(hasCities("US")).toBe(true);
+      expect(hasCities("CN")).toBe(true);
+      expect(hasCities("ZZ")).toBe(false);
     });
 
     it("returns an empty list rather than throwing for an unknown country", () => {
@@ -61,18 +84,39 @@ describe("places", () => {
       expect(countryName("ZZ")).toBeNull();
     });
 
-    it("returns an empty city list when no province is chosen", () => {
-      expect(citiesOf(null)).toEqual([]);
-    });
+    it("asks for nothing when the country has no file to ask for", async () => {
+      const fetcher = servingCities({});
 
-    it("returns an empty city list for a province outside the covered country", () => {
-      const california = provincesOf("US").find((p) => p.name === "California");
-
-      expect(citiesOf(california!.id)).toEqual([]);
+      expect(await fetchCities("ZZ")).toEqual({});
+      expect(fetcher).not.toHaveBeenCalled();
     });
 
     it("has no province name for an id that is not in that country", () => {
       expect(provinceName("ID", 999_999)).toBeNull();
+    });
+  });
+
+  describe("negative", () => {
+    it("hands back an empty list when the file will not load, rather than throwing", async () => {
+      // The city field falls back to a text input on an empty list, so a
+      // failed fetch costs the organiser a dropdown, not the form.
+      servingCities(null, false);
+
+      await expect(fetchCities("CN")).resolves.toEqual({});
+    });
+
+    it("survives a file that is not the shape it should be", async () => {
+      servingCities(["this is not a map of provinces"]);
+
+      await expect(fetchCities("CN")).resolves.toEqual({});
+    });
+
+    it("survives the network refusing outright", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => {
+        throw new Error("offline");
+      }));
+
+      await expect(fetchCities("CN")).resolves.toEqual({});
     });
   });
 });

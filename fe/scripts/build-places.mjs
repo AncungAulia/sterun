@@ -1,5 +1,6 @@
 /**
- * Generates src/data/places.json from the Countries States Cities Database.
+ * Generates src/data/places.json and public/places/<ISO2>.json from the
+ * Countries States Cities Database.
  *
  * Run by hand, not on install:
  *
@@ -31,20 +32,31 @@
  * organiser is choosing between, and all of which would be shipped to every
  * visitor.
  *
- * Cities are kept for Indonesia only. Worldwide cities are a 46 MB file, the
- * pilot is Indonesian, and a city select that covers one country honestly beats
- * one that half-covers every country. Elsewhere the city is typed.
+ * ## Why cities are one file per country
+ *
+ * Cities used to ship for Indonesia alone, because the source's combined file
+ * is 46 MB. But almost all of that 46 MB is coordinates, timezones and wikidata
+ * ids. The names alone, for every country on earth, are 2.1 MB: 152,970 cities
+ * across 223 countries, and the largest single country (the United States) is
+ * 205 KB.
+ *
+ * So the cities go in neither the bundle nor one file. Each country is written
+ * to `public/places/<ISO2>.json` and fetched only when somebody picks that
+ * country. One organiser filling in one form downloads one file, typically
+ * about 10 KB, and an organiser in Guangdong gets a list of cities rather than
+ * a text box and a shrug.
+ *
+ * `places.json` keeps the countries and the provinces, since both are needed
+ * before anything can be picked, and adds `hasCities` so the form knows whether
+ * a fetch is worth making before it makes one.
  */
-import { writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const BASE = "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json";
 const ATTRIBUTION =
   "Data by Countries States Cities Database " +
   "https://github.com/dr5hn/countries-states-cities-database | ODbL v1.0";
-
-/** The one country whose cities ship. Everything else types its city. */
-const CITIES_FOR = "ID";
 
 async function get(file) {
   process.stdout.write(`fetching ${file} ... `);
@@ -71,34 +83,62 @@ for (const state of rawStates) {
 for (const list of Object.values(states)) list.sort((a, b) => a.name.localeCompare(b.name));
 
 // Cities come from the combined file, which is the only one linking a city to
-// its state. Downloaded here and never shipped.
+// its state. Downloaded here, stripped to names, never shipped whole.
 const all = await get("countries+states+cities.json");
-const target = all.find((country) => country.iso2 === CITIES_FOR);
-if (!target) throw new Error(`${CITIES_FOR} is not in the dataset`);
 
-const cities = {};
-for (const state of target.states ?? []) {
-  const list = (state.cities ?? [])
-    .map((city) => city.name)
-    .sort((a, b) => a.localeCompare(b));
-  if (list.length > 0) cities[state.id] = list;
+const citiesDir = join(import.meta.dirname, "..", "public", "places");
+// Emptied first. A country dropped upstream would otherwise leave a stale file
+// behind that `hasCities` no longer lists but the server still serves.
+rmSync(citiesDir, { recursive: true, force: true });
+mkdirSync(citiesDir, { recursive: true });
+
+const hasCities = [];
+let cityCount = 0;
+let cityBytes = 0;
+let largest = { iso2: "", bytes: 0 };
+
+for (const country of all) {
+  const byProvince = {};
+  let count = 0;
+  for (const state of country.states ?? []) {
+    const list = (state.cities ?? [])
+      .map((city) => city.name)
+      .sort((a, b) => a.localeCompare(b));
+    if (list.length > 0) {
+      byProvince[state.id] = list;
+      count += list.length;
+    }
+  }
+  if (count === 0) continue;
+
+  const json = `${JSON.stringify(byProvince)}\n`;
+  writeFileSync(join(citiesDir, `${country.iso2}.json`), json, "utf8");
+  hasCities.push(country.iso2);
+  cityCount += count;
+  cityBytes += json.length;
+  if (json.length > largest.bytes) largest = { iso2: country.iso2, bytes: json.length };
 }
+
+hasCities.sort();
 
 const output = {
   attribution: ATTRIBUTION,
   generatedAt: new Date().toISOString().slice(0, 10),
-  citiesFor: CITIES_FOR,
   countries,
   states,
-  cities,
+  hasCities,
 };
 
 const path = join(import.meta.dirname, "..", "src", "data", "places.json");
 writeFileSync(path, `${JSON.stringify(output)}\n`, "utf8");
 
-const kb = (JSON.stringify(output).length / 1024).toFixed(0);
+const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
 console.log(
   `wrote ${path}: ${countries.length} countries, ` +
-    `${Object.values(states).flat().length} states, ` +
-    `${Object.values(cities).flat().length} cities in ${CITIES_FOR}, ${kb} KB`,
+    `${Object.values(states).flat().length} states, ${kb(JSON.stringify(output).length)}`,
+);
+console.log(
+  `wrote ${citiesDir}: ${hasCities.length} files, ` +
+    `${cityCount.toLocaleString()} cities, ${(cityBytes / 1e6).toFixed(1)} MB total, ` +
+    `largest ${largest.iso2} at ${kb(largest.bytes)}`,
 );
