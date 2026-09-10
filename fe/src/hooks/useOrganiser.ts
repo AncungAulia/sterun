@@ -12,6 +12,8 @@
  * separate transaction with its own signature, its own failure and its own
  * button. The wizard's whole shape follows from that.
  */
+import { useQuery } from "@tanstack/react-query";
+
 import { readClient } from "@/lib/sterun";
 
 import { useChainWrite, type Actor } from "./useChainWrite";
@@ -78,4 +80,34 @@ export function useRemoveScanner() {
   return useChainWrite<ScannerInput, void>(({ eventId, scanner }, actor) =>
     readClient.removeScanner(eventId, scanner, actor),
   );
+}
+
+/**
+ * Whether this wallet is on the registry's organiser allowlist (STE-36).
+ *
+ * Asked here rather than discovered from a failed `create_event`, because the
+ * refusal lands at the end of the wizard and the run's first step has already
+ * uploaded the details file by then: a wallet that was never allowed to
+ * publish would still have spent storage and six forms to find out.
+ *
+ * Three states, and the third is the one worth being careful about:
+ * `true` allowed, `false` refused, `undefined` not answered yet or not
+ * answerable. Being unable to reach a node is not the same as being turned
+ * away, so a failure here must not read as one; the contract still refuses on
+ * its own, and simulation refuses before anything is signed or paid.
+ */
+export function useCanCreateEvents(address: string | null) {
+  const query = useQuery({
+    queryKey: ["organiser-allowlist", address],
+    enabled: address !== null,
+    queryFn: () => readClient.isOrganiser(address!),
+    staleTime: 60_000,
+    // No retry at all, which is not laziness. The answer gates a screen, so
+    // the wait is in front of somebody's eyes, and the fallback when it does
+    // not arrive is to let them through anyway. Retrying only delays a form
+    // that is going to be shown either way.
+    retry: false,
+  });
+
+  return { allowed: query.data, isChecking: query.isPending && address !== null };
 }

@@ -38,8 +38,11 @@ import { Stepper } from "@/components/elements/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { WalletGate } from "@/components/layouts/WalletGate";
+import { NotAllowlisted } from "./component/NotAllowlisted";
 import { useEventRun } from "@/hooks/useEventRun";
 import { useExistingEventNames } from "@/hooks/useExistingEventNames";
+import { useCanCreateEvents } from "@/hooks/useOrganiser";
+import { useWallet } from "@/hooks/useWallet";
 import { buildEventDocument, documentHash } from "@/lib/event-document";
 import { countryName, provinceName } from "@/lib/places";
 
@@ -71,9 +74,45 @@ type Step = (typeof STEPS)[number]["id"];
 export function CreateEvent() {
   return (
     <WalletGate>
-      <Wizard />
+      <CreateGate />
     </WalletGate>
   );
+}
+
+/**
+ * The organiser allowlist, asked before the form rather than discovered from a
+ * refused transaction (STE-36).
+ *
+ * Not folded into `WalletGate`: the allowlist gates `create_event` and nothing
+ * else, so a wallet taken off it keeps every per-event power it already had.
+ * Gating the whole console on it would lock an organiser out of the races they
+ * already run, which the contract itself does not do.
+ */
+function CreateGate() {
+  const { address } = useWallet();
+  const { allowed, isChecking } = useCanCreateEvents(address);
+
+  // WalletGate has already established there is one; this is for the types.
+  if (!address) return null;
+
+  if (isChecking) {
+    return (
+      <div role="status" className="mx-auto w-full max-w-4xl px-4 py-16">
+        <div className="h-6 w-56 animate-pulse rounded-sm bg-n-100" />
+      </div>
+    );
+  }
+
+  /*
+    Only an explicit `false` stops anybody. `undefined` here means the question
+    could not be answered, which is not the same as being turned away: the
+    contract refuses on its own, in simulation, before anything is signed.
+    Drawing a refusal over a node that failed to answer would lock out an
+    organiser who is perfectly entitled to be here.
+  */
+  if (allowed === false) return <NotAllowlisted address={address} />;
+
+  return <Wizard />;
 }
 
 function Wizard() {

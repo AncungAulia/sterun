@@ -20,9 +20,13 @@ const fetchEventMetadata = vi.hoisted(() => vi.fn());
  * built so that a testnet or a VPS being down cannot turn CI red.
  */
 const existingNames = vi.hoisted(() => vi.fn(() => [] as string[]));
+/* The organiser allowlist (STE-36). Allowed unless a test says otherwise. */
+const isOrganiser = vi.hoisted(() => vi.fn(async () => true));
 const uploadEventFile = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/sterun", () => ({ readClient: { createEvent, addCategory, setEventStatus } }));
+vi.mock("@/lib/sterun", () => ({
+  readClient: { createEvent, addCategory, setEventStatus, isOrganiser },
+}));
 vi.mock("@/hooks/useExistingEventNames", () => ({ useExistingEventNames: existingNames }));
 vi.mock("@/lib/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/metadata")>()),
@@ -67,7 +71,9 @@ function renderWizard() {
 
 /** Fill everything step one insists on, then move to the distances. */
 async function fillDetails(user: ReturnType<typeof userEvent.setup>, name = "Jakarta Sunrise 10K") {
-  await user.type(screen.getByLabelText(/Event name/), name);
+  // The allowlist is read before the form is drawn (STE-36), so the first
+  // field is not there on the first tick any more.
+  await user.type(await screen.findByLabelText(/Event name/), name);
 
   await user.click(screen.getByRole("combobox", { name: "Country" }));
   await user.click(await screen.findByRole("option", { name: "Indonesia" }));
@@ -134,6 +140,18 @@ async function passTerms(user: ReturnType<typeof userEvent.setup>, terms?: strin
 }
 
 /**
+ * Render, and wait for the allowlist check to let the form through (STE-36).
+ *
+ * The tests that want to see the form all go through here. The ones that want
+ * to see it withheld call `renderWizard` directly.
+ */
+async function renderForm() {
+  const rendered = renderWizard();
+  await screen.findByLabelText(/Event name/);
+  return rendered;
+}
+
+/**
  * Everything up to the review screen, with the file publishing cleanly.
  *
  * Add-ons are skipped by default: an empty race pack is a normal way to finish,
@@ -185,6 +203,7 @@ beforeEach(() => {
     contentType: "application/json",
     created: true,
   }));
+  isOrganiser.mockResolvedValue(true);
   useWallet.setState({ address: ORGANISER, isRestoring: false, isConnecting: false, error: null });
 });
 
@@ -195,7 +214,7 @@ describe("CreateEvent", () => {
     it("lists every signature before asking for the first one", async () => {
       // The number cannot be reduced, so the only thing that makes it bearable
       // is not being surprised by it. Three fixed steps plus one distance.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       // Not on the page until it is asked for: it is the one thing here that
@@ -217,7 +236,7 @@ describe("CreateEvent", () => {
     it("signs nothing when the dialog is dismissed", async () => {
       // The second press is the consent. Backing out of it has to leave the
       // form exactly as it was.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       await user.click(screen.getByRole("button", { name: "Create event" }));
@@ -229,7 +248,7 @@ describe("CreateEvent", () => {
     });
 
     it("walks the whole run from one press, and ends with an open event", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       await startRun(user);
@@ -260,7 +279,7 @@ describe("CreateEvent", () => {
       // The point of the whole endpoint: the organiser hosts nothing, and the
       // uri that lands on chain is one the store guarantees keeps serving the
       // same bytes.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       await startRun(user);
@@ -276,7 +295,7 @@ describe("CreateEvent", () => {
     });
 
     it("signs the upload as the connected organiser", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       await startRun(user);
@@ -291,7 +310,7 @@ describe("CreateEvent", () => {
       // Stored is not served. A hash committed for bytes nobody fetched leaves
       // the event page saying the details were altered, for the rest of the
       // event's life, with nothing anybody can do about it.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -304,7 +323,7 @@ describe("CreateEvent", () => {
     });
 
     it("passes the price through as stroops, not as a decimal", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user, { price: "25.5" });
       await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -322,7 +341,7 @@ describe("CreateEvent", () => {
     it("puts the earliest wave on chain as the event start", async () => {
       // The event has one timestamp and the race has several. 06:00 on race day
       // in the browser's zone, which the frozen clock makes deterministic.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       await startRun(user);
@@ -340,7 +359,7 @@ describe("CreateEvent", () => {
     it("keeps what has landed and carries on from there", async () => {
       // Those transactions cannot be undone, so a screen that reset would be
       // lying about what exists. Carrying on must never repeat one.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
       setEventStatus.mockRejectedValueOnce(new Error("User declined the request"));
 
@@ -360,7 +379,7 @@ describe("CreateEvent", () => {
     });
 
     it("says nothing was created when it stops on the very first step", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -375,7 +394,7 @@ describe("CreateEvent", () => {
       // Hosting the file yourself is a real escape hatch, since our backend
       // being down should not stop anybody creating an event. It is not a
       // choice worth putting in front of somebody who has no problem.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument();
@@ -391,7 +410,7 @@ describe("CreateEvent", () => {
       // same kind of thing. They are not: skipping produces a page with no
       // poster, no location and no schedule, for ever, offered at the moment
       // somebody is annoyed enough to press anything.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
@@ -402,7 +421,7 @@ describe("CreateEvent", () => {
     });
 
     it("takes a document the organiser hosted and checked themselves", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
@@ -426,7 +445,7 @@ describe("CreateEvent", () => {
     });
 
     it("refuses a hosted url that is serving different bytes", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
@@ -446,7 +465,7 @@ describe("CreateEvent", () => {
       // The whole model in one assertion: an add-on is not a product with a
       // price, it is what a ticket already buys. `enter` moves one amount once,
       // so there is nowhere for a second charge to live.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await fillAddOn(user);
@@ -463,7 +482,7 @@ describe("CreateEvent", () => {
     it("seeds a size chart when the item is one people wear", async () => {
       // Picking a preset answers "does this have sizes" as well as naming it,
       // because the two are the same question and asking twice is friction.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await fillAddOn(user);
@@ -477,7 +496,7 @@ describe("CreateEvent", () => {
     it("takes an item that is not on the list at all", async () => {
       // Races hand out things nobody could enumerate in advance. The control
       // offers suggestions; it never limits the answer.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await fillAddOn(user, { name: "Meal ticket" });
@@ -490,7 +509,7 @@ describe("CreateEvent", () => {
     });
 
     it("leaves a tumbler without one", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await fillAddOn(user, { name: "Tumbler" });
@@ -502,7 +521,7 @@ describe("CreateEvent", () => {
     it("refuses an item nobody would ever receive", async () => {
       // An add-on ticked against no distance is invisible to every runner, and
       // the document is permanent, so it is caught before it is frozen.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await fillAddOn(user, { tick: null });
@@ -515,7 +534,7 @@ describe("CreateEvent", () => {
     it("unticks a distance that was renamed after it was chosen", async () => {
       // Otherwise the document would name a distance nobody can enter, and
       // there is no editing it once it is published.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
       await fillDistances(user);
       await fillAddOn(user);
@@ -535,7 +554,7 @@ describe("CreateEvent", () => {
       // The whole reason the rules live here rather than on a page the
       // organiser hosts: covered by metadata_hash, so they cannot change after
       // somebody has agreed to them.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       // Set here rather than leaned on from reachReview: this test walks the
       // wizard itself so it can stop at the terms step, so it owns the mock.
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
@@ -551,7 +570,7 @@ describe("CreateEvent", () => {
     });
 
     it("leaves the terms out entirely when the organiser skipped them", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
       await startRun(user);
       await screen.findByText(/your race is live/i);
@@ -561,7 +580,7 @@ describe("CreateEvent", () => {
     });
 
     it("carries on with nothing in the race pack, because that is a real race", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       expect(screen.queryByText("What runners get")).not.toBeInTheDocument();
@@ -571,7 +590,7 @@ describe("CreateEvent", () => {
 
   describe("the review itself", () => {
     it("shows the race in words rather than as a file", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       expect(screen.getByText("Jakarta Sunrise 10K")).toBeInTheDocument();
@@ -586,7 +605,7 @@ describe("CreateEvent", () => {
     it("still hands over the exact bytes, for anybody who wants to check them", async () => {
       // The fingerprint of these bytes is what goes on chain, so somebody
       // checking our claim has to be able to see them.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
 
       await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
@@ -598,7 +617,7 @@ describe("CreateEvent", () => {
     it("stops offering Back once something has been signed", async () => {
       // The form no longer describes what exists. Editing it would silently
       // change the document whose fingerprint is already on chain.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await reachReview(user);
       expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
 
@@ -620,10 +639,44 @@ describe("CreateEvent", () => {
       expect(screen.queryByLabelText(/Event name/)).not.toBeInTheDocument();
     });
 
+    it("refuses a wallet that is not on the organiser allowlist, before the form", async () => {
+      // The contract refuses too, but it refuses at the end of the run, and by
+      // then the first step has already uploaded the details file. Six forms
+      // and a stored document to be told no.
+      isOrganiser.mockResolvedValue(false);
+
+      renderWizard();
+
+      expect(await screen.findByText(/cannot publish races yet/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Event name/)).not.toBeInTheDocument();
+    });
+
+    it("shows the whole address on that screen, because it has to be copied", async () => {
+      isOrganiser.mockResolvedValue(false);
+
+      renderWizard();
+
+      expect(await screen.findByText(ORGANISER)).toBeInTheDocument();
+    });
+
+    it("lets a wallet through when the allowlist could not be read at all", async () => {
+      // Not being able to ask is not a refusal. The contract still refuses on
+      // its own, in simulation, before anything is signed or paid, so the cost
+      // of being wrong here is a clear error later. The cost of the opposite
+      // is locking out an organiser because a public node was down.
+      isOrganiser.mockRejectedValue(new Error("rpc unreachable"));
+
+      renderWizard();
+
+      expect(await screen.findByLabelText(/Event name/)).toBeInTheDocument();
+      expect(screen.queryByText(/cannot publish races yet/i)).not.toBeInTheDocument();
+    });
+
     it("says what is missing instead of disabling Continue", async () => {
       // A greyed out button with no reason is a dead end: you can see it, you
       // cannot tell what is wrong, and there is nothing to press to find out.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
+      await screen.findByLabelText(/Event name/);
 
       expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
       expect(screen.queryByText(/give the race a name/i)).not.toBeInTheDocument();
@@ -637,7 +690,7 @@ describe("CreateEvent", () => {
 
     it("names the race it thinks this one clashes with, while the name is typed", async () => {
       existingNames.mockReturnValue(["Lari Jateng 2026"]);
-      const { user } = renderWizard();
+      const { user } = await renderForm();
 
       await user.type(screen.getByLabelText(/Event name/), "lari jateng 2026");
 
@@ -651,7 +704,7 @@ describe("CreateEvent", () => {
       // called the same thing. Blocking would stop the organiser who is right
       // along with the one who is confused, and the contract does not care.
       existingNames.mockReturnValue(["Lari Jateng 2026"]);
-      const { user } = renderWizard();
+      const { user } = await renderForm();
 
       await user.type(screen.getByLabelText(/Event name/), "Lari Jateng 2026");
 
@@ -661,7 +714,7 @@ describe("CreateEvent", () => {
 
     it("says nothing when the index knows no race by that name", async () => {
       existingNames.mockReturnValue(["Borobudur Marathon 2026"]);
-      const { user } = renderWizard();
+      const { user } = await renderForm();
 
       await user.type(screen.getByLabelText(/Event name/), "Lari Jateng 2026");
 
@@ -672,7 +725,7 @@ describe("CreateEvent", () => {
       // Nobody has pressed Continue here. Two dates that cannot both be true
       // are wrong the moment the second one is picked, and the organiser is
       // looking at both fields right now — later is after they moved on.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
 
       await user.click(screen.getByRole("button", { name: "Registration opens date" }));
       await user.click(screen.getByRole("button", { name: /September 27th, 2026/ }));
@@ -686,7 +739,7 @@ describe("CreateEvent", () => {
       // The other half of the same decision. A form being filled in is not a
       // form being got wrong, and one that goes red under the cursor is one
       // people learn to read past.
-      const { user } = renderWizard();
+      const { user } = await renderForm();
 
       await user.click(screen.getByRole("button", { name: "Registration opens date" }));
       await user.click(screen.getByRole("button", { name: /September 27th, 2026/ }));
@@ -699,7 +752,7 @@ describe("CreateEvent", () => {
     });
 
     it("clears the clash the moment the dates make sense again", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
 
       await user.click(screen.getByRole("button", { name: "Registration opens date" }));
       await user.click(screen.getByRole("button", { name: /September 27th, 2026/ }));
@@ -714,7 +767,7 @@ describe("CreateEvent", () => {
     });
 
     it("insists on a maps link with a pin, because that is what places the race", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await user.type(screen.getByLabelText(/Event name/), "A race");
       await user.click(screen.getByRole("button", { name: "Continue" }));
 
@@ -722,7 +775,7 @@ describe("CreateEvent", () => {
     });
 
     it("refuses a distance code the contract would reject, without spending a signature", async () => {
-      const { user } = renderWizard();
+      const { user } = await renderForm();
       await fillDetails(user);
 
       await user.type(screen.getByLabelText(/^Code/), "10 K");
