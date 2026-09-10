@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -89,6 +92,25 @@ describe("places", () => {
 
       expect(await fetchCities("ZZ")).toEqual({});
       expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    it("never lists one city twice under a province", () => {
+      // Each name becomes an option keyed by itself. The source carried 324
+      // repeats (two Lianjiangs in Guangdong, told apart only by coordinates
+      // the build drops), and React threw on the first organiser to pick one.
+      const dir = join(process.cwd(), "public", "places");
+      const repeats: string[] = [];
+      for (const file of readdirSync(dir)) {
+        const byProvince = JSON.parse(readFileSync(join(dir, file), "utf8")) as Record<
+          string,
+          string[]
+        >;
+        for (const [province, cities] of Object.entries(byProvince)) {
+          if (new Set(cities).size !== cities.length) repeats.push(`${file} ${province}`);
+        }
+      }
+
+      expect(repeats).toEqual([]);
     });
 
     it("has no province name for an id that is not in that country", () => {

@@ -101,9 +101,14 @@ for (const country of all) {
   const byProvince = {};
   let count = 0;
   for (const state of country.states ?? []) {
-    const list = (state.cities ?? [])
-      .map((city) => city.name)
-      .sort((a, b) => a.localeCompare(b));
+    // Deduplicated because the source lists some names twice under one
+    // province: Guangdong has two Lianjiangs, a county-level city and a town,
+    // told apart only by coordinates we drop. Once stripped to names they are
+    // the same option, and a select with two identical rows is two React
+    // children under one key (324 duplicates across 33 provinces, mostly CN).
+    const list = [...new Set((state.cities ?? []).map((city) => city.name))].sort((a, b) =>
+      a.localeCompare(b),
+    );
     if (list.length > 0) {
       byProvince[state.id] = list;
       count += list.length;
