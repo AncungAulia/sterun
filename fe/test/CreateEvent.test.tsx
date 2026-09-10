@@ -171,13 +171,46 @@ async function reachReview(user: ReturnType<typeof userEvent.setup>) {
  */
 async function fillAddOn(
   user: ReturnType<typeof userEvent.setup>,
-  { name = "Event jersey", tick = "10K" }: { name?: string; tick?: string | null } = {},
+  {
+    name = "Event jersey",
+    tick = "10K",
+    kind = "included",
+    price,
+    stock = "200",
+  }: {
+    name?: string;
+    tick?: string | null;
+    kind?: "included" | "extra";
+    price?: string;
+    stock?: string;
+  } = {},
 ) {
-  await user.click(screen.getByRole("button", { name: /add an item/i }));
+  // Two lists now, and which button is pressed decides which one this lands
+  // in: what the entry fee covers, or what is sold on top of it.
+  const add = kind === "included" ? /add something included/i : /add something to sell/i;
+  await user.click(screen.getByRole("button", { name: add }));
   await user.click(screen.getByRole("combobox", { name: "Item" }));
   await user.type(screen.getByPlaceholderText(/search or type your own/i), name);
   await user.click(await screen.findByRole("option", { name: new RegExp(name, "i") }));
   if (tick) await user.click(screen.getByRole("checkbox", { name: tick }));
+
+  if (kind === "extra") {
+    // By role: `Help` names its button "About price in sUSD", which a loose
+    // label regex matches just as happily as the field itself.
+    await user.type(screen.getByRole("textbox", { name: /price in sUSD/i }), price ?? "30");
+  }
+
+  /*
+    Stock is not optional any more: the contract refuses a quota of zero, so
+    every row has to carry a number. A sized item carries one per size, because
+    each size is its own add-on.
+  */
+  const sizeStocks = screen.queryAllByLabelText(/size \d+ stock/i);
+  if (sizeStocks.length > 0) {
+    for (const field of sizeStocks) await user.type(field, stock);
+  } else {
+    await user.type(screen.getByRole("textbox", { name: /how many exist/i }), stock);
+  }
 }
 
 /**

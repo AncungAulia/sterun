@@ -23,9 +23,10 @@
  * drift: the document is hashed by `create_event`, so it has to be online
  * first, and nothing can be added to an event that does not exist yet.
  */
+import { addOnUnits, type PlannedAddOn } from "./addons";
 import type { PlannedCategory } from "./component/StepCategoryPlan";
 
-export type RunStepKind = "document" | "event" | "category" | "open";
+export type RunStepKind = "document" | "event" | "category" | "addon" | "open";
 
 export interface RunStep {
   /** Stable across a re-plan, so what is already done stays done. */
@@ -33,16 +34,17 @@ export interface RunStep {
   kind: RunStepKind;
   /** Shown in the list, in the organiser's words rather than the contract's. */
   label: string;
-  /** Only on `category` steps: which distance this one adds. */
+  /** On `category` and `addon` steps: the code this one writes. */
   code?: string;
 }
 
 export interface RunPlan {
   name: string;
   categories: PlannedCategory[];
+  addOns: PlannedAddOn[];
 }
 
-export function planRun({ name, categories }: RunPlan): RunStep[] {
+export function planRun({ name, categories, addOns }: RunPlan): RunStep[] {
   const steps: RunStep[] = [];
 
   /**
@@ -69,6 +71,28 @@ export function planRun({ name, categories }: RunPlan): RunStep[] {
       kind: "category",
       label: `Add the ${code}`,
       code,
+    });
+  }
+
+  /**
+   * After the distances and before opening, and both halves of that matter.
+   *
+   * After, because an add-on is worth nothing without a race to attach it to
+   * and the organiser reads the list top to bottom. Before opening, because
+   * `reserve_addon` requires the event to be `Open`: anything added afterwards
+   * is a thing the earliest entrants were never offered, and entries are the
+   * one part of this that cannot be replayed.
+   *
+   * One step per size, not per item. The contract holds a quota per add-on, so
+   * `EVENT_JERSEY_M` is its own row with its own stock, which is the only way
+   * a sold-out size can be true.
+   */
+  for (const unit of addOnUnits(addOns)) {
+    steps.push({
+      id: `addon:${unit.code}`,
+      kind: "addon",
+      label: `Add the ${unit.label}`,
+      code: unit.code,
     });
   }
 

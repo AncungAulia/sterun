@@ -33,20 +33,28 @@ export interface DocumentCategory {
 }
 
 /**
- * One thing a runner receives, and the distances that receive it.
+ * One thing a runner can get, and what it looks like.
  *
- * Not a product with a price. `enter` moves exactly `category.price` once, so
- * an extra charge has nowhere to live; a jersey that costs more is a second
- * distance at a higher price, and this only records what that price includes.
- * The reasoning is in `modules/organiser/component/StepAddOns.tsx`.
+ * The half of an add-on that is not chain state. Price and stock live on
+ * chain, in `AddOnData`, and are deliberately not copied here: two records of
+ * the same number is two records that can disagree, and the chain's is the one
+ * that decides whether a jersey can still be sold. What lives here instead is
+ * everything the contract has no field for, which is most of what a runner
+ * actually looks at: the photo, the measurements, the distances it is offered
+ * to.
+ *
+ * `code` is the join between the two. It is how a client reading this file
+ * finds the row on chain that says what this costs and how many are left.
  */
 export interface DocumentAddOn {
   name: string;
   photoUrl: string;
-  /** Distance codes. An add-on nobody receives is not written out. */
+  /** Distance codes it is offered to. A claim here, not a rule on chain. */
   includedIn: string[];
+  /** Soroban `Symbol` when the item has no sizes; a size carries its own. */
+  code: string;
   /** Empty when the item has no sizes to pick, like a tumbler. */
-  sizes: { label: string; chest: string; length: string }[];
+  sizes: { label: string; chest: string; length: string; code: string }[];
 }
 
 /** Everything the wizard collects for the document. Empty string means absent. */
@@ -257,9 +265,14 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
           const length = Number(size.length);
           if (size.chest.trim() && Number.isFinite(chest)) row.chest_cm = chest;
           if (size.length.trim() && Number.isFinite(length)) row.length_cm = length;
+          // The row on chain that holds this size's price and stock. Only a
+          // size that will actually be created carries one.
+          if (size.code) row.code = size.code;
           return row;
         });
       if (sizes.length > 0) entry.sizes = sizes;
+      // An item with sizes has no code of its own: every size is its own row.
+      else if (addOn.code) entry.code = addOn.code;
       return entry;
     });
   if (addOns.length > 0) document.add_ons = addOns;

@@ -30,19 +30,26 @@
  */
 import { useMemo, useState } from "react";
 
-import { useAddCategory, useCreateEvent, useSetEventStatus } from "@/hooks/useOrganiser";
+import {
+  useAddAddon,
+  useAddCategory,
+  useCreateEvent,
+  useSetEventStatus,
+} from "@/hooks/useOrganiser";
 import { useWallet } from "@/hooks/useWallet";
 import { fetchEventMetadata } from "@/lib/metadata";
 import { uploadEventFile } from "@/lib/upload";
 import { signMessage, walletErrorMessage } from "@/lib/wallet";
 import type { PlannedCategory } from "@/modules/organiser/component/StepCategoryPlan";
 import type { PublishedDocument } from "@/modules/organiser/component/DocumentFallback";
+import { addOnUnits, type PlannedAddOn } from "@/modules/organiser/addons";
 import { nextStep, planRun, type RunStep } from "@/modules/organiser/run";
 import { parseStroops } from "@/utils/format";
 
 export interface EventRunInput {
   name: string;
   plan: PlannedCategory[];
+  addOns: PlannedAddOn[];
   startsAt: bigint | null;
   /** The exact text to publish. Its bytes are what the hash covers. */
   documentText: string;
@@ -52,10 +59,18 @@ export interface EventRunInput {
 /** What the screen is waiting for right now, which are different feelings. */
 export type WaitingFor = "wallet" | "network" | null;
 
-export function useEventRun({ name, plan, startsAt, documentText, hash }: EventRunInput) {
+export function useEventRun({
+  name,
+  plan,
+  addOns,
+  startsAt,
+  documentText,
+  hash,
+}: EventRunInput) {
   const address = useWallet((state) => state.address);
   const createEvent = useCreateEvent();
   const addCategory = useAddCategory();
+  const addAddon = useAddAddon();
   const setStatus = useSetEventStatus();
 
   const [done, setDone] = useState<string[]>([]);
@@ -66,7 +81,10 @@ export function useEventRun({ name, plan, startsAt, documentText, hash }: EventR
   const [eventId, setEventId] = useState<number | null>(null);
   const [document, setDocument] = useState<PublishedDocument | null>(null);
 
-  const steps = useMemo(() => planRun({ name, categories: plan }), [name, plan]);
+  const steps = useMemo(
+    () => planRun({ name, categories: plan, addOns }),
+    [name, plan, addOns],
+  );
 
   const upload = useUploadPhase();
   const waitingFor: WaitingFor =
@@ -131,6 +149,18 @@ export function useEventRun({ name, plan, startsAt, documentText, hash }: EventR
           distanceM: Math.round(Number(category.km) * 1000),
           quota: Number(category.quota),
           priceStroops: parseStroops(category.price),
+        });
+        return sent.txHash;
+      }
+      case "addon": {
+        if (state.eventId === null) throw new Error("The event does not exist yet.");
+        const unit = addOnUnits(addOns).find((entry) => entry.code === step.code);
+        if (!unit) throw new Error("That item is no longer here.");
+        const sent = await addAddon.write({
+          eventId: state.eventId,
+          code: unit.code,
+          priceStroops: parseStroops(unit.price),
+          quota: Number(unit.stock),
         });
         return sent.txHash;
       }

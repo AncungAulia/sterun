@@ -442,9 +442,12 @@ describe("add-ons in the document", () => {
     name: "Event jersey",
     photoUrl: "https://cdn.example.test/jersey.png",
     includedIn: ["10K"],
+    // An item with sizes has no code of its own: each size is its own row on
+    // chain, with its own price and its own stock.
+    code: "",
     sizes: [
-      { label: "S", chest: "48", length: "68" },
-      { label: "M", chest: "52", length: "70" },
+      { label: "S", chest: "48", length: "68", code: "EVENT_JERSEY_S" },
+      { label: "M", chest: "52", length: "70", code: "EVENT_JERSEY_M" },
     ],
   };
 
@@ -459,9 +462,11 @@ describe("add-ons in the document", () => {
           name: "Event jersey",
           photo_url: "https://cdn.example.test/jersey.png",
           included_in: ["10K"],
+          // The code is the join to the chain: the row that says what this
+          // size costs and how many are left lives there, not here.
           sizes: [
-            { label: "S", chest_cm: 48, length_cm: 68 },
-            { label: "M", chest_cm: 52, length_cm: 70 },
+            { label: "S", chest_cm: 48, length_cm: 68, code: "EVENT_JERSEY_S" },
+            { label: "M", chest_cm: 52, length_cm: 70, code: "EVENT_JERSEY_M" },
           ],
         },
       ]);
@@ -472,11 +477,18 @@ describe("add-ons in the document", () => {
       // exists is worth something on its own.
       const document = JSON.parse(
         buildEventDocument(
-          draft({ addOns: [{ ...jersey, sizes: [{ label: "XXL", chest: "", length: "" }] }] }),
+          draft({
+            addOns: [
+              {
+                ...jersey,
+                sizes: [{ label: "XXL", chest: "", length: "", code: "EVENT_JERSEY_XXL" }],
+              },
+            ],
+          }),
         ),
       );
 
-      expect(document.add_ons[0].sizes).toEqual([{ label: "XXL" }]);
+      expect(document.add_ons[0].sizes).toEqual([{ label: "XXL", code: "EVENT_JERSEY_XXL" }]);
     });
   });
 
@@ -512,11 +524,20 @@ describe("add-ons in the document", () => {
     it("drops a measurement that is not a number", () => {
       const document = JSON.parse(
         buildEventDocument(
-          draft({ addOns: [{ ...jersey, sizes: [{ label: "M", chest: "wide", length: "70" }] }] }),
+          draft({
+            addOns: [
+              {
+                ...jersey,
+                sizes: [{ label: "M", chest: "wide", length: "70", code: "EVENT_JERSEY_M" }],
+              },
+            ],
+          }),
         ),
       );
 
-      expect(document.add_ons[0].sizes).toEqual([{ label: "M", length_cm: 70 }]);
+      expect(document.add_ons[0].sizes).toEqual([
+        { label: "M", length_cm: 70, code: "EVENT_JERSEY_M" },
+      ]);
     });
   });
 });

@@ -46,78 +46,27 @@ import { Label } from "@/components/ui/label";
 
 import type { PlannedCategory } from "./StepCategoryPlan";
 
-/** One row of a size chart, in centimetres as the organiser typed them. */
-export interface AddOnSize {
-  /** "S", "M", "XXL". Free text, because vendors label their own way. */
-  label: string;
-  chest: string;
-  length: string;
-}
+import {
+  ADD_ON_PRESETS,
+  DEFAULT_SIZES,
+  EMPTY_ADD_ON,
+  addOnProblem,
+  addOnUnits,
+  duplicateAddOnCode,
+  type AddOnSize,
+  type PlannedAddOn,
+} from "../addons";
 
-export interface PlannedAddOn {
-  name: string;
-  /** A url from the file store, or empty. */
-  photoUrl: string;
-  /** Whether runners have to pick a size. A tumbler does not. */
-  sized: boolean;
-  sizes: AddOnSize[];
-  /** Distance codes that include this. Empty means nobody gets it. */
-  includedIn: string[];
-}
-
-export const EMPTY_ADD_ON: PlannedAddOn = {
-  name: "",
-  photoUrl: "",
-  sized: false,
-  sizes: [],
-  includedIn: [],
-};
-
-/**
- * What Indonesian races actually hand out, so the list is a shortcut rather
- * than a guess: jersey, bib, medal and a goodie bag are the standard pack, and
- * premium packs add a cap, a soft flask, a running belt, socks and a drawstring
- * bag. The international registration platforms sell much the same list, plus
- * parking and transport.
- *
- * The bib is deliberately absent: everybody gets one, it is not a choice, and a
- * row for it would only be noise. The field takes free text anyway, so this
- * list never has to be complete.
- */
-export const ADD_ON_PRESETS: { name: string; sized: boolean }[] = [
-  { name: "Event jersey", sized: true },
-  { name: "Finisher tee", sized: true },
-  { name: "Jacket", sized: true },
-  { name: "Socks", sized: true },
-  { name: "Cap", sized: false },
-  { name: "Tumbler", sized: false },
-  { name: "Soft flask", sized: false },
-  { name: "Running belt", sized: false },
-  { name: "Drawstring bag", sized: false },
-  { name: "Goodie bag", sized: false },
-  { name: "Finisher medal", sized: false },
-  { name: "Printed certificate", sized: false },
-  { name: "Parking pass", sized: false },
-  { name: "Shuttle bus seat", sized: false },
-];
-
-/** The sizes a race orders by default. A starting point, all of it editable. */
-const DEFAULT_SIZES = ["S", "M", "L", "XL"];
-
-/**
- * What is wrong with this row, said before a signature is spent rather than
- * after a document is frozen with it.
- */
-export function addOnProblem(addOn: PlannedAddOn): string | null {
-  if (!addOn.name.trim()) return "Give this one a name, or remove it.";
-  if (addOn.includedIn.length === 0) {
-    return "Tick at least one distance, otherwise nobody ever receives this.";
-  }
-  if (addOn.sized && addOn.sizes.every((size) => !size.label.trim())) {
-    return "Name at least one size, so runners know what they can pick.";
-  }
-  return null;
-}
+export {
+  ADD_ON_PRESETS,
+  EMPTY_ADD_ON,
+  addOnCode,
+  addOnProblem,
+  addOnUnits,
+  duplicateAddOnCode,
+  type AddOnSize,
+  type PlannedAddOn,
+} from "../addons";
 
 interface StepAddOnsProps {
   addOns: PlannedAddOn[];
@@ -156,20 +105,22 @@ export function StepAddOns({
     });
   }
 
+  const clash = duplicateAddOnCode(addOns);
+
   return (
     <div className="flex flex-col gap-8">
       <div>
         <div className="flex items-center gap-2">
           <h2 className="heading-strong text-lg text-foreground">What runners get</h2>
           <Help label="what runners get">
-            These are not sold separately. Each one belongs to the distances you tick, and its cost
-            is already inside that distance&apos;s entry fee. To charge more for a jersey, make a
-            second distance at a higher price and tick only that one.
+            Two lists, because they are two different things to a runner: what the entry fee
+            already covers, and what costs more on top. Both are held on chain with their own
+            stock, so a size that is gone is gone, and neither can be quietly restocked later.
           </Help>
         </div>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          The jersey, the medal, whatever is in the race pack. Leave this empty if there is
-          nothing to show.
+          The jersey, the medal, whatever is in the race pack, and anything sold on top of the
+          entry. Leave both empty if there is nothing to show.
         </p>
       </div>
 
@@ -179,7 +130,38 @@ export function StepAddOns({
         </p>
       ) : null}
 
-      {addOns.map((addOn, index) => {
+      {clash ? (
+        <p role="alert" className="text-base text-danger">
+          Two of these would be stored under the same code, {clash}. Rename one, otherwise the
+          second reads as more stock of the first.
+        </p>
+      ) : null}
+
+      {(
+        [
+          {
+            kind: "included" as const,
+            title: "Comes with the ticket",
+            note: "Already covered by the entry fee. It still needs a number, because the contract will not take a stock of zero.",
+            add: "Add something included",
+          },
+          {
+            kind: "extra" as const,
+            title: "Sold on top",
+            note: "Bought during registration, charged in the same transaction as the entry. A runner who does not want it does not pay for it.",
+            add: "Add something to sell",
+          },
+        ]
+      ).map((section) => (
+        <section key={section.kind} className="flex flex-col gap-5">
+          <div>
+            <h3 className="heading text-base text-foreground">{section.title}</h3>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{section.note}</p>
+          </div>
+
+          {addOns.map((addOn, index) => ({ addOn, index }))
+            .filter((entry) => entry.addOn.kind === section.kind)
+            .map(({ addOn, index }) => {
         const problem = showProblems ? addOnProblem(addOn) : null;
         return (
           <div key={index} className="flex flex-col gap-5 rounded-lg border border-border p-5">
@@ -223,6 +205,44 @@ export function StepAddOns({
               help="For a jersey this is the thing people decide on. A race with the shirt on the page reads as a race that has actually made the shirt."
             />
 
+            {addOn.kind === "extra" ? (
+              <div className="flex flex-col gap-2">
+                <LabelRow
+                  htmlFor={`addon-price-${index}`}
+                  label="Price in sUSD"
+                  required
+                  help="Charged in the same transaction as the entry fee, in one transfer, so a runner cannot end up having paid for the shirt but not the race."
+                />
+                <Input
+                  id={`addon-price-${index}`}
+                  inputMode="decimal"
+                  value={addOn.price}
+                  onChange={(e) => set(index, { price: e.target.value })}
+                  placeholder="30"
+                  className="numeric w-40"
+                />
+              </div>
+            ) : null}
+
+            {addOn.sized ? null : (
+              <div className="flex flex-col gap-2">
+                <LabelRow
+                  htmlFor={`addon-stock-${index}`}
+                  label="How many exist"
+                  required
+                  help="Held on chain. Once they are gone the contract refuses the next entry that asks for one, which is the only version of sold out nobody has to police by hand."
+                />
+                <Input
+                  id={`addon-stock-${index}`}
+                  inputMode="numeric"
+                  value={addOn.stock}
+                  onChange={(e) => set(index, { stock: e.target.value })}
+                  placeholder="500"
+                  className="numeric w-40"
+                />
+              </div>
+            )}
+
             {/*
               Two questions, and they were being read as one. A tick list of
               distances followed immediately by a lone tick box put "Runners
@@ -233,11 +253,27 @@ export function StepAddOns({
             */}
             <fieldset className="flex flex-col gap-3">
               <legend className="sr-only">Included in</legend>
+              {/*
+                The wording follows the list, because the same tick means two
+                different things: for something included it says who receives
+                it, and for something sold it says who is allowed to buy it.
+              */}
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Which distances include it</p>
-                <Help label="which distances include it">
-                  The entry fee for a ticked distance already covers this. The quota you set on
-                  that distance is therefore how many of these you need to have made.
+                <p className="text-sm font-medium text-foreground">
+                  {addOn.kind === "included"
+                    ? "Which distances include it"
+                    : "Which distances can buy it"}
+                </p>
+                <Help
+                  label={
+                    addOn.kind === "included"
+                      ? "which distances include it"
+                      : "which distances can buy it"
+                  }
+                >
+                  {addOn.kind === "included"
+                    ? "The entry fee for a ticked distance already covers this, and the stock you set is how many you need to have made."
+                    : "Published as who this is offered to. The contract does not hold the link, so it cannot stop a runner on another distance from buying one; what it does hold is the stock."}
                 </Help>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -290,6 +326,22 @@ export function StepAddOns({
               ) : null}
             </div>
 
+            {/*
+              Shown rather than hidden. Nobody typed these and they are on
+              chain forever, so an organiser gets to see what their item is
+              about to be called before it is.
+            */}
+            {addOnUnits([addOn]).length > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                On chain as{" "}
+                <span className="numeric">
+                  {addOnUnits([addOn])
+                    .map((unit) => unit.code)
+                    .join(", ")}
+                </span>
+              </p>
+            ) : null}
+
             {problem ? (
               <p role="alert" className="text-sm text-danger">
                 {problem}
@@ -299,12 +351,17 @@ export function StepAddOns({
         );
       })}
 
-      <div>
-        <Button variant="secondary" onClick={() => onChange([...addOns, { ...EMPTY_ADD_ON }])}>
-          <PlusIcon aria-hidden="true" className="size-4" />
-          Add an item
-        </Button>
-      </div>
+          <div>
+            <Button
+              variant="secondary"
+              onClick={() => onChange([...addOns, { ...EMPTY_ADD_ON, kind: section.kind }])}
+            >
+              <PlusIcon aria-hidden="true" className="size-4" />
+              {section.add}
+            </Button>
+          </div>
+        </section>
+      ))}
 
     </div>
   );
@@ -341,10 +398,17 @@ function SizeChart({
 
       {/* Fixed columns: these are two digit numbers, and inputs stretched to the
           page width read as though a sentence is expected. */}
-      <div className="grid w-fit grid-cols-[5rem_7rem_7rem_auto] items-end gap-3">
+      <div className="grid w-fit grid-cols-[5rem_7rem_7rem_7rem_auto] items-end gap-3">
         <span className="text-sm text-muted-foreground">Size</span>
         <span className="text-sm text-muted-foreground">Chest (cm)</span>
         <span className="text-sm text-muted-foreground">Length (cm)</span>
+        {/*
+          The one column here that is not a measurement. It is what makes a
+          sold-out size real: the contract holds a quota per add-on, and each
+          size is its own add-on, so this number is the stock the chain will
+          refuse to sell past.
+        */}
+        <span className="text-sm text-muted-foreground">How many</span>
         <span />
 
         {sizes.map((size, row) => (
@@ -363,7 +427,7 @@ function SizeChart({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onChange([...sizes, { label: "", chest: "", length: "" }])}
+          onClick={() => onChange([...sizes, { label: "", chest: "", length: "", stock: "" }])}
         >
           <PlusIcon aria-hidden="true" className="size-4" />
           Add a size
@@ -415,6 +479,14 @@ function SizeRow({
         placeholder="70"
         className="numeric"
       />
+      <Input
+        aria-label={`Size ${row + 1} stock`}
+        inputMode="numeric"
+        value={size.stock}
+        onChange={(e) => onChange({ stock: e.target.value })}
+        placeholder="200"
+        className="numeric"
+      />
       <Button variant="ghost" size="sm" aria-label={`Remove size ${row + 1}`} onClick={onRemove}>
         <Trash2Icon aria-hidden="true" className="size-4" />
       </Button>
@@ -423,4 +495,4 @@ function SizeRow({
 }
 
 const defaultSizes = (): AddOnSize[] =>
-  DEFAULT_SIZES.map((label) => ({ label, chest: "", length: "" }));
+  DEFAULT_SIZES.map((label) => ({ label, chest: "", length: "", stock: "" }));

@@ -54,7 +54,13 @@ import {
 } from "./component/StepCategoryPlan";
 import { findNameClash } from "@/lib/event-names";
 
-import { StepAddOns, addOnProblem, type PlannedAddOn } from "./component/StepAddOns";
+import {
+  StepAddOns,
+  addOnCode,
+  addOnProblem,
+  duplicateAddOnCode,
+  type PlannedAddOn,
+} from "./component/StepAddOns";
 import { StepDone } from "./component/StepDone";
 import { StepTerms } from "./component/StepTerms";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
@@ -175,7 +181,12 @@ function Wizard() {
   }
 
   function continueFromAddOns() {
-    if (addOns.every((addOn) => addOnProblem(addOn) === null)) {
+    // The clash is checked here as well as drawn in the step, because two
+    // items under one code would both be written and the second would read as
+    // more stock of the first, for ever.
+    const ok =
+      addOns.every((addOn) => addOnProblem(addOn) === null) && duplicateAddOnCode(addOns) === null;
+    if (ok) {
       setStep("review");
       return;
     }
@@ -234,7 +245,15 @@ function Wizard() {
               name: addOn.name,
               photoUrl: addOn.photoUrl,
               includedIn: addOn.includedIn,
-              sizes: addOn.sized ? addOn.sizes : [],
+              // Derived in one place (`addOnCode`) so the document and the
+              // transaction can never name the same item differently.
+              code: addOn.sized ? "" : addOnCode(addOn.name),
+              sizes: addOn.sized
+                ? addOn.sizes.map((size) => ({
+                    ...size,
+                    code: size.label.trim() ? addOnCode(addOn.name, size.label) : "",
+                  }))
+                : [],
             })),
             categories: plan.map((category) => ({
               code: category.code,
@@ -254,7 +273,14 @@ function Wizard() {
     staleTime: Number.POSITIVE_INFINITY,
   });
 
-  const run = useEventRun({ name: details.name, plan, startsAt, documentText, hash });
+  const run = useEventRun({
+    name: details.name,
+    plan,
+    addOns: liveAddOns,
+    startsAt,
+    documentText,
+    hash,
+  });
 
   const existingNames = useExistingEventNames();
   const nameClash = findNameClash(details.name, existingNames);

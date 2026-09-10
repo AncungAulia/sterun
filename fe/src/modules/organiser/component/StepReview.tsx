@@ -264,15 +264,36 @@ function Pack({ addOns }: { addOns: PlannedAddOn[] }) {
               />
             ) : null}
             <div>
-              <p className="text-base text-foreground">{addOn.name}</p>
-              <p className="text-sm text-muted-foreground">
-                Included in {addOn.includedIn.join(", ") || "no distance yet"}
+              <p className="text-base text-foreground">
+                {addOn.name}
+                {addOn.kind === "extra" ? (
+                  <span className="numeric text-foreground">
+                    {" "}
+                    &middot; {formatPrice(parseStroops(addOn.price))}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground"> &middot; with the ticket</span>
+                )}
               </p>
+              <p className="text-sm text-muted-foreground">
+                Offered to {addOn.includedIn.join(", ") || "no distance yet"}
+              </p>
+              {/*
+                Stock per size rather than a total, because that is what the
+                chain will hold and what a sold-out size will mean. Read back
+                here because after this screen it cannot be raised.
+              */}
               {sizes.length > 0 ? (
                 <p className="numeric text-sm text-muted-foreground">
-                  Sizes {sizes.map((size) => size.label.trim()).join(", ")}
+                  {sizes
+                    .map((size) => `${size.label.trim()} × ${size.stock || "0"}`)
+                    .join(", ")}
                 </p>
-              ) : null}
+              ) : (
+                <p className="numeric text-sm text-muted-foreground">
+                  {addOn.stock || "0"} available
+                </p>
+              )}
             </div>
           </div>
         );

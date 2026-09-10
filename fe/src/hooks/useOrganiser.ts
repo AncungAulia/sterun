@@ -49,6 +49,22 @@ export function useAddCategory() {
   );
 }
 
+export interface AddAddonInput {
+  eventId: number;
+  /** Soroban `Symbol`, derived from the item and its size (`EVENT_JERSEY_M`). */
+  code: string;
+  /** Price in stroops. `0n` for something the entry fee already covers. */
+  priceStroops: bigint;
+  /** Units. The contract refuses zero (`InvalidQuota`). */
+  quota: number;
+}
+
+export function useAddAddon() {
+  return useChainWrite<AddAddonInput, number>((input, actor) =>
+    readClient.addAddon(input, actor),
+  );
+}
+
 export interface SetEventStatusInput {
   eventId: number;
   status: "Draft" | "Open" | "Closed" | "Completed";
