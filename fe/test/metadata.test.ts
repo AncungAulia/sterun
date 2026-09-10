@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchEventMetadata, gunStartConflict } from "@/lib/metadata";
+import { buildEventDocument } from "@/lib/event-document";
+import { fetchEventMetadata, gunStartConflict, readEventDocument } from "@/lib/metadata";
 
 const DOCUMENT = {
   poster_url: "https://cdn.example.test/poster.png",
@@ -224,6 +225,94 @@ describe("reading add-ons back", () => {
       // known-good data. It still must not throw on a document written by some
       // other client that guessed the shape.
       expect(await readAddOns("jersey")).toBeUndefined();
+    });
+  });
+});
+
+describe("reading the timeline's details back", () => {
+  /**
+   * Written by the wizard's own writer rather than typed here, so a key the
+   * writer spells one way and the reader another fails this test instead of
+   * quietly leaving a hole in the timeline.
+   */
+  function written() {
+    return buildEventDocument({
+      startsAt: 1_795_824_000n,
+      raceDate: "2026-11-21",
+      categories: [
+        { code: "10K", startTime: "05:00", cutOff: "07:00" },
+        { code: "5K", startTime: "05:15", cutOff: "" },
+      ],
+      description: "",
+      locationName: "Lapangan GSP",
+      city: "",
+      province: "",
+      country: "",
+      countryCode: "",
+      locationLink: "https://www.google.com/maps/@-7.771,110.377,17z",
+      posterUrl: "",
+      waiverUrl: "",
+      instagram: "",
+      website: "",
+      registrationOpens: "",
+      registrationCloses: "",
+      racepackFrom: "2026-11-18",
+      racepackTo: "2026-11-20",
+      racepackOpens: "09:00",
+      racepackCloses: "21:00",
+      racepackVenue: "GOR UGM, Hall A",
+      racepackVenueLink: "https://www.google.com/maps/@-7.77,110.37,17z",
+      addOns: [],
+      terms: "",
+    });
+  }
+
+  describe("positive", () => {
+    it("reads when each distance starts, in the order they were planned", () => {
+      const document = readEventDocument(written());
+      if (typeof document === "string") throw new Error(document);
+
+      expect(document.categories?.map((category) => category.code)).toEqual(["10K", "5K"]);
+      expect(document.categories?.[1]?.startTime).toMatch(/^2026-11-2\dT\d{2}:15:00\.000Z$/);
+      expect(document.categories?.[0]?.cutOff).toBeDefined();
+    });
+
+    it("reads where the race pack desk is, pin and hours included", () => {
+      const document = readEventDocument(written());
+      if (typeof document === "string") throw new Error(document);
+
+      expect(document.schedule?.find((phase) => phase.phase === "racepack")).toMatchObject({
+        venue: "GOR UGM, Hall A",
+        venueLat: -7.77,
+        venueLng: 110.37,
+        dailyOpens: "09:00",
+        dailyCloses: "21:00",
+      });
+    });
+  });
+
+  describe("negative", () => {
+    it("drops a distance with no code, since nothing on chain could be joined to it", () => {
+      const document = readEventDocument(
+        JSON.stringify({ categories: [{ start_time: "2026-11-21T05:00:00Z" }, { code: "5K" }] }),
+      );
+
+      expect(document).toEqual({ categories: [{ code: "5K" }] });
+    });
+
+    it("keeps a venue whose link had no pin, without inventing coordinates", () => {
+      const document = readEventDocument(
+        JSON.stringify({ schedule: [{ phase: "racepack", venue: "Hall A", venue_lat: "-7" }] }),
+      );
+
+      expect(document).toEqual({ schedule: [{ phase: "racepack", venue: "Hall A" }] });
+    });
+  });
+
+  describe("edge", () => {
+    it("tells text that is not JSON apart from JSON that is not a document", () => {
+      expect(readEventDocument("{nope")).toBe("not-json");
+      expect(readEventDocument("[]")).toBe("not-object");
     });
   });
 });

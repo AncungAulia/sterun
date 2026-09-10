@@ -152,7 +152,15 @@ export function EventView({
         </TabsContent>
 
         <TabsContent value="timeline">
-          <TabTimeline document={document ?? {}} startsAt={event.startsAt} />
+          <TabTimeline
+            document={document ?? {}}
+            startsAt={event.startsAt}
+            categoryCodes={categories.map((category) => category.code)}
+            canEnter={
+              event.status === "Open" && categories.some((category) => category.slotsLeft > 0)
+            }
+            onEnter={() => setTab("categories")}
+          />
         </TabsContent>
 
         <TabsContent value="categories">

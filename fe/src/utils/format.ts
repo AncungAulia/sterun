@@ -82,6 +82,22 @@ export function formatEventDateTime(startsAt: bigint, timeZone?: string): string
 }
 
 /**
+ * Just the clock time of an instant, `05:30`, in the same timezone the dates
+ * beside it are shown in. For a line that already sits under its own date,
+ * where repeating the day and the zone would only be noise.
+ */
+export function formatEventTime(startsAt: bigint, timeZone?: string): string {
+  const date = toDate(startsAt);
+  if (!date) return "Unknown time";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/**
  * A price typed by a person, as the stroops the contract takes.
  *
  * Parsed digit by digit rather than through `Number`. An entry fee is money:

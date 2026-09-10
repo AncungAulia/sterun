@@ -52,6 +52,19 @@ export interface EventMetadata {
    * that were published, not the ones being served today.
    */
   terms?: string;
+  /**
+   * When each distance goes, which the contract has no field for. A 5K and a
+   * half marathon on one morning do not start together, and `starts_at` on
+   * chain is only the first of them.
+   */
+  categories?: MetadataCategory[];
+}
+
+export interface MetadataCategory {
+  code: string;
+  /** ISO 8601. */
+  startTime?: string;
+  cutOff?: string;
 }
 
 export interface MetadataAddOn {
@@ -77,6 +90,9 @@ export interface MetadataPhase {
   gunStart?: string;
   cutOff?: string;
   venue?: string;
+  /** Where that venue is, when the organiser pasted a link with a pin in it. */
+  venueLat?: number;
+  venueLng?: number;
   /** `HH:mm` opening hours that apply to each day of the phase. */
   dailyOpens?: string;
   dailyCloses?: string;
@@ -182,6 +198,7 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
     ? raw.schedule.filter(isRecord).map(parsePhase)
     : undefined;
   const addOns = parseAddOns(raw.add_ons);
+  const categories = parseCategories(raw.categories);
 
   return {
     ...str(raw.poster_url, "posterUrl"),
@@ -195,7 +212,18 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
       ? { gunStart: schedule.find((phase) => phase.gunStart)!.gunStart }
       : {}),
     ...(addOns && addOns.length > 0 ? { addOns } : {}),
+    ...(categories.length > 0 ? { categories } : {}),
   };
+}
+
+/** A distance is only worth keeping with a code, since the code is the join to the chain. */
+function parseCategories(raw: unknown): MetadataCategory[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isRecord).flatMap((entry): MetadataCategory[] => {
+    const code = typeof entry.code === "string" ? entry.code.trim() : "";
+    if (!code) return [];
+    return [{ code, ...str(entry.start_time, "startTime"), ...str(entry.cut_off, "cutOff") }];
+  });
 }
 
 /**
@@ -246,6 +274,8 @@ function parsePhase(raw: Record<string, unknown>): MetadataPhase {
     ...str(raw.gun_start, "gunStart"),
     ...str(raw.cut_off, "cutOff"),
     ...str(raw.venue, "venue"),
+    ...(typeof raw.venue_lat === "number" ? { venueLat: raw.venue_lat } : {}),
+    ...(typeof raw.venue_lng === "number" ? { venueLng: raw.venue_lng } : {}),
     ...str(raw.daily_opens, "dailyOpens"),
     ...str(raw.daily_closes, "dailyCloses"),
   };
