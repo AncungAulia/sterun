@@ -25,6 +25,14 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import {
+  CalendarClockIcon,
+  InfoIcon,
+  RouteIcon,
+  ScrollTextIcon,
+  ShieldCheckIcon,
+  ShirtIcon,
+} from "lucide-react";
 
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { ChainSource } from "@/components/layouts/ChainSource";
@@ -92,21 +100,29 @@ export function EventDetail({ eventId }: { eventId: number }) {
         All races
       </Link>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+      {/*
+        Both columns end on the same line. `min-h` rather than a fixed height
+        so a card with eight distances in it can still push the row taller;
+        the poster then letterboxes inside its frame rather than the two
+        columns drifting apart.
+      */}
+      <div className="grid gap-6 lg:min-h-[26rem] lg:grid-cols-[1fr_22rem]">
         {document?.posterUrl ? (
-          <Image
-            src={document.posterUrl}
-            alt=""
-            width={1200}
-            height={900}
-            unoptimized
-            /* Contained, not cover: the poster is whatever the organiser had,
-               at whatever shape it was, and cropping a portrait one to fill a
-               landscape box cuts the date off the bottom of half of them. */
-            className="max-h-[26rem] w-full rounded-lg border border-n-200 object-contain"
-          />
+          <div className="flex h-full items-center justify-center overflow-hidden rounded-lg border border-n-200 bg-n-100">
+            <Image
+              src={document.posterUrl}
+              alt=""
+              width={1200}
+              height={900}
+              unoptimized
+              /* Contained, not cover: the poster is whatever the organiser had,
+                 at whatever shape it was, and cropping a portrait one to fill a
+                 landscape box cuts the date off the bottom of half of them. */
+              className="max-h-[26rem] w-full object-contain"
+            />
+          </div>
         ) : (
-          <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-n-300">
+          <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed border-n-300">
             <p className="text-sm text-n-500">This race has not published a poster.</p>
           </div>
         )}
@@ -115,14 +131,37 @@ export function EventDetail({ eventId }: { eventId: number }) {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="terms">Terms</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="categories">Distances</TabsTrigger>
-          <TabsTrigger value="add-ons">Race pack</TabsTrigger>
-          <TabsTrigger value="proofs">Proofs</TabsTrigger>
-        </TabsList>
+        {/* The strip divides the full width evenly, and on a phone it scrolls
+            rather than wrapping: six tabs on two rows would put an active
+            underline in the middle of the block. */}
+        <div className="overflow-x-auto">
+          <TabsList>
+            <TabsTrigger value="details">
+              <InfoIcon aria-hidden="true" />
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="terms">
+              <ScrollTextIcon aria-hidden="true" />
+              Terms
+            </TabsTrigger>
+            <TabsTrigger value="timeline">
+              <CalendarClockIcon aria-hidden="true" />
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger value="categories">
+              <RouteIcon aria-hidden="true" />
+              Distances
+            </TabsTrigger>
+            <TabsTrigger value="add-ons">
+              <ShirtIcon aria-hidden="true" />
+              Race pack
+            </TabsTrigger>
+            <TabsTrigger value="proofs">
+              <ShieldCheckIcon aria-hidden="true" />
+              Proofs
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="details">
           <TabDetails

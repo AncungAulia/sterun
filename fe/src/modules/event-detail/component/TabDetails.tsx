@@ -6,15 +6,44 @@
  * frozen. What the hash buys is not that the description is true, but that it
  * is the same description the organiser committed to before anybody paid.
  */
+import {
+  AtSignIcon,
+  CalendarDaysIcon,
+  GlobeIcon,
+  MapPinIcon,
+  SignatureIcon,
+  WalletIcon,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
 import { EXPLORER_BASE } from "@/lib/env";
 import { formatEventDateTime, shortAddress } from "@/utils/format";
 import { mapsLink } from "@/utils/geo";
 import type { EventMetadata } from "@/lib/metadata";
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * One fact, with a glyph for the kind of fact it is.
+ *
+ * The icon is here to make the list scannable, not to decorate it: a runner
+ * looking for the venue finds the pin before they finish reading the labels.
+ * So it stays at `n-400`, a shade below the label it belongs to, and it never
+ * appears without that label. An icon on its own is a guess.
+ */
+function Row({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-n-200 py-3 last:border-b-0">
-      <p className="w-40 shrink-0 text-sm text-n-500">{label}</p>
+      <p className="flex w-44 shrink-0 items-center gap-2.5 text-sm text-n-500">
+        <Icon aria-hidden="true" className="size-4 shrink-0 text-n-400" />
+        {label}
+      </p>
       <div className="text-base text-foreground">{children}</div>
     </div>
   );
@@ -47,7 +76,7 @@ export function TabDetails({
       <section>
         <h2 className="heading-strong text-lg text-foreground">General information</h2>
         <div className="mt-2">
-          <Row label="Organised by">
+          <Row icon={WalletIcon} label="Organised by">
             {EXPLORER_BASE ? (
               <a
                 href={`${EXPLORER_BASE}/account/${organiser}`}
@@ -61,11 +90,11 @@ export function TabDetails({
               <span className="numeric">{shortAddress(organiser, 6, 6)}</span>
             )}
           </Row>
-          <Row label="Race day">
+          <Row icon={CalendarDaysIcon} label="Race day">
             <span className="numeric">{formatEventDateTime(startsAt)}</span>
           </Row>
           {place ? (
-            <Row label="Venue">
+            <Row icon={MapPinIcon} label="Venue">
               {place}
               {pin ? (
                 <>
@@ -83,7 +112,7 @@ export function TabDetails({
             </Row>
           ) : null}
           {document?.waiverUrl ? (
-            <Row label="Waiver">
+            <Row icon={SignatureIcon} label="Waiver">
               <a
                 href={document.waiverUrl}
                 target="_blank"
@@ -102,7 +131,7 @@ export function TabDetails({
           <h2 className="heading-strong text-lg text-foreground">Socials</h2>
           <div className="mt-2">
             {document.links.instagram ? (
-              <Row label="Instagram">
+              <Row icon={AtSignIcon} label="Instagram">
                 <a
                   href={`https://www.instagram.com/${document.links.instagram}`}
                   target="_blank"
@@ -114,7 +143,7 @@ export function TabDetails({
               </Row>
             ) : null}
             {document.links.website ? (
-              <Row label="Official website">
+              <Row icon={GlobeIcon} label="Official website">
                 <a
                   href={document.links.website}
                   target="_blank"

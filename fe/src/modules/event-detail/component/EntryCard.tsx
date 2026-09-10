@@ -59,7 +59,7 @@ export function EntryCard({
       : undefined;
 
   return (
-    <Card className="gap-5 p-6">
+    <Card className="h-full gap-5 p-6">
       <div className="flex items-start justify-between gap-3">
         <h1 className="heading-hero text-3xl text-ink">{event.name}</h1>
         <EventStatusBadge status={event.status} />
@@ -114,8 +114,11 @@ export function EntryCard({
         ) : null}
       </div>
 
+      {/* `mt-auto`: the card is as tall as the poster beside it, and the one
+          thing a runner is looking for should sit on the same line as the
+          poster's bottom edge rather than floating in the middle of it. */}
       {open ? (
-        <div>
+        <div className="mt-auto">
           <Button onClick={onEnter} disabled={left <= 0}>
             {left > 0 ? "Enter this race" : "Every distance is full"}
           </Button>
@@ -130,8 +133,8 @@ export function EntryCard({
           role={event.status === "Cancelled" ? "alert" : undefined}
           className={
             event.status === "Cancelled"
-              ? "rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-base text-danger"
-              : "text-base text-n-600"
+              ? "mt-auto rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-base text-danger"
+              : "mt-auto text-base text-n-600"
           }
         >
           {CLOSED_REASON[event.status] ?? "This race is not taking entries."}
