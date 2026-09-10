@@ -56,9 +56,10 @@ export interface EventViewProps {
    */
   proofs: ReactNode;
   /**
-   * Drawn inside the organiser's wizard. The entry links are shown, because
-   * runners will see them, but not followed: a race that does not exist cannot
-   * be entered, and leaving the wizard loses everything typed into it.
+   * Drawn inside the organiser's wizard, with no Enter button anywhere: not
+   * on the card, not on a distance, not on the timeline. A race that does not
+   * exist cannot be entered, and following a link out of the wizard loses
+   * everything typed into it.
    */
   preview?: boolean;
 }
@@ -72,6 +73,8 @@ export function EventView({
   preview = false,
 }: EventViewProps) {
   const [tab, setTab] = useState("details");
+  /** Absent in a preview, and every Enter button on the page hangs off it. */
+  const onEnter = preview ? undefined : () => setTab("categories");
 
   return (
     <>
@@ -102,7 +105,7 @@ export function EventView({
           </div>
         )}
 
-        <EntryCard event={event} categories={categories} onEnter={() => setTab("categories")} />
+        <EntryCard event={event} categories={categories} onEnter={onEnter} />
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -159,7 +162,7 @@ export function EventView({
             canEnter={
               event.status === "Open" && categories.some((category) => category.slotsLeft > 0)
             }
-            onEnter={() => setTab("categories")}
+            onEnter={onEnter}
           />
         </TabsContent>
 
@@ -167,7 +170,7 @@ export function EventView({
           <TabCategories
             categories={categories}
             openForEntry={event.status === "Open"}
-            linkEntries={!preview}
+            offerEntry={!preview}
           />
         </TabsContent>
 

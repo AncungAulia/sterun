@@ -689,16 +689,22 @@ describe("CreateEvent", () => {
       expect(screen.getByText("Two laps of the park.")).toHaveClass("whitespace-pre-line");
     });
 
-    it("draws the entry buttons without letting them leave the wizard", async () => {
-      // Following one would drop everything typed so far, for a race that
-      // cannot be entered yet.
+    it("draws no Enter button anywhere in the preview", async () => {
+      // The race cannot be entered yet, and following a link out would drop
+      // everything typed so far.
       const { user } = await renderForm();
       await reachReview(user);
+      const preview = screen.getByRole("region", { name: /preview of your event page/i });
 
-      await user.click(screen.getByRole("tab", { name: "Distances" }));
+      expect(within(preview).queryByRole("button", { name: /enter/i })).not.toBeInTheDocument();
 
-      expect(screen.getByText("Enter 10K")).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "Enter 10K" })).not.toBeInTheDocument();
+      await user.click(within(preview).getByRole("tab", { name: "Distances" }));
+      expect(within(preview).getByText("300 of 300 entries left")).toBeInTheDocument();
+      expect(within(preview).queryByText(/^Enter /)).not.toBeInTheDocument();
+
+      await user.click(within(preview).getByRole("tab", { name: "Timeline" }));
+      expect(within(preview).getByText("Race day")).toBeInTheDocument();
+      expect(within(preview).queryByRole("button", { name: /enter/i })).not.toBeInTheDocument();
     });
 
     it("still hands over the exact bytes, for anybody who wants to check them", async () => {

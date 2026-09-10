@@ -153,9 +153,10 @@ ditambahkan bukan itu:
   `modules/organiser/preview.ts` dari apa yang akan ditandatangani run. Dokumennya dibaca lewat
   `readEventDocument` (parser yang sama dengan halaman publik), jadi yang tidak dibaca halaman
   juga tidak muncul di preview. **Jangan bikin ringkasan review sendiri lagi**: versi lama begitu,
-  dan dia melenceng diam-diam (deskripsi kehilangan baris baru, halaman publik tidak). Link
-  "Enter …" di preview tidak mengarah ke mana pun (`linkEntries={false}`), karena meninggalkan
-  wizard membuang semua isian. File mentah + fingerprint pindah ke tab **Proofs** preview.
+  dan dia melenceng diam-diam (deskripsi kehilangan baris baru, halaman publik tidak). **Preview
+  tidak menggambar tombol Enter sama sekali**, baik di kartu kanan, kartu distance, maupun timeline
+  (`EventView preview` → `onEnter` kosong + `offerEntry={false}`): event-nya belum ada, dan link
+  keluar wizard membuang semua isian. File mentah + fingerprint pindah ke tab **Proofs** preview.
   Tombol **Create event** ada di kanan bawah seperti tiap step lain, dan membuka **Dialog** yang memuat **seluruh
   rangkaian**: daftar tanda tangan, centangnya, kegagalannya, dan jalan keluarnya. Mulainya tekanan
   kedua. Dialog-nya tidak bisa ditutup selama jalan, dan menutup sendiri begitu selesai.

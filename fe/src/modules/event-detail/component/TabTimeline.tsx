@@ -116,15 +116,25 @@ export function timelineMoments(document: EventMetadata, startsAt: bigint): Mome
     }
   }
 
-  // Race day comes from the chain, not the document. It is the one date the
-  // contract itself holds, so it is the one that cannot be wrong.
+  moments.sort((a, b) => Date.parse(a.iso) - Date.parse(b.iso));
+
+  /*
+    Race day comes from the chain, not the document. It is the one date the
+    contract itself holds, so it is the one that cannot be wrong.
+
+    And it goes last whatever its time says. A pack desk that stays open until
+    the evening of race day is common, and sorted strictly by the clock it
+    pushed the race itself into the middle of the list, under a moment nobody
+    at the start line cares about. Everything above race day is a step toward
+    it; the destination belongs at the bottom of the rail.
+  */
   moments.push({
     key: "race-day",
     label: "Race day",
     iso: new Date(Number(startsAt) * 1000).toISOString(),
   });
 
-  return moments.sort((a, b) => a.iso.localeCompare(b.iso));
+  return moments;
 }
 
 /** What a moment says underneath its label, and where it can send a runner. */
@@ -177,6 +187,8 @@ export function momentDetail(
       const lines: string[] = [];
       const starts = (document.categories ?? [])
         .filter((category) => category.startTime && !Number.isNaN(Date.parse(category.startTime)))
+        // First wave first, which is also the time printed beside it.
+        .sort((a, b) => Date.parse(a.startTime!) - Date.parse(b.startTime!))
         .map(
           (category) =>
             `${category.code} starts ${formatEventTime(BigInt(Math.floor(Date.parse(category.startTime!) / 1000)))}`,

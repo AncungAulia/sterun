@@ -23,22 +23,20 @@ import { NonRefundableNotice } from "@/components/elements/NonRefundableNotice";
 import { formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterun/sdk";
 
-/** The entry button's look, shared by the link and by its preview stand-in. */
-const ENTER = "inline-flex h-10 items-center justify-center rounded-md bg-teal-500 px-4 text-base font-medium text-paper";
-
 export function TabCategories({
   categories,
   openForEntry,
-  linkEntries = true,
+  offerEntry = true,
 }: {
   categories: SterunCategory[];
   openForEntry: boolean;
   /**
-   * False in the organiser's review. The button is drawn, because it is what
-   * runners will press, but it goes nowhere: the event has no id yet, and
-   * following it would throw away the wizard the organiser is halfway through.
+   * False in the organiser's review, where no Enter button is drawn. The
+   * event has no id yet to link to, following one would throw away the wizard
+   * the organiser is halfway through, and a dead button invites the press it
+   * then ignores.
    */
-  linkEntries?: boolean;
+  offerEntry?: boolean;
 }) {
   if (categories.length === 0) {
     return (
@@ -79,19 +77,13 @@ export function TabCategories({
               <p className="numeric heading-strong text-2xl text-ink">
                 {formatPrice(category.priceStroops)}
               </p>
-              {openForEntry && !full ? (
-                linkEntries ? (
-                  <Link
-                    href={`/events/${category.eventId}/enter?category=${category.categoryId}`}
-                    className={`${ENTER} transition-colors hover:bg-teal-600 active:bg-teal-700`}
-                  >
-                    Enter {category.code}
-                  </Link>
-                ) : (
-                  <span aria-disabled="true" className={ENTER}>
-                    Enter {category.code}
-                  </span>
-                )
+              {openForEntry && !full && offerEntry ? (
+                <Link
+                  href={`/events/${category.eventId}/enter?category=${category.categoryId}`}
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-teal-500 px-4 text-base font-medium text-paper transition-colors hover:bg-teal-600 active:bg-teal-700"
+                >
+                  Enter {category.code}
+                </Link>
               ) : null}
             </div>
           </Card>

@@ -46,7 +46,12 @@ export function EntryCard({
 }: {
   event: SterunEvent;
   categories: SterunCategory[];
-  onEnter: () => void;
+  /**
+   * Left out in the organiser's preview, which draws no Enter button at all.
+   * A button there would be one the organiser presses to see what happens,
+   * on a race that does not exist yet.
+   */
+  onEnter?: () => void;
 }) {
   const open = event.status === "Open";
   const left = categories.reduce((sum, category) => sum + category.slotsLeft, 0);
@@ -118,11 +123,13 @@ export function EntryCard({
           thing a runner is looking for should sit on the same line as the
           poster's bottom edge rather than floating in the middle of it. */}
       {open ? (
-        <div className="mt-auto">
-          <Button onClick={onEnter} disabled={left <= 0}>
-            {left > 0 ? "Enter this race" : "Every distance is full"}
-          </Button>
-        </div>
+        onEnter ? (
+          <div className="mt-auto">
+            <Button onClick={onEnter} disabled={left <= 0}>
+              {left > 0 ? "Enter this race" : "Every distance is full"}
+            </Button>
+          </div>
+        ) : null
       ) : (
         /*
           A cancelled race is not a disabled button. It is the most important

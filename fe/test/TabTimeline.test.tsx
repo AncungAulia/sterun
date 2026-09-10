@@ -142,9 +142,45 @@ describe("TabTimeline", () => {
       const race = item("Race day");
       // 22:15Z is 05:15 in Jakarta, and the test runner's zone is not Jakarta's,
       // so the clock is matched by shape and the codes by name.
-      expect(within(race).getByText(/^5K starts \d{2}:\d{2} · 10K starts \d{2}:\d{2}$/)).toBeInTheDocument();
+      // 10K goes at 22:00Z, a quarter hour before the 5K, so it is named first.
+      expect(within(race).getByText(/^10K starts \d{2}:\d{2} · 5K starts \d{2}:\d{2}$/)).toBeInTheDocument();
       expect(within(race).getByText("Lapangan GSP")).toBeInTheDocument();
       expect(within(race).getByRole("link", { name: /open in maps/i })).toBeInTheDocument();
+    });
+
+    it("keeps race day last even when the pack desk closes later that evening", () => {
+      // Common, and sorted by the clock it put the race in the middle of the
+      // rail under a moment nobody at the start line cares about.
+      const lateDesk: EventMetadata = {
+        schedule: [
+          { phase: "racepack", startsAt: "2026-11-18T09:00:00+07:00", endsAt: "2026-11-21T21:00:00+07:00" },
+        ],
+      };
+      render(<TabTimeline document={lateDesk} startsAt={RACE_DAY} now={BEFORE_ANYTHING} />);
+
+      const labels = screen.getAllByTestId("moment-label").map((label) => label.textContent);
+      expect(labels).toEqual([
+        "Race pack collection opens",
+        "Race pack collection closes",
+        "Race day",
+      ]);
+    });
+
+    it("lists the waves in the order they go off, not the order they were typed", () => {
+      render(
+        <TabTimeline
+          document={{
+            categories: [
+              { code: "5K", startTime: "2026-11-20T22:30:00Z" },
+              { code: "10K", startTime: "2026-11-20T22:15:00Z" },
+            ],
+          }}
+          startsAt={RACE_DAY}
+          now={BEFORE_ANYTHING}
+        />,
+      );
+
+      expect(within(item("Race day")).getByText(/^10K starts .* · 5K starts /)).toBeInTheDocument();
     });
 
     it("warns that a distance can close before the registration date does", () => {
