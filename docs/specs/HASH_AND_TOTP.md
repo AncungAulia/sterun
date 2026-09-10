@@ -1,68 +1,70 @@
-# HASH & TOTP — spesifikasi byte-exact (v1.0.1)
+# HASH & TOTP — the byte-exact specification (v1.0.1)
 
-> **Status: FROZEN 2026-08-31 (STE-10, komponen C4).**
-> Ini *handoff contract* nomor 2 di `docs/SYSTEM_DESIGN.md` §9: definisi byte-exact
-> `participant_hash` dan derivasi kode check-in, supaya **backend (James)**, **QR pass** dan
-> **scanner PWA (Ancung)** menghitung nilai yang **identik** tanpa perlu saling membaca kode.
+> **Status: FROZEN 2026-08-31 (STE-10, component C4).**
+> This is handoff contract number 2 in `docs/SYSTEM_DESIGN.md` §9: the byte-exact definitions of
+> `participant_hash` and of check-in code derivation, so that the **backend (James)**, the **QR
+> pass** and the **scanner PWA (Ancung)** compute **identical** values without having to read each
+> other's code.
 >
-> Aturan perubahan ada di §8 dan `docs/specs/CHANGELOG.md`. Interface kontraknya ada di
+> The rules for changing it are in §8 and `docs/specs/CHANGELOG.md`. The contract interface is in
 > `docs/specs/INTERFACE.md`.
 
-Yang menemani dokumen ini:
+What accompanies this document:
 
-| File | Isi |
+| File | Contents |
 | --- | --- |
-| `docs/specs/vectors/participant_hash.json` | 5 vector + 4 kasus tolak, lengkap dengan preimage hex |
-| `docs/specs/vectors/totp.json` | 4 vector kode + 8 kasus verifikasi |
-| `docs/specs/reference/node/verify-vectors.mjs` | implementasi referensi #1 (Node, **nol dependency npm**) |
-| `docs/specs/reference/rust/` | implementasi referensi #2 (Rust, crate berdiri sendiri) |
-| `docs/specs/verify.sh` | menjalankan keduanya; gagal keras kalau salah satu tidak setuju |
+| `docs/specs/vectors/participant_hash.json` | 5 vectors + 4 rejection cases, with their preimages in hex |
+| `docs/specs/vectors/totp.json` | 4 code vectors + 8 verification cases |
+| `docs/specs/reference/node/verify-vectors.mjs` | reference implementation #1 (Node, **zero npm dependencies**) |
+| `docs/specs/reference/rust/` | reference implementation #2 (Rust, a standalone crate) |
+| `docs/specs/verify.sh` | runs both; fails loudly if either disagrees |
 
-**Kalau dokumen ini dan implementasi referensi berbeda, yang menang adalah dokumen + vector.**
-Semua angka di dokumen ini benar-benar dihitung, bukan diketik dari ingatan.
+**If this document and a reference implementation disagree, the document + vectors win.** Every
+number in this document was genuinely computed, not typed from memory.
 
 ---
 
-## 1. Ringkasan satu layar
+## 1. The whole thing on one screen
 
 ```
 participant_hash = SHA-256(
       utf8(norm_name(name))                   || 0x00
    || utf8(norm_id(national_id))              || 0x00
    || utf8(norm_contact(emergency_contact))   || 0x00
-   || salt                                              // 32 byte MENTAH, bukan teks hex
-)                                                       // -> 32 byte = BytesN<32> untuk RaceRecord.enter
+   || salt                                              // 32 RAW bytes, not hex text
+)                                                       // -> 32 bytes = BytesN<32> for RaceRecord.enter
 
 time_step     = floor(unix_seconds / 30)                        // u64
-mac           = HMAC-SHA-256(key = totp_secret (32 byte mentah),
-                             msg = time_step sebagai 8 byte big-endian)
+mac           = HMAC-SHA-256(key = totp_secret (32 raw bytes),
+                             msg = time_step as 8 big-endian bytes)
 offset        = mac[31] & 0x0F
 bin           = ((mac[offset] & 0x7F) << 24) | (mac[offset+1] << 16)
               | (mac[offset+2] << 8) | mac[offset+3]
-code          = format 6 digit desimal, PAD KIRI '0', dari (bin % 1_000_000)
+code          = 6 decimal digits, LEFT-PADDED with '0', from (bin % 1_000_000)
 
-qr            = {"t":<token_id>,"s":<time_step>,"c":"<code>"}   // persis, tanpa spasi
+qr            = {"t":<token_id>,"s":<time_step>,"c":"<code>"}   // exactly this, no spaces
 ```
 
-Aturan rendering yang berlaku di seluruh sistem:
+Rendering rules that hold across the whole system:
 
-- **Hex selalu huruf kecil, tanpa prefix `0x`.** Salt dan `totp_secret` muncul sebagai 64 karakter
-  hex di JSON/API; yang masuk ke hash/HMAC adalah **byte mentahnya**, bukan teks hex-nya.
-- **`code` selalu string 6 karakter.** Tidak pernah integer. Lihat §4.4.
+- **Hex is always lowercase, with no `0x` prefix.** Salts and `totp_secret`s appear as 64 hex
+  characters in JSON and the API; what goes into the hash or the HMAC is their **raw bytes**, not
+  that hex text.
+- **`code` is always a 6-character string.** Never an integer. See §4.4.
 
 ---
 
-## 2. Normalisasi input
+## 2. Input normalisation
 
-Formulir pendaftaran menghasilkan teks manusia: spasi ganda, tab hasil copy-paste, NIK ditulis
-pakai strip, nomor HP ditulis pakai kurung. Dua orang yang sama bisa mengetik namanya dengan dua
-urutan code point Unicode yang berbeda tapi terlihat identik. Kalau kita hash mentah-mentah,
-recompute di kemudian hari (petugas medis, asuransi, auditor) akan gagal padahal datanya benar.
-Jadi setiap field dinormalisasi dulu, secara deterministik.
+A registration form produces human text: doubled spaces, tabs from copy-paste, national IDs written
+with hyphens, phone numbers written with brackets. Two spellings of the same person's name can use
+different Unicode code point sequences and look identical. If we hashed that raw, recomputing later
+(a medic, an insurer, an auditor) would fail even though the data is correct. So every field is
+normalised first, deterministically.
 
-### 2.1 Definisi whitespace (baca ini, jangan dilewat)
+### 2.1 The definition of whitespace (read this, do not skip)
 
-Spesifikasi ini memakai **daftar eksplisit** 25 code point Unicode `White_Space=Yes`:
+This specification uses an **explicit list** of the 25 Unicode code points with `White_Space=Yes`:
 
 ```
 U+0009 U+000A U+000B U+000C U+000D   (TAB LF VT FF CR)
@@ -77,157 +79,156 @@ U+205F                                (MEDIUM MATHEMATICAL SPACE)
 U+3000                                (IDEOGRAPHIC SPACE)
 ```
 
-**Jangan pakai `String.prototype.trim()` / `\s` di JavaScript maupun `char::is_whitespace()`
-begitu saja sebagai definisi.** Keduanya bukan himpunan yang sama:
+**Do not simply use JavaScript's `String.prototype.trim()` / `\s` or Rust's
+`char::is_whitespace()` as the definition.** They are not the same set:
 
 | Code point | ECMAScript `WhiteSpace` | Unicode `White_Space` (= Rust) |
 | --- | --- | --- |
-| `U+0085` NEL | **bukan** whitespace | **whitespace** |
-| `U+FEFF` ZWNBSP | **whitespace** | **bukan** whitespace |
+| `U+0085` NEL | **not** whitespace | **whitespace** |
+| `U+FEFF` ZWNBSP | **whitespace** | **not** whitespace |
 
-Kalau spec cuma bilang "Unicode whitespace" dan tiap bahasa memakai bawaannya, dua implementasi
-akan menghasilkan **hash berbeda** untuk input yang sama. Karena itu daftarnya ditulis eksplisit
-dan di-hardcode di kedua implementasi referensi. Test
-`whitespace_table_equals_unicode_white_space` di crate Rust membuktikan daftar itu sama persis
-dengan `char::is_whitespace()` untuk **seluruh** rentang scalar Unicode, jadi daftarnya terikat
-pada properti Unicode sungguhan, bukan tebakan.
+If the spec only said "Unicode whitespace" and each language used its own built-in, two
+implementations would produce **different hashes** for the same input. So the list is written out
+explicitly and hardcoded in both reference implementations. The test
+`whitespace_table_equals_unicode_white_space` in the Rust crate proves that list is exactly
+`char::is_whitespace()` across the **entire** Unicode scalar range, so it is tied to a real Unicode
+property rather than to a guess.
 
-Catatan: `U+200B` ZERO WIDTH SPACE **bukan** whitespace meskipun namanya begitu, dan `U+FEFF`
-juga bukan. Keduanya lolos apa adanya ke dalam hash.
+Note: `U+200B` ZERO WIDTH SPACE is **not** whitespace despite its name, and neither is `U+FEFF`.
+Both pass through into the hash unchanged.
 
-### 2.2 `norm_base(s)` — dipakai semua field
+### 2.2 `norm_base(s)` — used by every field
 
-| # | Langkah |
+| # | Step |
 | --- | --- |
-| **N1** | Normalisasi Unicode **NFC**. |
-| **N2** | Buang whitespace (§2.1) di awal dan akhir. |
-| **N3** | Ganti setiap **runtun** whitespace internal menjadi **satu** `U+0020`. |
-| **N4** | **TOLAK** (error, jangan pernah di-hash) kalau hasilnya kosong atau mengandung `U+0000`. |
+| **N1** | Unicode **NFC** normalisation. |
+| **N2** | Strip whitespace (§2.1) from the start and the end. |
+| **N3** | Replace every internal **run** of whitespace with a **single** `U+0020`. |
+| **N4** | **REJECT** (error; never hash it) if the result is empty or contains `U+0000`. |
 
-Urutannya wajib persis seperti itu.
+The order must be exactly that.
 
 ### 2.3 Per field
 
-| Field | Aturan |
+| Field | Rule |
 | --- | --- |
-| `norm_name(s)` | `norm_base(s)`. **Tanpa case folding** — kapitalisasi nama orang adalah bagian dari namanya. |
-| `norm_id(s)` | **N5:** `norm_base(s)`, lalu buang **semua** whitespace dan setiap ASCII hyphen-minus `-`, lalu **ASCII-uppercase** (`a-z` → `A-Z` saja). **N5b:** tolak kalau hasil akhirnya kosong. |
-| `norm_contact(s)` | **N6:** `norm_base(s)`, lalu buang semua whitespace dan setiap `-`, `(`, `)`. `+` di depan dipertahankan (tidak pernah dibuang). **N6b:** tolak kalau hasil akhirnya kosong. |
+| `norm_name(s)` | `norm_base(s)`. **No case folding** — the capitalisation of a person's name is part of their name. |
+| `norm_id(s)` | **N5:** `norm_base(s)`, then remove **all** whitespace and every ASCII hyphen-minus `-`, then **ASCII-uppercase** (`a-z` → `A-Z` only). **N5b:** reject if the final result is empty. |
+| `norm_contact(s)` | **N6:** `norm_base(s)`, then remove all whitespace and every `-`, `(`, `)`. A leading `+` is preserved (never removed). **N6b:** reject if the final result is empty. |
 
-**ASCII-uppercase, bukan uppercase Unicode.** Jangan pakai `toUpperCase()` (JS) atau
-`to_uppercase()` (Rust): keduanya bergantung locale/script dan akan mengubah panjang string
-(mis. `ß` → `SS`, `i` Turki → `İ`). Yang benar `toUpperCase` khusus ASCII / `to_ascii_uppercase()`.
+**ASCII-uppercase, not Unicode uppercase.** Do not use `toUpperCase()` (JS) or `to_uppercase()`
+(Rust): both are locale- and script-dependent and will change the string's length (e.g. `ß` → `SS`,
+Turkish `i` → `İ`). The correct tools are an ASCII-only `toUpperCase` / `to_ascii_uppercase()`.
 
-**Kenapa N5b/N6b ada** (ini tambahan eksplisit terhadap draft spesifikasi PM, yang hanya menyebut
-penolakan di N4): input seperti `" -- - "` lolos N4 (setelah trim masih ada isinya) tapi menjadi
-string kosong setelah pembuangan separator di N5. Menghash komponen kosong berarti menerima field
-identitas yang tidak berisi apa pun. Lebih aman menolak. Dicakup vector `rj-03` dan `rj-04`.
+**Why N5b/N6b exist** (an explicit addition to the PM's draft specification, which only mentioned
+rejection at N4): an input like `" -- - "` passes N4 (after trimming there is still something) but
+becomes an empty string once N5 removes the separators. Hashing an empty component means accepting
+an identity field that contains nothing. Refusing is safer. Covered by vectors `rj-03` and `rj-04`.
 
-### 2.4 Kode error normalisasi
+### 2.4 Normalisation error codes
 
-Kedua implementasi referensi memakai tag yang sama, dan vector penolakan menyebutkannya:
+Both reference implementations use the same tags, and the rejection vectors name them:
 
-| Tag | Arti |
+| Tag | Meaning |
 | --- | --- |
-| `<field>/E_EMPTY` | kosong setelah normalisasi (N4) atau setelah pembuangan separator (N5b/N6b) |
-| `<field>/E_NUL` | mengandung `U+0000` (N4) |
+| `<field>/E_EMPTY` | empty after normalisation (N4) or after separator removal (N5b/N6b) |
+| `<field>/E_NUL` | contains `U+0000` (N4) |
 
-`<field>` ∈ `name`, `national_id`, `emergency_contact`, `salt`. Urutan evaluasi:
-`name` → `national_id` → `emergency_contact`, jadi input yang salah di dua field melaporkan yang
-pertama.
+`<field>` ∈ `name`, `national_id`, `emergency_contact`, `salt`. The evaluation order is
+`name` → `national_id` → `emergency_contact`, so an input that is wrong in two fields reports the
+first.
 
 ---
 
 ## 3. `participant_hash`
 
-### 3.1 Preimage
+### 3.1 The preimage
 
 ```
 preimage =
       utf8(norm_name(name))                   || 0x00
    || utf8(norm_id(national_id))              || 0x00
    || utf8(norm_contact(emergency_contact))   || 0x00
-   || salt                                            // 32 byte mentah
+   || salt                                            // 32 raw bytes
 
-participant_hash = SHA-256(preimage)                  // 32 byte
+participant_hash = SHA-256(preimage)                  // 32 bytes
 ```
 
-**Tepat tiga separator `0x00`. Tidak ada separator setelah salt.** Salt selalu 32 byte, jadi
-posisinya tidak ambigu tanpa penanda tambahan.
+**Exactly three `0x00` separators. No separator after the salt.** The salt is always 32 bytes, so
+its position is unambiguous without an extra marker.
 
-### 3.2 Kenapa separator sudah cukup, tanpa length prefix
+### 3.2 Why separators are enough, without length prefixes
 
-Ini alasan N4 ada. Encoding "sambung pakai separator" hanya injektif kalau separatornya **tidak
-mungkin muncul di dalam komponen**. N4 menolak field apa pun yang mengandung `U+0000`, dan UTF-8
-punya sifat: satu-satunya cara byte `0x00` muncul dalam UTF-8 yang valid adalah sebagai encoding
-`U+0000` itu sendiri (byte lanjutan multi-byte selalu `0x80..0xBF`, byte awal selalu
-`0xC2..0xF4`). Jadi setelah N4, **`0x00` tidak akan pernah muncul di dalam
-`utf8(norm_*(...))`**, dan pembacaan preimage dari kiri ke kanan hanya punya satu tafsiran:
-potong di `0x00` pertama, kedua, ketiga; sisa 32 byte terakhir adalah salt.
+This is why N4 exists. A "join with a separator" encoding is only injective when the separator
+**cannot appear inside a component**. N4 rejects any field containing `U+0000`, and UTF-8 has the
+property that the only way the byte `0x00` appears in valid UTF-8 is as the encoding of `U+0000`
+itself (multi-byte continuation bytes are always `0x80..0xBF`, leading bytes always `0xC2..0xF4`).
+So after N4, **`0x00` can never appear inside `utf8(norm_*(...))`**, and reading the preimage left
+to right has exactly one interpretation: cut at the first, second and third `0x00`; the remaining
+32 bytes are the salt.
 
-Tanpa N4, penyerang bisa menaruh `U+0000` di dalam nama dan memindahkan batas field — dua orang
-berbeda menghasilkan preimage identik. Karena itu **length prefix tidak dibutuhkan**, dan
-tidak boleh ditambahkan diam-diam (itu akan mengubah semua hash).
+Without N4, an attacker could put `U+0000` inside a name and move the field boundaries — two
+different people producing an identical preimage. That is why **length prefixes are not needed**,
+and must not be added quietly (doing so would change every hash).
 
-### 3.3 Salt
+### 3.3 The salt
 
-- **Tepat 32 byte** dari CSPRNG (`crypto.randomBytes(32)` di Node, `getrandom` di Rust), **satu
-  per record** — bukan per user, bukan per event.
-- Dibuat **backend**, disimpan backend, dan **ditunjukkan sekali** ke runner (supaya runner bisa
-  membuktikan record-nya sendiri belakangan tanpa bergantung ke backend).
-- Di JSON/API dirender sebagai **64 karakter hex huruf kecil**. Yang masuk ke SHA-256 adalah 32
-  byte mentahnya. Meng-hash teks hex-nya adalah bug klasik dan menghasilkan hash yang salah
-  total.
-- Salt **tidak pernah** masuk on-chain. Yang on-chain hanya `participant_hash`.
+- **Exactly 32 bytes** from a CSPRNG (`crypto.randomBytes(32)` in Node, `getrandom` in Rust),
+  **one per record** — not per user, not per event.
+- Generated by the **backend**, stored by the backend, and **shown once** to the runner (so a runner
+  can prove their own record later without depending on the backend).
+- Rendered in JSON and the API as **64 lowercase hex characters**. What goes into SHA-256 is the 32
+  raw bytes. Hashing the hex text is a classic bug and produces a completely wrong hash.
+- The salt **never** goes on chain. What goes on chain is only `participant_hash`.
 
-### 3.4 Contoh byte-level (vector `ph-01-ascii-plain`)
+### 3.4 A byte-level example (vector `ph-01-ascii-plain`)
 
-Input:
+The input:
 
-| Field | Nilai mentah |
+| Field | Raw value |
 | --- | --- |
 | `name` | `Budi Santoso` |
 | `national_id` | `3174012509900001` |
 | `emergency_contact` | `+6281234567890` |
 | `salt` (hex) | `a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e` |
 
-Semuanya sudah ASCII dan sudah rapi, jadi normalisasi di sini adalah identitas — vector ini
-sengaja mengunci **konkatenasi dan SHA-256-nya**, bukan normalisasinya.
+All of it is already ASCII and already tidy, so normalisation here is the identity — this vector
+deliberately pins **the concatenation and its SHA-256**, not the normalisation.
 
-Preimage, dipecah per bagian (total **77 byte**):
+The preimage, broken up by part (**77 bytes** in total):
 
 ```
-  4275646920 53616e746f736f    "Budi Santoso"                    12 byte
+  4275646920 53616e746f736f    "Budi Santoso"                    12 bytes
   00                           separator #1                       1 byte
   33313734303132353039393030303031
-                               "3174012509900001"                16 byte
+                               "3174012509900001"                16 bytes
   00                           separator #2                       1 byte
-  2b3632383132333435363738 3930  "+6281234567890"                14 byte
+  2b3632383132333435363738 3930  "+6281234567890"                14 bytes
   00                           separator #3                       1 byte
   a3f1c0d5e7b249168a0c4f2d9e6b8135
   c7a2049fbe31d68075c4e9a1b2f3d40e
-                               salt (32 byte MENTAH)             32 byte
+                               salt (32 RAW bytes)               32 bytes
                                                                  -------
-                                                                 77 byte
+                                                                 77 bytes
 ```
 
-Preimage utuh:
+The whole preimage:
 
 ```
 427564692053616e746f736f0033313734303132353039393030303031002b36323831323334353637383930\
 00a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e
 ```
 
-SHA-256:
+Its SHA-256:
 
 ```
 11b4bbdb068b470aa79124846c6684b70ad0e5d7b5f7d74fe88cdc9fafdec8fe
 ```
 
-Itulah 32 byte yang dikirim sebagai `BytesN<32>` ke `RaceRecord.enter`, dan yang diterima
-`RaceRecord.verify`.
+Those are the 32 bytes sent as a `BytesN<32>` to `RaceRecord.enter`, and the ones `RaceRecord.verify`
+accepts.
 
-Cek sendiri tanpa dependency apa pun:
+Check it yourself with no dependencies at all:
 
 ```bash
 printf 'Budi Santoso\0003174012509900001\0+6281234567890\0' > /tmp/p.bin
@@ -237,86 +238,85 @@ wc -c < /tmp/p.bin        # 77
 shasum -a 256 /tmp/p.bin  # 11b4bbdb068b470aa79124846c6684b70ad0e5d7b5f7d74fe88cdc9fafdec8fe
 ```
 
-### 3.5 Contoh normalisasi (vector `ph-04-messy-whitespace`)
+### 3.5 A normalisation example (vector `ph-04-messy-whitespace`)
 
-Bagaimana input formulir yang berantakan menjadi field yang bersih:
+How a messy form submission becomes clean fields:
 
-| Field | Mentah (escape Unicode) | Ternormalisasi |
+| Field | Raw (Unicode-escaped) | Normalised |
 | --- | --- | --- |
 | `name` | `"  Siti\u00a0 Aminah   binti\u0009Rahman\u000a"` | `Siti Aminah binti Rahman` |
 | `national_id` | `" a1-2345 6789-0b "` | `A1234567890B` |
 | `emergency_contact` | `" +62 (812) 3456-7890 "` | `+6281234567890` |
 
-Perhatikan: NBSP + spasi menjadi **satu** spasi (N3), TAB juga menjadi satu spasi, LF di ujung
-ikut ter-trim (N2), strip dan spasi di NIK hilang lalu huruf jadi kapital (N5), tanda kurung dan
-strip di nomor HP hilang sementara `+` di depan tetap (N6). Hash-nya:
+Note: NBSP + space becomes **one** space (N3), the TAB also becomes one space, the trailing LF is
+trimmed (N2), the hyphens and spaces vanish from the national ID and its letters are uppercased (N5),
+and the brackets and hyphens vanish from the phone number while the leading `+` stays (N6). Its hash:
 `feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29`.
 
-### 3.6 NFC: satu orang, satu hash
+### 3.6 NFC: one person, one hash
 
-Vector `ph-02` dan `ph-03` adalah **orang yang sama** dengan ejaan Unicode berbeda:
+Vectors `ph-02` and `ph-03` are **the same person** with different Unicode spellings:
 
-| Vector | Nama (escape) | Bentuk |
+| Vector | Name (escaped) | Form |
 | --- | --- | --- |
 | `ph-02-nfc-precomposed` | `"Jos\u00e9 Nu\u00f1ez Wijaya"` | precomposed (`\u00e9`, `\u00f1`) |
 | `ph-03-nfc-decomposed` | `"Jose\u0301 Nun\u0303ez Wijaya"` | decomposed (`e`+`\u0301`, `n`+`\u0303`) |
 
-Keduanya **wajib** menghasilkan preimage dan hash yang identik:
+Both **must** produce an identical preimage and hash:
 
 ```
 f5f43fc590b0edfbdf7a7b9c8c0751fa9c69329fec716b64afbd829962293f95
 ```
 
-Kalau implementasimu membuat keduanya berbeda, **langkah N1 (NFC) yang salah, bukan vector-nya.**
-Ini bukan kasus teoretis: keyboard macOS dan beberapa IME menghasilkan bentuk decomposed, sementara
-Windows dan kebanyakan database menyimpan precomposed. Runner mendaftar dari satu perangkat dan
-diverifikasi dari perangkat lain.
+If your implementation makes them differ, **step N1 (NFC) is wrong, not the vector.** This is not a
+theoretical case: macOS keyboards and some IMEs produce the decomposed form, while Windows and most
+databases store precomposed. A runner registers on one device and is verified on another.
 
-Node dan Rust sudah dibuktikan sepakat di sini secara empiris (bukan diasumsikan):
-`String.prototype.normalize('NFC')` dan `unicode-normalization` menghasilkan hash yang sama pada
-vector ini, dan `bash docs/specs/verify.sh` menjalankan keduanya setiap kali.
+Node and Rust have been shown to agree here empirically (rather than assumed):
+`String.prototype.normalize('NFC')` and `unicode-normalization` produce the same hash on this vector,
+and `bash docs/specs/verify.sh` runs both every time.
 
-### 3.7 Salt yang berbeda = hash yang berbeda
+### 3.7 A different salt means a different hash
 
-`ph-05-salt-only-differs` identik byte-per-byte dengan `ph-01` kecuali salt-nya, dan hash-nya
-`4799814afd98d8cccb1db3f9cd395adc6527fdcb1d3df7a48407f62ef27ab15b` — sama sekali lain. Ini yang
-membuat dua record milik orang yang sama di dua event **tidak bisa dikaitkan** hanya dari data
-on-chain.
+`ph-05-salt-only-differs` is byte-for-byte identical to `ph-01` except for its salt, and its hash is
+`4799814afd98d8cccb1db3f9cd395adc6527fdcb1d3df7a48407f62ef27ab15b` — entirely different. This is
+what makes two records belonging to the same person at two events **impossible to link** from
+on-chain data alone.
 
 ---
 
-## 4. TOTP untuk check-in
+## 4. TOTP for check-in
 
-Design naratifnya di `docs/SYSTEM_DESIGN.md` §7. Bagian ini definisi mekanisnya.
+The narrative design is in `docs/SYSTEM_DESIGN.md` §7. This section is the mechanical definition.
 
-### 4.1 Secret
+### 4.1 The secret
 
-- **Tepat 32 byte** dari CSPRNG, **satu per record**.
-- Dibuat backend saat entry, dikirim **sekali** ke perangkat runner (disimpan di PWA QR pass) dan
-  disimpan server-side untuk roster bundle scanner.
-- Di JSON/roster bundle dirender sebagai **64 karakter hex huruf kecil**; HMAC memakai **byte
-  mentahnya**.
-- **Tidak pernah on-chain**, dan **tidak pernah masuk QR** — yang masuk QR hanya keluaran
-  per-langkah-waktunya.
+- **Exactly 32 bytes** from a CSPRNG, **one per record**.
+- Generated by the backend at entry, sent **once** to the runner's device (stored in the QR pass
+  PWA) and kept server-side for the scanner's roster bundle.
+- Rendered in JSON and the roster bundle as **64 lowercase hex characters**; the HMAC uses its
+  **raw bytes**.
+- **Never on chain**, and **never in the QR** — what goes in the QR is only its per-time-step
+  output.
 
-### 4.2 Derivasi kode
+### 4.2 Deriving the code
 
-| # | Langkah |
+| # | Step |
 | --- | --- |
-| T1 | `time_step = floor(unix_seconds / 30)`, unsigned 64-bit. Pakai UTC epoch detik, bukan milidetik. |
-| T2 | `counter_bytes` = `time_step` sebagai **8 byte big-endian**. |
-| T3 | `mac = HMAC-SHA-256(key = totp_secret (32 byte mentah), msg = counter_bytes)` → 32 byte. |
-| T4 | `offset = mac[mac.len() - 1] & 0x0F` (untuk SHA-256: `mac[31]`). |
+| T1 | `time_step = floor(unix_seconds / 30)`, unsigned 64-bit. Use UTC epoch seconds, not milliseconds. |
+| T2 | `counter_bytes` = `time_step` as **8 big-endian bytes**. |
+| T3 | `mac = HMAC-SHA-256(key = totp_secret (32 raw bytes), msg = counter_bytes)` → 32 bytes. |
+| T4 | `offset = mac[mac.len() - 1] & 0x0F` (for SHA-256: `mac[31]`). |
 | T5 | `bin = ((mac[offset] & 0x7F) << 24) \| (mac[offset+1] << 16) \| (mac[offset+2] << 8) \| mac[offset+3]` |
-| T6 | `code = (bin % 1_000_000)` dirender sebagai **string 6 karakter, pad kiri dengan `'0'`**. |
+| T6 | `code = (bin % 1_000_000)` rendered as a **6-character string, left-padded with `'0'`**. |
 
-T4/T5 adalah *dynamic truncation* RFC 4226 §5.3, diterapkan ke MAC 32 byte (RFC aslinya memakai
-HMAC-SHA-1 20 byte; kita memakai SHA-256, jadi `offset` diambil dari byte terakhir MAC 32 byte).
+T4/T5 are RFC 4226 §5.3's *dynamic truncation*, applied to a 32-byte MAC (the original RFC uses a
+20-byte HMAC-SHA-1; we use SHA-256, so `offset` comes from the last byte of the 32-byte MAC).
 
-Masking `& 0x7F` pada byte pertama membuang bit tanda supaya hasilnya tidak bergantung pada
-bagaimana bahasa memperlakukan integer bertanda.
+Masking the first byte with `& 0x7F` discards the sign bit so the result does not depend on how a
+language treats signed integers.
 
-### 4.3 Contoh byte-level (vector `tp-02-leading-zero`)
+### 4.3 A byte-level example (vector `tp-02-leading-zero`)
 
 ```
 totp_secret (hex) 4d7b1e93a05c26f8d3407e91b6c258aa0f31d74e69b2085c1a3f6d904e7c2b15
@@ -328,88 +328,87 @@ T4 mac[31] = 0xe2, 0xe2 & 0x0f = 2                      -> offset = 2
 T5 mac[2..6] = 65 de 7c 6f
      ((0x65 & 0x7f) << 24) | (0xde << 16) | (0x7c << 8) | 0x6f
    = 0x65de7c6f = 1709079663
-T6 1709079663 % 1000000 = 79663      -> "079663"   <-- ENAM karakter, nol di depan
+T6 1709079663 % 1000000 = 79663      -> "079663"   <-- SIX characters, leading zero
 ```
 
-QR payload-nya:
+Its QR payload:
 
 ```json
 {"t":7,"s":59070111,"c":"079663"}
 ```
 
-### 4.4 Nol di depan itu SIGNIFIKAN (baca dua kali)
+### 4.4 The leading zero is SIGNIFICANT (read this twice)
 
-**Ini bug implementasi TOTP yang paling sering terjadi.** `bin % 1_000_000` di atas menghasilkan
-`79663` — lima digit. Kodenya adalah **`"079663"`**, enam karakter. Kalau kode disimpan,
-dikirim, atau dibandingkan sebagai **integer**, nol di depan hilang, dan:
+**This is the most common TOTP implementation bug.** The `bin % 1_000_000` above yields `79663` —
+five digits. The code is **`"079663"`**, six characters. If a code is stored, transmitted or compared
+as an **integer**, the leading zero disappears, and:
 
-- runner menampilkan `79663`, scanner menghitung `079663` → **setiap scan gagal**, dan hanya
-  untuk ~10% runner (yang kebetulan dapat kode berawalan nol). Bug seperti ini lolos testing
-  manual dan meledak di hari lomba.
-- fallback manual juga rusak: runner membaca lima angka, volunteer mengetik lima angka.
+- the runner shows `79663` while the scanner computes `079663` → **every scan fails**, and only for
+  ~10% of runners (the ones whose code happens to start with a zero). A bug like this survives manual
+  testing and detonates on race day.
+- the manual fallback breaks too: the runner reads out five digits, the volunteer types five digits.
 
-Aturannya, tanpa pengecualian:
+The rules, without exception:
 
-1. `code` **selalu** string 6 karakter. Pad kiri dengan `'0'` (`String(n).padStart(6,'0')`,
+1. `code` is **always** a 6-character string. Left-pad with `'0'` (`String(n).padStart(6,'0')`,
    `format!("{:06}", n)`).
-2. Di payload QR, `c` adalah **JSON string** (`"079663"`), **tidak pernah** JSON number.
-3. Perbandingan dilakukan **antar string**, bukan antar angka.
-4. Kode yang dipresentasikan divalidasi bentuknya dulu: harus **tepat 6 digit ASCII**. Kode 5
-   karakter ditolak sebagai *malformed*, bukan cuma "salah".
+2. In the QR payload, `c` is a **JSON string** (`"079663"`), **never** a JSON number.
+3. Comparison is **string against string**, not number against number.
+4. A presented code has its shape validated first: it must be **exactly 6 ASCII digits**. A
+   5-character code is rejected as *malformed*, not merely "wrong".
 
-Dua vector khusus menjaga ini: `tp-02-leading-zero` (kodenya `079663`) dan
-`vf-08-five-digit-code-rejected` (mempresentasikan `79663` pada langkah waktu yang benar →
-**ditolak**).
+Two vectors guard this: `tp-02-leading-zero` (whose code is `079663`) and
+`vf-08-five-digit-code-rejected` (presenting `79663` at the correct time step → **rejected**).
 
-### 4.5 Verifikasi + toleransi jam
+### 4.5 Verification + clock tolerance
 
-Kode `presented` **diterima jika dan hanya jika** dia sama dengan kode yang dihitung untuk
-`time_step - 1`, `time_step`, atau `time_step + 1` — jendela hingga **90 detik**.
+A `presented` code is **accepted if and only if** it equals the code computed for `time_step - 1`,
+`time_step`, or `time_step + 1` — a window of up to **90 seconds**.
 
 ```
 verify(secret, now, presented):
-    if presented bukan tepat 6 digit ASCII: return false
+    if presented is not exactly 6 ASCII digits: return false
     step = floor(now / 30)
     ok = false
     for d in [-1, 0, +1]:
-        ok |= constant_time_eq(code_at_step(secret, step + d), presented)   # tanpa short-circuit
+        ok |= constant_time_eq(code_at_step(secret, step + d), presented)   # no short-circuit
     return ok
 ```
 
-Dua hal yang wajib:
+Two requirements:
 
-- **Bandingkan constant-time.** Node: `crypto.timingSafeEqual` (cek panjang dulu — panjang bukan
-  rahasia). Rust: akumulasi `diff |= a[i] ^ b[i]` lalu bandingkan sekali. Jangan pakai `==` biasa
-  pada string.
-- **Jangan short-circuit di loop.** Pakai `|=`, bukan `||`/`or else`, supaya waktu penerimaan
-  tidak membocorkan langkah mana yang cocok.
+- **Compare in constant time.** Node: `crypto.timingSafeEqual` (check the length first — a length is
+  not a secret). Rust: accumulate `diff |= a[i] ^ b[i]` and compare once. Do not use a plain `==` on
+  the strings.
+- **Do not short-circuit in the loop.** Use `|=`, not `||`/`or else`, so that the time taken to
+  accept does not leak which step matched.
 
-Vector yang menjaga jendela ini:
+The vectors guarding this window:
 
-| Vector | Kode dari langkah | Diverifikasi pada langkah | Hasil |
+| Vector | Code from step | Verified at step | Result |
 | --- | ---: | ---: | --- |
-| `vf-01-same-step` | 59070000 | 59070000 | **diterima** |
-| `vf-02-previous-step` | 59069999 | 59070000 | **diterima** (jam runner ~30 dtk lambat) |
-| `vf-03-next-step` | 59070001 | 59070000 | **diterima** (jam runner ~30 dtk cepat) |
-| `vf-04-two-steps-old-rejected` | 59069998 | 59070000 | **ditolak** (60 dtk basi) |
-| `vf-05-two-steps-ahead-rejected` | 59070002 | 59070000 | **ditolak** |
-| `vf-06-leading-zero-roundtrip` | 59070111 | 59070111 | **diterima** (kode `079663`) |
-| `vf-07-wrong-code-rejected` | — | 59070000 | **ditolak** (`000000`) |
-| `vf-08-five-digit-code-rejected` | — | 59070111 | **ditolak** (`79663`, malformed) |
+| `vf-01-same-step` | 59070000 | 59070000 | **accepted** |
+| `vf-02-previous-step` | 59069999 | 59070000 | **accepted** (the runner's clock is ~30s slow) |
+| `vf-03-next-step` | 59070001 | 59070000 | **accepted** (the runner's clock is ~30s fast) |
+| `vf-04-two-steps-old-rejected` | 59069998 | 59070000 | **rejected** (60s stale) |
+| `vf-05-two-steps-ahead-rejected` | 59070002 | 59070000 | **rejected** |
+| `vf-06-leading-zero-roundtrip` | 59070111 | 59070111 | **accepted** (code `079663`) |
+| `vf-07-wrong-code-rejected` | — | 59070000 | **rejected** (`000000`) |
+| `vf-08-five-digit-code-rejected` | — | 59070111 | **rejected** (`79663`, malformed) |
 
-Jam yang meleset lebih dari 90 detik akan menolak scan yang sebenarnya sah. Itu risiko yang
-diakui (`SYSTEM_DESIGN.md` §11 poin 11); mitigasinya banner "clock sanity" di scanner PWA plus
-fallback manual.
+A clock more than 90 seconds out will refuse scans that are genuinely valid. That is an acknowledged
+risk (`SYSTEM_DESIGN.md` §11, point 11); the mitigation is a "clock sanity" banner in the scanner PWA
+plus the manual fallback.
 
 ---
 
-## 5. Payload QR
+## 5. The QR payload
 
 ```json
-{"t":<token_id>,"s":<time_step>,"c":"<kode 6 karakter>"}
+{"t":<token_id>,"s":<time_step>,"c":"<6-character code>"}
 ```
 
-**Persis tiga key, dalam urutan itu, tanpa spasi sama sekali.** Contoh nyata dari vector:
+**Exactly three keys, in that order, with no spaces at all.** Real examples from the vectors:
 
 ```
 {"t":1,"s":59070000,"c":"911070"}
@@ -417,119 +416,119 @@ fallback manual.
 {"t":4242,"s":59072879,"c":"844761"}
 ```
 
-| Key | Tipe | Isi |
+| Key | Type | Contents |
 | --- | --- | --- |
-| `t` | JSON number (`u32`) | `token_id` record-nya (dari `RaceRecord.enter`) |
-| `s` | JSON number (`u64`) | `time_step` saat kode dibuat |
-| `c` | **JSON string** | kode 6 karakter, nol di depan dipertahankan |
+| `t` | JSON number (`u32`) | the record's `token_id` (from `RaceRecord.enter`) |
+| `s` | JSON number (`u64`) | the `time_step` the code was made for |
+| `c` | **JSON string** | the 6-character code, leading zero preserved |
 
-**Kenapa `s` boleh berupa number biasa.** JSON number aman sampai `2^53 - 1`
-(≈ 9,007 × 10^15). `time_step` hari ini ≈ 5,9 × 10^7 dan naik sekitar 1,05 juta per tahun, jadi
-batas itu baru tersentuh dalam ratusan juta tahun. Tidak perlu string, tidak perlu BigInt.
+**Why `s` may be an ordinary number.** JSON numbers are safe up to `2^53 - 1` (≈ 9.007 × 10^15).
+`time_step` today is ≈ 5.9 × 10^7 and rises by about 1.05 million a year, so that limit is hundreds
+of millions of years away. No string needed, no BigInt needed.
 
-**Kenapa `c` harus string.** Lihat §4.4. Ini satu-satunya alasan aturan urutan/tipe ini ditulis
-sedetail ini.
+**Why `c` must be a string.** See §4.4. That is the only reason this ordering/typing rule is written
+out in such detail.
 
-**Fallback manual** ketika kamera gagal (layar retak, lensa kotor, QR terlalu redup): runner
-membacakan **6 digit `c`** dan volunteer mengetik keenam digit itu plus **nomor bib**. Nomor bib
-menggantikan `t`, dan `s` diambil dari jam scanner sendiri — yang persis alasan toleransi ±1
-langkah ada. Alur ini wajib ada di scanner PWA (STE-22): kamera bukan jalur satu-satunya.
-
----
-
-## 6. Catatan keamanan (dari `SYSTEM_DESIGN.md` §7 dan §11)
-
-1. **Hash adalah komitmen, bukan enkripsi.** `participant_hash` tidak menyembunyikan PII dalam
-   arti kriptografis. Dia hanya memungkinkan siapa pun yang **sudah** punya plaintext + salt
-   membuktikan bahwa record ini milik orang tersebut. Dia tidak memungkinkan siapa pun membaca
-   PII dari chain.
-2. **Keamanannya bergantung sepenuhnya pada salt yang tetap rahasia dan acak.** NIK itu
-   **entropi rendah** — ruang tebakannya kecil dan berstruktur (kode wilayah + tanggal lahir +
-   nomor urut). Tanpa salt, siapa pun bisa brute-force nama+NIK terhadap hash on-chain dalam
-   waktu sepele. Salt 32 byte acak per record yang menutup itu. Karena itu: salt tidak pernah
-   masuk QR, tidak pernah masuk log, tidak pernah masuk chain.
-3. **Backend yang bocor = PII bocor.** PII vault adalah database Web2 biasa dengan kewajiban Web2
-   biasa (enkripsi at rest, kontrol akses, audit). Chain tidak menolong di sini, dan tidak
-   berpura-pura menolong.
-4. **Screenshot yang diteruskan gagal karena langkah waktunya bergerak.** Screenshot membekukan
-   satu kode 30 detik. Saat gambarnya sampai ke orang lain lewat grup chat, `time_step` sudah
-   lewat toleransi ±1 dan HMAC-nya tidak cocok lagi (persis kasus `vf-04`). Penyerang butuh
-   `totp_secret`-nya sendiri, yang tidak pernah muncul di QR — hanya keluaran per-langkahnya.
-5. **Roster yang bocor tetap dibatasi chain.** Scanner PWA memegang secret seluruh roster supaya
-   bisa verifikasi offline. Roster yang bocor memungkinkan orang membuat kode valid — tapi
-   kerusakannya tetap dibatasi: hanya address scanner yang ter-allowlist yang boleh
-   `claim_racepack`, dan tetap **satu pack per record**.
-6. **Yang menjadi arbiter sesungguhnya adalah guard `state == Entered` on-chain.** Cek roster
-   lokal di desk hanya optimasi UX. Dua desk offline bisa sama-sama menyetujui runner yang sama;
-   keduanya mengantre transaksi, dan chain menerima **tepat satu** — yang kedua dapat
-   `AlreadyClaimed(102)` untuk direkonsiliasi organiser. Invarian "satu pack per entry" ditegakkan
-   konsensus, bukan disiplin volunteer.
-7. **Impersonasi fisik tetap mungkin.** Runner bisa menyerahkan HP + race pack ke temannya.
-   Sterun membuat **record**-nya jujur (chain tetap mencatat siapa yang mendaftar, dan organiser
-   punya hash untuk spot-check identitas); Sterun tidak menaruh marshal di lintasan. Ini harus
-   dinyatakan apa adanya di materi organiser.
-8. **Hak penghapusan vs hash yang immutable** masih terbuka (`SYSTEM_DESIGN.md` §11 poin 2).
-   Hash sendirian tidak mengidentifikasi siapa pun, tapi pembacaan hukumnya di yurisdiksi kita
-   perlu dicek sebelum mainnet.
+**The manual fallback** for when the camera fails (a cracked screen, a dirty lens, a QR too dim): the
+runner reads out the **6 digits of `c`** and the volunteer types those six digits plus the **bib
+number**. The bib number replaces `t`, and `s` comes from the scanner's own clock — which is exactly
+why the ±1 step tolerance exists. This flow is required in the scanner PWA (STE-22): the camera is
+not the only path.
 
 ---
 
-## 7. Menjalankan vector
+## 6. Security notes (from `SYSTEM_DESIGN.md` §7 and §11)
+
+1. **A hash is a commitment, not encryption.** `participant_hash` does not hide PII in any
+   cryptographic sense. It only lets anyone who **already** has the plaintext + salt prove that this
+   record belongs to that person. It does not let anyone read PII off the chain.
+2. **Its security rests entirely on the salt staying secret and random.** A national ID is
+   **low-entropy** — its guess space is small and structured (region code + date of birth +
+   sequence number). Without a salt, anyone could brute-force name+ID against an on-chain hash
+   trivially. A random 32-byte salt per record is what closes that. Hence: the salt never enters a
+   QR, never enters a log, never enters the chain.
+3. **A leaked backend is leaked PII.** The PII vault is an ordinary Web2 database with ordinary Web2
+   obligations (encryption at rest, access control, auditing). The chain does not help here, and does
+   not pretend to.
+4. **A forwarded screenshot fails because the time step moves.** A screenshot freezes one 30-second
+   code. By the time the image reaches someone else through a group chat, `time_step` is outside the
+   ±1 tolerance and the HMAC no longer matches (exactly case `vf-04`). An attacker would need the
+   `totp_secret` itself, which never appears in a QR — only its per-step output does.
+5. **A leaked roster is still bounded by the chain.** The scanner PWA holds the secrets for a whole
+   roster so it can verify offline. A leaked roster lets someone produce valid codes — but the damage
+   is still bounded: only allowlisted scanner addresses may `claim_racepack`, and it is still **one
+   pack per record**.
+6. **The real arbiter is the on-chain `state == Entered` guard.** The desk's local roster check is a
+   UX optimisation. Two offline desks can both approve the same runner; both queue transactions, and
+   the chain accepts **exactly one** — the second gets `AlreadyClaimed(102)` for the organiser to
+   reconcile. The "one pack per entry" invariant is enforced by consensus, not by volunteer
+   discipline.
+7. **Physical impersonation is still possible.** A runner can hand their phone and race pack to a
+   friend. Sterun makes the **record** honest (the chain still records who entered, and the organiser
+   has a hash for spot-checking identity); Sterun does not put marshals on the course. This has to be
+   stated plainly in organiser material.
+8. **The right to erasure vs an immutable hash** is still open (`SYSTEM_DESIGN.md` §11, point 2). A
+   hash alone identifies nobody, but the legal reading in our jurisdiction needs checking before
+   mainnet.
+
+---
+
+## 7. Running the vectors
 
 ```bash
 bash docs/specs/verify.sh
 ```
 
-Menjalankan **dua implementasi yang ditulis terpisah** terhadap file JSON yang sama:
+This runs **two separately written implementations** against the same JSON files:
 
-- **Node** — `docs/specs/reference/node/verify-vectors.mjs`, hanya `node:crypto`, **nol
-  dependency npm**. Jangan tambahkan apa pun ke pnpm workspace untuk ini.
-- **Rust** — `docs/specs/reference/rust/`, crate berdiri sendiri (punya `[workspace]` sendiri,
-  **bukan** member workspace `sc/`), dependency dipin `=`: `sha2 =0.10.9`, `hmac =0.12.1`,
+- **Node** — `docs/specs/reference/node/verify-vectors.mjs`, using only `node:crypto`, with **zero
+  npm dependencies**. Do not add anything to the pnpm workspace for it.
+- **Rust** — `docs/specs/reference/rust/`, a standalone crate (with its own `[workspace]`, **not** a
+  member of the `sc/` workspace), with `=`-pinned dependencies: `sha2 =0.10.9`, `hmac =0.12.1`,
   `unicode-normalization =0.1.25`, `serde_json =1.0.151` (dev).
 
-Kriteria penerimaan STE-10 adalah **keduanya menghasilkan output identik**. Satu implementasi
-yang lulus test-nya sendiri tidak membuktikan apa-apa; dua implementasi independen yang sepakat
-membuktikan spesifikasinya benar-benar tidak ambigu.
+STE-10's acceptance criterion is that **both produce identical output**. One implementation passing
+its own tests proves nothing; two independent implementations agreeing proves the specification is
+genuinely unambiguous.
 
-Selain itu, **host Soroban sendiri ikut diuji sepakat**: test
-`host_sha256_matches_every_participant_hash_vector` dan
-`every_participant_hash_vector_is_accepted_by_enter_and_verify` di
-`sc/contracts/race_record/src/test.rs` membaca file
-`docs/specs/vectors/participant_hash.json` yang sama, menjalankan preimage-nya lewat
-`env.crypto().sha256()`, dan memasukkan hasilnya ke `enter` + `verify`. Jadi nilai yang dihitung
-backend memang persis nilai yang diterima chain.
-
----
-
-## 8. Aturan perubahan
-
-Setelah PR STE-10 ini merged, **setiap** perubahan pada definisi `participant_hash` (termasuk
-langkah normalisasi), derivasi TOTP, atau serialisasi payload QR wajib:
-
-1. **PR baru** yang di-approve **Axel (PM) + fable (AI co-PM)**. Tidak ada self-merge.
-2. **Entri di `docs/specs/CHANGELOG.md`**: versi baru, tanggal, alasan, dan dampaknya ke data
-   yang sudah ada.
-3. **`bash docs/specs/verify.sh` tetap hijau** dan **`cd sc && cargo test` tetap hijau**.
-4. Vector lama yang berubah nilainya harus disebut **eksplisit** di changelog. Vector adalah
-   artefak beku — jangan pernah di-regenerate diam-diam supaya test lewat.
-5. Kalau perubahannya menyentuh signature kontrak atau kode error, ikuti juga aturan di
-   `docs/specs/INTERFACE.md` §7 (termasuk **regenerate TS bindings**, STE-14).
-
-Perubahan pada definisi hash **membatalkan semua `participant_hash` yang sudah ada on-chain**
-(record lama tidak bisa diverifikasi ulang dengan aturan baru). Karena itu perubahan hash bukan
-patch — minimal **major version** plus rencana migrasi yang tertulis.
+On top of that, **the Soroban host itself is tested for agreement**: the tests
+`host_sha256_matches_every_participant_hash_vector` and
+`every_participant_hash_vector_is_accepted_by_enter_and_verify` in
+`sc/contracts/race_record/src/test.rs` read the same
+`docs/specs/vectors/participant_hash.json` file, run its preimages through
+`env.crypto().sha256()`, and feed the results into `enter` + `verify`. So the value the backend
+computes really is the value the chain accepts.
 
 ---
 
-## 9. Siapa yang mengonsumsi ini
+## 8. The rules for changing this
 
-| Tiket | Komponen | Yang dipakai |
+Once this STE-10 PR is merged, **every** change to the definition of `participant_hash` (including
+its normalisation steps), to the TOTP derivation, or to the QR payload serialisation requires:
+
+1. **A new PR** approved by **Axel (PM) + fable (AI co-PM)**. No self-merges.
+2. **An entry in `docs/specs/CHANGELOG.md`**: the new version, the date, the reason, and its impact
+   on existing data.
+3. **`bash docs/specs/verify.sh` staying green** and **`cd sc && cargo test` staying green**.
+4. Any existing vector whose value changes must be called out **explicitly** in the changelog.
+   Vectors are frozen artefacts — never regenerate them quietly to make a test pass.
+5. If the change touches a contract signature or an error code, follow the rules in
+   `docs/specs/INTERFACE.md` §7 as well (including **regenerating the TS bindings**, STE-14).
+
+A change to the hash definition **invalidates every `participant_hash` already on chain** (old
+records could not be re-verified under the new rules). So a hash change is not a patch — it is at
+minimum a **major version** plus a written migration plan.
+
+---
+
+## 9. Who consumes this
+
+| Ticket | Component | What it uses |
 | --- | --- | --- |
-| STE-11 | PII vault + salt/secret backend (James) | §2, §3, §4.1 — hitung `participant_hash`, simpan salt + `totp_secret` |
-| STE-14 | TS bindings (Axel) | tipe `BytesN<32>` untuk `participant_hash` |
+| STE-11 | PII vault + backend salt/secret (James) | §2, §3, §4.1 — computing `participant_hash`, storing the salt + `totp_secret` |
+| STE-14 | TS bindings (Axel) | the `BytesN<32>` type for `participant_hash` |
 | STE-15 | `SterunClient` (James) | `enter(participant_hash)`, `verify(token_id, participant_hash)` |
-| STE-16 | Indexer (James) | tidak langsung — `participant_hash` muncul lewat `record_of` |
-| STE-17 | Organiser console (Ancung) | verifikasi identitas via recompute hash |
-| STE-18 | QR pass PWA (Ancung) | §4, §5 — hitung kode offline, render payload QR |
-| STE-21 / STE-22 | Scanner PWA + TOTP verify (Ancung) | §4.5, §5 — verifikasi ±1 langkah, fallback manual |
+| STE-16 | Indexer (James) | indirectly — `participant_hash` arrives through `record_of` |
+| STE-17 | Organiser console (Ancung) | identity verification by recomputing the hash |
+| STE-18 | QR pass PWA (Ancung) | §4, §5 — computing codes offline, rendering the QR payload |
+| STE-21 / STE-22 | Scanner PWA + TOTP verify (Ancung) | §4.5, §5 — ±1 step verification, the manual fallback |

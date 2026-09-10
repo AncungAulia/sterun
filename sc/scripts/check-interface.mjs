@@ -216,7 +216,7 @@ function tableRows(text) {
 
 const ticks = (cell) => [...cell.matchAll(/`([^`]*)`/g)].map((m) => m[1]);
 const firstTick = (cell) => (ticks(cell)[0] ?? null);
-const EMPTY = /^(—|-|\*\(kosong\)\*)$/;
+const EMPTY = /^(—|-|\*\(none\)\*)$/;
 
 function mdFunctions(sec) {
   const fns = new Map();
