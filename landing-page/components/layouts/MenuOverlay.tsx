@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { CONTRACTS, REPO_URL, SDK_URL, SECTIONS, X_URL } from "@/lib/links";
 
 /** Links that leave the site get the diagonal arrow and the new-tab treatment. */
@@ -33,8 +34,33 @@ const LAYERS = [
   { key: "ink", className: "bg-n-950", openDelay: 180, closeDelay: 0 },
 ] as const;
 
-/** Time from opening until the last panel has landed. Content waits for it. */
-const CONTENT_DELAY_MS = 430;
+/**
+ * Motion of the content, which is deliberately not symmetrical.
+ *
+ * Coming in, each line rises into place behind a mask, one after another, so
+ * the panel reads as being set rather than switched on. Going out there is no
+ * second performance: the text is treated as printed on the dark panel and
+ * leaves with it in one piece, which is both quicker and more convincing than
+ * watching a dozen elements dismiss themselves.
+ *
+ * That asymmetry is why the durations below are per-direction rather than one
+ * shared transition.
+ */
+const PANEL_MS = 620;
+/** The ink panel starts at 180ms, so it has landed by here. */
+const REVEAL_START_MS = 700;
+const REVEAL_MS = 700;
+/** Between nav lines; the right column moves faster because its lines are smaller. */
+const NAV_STEP_MS = 70;
+const SIDE_STEP_MS = 50;
+const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
+const EASE_PANEL = "cubic-bezier(0.76, 0, 0.24, 1)";
+
+/** Where the right column picks up after the last nav line. */
+const SIDE_START_MS = REVEAL_START_MS + SECTIONS.length * NAV_STEP_MS;
+const sideDelay = (order: number) => SIDE_START_MS + order * SIDE_STEP_MS;
+/** Eight rows on the right: two headings and six links. */
+const FOOTER_DELAY_MS = sideDelay(8) + 60;
 
 /**
  * One scale for the nav, referenced by everything that has to line up with it.
@@ -56,6 +82,46 @@ const NAV_SIZE = "clamp(3rem, min(11vw, 18vh), 13rem)";
  * this: the 01-04 numbers, and the first group heading in the right column.
  */
 const CAP_TOP = `calc(${NAV_SIZE} * 0.2)`;
+
+/**
+ * One line of content behind a mask.
+ *
+ * Opening, the inner element rises from a full line below into view. Closing,
+ * it does not move at all: it stays where it is and rides the panel out, then
+ * snaps back below the mask once the panel has gone, ready for the next open.
+ * The reset is what the close delay is for; without it the line would vanish
+ * from under the reader mid-exit.
+ */
+function Reveal({
+  open,
+  delay,
+  reduced,
+  className,
+  children,
+}: {
+  open: boolean;
+  delay: number;
+  reduced: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className={`block overflow-hidden ${className ?? ""}`}>
+      <span
+        className="block"
+        style={{
+          translate: open ? "0 0" : "0 100%",
+          transitionProperty: "translate",
+          transitionTimingFunction: EASE_OUT,
+          transitionDuration: reduced ? "0ms" : open ? `${REVEAL_MS}ms` : "0ms",
+          transitionDelay: reduced ? "0ms" : open ? `${delay}ms` : `${PANEL_MS + 40}ms`,
+        }}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
 
 function ArrowUpRight() {
   return (
@@ -79,23 +145,40 @@ function ArrowUpRight() {
  * from the left on the way in and is pulled off to the right on the way out,
  * which is why the origin flips rather than the scale simply reversing.
  */
-function SecondaryGroup({ title, links }: { title: string; links: SecondaryLink[] }) {
+function SecondaryGroup({
+  title,
+  links,
+  open,
+  reduced,
+  firstOrder,
+}: {
+  title: string;
+  links: SecondaryLink[];
+  open: boolean;
+  reduced: boolean;
+  /** Position of this group's heading in the right column's reveal order. */
+  firstOrder: number;
+}) {
   return (
     <div>
-      <h3 className="text-[clamp(0.75rem,1.1vw,1rem)] uppercase leading-none tracking-[0.12em] text-paper/60">
-        {title}
-      </h3>
+      <Reveal open={open} reduced={reduced} delay={sideDelay(firstOrder)}>
+        <h3 className="text-[clamp(0.75rem,1.1vw,1rem)] uppercase leading-none tracking-[0.12em] text-paper/60">
+          {title}
+        </h3>
+      </Reveal>
       <ul className="mt-[0.7em] flex flex-col gap-[0.28em] text-[clamp(1.25rem,2.2vw,2.75rem)]">
-        {links.map((link) => (
+        {links.map((link, index) => (
           <li key={link.label}>
-            <a
-              href={link.href}
-              {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-              className="wipe-underline relative inline-flex items-center leading-tight text-paper"
-            >
-              {link.label}
-              {link.external ? <ArrowUpRight /> : null}
-            </a>
+            <Reveal open={open} reduced={reduced} delay={sideDelay(firstOrder + 1 + index)}>
+              <a
+                href={link.href}
+                {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="wipe-underline relative inline-flex items-center leading-tight text-paper"
+              >
+                {link.label}
+                {link.external ? <ArrowUpRight /> : null}
+              </a>
+            </Reveal>
           </li>
         ))}
       </ul>
@@ -114,6 +197,7 @@ export function MenuOverlay({
   closeButtonRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
 
   // Escape closes, Tab stays inside. The close button joins the loop even
   // though it renders in the header, otherwise the only way out of an open
@@ -194,12 +278,20 @@ export function MenuOverlay({
         />
       ))}
 
+      {/* The content is fixed to the ink panel rather than fading against it.
+          Leaving, it travels up on the panel's own timing and easing, so the
+          text reads as printed on the surface being lifted away. Arriving, it
+          is put in place instantly — every line is masked at that moment, so
+          there is nothing to see until the reveals begin. */}
       <div
         ref={panelRef}
-        className={`absolute inset-0 overflow-y-auto text-paper transition-opacity duration-300 motion-reduce:duration-0 ${
-          open ? "opacity-100" : "opacity-0"
-        }`}
-        style={{ transitionDelay: `${open ? CONTENT_DELAY_MS : 0}ms` }}
+        className="absolute inset-0 overflow-y-auto text-paper"
+        style={{
+          translate: open ? "0 0" : "0 -100%",
+          transitionProperty: "translate",
+          transitionTimingFunction: EASE_PANEL,
+          transitionDuration: open || reduced ? "0ms" : `${PANEL_MS}ms`,
+        }}
       >
         {/* Same container and gutter as the header, so the wordmark, CLOSE, the
             01-04 numbers and the footer all sit on one line. */}
@@ -217,33 +309,41 @@ export function MenuOverlay({
                     them. Setting leading only on the innermost span left the
                     wrapping block boxes at their default 1.5, which quietly made
                     the list almost twice as tall as intended. */}
-                {SECTIONS.map((item) => (
-                  <li
-                    key={item.n}
-                    className="relative leading-[0.95] tracking-[-0.01em]"
-                    style={{ fontSize: NAV_SIZE }}
-                  >
+                {SECTIONS.map((item, index) => (
+                  <li key={item.n} className="leading-[0.95] tracking-[-0.01em]" style={{ fontSize: NAV_SIZE }}>
                     <a href={item.href} onClick={onClose} className="nav-item block text-paper">
-                      {/* At the gutter, level with the cap-top of the word
-                          beside it rather than centred against it. */}
-                      <span
-                        className="absolute left-0 text-[clamp(0.7rem,1.1vw,1rem)] font-medium leading-none tabular-nums text-paper/60"
-                        style={{ top: CAP_TOP }}
+                      <Reveal
+                        open={open}
+                        reduced={reduced}
+                        delay={REVEAL_START_MS + index * NAV_STEP_MS}
                       >
-                        {item.n}
-                      </span>
-                      <span className="block pl-[2.4vw]">
-                        <span className="heading-hero relative inline-block whitespace-nowrap uppercase">
-                          {/* The fill. A 1:1 copy of the word underneath,
-                              revealed bottom-up by a clip-path rather than
-                              faded in, so the colour looks poured rather than
-                              switched. */}
-                          <span aria-hidden className="nav-fill absolute inset-0 text-teal-300">
-                            {item.label}
+                        {/* The number is positioned against this element rather
+                            than the li, so it rides inside the mask with the
+                            word instead of hanging in the open while the word
+                            is still below the line. */}
+                        <span className="relative block">
+                          {/* At the gutter, level with the cap-top of the word
+                              beside it rather than centred against it. */}
+                          <span
+                            className="absolute left-0 text-[clamp(0.7rem,1.1vw,1rem)] font-medium leading-none tabular-nums text-paper/60"
+                            style={{ top: CAP_TOP }}
+                          >
+                            {item.n}
                           </span>
-                          {item.label}
+                          <span className="block pl-[2.4vw]">
+                            <span className="heading-hero relative inline-block whitespace-nowrap uppercase">
+                              {/* The fill. A 1:1 copy of the word underneath,
+                                  revealed bottom-up by a clip-path rather than
+                                  faded in, so the colour looks poured rather
+                                  than switched. */}
+                              <span aria-hidden className="nav-fill absolute inset-0 text-teal-300">
+                                {item.label}
+                              </span>
+                              {item.label}
+                            </span>
+                          </span>
                         </span>
-                      </span>
+                      </Reveal>
                     </a>
                   </li>
                 ))}
@@ -265,15 +365,29 @@ export function MenuOverlay({
                 rowGap: `clamp(2.5rem, calc(${NAV_SIZE} * 0.95), 4rem)`,
               }}
             >
-              <SecondaryGroup title="Sterun" links={STERUN_LINKS} />
-              <SecondaryGroup title="Live on testnet" links={CHAIN_LINKS} />
+              <SecondaryGroup
+                title="Sterun"
+                links={STERUN_LINKS}
+                open={open}
+                reduced={reduced}
+                firstOrder={0}
+              />
+              <SecondaryGroup
+                title="Live on testnet"
+                links={CHAIN_LINKS}
+                open={open}
+                reduced={reduced}
+                firstOrder={STERUN_LINKS.length + 1}
+              />
             </div>
           </div>
 
-          <div className="mt-8 flex flex-col gap-2 pt-2 text-[clamp(0.875rem,1.4vw,1.25rem)] text-paper sm:flex-row sm:items-center sm:justify-between">
-            <p>Verified race records for running events, built on Stellar.</p>
-            <p>&copy; {new Date().getFullYear()} Sterun</p>
-          </div>
+          <Reveal open={open} reduced={reduced} delay={FOOTER_DELAY_MS} className="mt-8 pt-2">
+            <span className="flex flex-col gap-2 text-[clamp(0.875rem,1.4vw,1.25rem)] text-paper sm:flex-row sm:items-center sm:justify-between">
+              <span>Verified race records for running events, built on Stellar.</span>
+              <span>&copy; {new Date().getFullYear()} Sterun</span>
+            </span>
+          </Reveal>
         </div>
       </div>
     </div>
