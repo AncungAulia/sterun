@@ -185,6 +185,21 @@ Validasi form punya dua kelas yang tampil di waktu berbeda (`modules/organiser/m
 `missingDetails` (field kosong) nunggu Continue, `incoherentDates` (dua tanggal yang bertabrakan)
 muncul seketika. Field kosong belum tentu salah; tanggal yang bertentangan sudah pasti salah.
 
+### `/org` — daftar event milik wallet ini
+
+`modules/organiser/OrganiserHome.tsx`. Tiga hal yang sudah diputuskan:
+
+- **Datanya `useEvents()` yang sama dengan directory**, lalu difilter `event.organiser === address`.
+  Registry tidak punya view "event per organiser" (alasannya sama dengan tidak ada "list events"),
+  dan memakai query yang sama berarti `/` lalu `/org` cuma bertanya ke chain sekali.
+- **Allowlist cuma menentukan tombol Create event, bukan halamannya.** Wallet yang dicabut dari
+  allowlist tetap melihat event lamanya, karena kontrak masih mengizinkan dia mengelolanya (STE-36).
+  Yang ditolak dapat `NotAllowedNotice` (catatan, bukan layar penuh `NotAllowlisted`). Tombolnya
+  disembunyikan **selama** allowlist ditanya, dan tetap muncul kalau node gagal menjawab.
+- **Kartunya bukan `EventCard` directory.** Organiser butuh "berapa yang sudah daftar dari kuota"
+  per jarak, termasuk yang penuh, bukan harga dan sisa tempat. Sementara nge-link ke
+  `/events/[id]`, karena `/org/events/[id]` (scanner, hasil) belum dibangun.
+
 ## Test
 
 ```bash
