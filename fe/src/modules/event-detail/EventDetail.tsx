@@ -133,8 +133,13 @@ export function EventDetail({ eventId }: { eventId: number }) {
       <Tabs value={tab} onValueChange={setTab}>
         {/* The strip divides the full width evenly, and on a phone it scrolls
             rather than wrapping: six tabs on two rows would put an active
-            underline in the middle of the block. */}
-        <div className="overflow-x-auto">
+            underline in the middle of the block.
+
+            `overflow-y-hidden` is not decoration. Setting one axis to `auto`
+            promotes the other one out of `visible` too, and the triggers hang
+            a pixel past the rule with `-mb-px`, so the strip grew a vertical
+            scrollbar of its own next to the last tab. */}
+        <div className="overflow-x-auto overflow-y-hidden">
           <TabsList>
             <TabsTrigger value="details">
               <InfoIcon aria-hidden="true" />
