@@ -1884,4 +1884,4 @@ jadwalkan seeding-nya di menit yang sama, bukan besok.
 
 Index `be/` **tidak** perlu di-truncate kali ini: alamatnya tidak berubah, `event_id` tidak
 dipakai ulang, dan tidak ada satu pun entry lama yang berubah arti. Itu bedanya upgrade in-place
-dengan pindah alamat (bandingkan `be/OPERATIONS.md` bagian "Pindah ke kontrak v2").
+dengan pindah alamat (bandingkan `be/OPERATIONS.md` bagian "Moving to the v2 contracts").

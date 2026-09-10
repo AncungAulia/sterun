@@ -1,347 +1,347 @@
-# `be/` — catatan operasional (STE-11 + STE-16)
+# `be/` — operational notes (STE-11 + STE-16)
 
-Dokumen ini bagian dari tiketnya, bukan pelengkap. **STE-11** meminta secara eksplisit siapa yang
-memegang kunci enkripsi, bagaimana rotasinya, dan apa dampaknya kalau database bocor. **STE-16**
-meminta prosedur rebuild indexer dan runbook restore untuk entry yang ter-archive. Kalau kamu
-mengoperasikan backend Sterun, ini yang wajib kamu tahu sebelum menyalakannya.
+This document is part of the ticket rather than an addition to it. **STE-11** explicitly asked who
+holds the encryption keys, how they are rotated, and what a database leak would mean. **STE-16**
+asked for the indexer rebuild procedure and a restore runbook for archived entries. If you operate
+the Sterun backend, this is what you have to know before starting it.
 
-| Bagian | Tiket |
+| Section | Ticket |
 | --- | --- |
-| Kunci enkripsi, rotasi, dampak kebocoran database | STE-11 |
-| Indexer, prosedur rebuild | STE-16 |
-| TTL keeper, runbook restore entry ter-archive | STE-16 |
-| Format roster bundle (handoff contract #3) | STE-16 -> STE-18 (Ancung) |
+| Encryption keys, rotation, what a database leak means | STE-11 |
+| Indexer, rebuild procedure | STE-16 |
+| TTL keeper, restore runbook for archived entries | STE-16 |
+| Roster bundle format (handoff contract #3) | STE-16 -> STE-18 (Ancung) |
 
-## Apa yang disimpan, dan apa yang tidak
+## What is stored, and what is not
 
-| Data | Di mana | Bentuk |
+| Data | Where | Form |
 | --- | --- | --- |
-| Nama, NIK, kontak darurat | Postgres, tabel `participants` | **terenkripsi** AES-256-GCM (`bytea`) |
-| `salt` (32 byte) | Postgres | mentah — bukan PII, tapi rahasia (dia yang membuktikan hash) |
-| `totp_secret` (32 byte) | Postgres | mentah — rahasia, dipakai roster bundle STE-16 |
-| `participant_hash` | Postgres **dan on-chain** | 32 byte, satu-satunya yang publik |
-| `runner_address`, `token_id`, `enter_tx_hash` | Postgres | publik (ada di chain) |
+| Name, national ID, emergency contact | Postgres, `participants` | **encrypted** AES-256-GCM (`bytea`) |
+| `salt` (32 bytes) | Postgres | raw — not PII, but secret (it is what proves the hash) |
+| `totp_secret` (32 bytes) | Postgres | raw — secret, used by the STE-16 roster bundle |
+| `participant_hash` | Postgres **and on-chain** | 32 bytes, the only public one |
+| `runner_address`, `token_id`, `enter_tx_hash` | Postgres | public (they are on chain) |
 
-**Yang menyentuh chain cuma `participant_hash`.** Tidak ada nama, NIK, atau nomor telepon yang
-pernah masuk transaksi, event, atau `uri`. Sesuatu yang terlanjur masuk chain tidak bisa dihapus —
-itu alasan aturannya sekaku ini.
+**The only thing that touches a chain is `participant_hash`.** No name, national ID or phone number
+ever enters a transaction, an event or a `uri`. Something that has reached a chain cannot be removed
+— that is why the rule is this rigid.
 
-## Kunci enkripsi
+## Encryption keys
 
-### Siapa yang memegang
+### Who holds them
 
-| Lingkungan | Pemegang | Di mana |
+| Environment | Holder | Where |
 | --- | --- | --- |
-| Dev lokal | tiap developer, kunci sendiri-sendiri | `be/.env` (di-gitignore) |
-| Testnet (STE-31) | **Axel (PM)** | secret manager VPS / env unit systemd, bukan file di repo |
-| Mainnet | belum ada — di luar scope Instawards | — |
+| Local dev | each developer, their own keys | `be/.env` (gitignored) |
+| Testnet (STE-31) | **Axel (PM)** | VPS secret manager / systemd unit environment, not a file in the repo |
+| Mainnet | none yet — outside the Instawards scope | — |
 
-Kunci **tidak pernah** masuk repo, tiket, chat, atau log. `parseKeyring` sengaja tidak pernah
-menyertakan entri yang ditolaknya ke dalam pesan error, karena entri itu adalah kunci.
+Keys **never** enter the repository, a ticket, chat, or a log. `parseKeyring` deliberately never
+includes a rejected entry in its error message, because that entry is a key.
 
-### Bentuknya
+### Their shape
 
 ```bash
-PII_KEYS="1:<64 hex>,2:<64 hex>"   # semua kunci yang mungkin masih dibutuhkan
-PII_ACTIVE_KEY_ID="2"              # yang dipakai mengenkripsi baris baru
+PII_KEYS="1:<64 hex>,2:<64 hex>"   # every key that might still be needed
+PII_ACTIVE_KEY_ID="2"              # the one new rows are encrypted with
 ```
 
-Bikin kunci baru:
+Generating a new one:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### Rotasi
+### Rotation
 
-Tiap ciphertext membawa **id kunci**-nya di header (2 byte), jadi rotasi tidak butuh downtime dan
-tidak butuh re-encrypt serentak:
+Every ciphertext carries its **key id** in a 2-byte header, so rotation needs no downtime and no
+simultaneous re-encryption:
 
-1. Tambah kunci baru ke `PII_KEYS` (jangan hapus yang lama).
-2. Arahkan `PII_ACTIVE_KEY_ID` ke id baru. Restart. Baris **baru** memakai kunci baru; baris lama
-   tetap terbaca dengan kunci lama.
-3. Jalankan re-encrypt bertahap: baca baris yang `keyIdOf(blob) != activeKeyId`, decrypt, encrypt
-   ulang, tulis. (Job-nya belum ada — tulis saat pertama kali benar-benar rotasi; `keyIdOf()`
-   sudah tersedia justru supaya job itu bisa menemukan pekerjaannya tanpa mendekripsi apa pun.)
-4. Setelah nol baris memakai kunci lama, **baru** hapus id lama dari `PII_KEYS`.
+1. Add the new key to `PII_KEYS` (do not remove the old one).
+2. Point `PII_ACTIVE_KEY_ID` at the new id. Restart. **New** rows use the new key; old rows are still
+   readable with the old one.
+3. Run a gradual re-encrypt: read rows where `keyIdOf(blob) != activeKeyId`, decrypt, re-encrypt,
+   write. (The job does not exist yet — write it the first time a rotation actually happens;
+   `keyIdOf()` is already there precisely so that job can find its work without decrypting
+   anything.)
+4. Once zero rows use the old key, **then** remove the old id from `PII_KEYS`.
 
-Menghapus kunci sebelum langkah 4 membuat baris yang masih memakainya **tidak bisa dibaca
-selamanya**. `decrypt` akan gagal dengan `no key with id N in PII_KEYS`, dan itu memang satu-satunya
-jawaban yang jujur.
+Removing a key before step 4 makes every row still using it **permanently unreadable**. `decrypt`
+fails with `no key with id N in PII_KEYS`, and that is the only honest answer available.
 
-Kapan harus rotasi: kunci dicurigai bocor, orang yang pernah memegangnya keluar dari tim, atau
-rutin (saran: tiap 90 hari kalau ini pernah jadi produksi sungguhan).
+When to rotate: a key is suspected leaked, somebody who held one leaves the team, or on a schedule
+(suggested: every 90 days if this ever became real production).
 
-## Kalau database bocor
+## If the database leaks
 
-**Yang didapat penyerang:**
+**What an attacker gets:**
 
-- Ciphertext PII — tidak bisa dibaca tanpa kunci. AES-256-GCM, IV acak per enkripsi, jadi dua baris
-  dengan nama yang sama pun **tidak** bisa dikenali sama hanya dari ciphertext-nya.
-- `salt` dan `totp_secret` mentah. Ini yang berdampak nyata:
-  - Dengan `salt` + tebakan PII, penyerang bisa **memverifikasi tebakan** (`sha256(preimage)` vs
-    `participant_hash` on-chain). Jadi salt bukan pelindung terhadap penyerang yang sudah menebak
-    data seseorang dengan benar — dia pelindung terhadap **rainbow table** dan terhadap korelasi
-    antar-event untuk orang yang sama.
-  - Dengan `totp_secret`, penyerang bisa membuat kode check-in yang valid untuk record itu. Artinya
-    dia bisa mengklaim racepack orang lain **kalau** dia juga bisa hadir secara fisik dan record-nya
-    belum diklaim. Guard `AlreadyClaimed` di kontrak tetap membatasi kerusakannya ke satu pack.
-- `runner_address`, `event_id`, `token_id` — semuanya sudah publik di chain.
+- The PII ciphertext — unreadable without the keys. AES-256-GCM with a random IV per encryption, so
+  two rows holding the same name **cannot** be recognised as equal from the ciphertext alone.
+- Raw `salt` and `totp_secret`. These are the ones with real consequences:
+  - With a `salt` plus a guess at the PII, an attacker can **verify the guess** (`sha256(preimage)`
+    against the on-chain `participant_hash`). So the salt is not protection against an attacker who
+    has already guessed someone's data correctly — it is protection against **rainbow tables** and
+    against correlating the same person across events.
+  - With a `totp_secret`, an attacker can produce valid check-in codes for that record. That means
+    claiming somebody else's race pack — **if** they can also be there physically and the record is
+    unclaimed. The contract's `AlreadyClaimed` guard still limits the damage to one pack.
+- `runner_address`, `event_id`, `token_id` — all already public on chain.
 
-**Yang TIDAK didapat:** PII dalam bentuk terbaca, selama kunci tidak ikut bocor. Itulah sebabnya
-kunci tidak boleh tinggal di mesin yang sama dengan dump database, dan tidak boleh ikut masuk backup
-database.
+**What they do NOT get:** readable PII, as long as the keys did not leak with it. That is why the
+keys must not live on the same machine as a database dump, and must not be included in a database
+backup.
 
-**Kalau kunci ikut bocor**, anggap seluruh PII yang pernah disimpan sudah terbaca. Rotasi kunci
-**tidak** memperbaiki itu — data lama sudah terlanjur dibaca. Yang harus dilakukan: beri tahu
-peserta yang terdampak, dan (kalau ini pernah jadi produksi) ikuti kewajiban notifikasi yang
-berlaku. Rotasi tetap dilakukan supaya kebocoran berikutnya tidak menambah korban.
+**If the keys leak too**, assume all of the PII ever stored has been read. Rotating keys does **not**
+fix that — the old data has already been read. What has to happen: tell the affected participants,
+and (if this were ever production) follow the applicable notification obligations. Rotate anyway, so
+the next leak does not add victims.
 
-**Yang tidak bisa diperbaiki oleh apa pun:** `participant_hash` sudah permanen di chain. Kalau
-seseorang tahu PII asli sebuah record, dia bisa membuktikan tautan itu selamanya. Ini konsekuensi
-desain yang disadari (`docs/SYSTEM_DESIGN.md` §11) dan alasan kenapa yang di-hash disalt per-record.
+**What nothing can fix:** `participant_hash` is permanently on chain. Anyone who knows a record's
+real PII can prove that link forever. This is a consequence the design accepts knowingly
+(`docs/SYSTEM_DESIGN.md` §11) and the reason what gets hashed is salted per record.
 
-## Menyalakan backend
+## Starting the backend
 
 ```bash
-docker compose up -d postgres                        # dari root repo
-cp be/.env.example be/.env                           # lalu isi DATABASE_URL + PII_KEYS
+docker compose up -d postgres                        # from the repository root
+cp be/.env.example be/.env                           # then fill in DATABASE_URL + PII_KEYS
 pnpm dev
 ```
 
-Migrasi jalan otomatis sebelum socket dibuka, jadi service tidak pernah sempat menerima pendaftaran
-di atas skema yang belum ada.
+Migrations run automatically before the socket opens, so the service never gets the chance to accept
+a registration against a schema that does not exist yet.
 
-Tiga keadaan konfigurasi, dan hanya dua yang boleh jalan:
+Three configuration states, and only two of them are allowed to run:
 
-| `DATABASE_URL` | `PII_KEYS` | Hasil |
+| `DATABASE_URL` | `PII_KEYS` | Result |
 | --- | --- | --- |
-| kosong | kosong | jalan **tanpa** vault — `/health` + `/config` saja. Ini yang didapat clone baru. |
-| ada | ada | jalan dengan vault |
-| ada | kosong | **menolak start.** Service yang bisa menjangkau database tapi tidak bisa mengenkripsi akan menyimpan dokumen identitas dalam bentuk terbaca. |
+| empty | empty | runs **without** the vault — `/health` + `/config` only. This is what a fresh clone gets. |
+| set | set | runs with the vault |
+| set | empty | **refuses to start.** A service that can reach the database but cannot encrypt would store identity documents in readable form. |
 
-`/config` melaporkan `vault.enabled` dan **id** kunci yang ada (bukan kuncinya), supaya "kenapa
-decrypt gagal setelah rotasi" bisa dijawab dalam satu request.
+`/config` reports `vault.enabled` and the **ids** of the keys present (never the keys), so "why did
+decryption start failing after the rotation" can be answered in one request.
 
 ## Indexer (STE-16)
 
-Tiga proses, sengaja dipisah. API **melayani** index; dia tidak mengisinya.
+Three processes, deliberately separate. The API **serves** the index; it does not fill it.
 
 ```bash
-pnpm indexer follow     # poller: getEvents -> Postgres, terus-menerus
-pnpm indexer poll       # satu halaman lalu keluar (cron/CI)
-pnpm indexer rebuild    # truncate + replay dari STATE kontrak, lalu verifikasi
-pnpm indexer doctor     # bandingkan index dengan chain, field demi field
-pnpm indexer status     # cursor + jumlah baris, tanpa menyentuh network
-pnpm dev                # API — /events, /records, /runners/..., /events/:id/roster
+pnpm indexer follow     # the poller: getEvents -> Postgres, continuously
+pnpm indexer poll       # one page, then exit (cron/CI)
+pnpm indexer rebuild    # truncate + replay from contract STATE, then verify
+pnpm indexer doctor     # compare the index against the chain, field by field
+pnpm indexer status     # cursor + row counts, without touching the network
+pnpm dev                # the API — /events, /records, /runners/..., /events/:id/roster
 ```
 
-Env yang relevan (semua punya default, lihat `be/.env.example`):
+The relevant environment variables (all have defaults, see `be/.env.example`):
 `INDEXER_POLL_INTERVAL_MS` (7000), `INDEXER_PAGE_LIMIT` (200), `INDEXER_START_LEDGER`,
 `INDEXER_SOURCE_ACCOUNT`.
 
-### Dua sumber, dan bedanya penting
+### Two sources, and the difference matters
 
-Tiap baris membawa kolom `source`:
+Every row carries a `source` column:
 
-| `source` | Dari mana | Tahu apa |
+| `source` | Where from | What it knows |
 | --- | --- | --- |
-| `event` | `getEvents` (poller) | **kapan** — ledger, tx hash, urutan lifecycle |
-| `state` | view call ke kontrak (rebuild) | **apa yang benar sekarang** — semuanya kecuali provenance |
+| `event` | `getEvents` (the poller) | **when** — ledger, tx hash, lifecycle ordering |
+| `state` | view calls to the contract (rebuild) | **what is true now** — everything except provenance |
 
-Rebuild tetap menghasilkan riwayat transisi, direkonstruksi dari `entered_at` / `claimed_at` /
-`result_at` di `RecordData` — itu jam kontrak sendiri, jadi riwayatnya jujur. Yang hilang cuma ledger
-dan tx hash-nya, dan barisnya mengatakan begitu (`ledger IS NULL`), bukan mengarang angka.
+A rebuild still produces a transition history, reconstructed from `entered_at` / `claimed_at` /
+`result_at` in `RecordData` — the contract's own clock, so the history is honest. What is missing is
+the ledger and the tx hash, and the row says so (`ledger IS NULL`) rather than inventing a number.
 
-### Yang membuat poller aman dimatikan kapan saja
+### What makes the poller safe to kill at any moment
 
-- **Cursor disimpan setelah halamannya commit.** Mati di tengah = halaman itu diulang, bukan
-  dilewati. Mengulang gratis: `chain_events` ber-primary key id event dari RPC, jadi lintasan kedua
-  mengenali semuanya dan tidak mengerjakan apa pun.
-- **Halaman kosong bukan berarti sudah kejar.** RPC memindai jendela ledger terbatas per request
-  (10.000 di testnet) dan menjawab halaman kosong + cursor kalau jendela itu tidak berisi apa-apa.
-  `last_ledger` dibaca dari cursor-nya, bukan dari `latestLedger`. Ini bukan teori: versi pertama
-  memakai `latestLedger`, dan `/indexer/status` melaporkan sudah kejar padahal masih dua belas
-  request di belakang. Ketahuan saat dijalankan ke testnet sungguhan.
-- **Event untuk sesuatu yang belum ter-index dihitung sebagai `orphans`, bukan error.** Index yang
-  mulai di tengah balapan punya lubang yang sah; menyandera poller di lubang itu tidak menolong
-  siapa pun. Yang membetulkan lubang adalah `rebuild`.
+- **The cursor is stored after its page commits.** Dying mid-page means that page is repeated, not
+  skipped. Repeating is free: `chain_events` is keyed by the RPC's event id, so a second pass
+  recognises everything and does no work.
+- **An empty page does not mean caught up.** The RPC scans a bounded ledger window per request
+  (10,000 on testnet) and answers with an empty page plus a cursor when that window held nothing.
+  `last_ledger` is read from the cursor, not from `latestLedger`. This is not theoretical: the first
+  version used `latestLedger`, and `/indexer/status` reported being caught up while it was twelve
+  requests behind. Found by running it against real testnet.
+- **An event for something not yet indexed counts as an `orphan`, not an error.** An index that
+  started mid-race has legitimate holes; holding the poller hostage to one helps nobody. What fixes
+  a hole is `rebuild`.
 
-### Rebuild: prosedur yang wajib ada
+### Rebuild: the procedure that has to exist
 
-**Kenapa ada.** RPC testnet cuma menyimpan jendela `getEvents` terbatas (saat tulisan ini dibuat
-~120.960 ledger, sekitar tujuh hari). Lewat dari itu, "putar ulang event"-nya tidak tersedia lagi.
-State kontrak selalu tersedia. Karena itu jalur pemulihan Sterun berjalan dari **state**, bukan dari
-event — `docs/SYSTEM_DESIGN.md` §11 poin 10.
+**Why it exists.** Testnet RPC only retains a bounded `getEvents` window (~120,960 ledgers at the
+time of writing, about seven days). Past that, "replay the events" is no longer available. Contract
+state is always available. So Sterun's recovery path runs from **state**, not from events —
+`docs/SYSTEM_DESIGN.md` §11, point 10.
 
 ```bash
 pnpm indexer rebuild
 ```
 
-Tiga fase, urutannya disengaja:
+Three phases, in a deliberate order:
 
-1. **Catat ledger awal sebelum membaca apa pun.** Poller melanjutkan dari situ, jadi perubahan yang
-   mendarat di tengah walk **diulang**, bukan terlewat. Mengulang idempoten; terlewat tidak.
-2. **Baca semuanya lewat RPC ke memori.** Tidak ada transaksi yang terbuka, jadi walk yang lambat
-   tidak mengunci siapa pun.
-3. **Truncate + insert dalam SATU transaksi.** Pembaca tidak pernah melihat index setengah kosong —
-   mereka melihat index lama, lalu index baru.
+1. **Record the starting ledger before reading anything.** The poller resumes from there, so a change
+   landing mid-walk is **repeated** rather than missed. Repeating is idempotent; missing is not.
+2. **Read everything over RPC into memory.** No transaction is open, so a slow walk locks nobody out.
+3. **Truncate + insert in ONE transaction.** Readers never see a half-empty index — they see the old
+   index, then the new one.
 
-Setelah itu `rebuild` otomatis menjalankan `doctor`. Rebuild yang tidak diperiksa adalah rebuild yang
-tidak bisa dipercaya.
+`rebuild` then runs `doctor` automatically. A rebuild that was not checked is a rebuild that cannot
+be trusted.
 
-`chain_events` **tidak** ikut di-truncate: itu satu-satunya bukti lokal tentang apa yang chain
-katakan saat itu, dan RPC tidak akan mengembalikannya setelah jendela retensinya lewat.
+`chain_events` is **not** truncated: it is the only local evidence of what the chain said at the
+time, and the RPC will not return it once its retention window has passed.
 
-Kapan menjalankannya: setelah gap yang tidak bisa ditutup event (poller mati lebih lama dari jendela
-retensi), setelah `doctor` melaporkan mismatch, setelah restore entry yang ter-archive, atau setelah
-migrasi skema yang mengubah cara sebuah kolom diisi.
+When to run it: after a gap events cannot close (the poller was down longer than the retention
+window), after `doctor` reports a mismatch, after restoring an archived entry, or after a schema
+migration that changes how a column is filled.
 
 ---
 
 ## TTL keeper (STE-16)
 
 ```bash
-pnpm keeper scan        # laporkan yang jatuh tempo; tidak mengirim apa pun (tanpa kunci)
-pnpm keeper run         # perpanjang semua yang di bawah threshold
-pnpm keeper report      # riwayat run dari tabel ttl_keeper_runs
-pnpm keeper restore     # pulihkan entry yang tidak lagi dilayani RPC
+pnpm keeper scan        # report what is due; sends nothing (needs no key)
+pnpm keeper run         # extend everything below the threshold
+pnpm keeper report      # run history from the ttl_keeper_runs table
+pnpm keeper restore     # recover entries the RPC no longer serves
 ```
 
-Dimaksudkan sebagai **cron mingguan** (`docs/SYSTEM_DESIGN.md` §3.4 poin 4). Menjalankannya lebih
-sering tidak merusak apa-apa: `ExtendFootprintTTLOp` itu lantai, tidak pernah memperpendek, dan entry
-yang masih di atas threshold dilewati tanpa transaksi.
+Intended as a **weekly cron** (`docs/SYSTEM_DESIGN.md` §3.4, point 4). Running it more often breaks
+nothing: `ExtendFootprintTTLOp` is a floor and never shortens anything, and entries still above the
+threshold are skipped without a transaction.
 
-`run` dan `restore` butuh `TTL_KEEPER_SECRET`: akun berisi XLM dan **tidak lebih**. Memperpanjang TTL
-tidak butuh otorisasi siapa pun — itulah kenapa sewa boleh dibayar orang asing — jadi kunci ini tidak
-menguasai record apa pun dan tidak bisa membelanjakan apa pun selain fee-nya sendiri.
+`run` and `restore` need `TTL_KEEPER_SECRET`: an account holding XLM and **nothing else**. Extending
+a TTL needs nobody's authorisation — which is exactly why rent may be paid by a stranger — so this
+key owns no record and can spend nothing beyond its own fees.
 
-### Kenapa keeper tidak memanggil `extend_record_ttl`
+### Why the keeper does not call `extend_record_ttl`
 
-`RaceRecord::extend_record_ttl(token_id)` memperpanjang dua hal: instance kontrak dan
-`DataKey::Record(token_id)`. Dia **tidak** menyentuh `NFTStorageKey::Owner(token_id)` milik
-OpenZeppelin maupun index `Enumerable` per-owner, karena keduanya hidup di key crate lain dan fungsi
-itu memang tidak pernah menyentuhnya. Record yang entry `Record`-nya hidup tapi entry `Owner`-nya
-ter-archive tetap mematahkan `verify` dan `records_of` — dan itu sebagian besar dari gunanya sebuah
-race record.
+`RaceRecord::extend_record_ttl(token_id)` extends two things: the contract instance and
+`DataKey::Record(token_id)`. It does **not** touch OpenZeppelin's `NFTStorageKey::Owner(token_id)`
+nor the per-owner `Enumerable` index, because both live under keys owned by another crate and that
+function was never written to touch them. A record whose `Record` entry is alive but whose `Owner`
+entry is archived still breaks `verify` and `records_of` — and that is most of what a race record is
+for.
 
-Jadi keeper bekerja di level **ledger key** dan memakai `ExtendFootprintTTLOp`. Key-nya didapat
-dengan **mensimulasikan** `record_of`, `owner_of`, dan `records_of` lalu mengambil footprint yang
-dihitung host — bukan dengan menyusun ulang layout key OZ dengan tangan. Keeper yang memperpanjang
-key salah akan melaporkan sukses tiap minggu sementara record-nya tetap ter-archive, dan kegagalan
-itu diam selama berbulan-bulan.
+So the keeper works at the **ledger key** level and uses `ExtendFootprintTTLOp`. The keys come from
+**simulating** `record_of`, `owner_of` and `records_of` and taking the footprint the host computed —
+not from reassembling OZ's key layout by hand. A keeper extending the wrong keys would report success
+every week while the records stayed archived, and that failure would be silent for months.
 
-### Angka
+### The numbers
 
-Threshold-nya sama persis dengan konstanta di kontrak (`sc/contracts/race_record/src/lib.rs`):
-perpanjang saat tersisa di bawah **~120 hari** (2.073.600 ledger, 1 ledger sekitar 5 detik). Angka
-berbeda akan membuat "kapan ini kedaluwarsa" bergantung pada siapa yang terakhir menyentuh entry-nya.
+The threshold matches the constant in the contract
+(`sc/contracts/race_record/src/lib.rs`) exactly: extend when under **~120 days** remain (2,073,600
+ledgers, one ledger about 5 seconds). A different number would make "when does this expire" depend on
+who touched the entry last.
 
-Target perpanjangannya **3.110.399**, yaitu satu ledger **di bawah** `max_entry_ttl` — dan `-1` itu
-bukan salah ketik. `ExtendFootprintTTLOp` memvalidasi `extendTo` strictly di bawah maksimum dan
-menolak angka batasnya dengan `EXTEND_FOOTPRINT_TTL_MALFORMED`, yang di permukaan cuma kelihatan
-sebagai `txFailed`. `BUMP_TO` di kontrak tetap 180 hari penuh dan itu benar di sana: host function
-`extend_ttl` meng-**clamp** ke maksimum, bukan menolak. Dua validator, satu maksud, beda satu ledger.
-Menaikkan angka ini biar "cocok" dengan kontrak akan mematahkan semua run keeper.
+The extension target is **3,110,399**, one ledger **below** `max_entry_ttl` — and that `-1` is not a
+typo. `ExtendFootprintTTLOp` validates `extendTo` as strictly below the maximum and rejects the
+boundary value with `EXTEND_FOOTPRINT_TTL_MALFORMED`, which on the surface only shows up as
+`txFailed`. `BUMP_TO` in the contract is still the full 180 days and that is correct there: the
+`extend_ttl` host function **clamps** to the maximum rather than rejecting. Two validators, one
+intent, one ledger apart. Raising this number to "match" the contract would break every keeper run.
 
-Override: `TTL_THRESHOLD_LEDGERS`, `TTL_EXTEND_TO_LEDGERS`.
+Overrides: `TTL_THRESHOLD_LEDGERS`, `TTL_EXTEND_TO_LEDGERS`.
 
-> Konsekuensi yang perlu diketahui sekali: entry persistent yang baru ditulis **mulai** di sekitar
-> 120 hari, jadi run pertama menemukan hampir semuanya jatuh tempo. Itu normal. Setelah satu run yang
-> sukses semuanya ada di 180 hari, dan keeper diam sekitar 60 hari.
+> A consequence worth learning once: a freshly written persistent entry **starts** at around 120
+> days, so the first run finds nearly everything due. That is normal. After one successful run
+> everything sits at 180 days and the keeper goes quiet for about 60.
 
-### Membaca hasilnya
+### Reading the results
 
 ```sql
 SELECT id, started_at, status, scanned_keys, below_threshold, extended_keys, missing_keys
   FROM ttl_keeper_runs ORDER BY started_at DESC LIMIT 5;
 ```
 
-Barisnya ditulis **sebelum** pekerjaannya mulai, dengan status `running`. Keeper yang mati di tengah
-meninggalkan bukti bahwa dia jalan dan tidak selesai — itu justru kasus yang perlu terlihat. Hanya
-transaksi ber-status `SUCCESS` yang dihitung di `extended_keys`: job yang melaporkan sewa yang tidak
-pernah dibayar lebih buruk daripada job yang tidak melaporkan apa-apa.
+The row is written **before** the work starts, with status `running`. A keeper that dies mid-run
+leaves evidence that it ran and did not finish — which is precisely the case that needs to be
+visible. Only `SUCCESS` transactions count towards `extended_keys`: a job reporting rent that was
+never paid is worse than a job reporting nothing.
 
-`missing_keys > 0` berarti ada entry yang **tidak dilayani RPC** — ter-archive, atau tidak pernah
-ditulis. Perpanjangan tidak bisa menolongnya (`ExtendFootprintTTLOp` melewati apa yang tidak dia
-lihat). Lanjut ke runbook di bawah.
+`missing_keys > 0` means some entries are **not served by the RPC** — archived, or never written.
+Extension cannot help them (`ExtendFootprintTTLOp` skips what it cannot see). Continue to the runbook
+below.
 
 ### Restoring an archived entry
 
-Gejalanya salah satu dari ini:
+The symptom is one of these:
 
-- `pnpm keeper scan` melaporkan `missing_keys > 0`;
-- indexer gagal dengan `a ledger entry this call reads has been ARCHIVED`;
-- `record_of` / `verify` di client mengembalikan error alih-alih nilai.
+- `pnpm keeper scan` reports `missing_keys > 0`;
+- the indexer fails with `a ledger entry this call reads has been ARCHIVED`;
+- `record_of` / `verify` return an error to a client instead of a value.
 
-Prosedurnya:
+The procedure:
 
-1. **Pastikan dulu ini archival, bukan RPC yang salah.** Jalankan `pnpm keeper scan` sekali lagi, dan
-   cek `pnpm indexer status` — kalau RPC baru saja di-restart, `oldest_ledger`-nya ikut bergeser.
-2. **Kumpulkan key-nya lagi, jangan pakai daftar lama.** `pnpm keeper restore` sengaja melakukan scan
-   ulang: himpunan yang perlu dipulihkan adalah apa pun yang RPC tidak layani **sekarang**, dan
-   daftar yang di-copy dari run kemarin akan memulihkan entry yang salah.
-3. **Jalankan `pnpm keeper restore`.** Dia mengirim `RestoreFootprintOp` dengan key di footprint
-   **read-write** (kebalikan dari extend, yang memakai read-only). Ini jauh lebih mahal daripada
-   memperpanjang — itu sebabnya `run` tidak pernah memanggilnya sendiri; ada manusia yang memutuskan.
-4. **Segera perpanjang.** Restore mengembalikan entry dengan TTL minimum. `pnpm keeper run`.
-5. **Rebuild index-nya.** `pnpm indexer rebuild`. Selama ter-archive, poller mungkin sudah menghitung
-   event terkait sebagai `orphans`.
-6. **Catat di `docs/deployments.md`**: apa yang ter-archive, kapan, dan hash transaksi restore-nya.
+1. **First establish that this is archival and not a misbehaving RPC.** Run `pnpm keeper scan` again,
+   and check `pnpm indexer status` — if the RPC was recently restarted, its `oldest_ledger` moved
+   too.
+2. **Collect the keys again; do not reuse an old list.** `pnpm keeper restore` deliberately rescans:
+   the set that needs restoring is whatever the RPC does not serve **now**, and a list copied from
+   yesterday's run would restore the wrong entries.
+3. **Run `pnpm keeper restore`.** It sends `RestoreFootprintOp` with the keys in the **read-write**
+   footprint (the opposite of extend, which uses read-only). This is far more expensive than
+   extending — which is why `run` never calls it by itself; a human decides.
+4. **Extend immediately afterwards.** A restore returns entries with the minimum TTL. `pnpm keeper
+   run`.
+5. **Rebuild the index.** `pnpm indexer rebuild`. While it was archived, the poller may have counted
+   related events as `orphans`.
+6. **Record it in `docs/deployments.md`**: what was archived, when, and the restore transaction hash.
 
-Pencegahannya bukan runbook ini, melainkan cron mingguan yang tidak pernah dilewatkan.
+The prevention is not this runbook; it is a weekly cron that never gets skipped.
 
 ---
 
-## Daftar scanner (ditambahkan STE-17, Ancung)
+## The scanner list (added in STE-17, Ancung)
 
-`GET /events/:eventId/scanners` — dikonsumsi organiser console.
+`GET /events/:eventId/scanners` — consumed by the organiser console.
 
-**Kenapa endpoint ini ada, dan kenapa di sini:** kontraknya tidak bisa menjawabnya. EventRegistry
-punya `is_scanner(event_id, addr)` dan **tidak punya** cara meng-enumerasi — itu disengaja, karena
-view yang mengembalikan vector tak terbatas makin mahal seiring event membesar. Jadi satu-satunya
-tempat yang bisa menyusun daftarnya adalah index, yang memang sudah mencatat `scanner_added` /
-`scanner_removed` ke tabel `event_scanners`. Datanya sudah ada sejak STE-16; yang belum ada cuma
-pintu keluarnya.
+**Why this endpoint exists, and why it lives here:** the contract cannot answer the question.
+EventRegistry has `is_scanner(event_id, addr)` and **no** way to enumerate — deliberately, because a
+view returning an unbounded vector gets more expensive as an event grows. So the only place that can
+assemble the list is the index, which has been recording `scanner_added` / `scanner_removed` into
+`event_scanners` all along. The data has existed since STE-16; what was missing was the way out.
 
-Tanpa auth: yang dikembalikan cuma address yang sudah publik di chain (event `scanner_added`
-terbaca siapa pun), jadi tidak ada yang bocor dengan membukanya.
+No auth: what comes back is addresses that are already public on chain (`scanner_added` is readable
+by anyone), so opening it leaks nothing.
 
 ```jsonc
 {
   "scanners": [{ "address": "GA…", "added_ledger": 4469750 }],
-  "last_ledger": 4469811   // sejauh mana index sudah mengejar, BUKAN sejauh mana event ini
+  "last_ledger": 4469811   // how far the index has caught up, NOT how far this event has
 }
 ```
 
-`last_ledger` sengaja diambil dari cursor ingestion, bukan dari baris event-nya: daftar kosong
-adalah klaim tentang apa yang **tidak** ada, dan ukuran kesegaran yang jujur untuk klaim seperti itu
-cuma seberapa jauh index sudah membaca.
+`last_ledger` deliberately comes from the ingestion cursor rather than from the event rows: an empty
+list is a claim about what is **not** there, and the only honest freshness measure for a claim like
+that is how far the index has read.
 
-**Ini fast path, bukan otoritas.** Console memakainya untuk tahu address mana yang perlu ditanyakan,
-lalu mengonfirmasi tiap satu ke chain lewat `is_scanner`. Siapa yang boleh nge-scan itu keputusan
-otorisasi, dan keputusan otorisasi dibaca dari salinan yang otoritatif — aturan yang sama dipakai
-route hasil waktu membaca organiser.
+**This is a fast path, not an authority.** The console uses it to learn which addresses to ask about,
+then confirms each one against the chain with `is_scanner`. Who may scan is an authorisation
+decision, and authorisation decisions are read from the authoritative copy — the same rule the
+results route follows when it reads the organiser.
 
 ---
 
 ## Roster bundle (handoff contract #3)
 
-`GET /events/:eventId/roster` — dikonsumsi scanner PWA (STE-18, Ancung).
+`GET /events/:eventId/roster` — consumed by the scanner PWA (STE-18, Ancung).
 
-**Auth:** signature wallet Stellar, sama seperti route vault (`POST /auth/challenge`, tanda tangani
-nonce, kirim `x-sterun-address` / `x-sterun-nonce` / `x-sterun-signature`). Nonce sekali pakai,
-kedaluwarsa 2 menit. Tanda tangannya boleh atas byte nonce langsung (script yang pegang keypair)
-**atau** SEP-53 (yang dipakai wallet browser lewat Stellar Wallets Kit); server mencoba keduanya.
+**Auth:** a Stellar wallet signature, the same as the vault routes (`POST /auth/challenge`, sign the
+nonce, send `x-sterun-address` / `x-sterun-nonce` / `x-sterun-signature`). Nonces are single-use and
+expire after 2 minutes. The signature may be over the nonce bytes directly (a script holding a
+keypair) **or** SEP-53 (what browser wallets use through Stellar Wallets Kit); the server tries both.
 
-**Siapa yang boleh:** organiser event itu, atau address yang **chain** sebut scanner
-(`is_scanner(event_id, addr)`). Dibaca ulang dari chain **tiap request** — scanner yang dicabut
-on-chain langsung kehilangan akses, tanpa cache yang perlu di-invalidate.
+**Who may:** that event's organiser, or an address the **chain** calls a scanner
+(`is_scanner(event_id, addr)`). Re-read from the chain on **every request** — a scanner revoked
+on-chain loses access immediately, with no cache to invalidate.
 
 ```jsonc
 {
   "event_id": 0,
-  "snapshot_ledger": 4469811,          // seberapa segar state di dalamnya
+  "snapshot_ledger": 4469811,          // how fresh the state inside is
   "generated_at": "2026-09-02T18:10:47.702Z",
   "totp": { "digits": 6, "step_seconds": 30, "tolerance_steps": 1 },
   "entries": [
@@ -350,60 +350,58 @@ on-chain langsung kehilangan akses, tanpa cache yang perlu di-invalidate.
       "bib_no": 1,
       "category_id": 0,
       "state": "Entered",              // Entered | RacepackClaimed | Finished | Dnf
-      "name_fragment": "Budi S.",      // nama depan + inisial; null untuk baris pra-migrasi 003
-      "totp_secret": "…64 hex…"        // 32 byte, dipakai HMAC lokal di scanner
+      "name_fragment": "Budi S.",      // given name + initials; null for pre-migration-003 rows
+      "totp_secret": "…64 hex…"        // 32 bytes, used for a local HMAC in the scanner
     }
   ],
   "count": 1,
-  "missing_from_index": 0              // baris vault yang token_id-nya belum ter-index
+  "missing_from_index": 0              // vault rows whose token_id is not indexed yet
 }
 ```
 
-Catatan untuk yang memakainya:
+Notes for whoever consumes it:
 
-- **`totp` dikirim, jangan di-hardcode.** Parameternya beku di `docs/specs/HASH_AND_TOTP.md`; scanner
-  yang menyalin angkanya akan diam-diam tidak setuju kalau suatu saat berubah.
-- **`snapshot_ledger` bukan hiasan.** Bundle yang jauh tertinggal berisi `state` basi, dan `Entered`
-  yang basi persis yang membuat racepack kedua keluar. Ambil ulang sebelum start.
-- **`missing_from_index` > 0 artinya bundle-nya belum lengkap** — ada peserta yang sudah `enter` tapi
-  indexer belum menyusul. Jalankan `pnpm indexer poll` lalu ambil ulang.
-- **`name_fragment` bukan nama.** Nama depan utuh, sisanya inisial, dihitung sekali saat submit dan
-  **itu** yang disimpan (terenkripsi, sama seperti kolom PII lain). Tidak ada jalur kode yang bisa
-  mengembalikannya jadi nama lengkap, karena informasinya memang sudah tidak ada di sana. Gunanya cek
-  akal sehat petugas, bukan verifikasi identitas — yang memverifikasi identitas adalah
+- **`totp` is sent; do not hardcode it.** The parameters are frozen in `docs/specs/HASH_AND_TOTP.md`;
+  a scanner that copies the numbers will silently disagree if they ever change.
+- **`snapshot_ledger` is not decoration.** A bundle far behind holds stale `state`, and a stale
+  `Entered` is exactly what hands out a second race pack. Re-fetch before the start.
+- **`missing_from_index` > 0 means the bundle is incomplete** — someone has entered but the indexer
+  has not caught up. Run `pnpm indexer poll` and fetch again.
+- **`name_fragment` is not a name.** Full given name, initials for the rest, computed once at submit
+  and stored **in that form** (encrypted, like every other PII column). No code path can turn it back
+  into a full name, because the information genuinely is not there any more. It is for a marshal's
+  sanity check, not identity verification — what verifies identity is
   `verify(token_id, participant_hash)`.
-- **Yang menegakkan "satu pack per entry" tetap kontrak.** Cek roster lokal itu optimasi UX;
-  `claim_racepack` revert `AlreadyClaimed` kalau state bukan `Entered`.
+- **"One pack per entry" is still enforced by the contract.** The local roster check is a UX
+  optimisation; `claim_racepack` reverts with `AlreadyClaimed` if the state is not `Entered`.
 
-**Risikonya diakui terbuka** di `docs/SYSTEM_DESIGN.md` §11 poin 3: siapa pun yang memegang roster
-bisa membuat kode check-in yang valid untuk tiap peserta di dalamnya. Yang membatasi kerusakannya:
-guard on-chain, allowlist scanner, dan cakupan satu event per request.
-
----
+**The risk is acknowledged openly** in `docs/SYSTEM_DESIGN.md` §11, point 3: anyone holding a roster
+can produce valid check-in codes for every participant in it. What bounds the damage: the on-chain
+guards, the scanner allowlist, and one event's scope per request.
 
 ---
 
-## Deploy ke VPS (STE-31)
+## Deploying to the VPS (STE-31)
 
-Lima container: Postgres, API, poller, TTL keeper, dan Caddy di depan mengurus TLS. Tiga service
-Node-nya adalah **image yang sama dengan perintah berbeda** — memang begitu bentuknya, dan satu
-image berarti satu build, satu versi, dan tidak mungkin poller menjalankan kode yang tidak dimiliki
-API.
+Five containers: Postgres, the API, the poller, the TTL keeper, and Caddy in front handling TLS. The
+three Node services are the **same image with different commands** — that is genuinely what they are,
+and one image means one build, one version, and no way for the poller to be running code the API
+does not have.
 
-Deploy-nya **manual dan terdokumentasi**, bukan CD. Itu keputusan tiket ("deploy manual
-terdokumentasi cukup untuk v1"), dan setiap bagian pipeline otomatis akan menambah komponen yang
-butuh runbook-nya sendiri.
+Deployment is **manual and documented**, not CD. That is the ticket's decision ("a documented manual
+deploy is enough for v1"), and every piece of automated pipeline adds a component with a runbook of
+its own.
 
-### Sebelum mulai
+### Before you start
 
-| Kebutuhan | Kenapa |
+| Requirement | Why |
 | --- | --- |
-| VPS, Docker + compose plugin | tempat semuanya jalan |
-| Domain yang **DNS-nya sudah menunjuk ke VPS** | Caddy mengambil sertifikat lewat ACME HTTP challenge; tanpa DNS yang benar, challenge-nya gagal dan Caddy retry dengan backoff |
-| Port 80 dan 443 terbuka | 80 dipakai ACME, bukan cuma redirect |
-| Akun keeper testnet yang **baru** | jangan menyalin akun dari bukti STE-16; itu akun laptop sekali pakai |
+| A VPS, Docker + the compose plugin | somewhere for it to run |
+| A domain whose **DNS already points at the VPS** | Caddy gets its certificate over the ACME HTTP challenge; without correct DNS the challenge fails and Caddy retries with backoff |
+| Ports 80 and 443 open | 80 is used by ACME, not just for a redirect |
+| A **fresh** testnet keeper account | do not copy the account from the STE-16 evidence; that was a throwaway laptop account |
 
-### Langkah
+### The steps
 
 ```bash
 git clone https://github.com/AncungAulia/sterun.git && cd sterun
@@ -411,323 +409,325 @@ git clone https://github.com/AncungAulia/sterun.git && cd sterun
 cp be/.env.production.example be/.env.production
 $EDITOR be/.env.production      # STERUN_DOMAIN, POSTGRES_PASSWORD, PII_KEYS, TTL_KEEPER_SECRET
 
-# compose membaca STERUN_DOMAIN dan POSTGRES_PASSWORD dari .env di root
+# compose reads STERUN_DOMAIN and POSTGRES_PASSWORD from .env at the root
 ln -s be/.env.production .env
 
 docker compose -f compose.prod.yml up -d --build
 docker compose -f compose.prod.yml ps
 ```
 
-Migrasi jalan sendiri saat API start, **sebelum** socket-nya dibuka — jadi service tidak pernah
-sempat menerima pendaftaran terhadap schema yang belum ada. Container `indexer` dan `keeper` menunggu
-API start persis karena itu.
+Migrations run themselves when the API starts, **before** its socket opens — so the service never
+gets the chance to accept a registration against a schema that does not exist yet. The `indexer` and
+`keeper` containers wait for the API to start for exactly that reason.
 
-### Deployment nyata: jameserver (pve02 / ct-sterun)
+### The real deployment: jameserver (pve02 / ct-sterun)
 
-Ini deployment yang benar-benar berjalan, dan bentuknya **berbeda** dari langkah generik di atas
-karena satu fakta yang baru ketahuan setelah masuk ke servernya.
+This is the deployment that actually runs, and its shape **differs** from the generic steps above
+because of one fact that only surfaced after getting into the server.
 
-| Item | Nilai |
+| Item | Value |
 | --- | --- |
-| Node Proxmox | `pve02` (cluster `homelab`, 2 node) |
+| Proxmox node | `pve02` (cluster `homelab`, 2 nodes) |
 | Container | LXC **203**, hostname `ct-sterun`, Debian 13 |
-| Sumber daya | 2 core, 2 GiB RAM, 512 MiB swap, 20 GiB rootfs (`local-lvm`) |
-| IP LAN | `192.168.18.42/24`, gw `192.168.18.1` |
-| Fitur LXC | `unprivileged=1`, `nesting=1,keyctl=1` (Docker butuh nesting), `onboot=1` |
-| Path repo | `/opt/sterun` |
+| Resources | 2 cores, 2 GiB RAM, 512 MiB swap, 20 GiB rootfs (`local-lvm`) |
+| LAN IP | `192.168.18.42/24`, gw `192.168.18.1` |
+| LXC features | `unprivileged=1`, `nesting=1,keyctl=1` (Docker needs nesting), `onboot=1` |
+| Repository path | `/opt/sterun` |
 
-Konvensi diikuti dari container yang sudah ada di cluster ini: vmid `2xx` untuk pve02, prefix
-hostname `ct-`, IP `192.168.18.4x`, bridge `vmbr0`, nameserver `1.1.1.1`.
+Conventions followed from the containers already on this cluster: vmid `2xx` for pve02, hostname
+prefix `ct-`, IP `192.168.18.4x`, bridge `vmbr0`, nameserver `1.1.1.1`.
 
-#### Kenapa ingress-nya BUKAN Caddy di sini
+#### Why the ingress here is NOT Caddy
 
-Router homelab ini **tidak mem-forward port 80/443**. Ini diuji, bukan diasumsikan: sebuah listener
-sementara dipasang di port 80 pve01, lalu WAN IP-nya (`182.253.126.14` — IP publik asli, bukan
-CGNAT) diprobe dari internet lewat proxy eksternal. Hasilnya timeout (522). Artinya:
+This homelab router does **not** forward ports 80/443. That was tested rather than assumed: a
+temporary listener was put on port 80 of pve01, and its WAN IP (`182.253.126.14` — a genuine public
+IP, not CGNAT) was probed from the internet through an external proxy. The result was a timeout
+(522). Which means:
 
-- **ACME HTTP-01 tidak mungkin.** Caddy di dalam `compose.prod.yml` tidak akan pernah dapat
-  sertifikat, dan membiarkannya mencoba hanya membakar rate limit Let's Encrypt.
-- Ingress harus datang dari **luar** container.
+- **ACME HTTP-01 is impossible.** The Caddy inside `compose.prod.yml` would never get a certificate,
+  and letting it keep trying would only burn Let's Encrypt rate limits.
+- The ingress has to come from **outside** the container.
 
-#### Ingress: Cloudflare Tunnel (yang dipakai sekarang)
+#### Ingress: Cloudflare Tunnel (what is used now)
 
-`jameshub.fun` DNS-nya di Cloudflare. Tunnel menyelesaikan ketiganya sekaligus — tanpa port
-forward, TLS diurus Cloudflare, dan record DNS-nya dibuat sendiri oleh tunnel.
+`jameshub.fun` has its DNS on Cloudflare. A tunnel solves all three at once — no port forwarding, TLS
+handled by Cloudflare, and the DNS record created by the tunnel itself.
 
-**Locally-managed, bukan token.** Aturan routing ada di `deploy/cloudflared-config.yml` di dalam
-repo, bukan di dashboard. Alasannya: aturan yang hidup di UI tidak bisa di-review di PR, tidak ikut
-ter-rollback, dan `git log` tidak bisa menjawab pertanyaan tentangnya.
+**Locally-managed, not token-managed.** The routing rules live in `deploy/cloudflared-config.yml`
+inside the repository rather than in the dashboard. The reason: rules that live in a UI cannot be
+reviewed in a PR, do not roll back with anything, and `git log` cannot answer questions about them.
 
-Prosedur (sekali seumur deployment):
+The procedure (once per deployment):
 
 ```bash
-# 1. di pve01 — satu login browser, pilih zona jameshub.fun
+# 1. on pve01 — one browser login, pick the jameshub.fun zone
 cloudflared tunnel login
 
-# 2. bikin tunnel + record DNS-nya
+# 2. create the tunnel and its DNS record
 cloudflared tunnel create sterun-api
 cloudflared tunnel route dns sterun-api api-sterun.jameshub.fun
 
-# 3. pindahkan credentials ke host deployment TANPA melewati clipboard/chat
+# 3. move the credentials to the deployment host WITHOUT going through a clipboard or chat
 ssh root@100.111.186.114 "cat ~/.cloudflared/<TUNNEL_ID>.json" \
   | ssh root@192.168.18.42 "mkdir -p /opt/sterun/secrets \
       && cat > /opt/sterun/secrets/cloudflared-credentials.json \
       && chmod 600 /opt/sterun/secrets/cloudflared-credentials.json"
 
-# 4. image cloudflared jalan sebagai uid 65532, bukan root. File 600 milik root
-#    TIDAK terbaca olehnya — gejalanya `permission denied` yang berulang tiap
-#    detik. Perbaikannya chown, BUKAN chmod 644: rahasianya tetap 600.
+# 4. the cloudflared image runs as uid 65532, not root. A 600 file owned by root
+#    is NOT readable by it — the symptom is `permission denied` repeating every
+#    second. The fix is chown, NOT chmod 644: the secret stays 600.
 ssh root@192.168.18.42 "chown 65532:65532 /opt/sterun/secrets/cloudflared-credentials.json"
 
-# 5. nyalakan
+# 5. bring it up
 ssh root@192.168.18.42 "cd /opt/sterun && \
   docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel up -d cloudflared"
 ```
 
-Sehat kalau lognya menunjukkan **empat** `Registered tunnel connection` (Cloudflare menyambung ke
-dua region, dua koneksi masing-masing).
+Healthy means the log shows **four** `Registered tunnel connection` lines (Cloudflare connects to two
+regions, two connections each).
 
-#### Kenapa `api-sterun` dan BUKAN `api.sterun`
+#### Why `api-sterun` and NOT `api.sterun`
 
-Nama yang diminta tiket awalnya `api.sterun.jameshub.fun`. Itu **tidak bisa dilayani** di plan
-Cloudflare sekarang, dan alasannya bukan konfigurasi:
+The name the ticket originally asked for was `api.sterun.jameshub.fun`. That **cannot be served** on
+the current Cloudflare plan, and the reason is not configuration:
 
-**Universal SSL cuma menerbitkan sertifikat satu tingkat** — `jameshub.fun` dan `*.jameshub.fun`.
-Nama dua tingkat butuh `*.sterun.jameshub.fun`, yang cuma ada lewat **Advanced Certificate
-Manager** (berbayar) atau Total TLS.
+**Universal SSL only issues certificates one level deep** — `jameshub.fun` and `*.jameshub.fun`. A
+two-level name needs `*.sterun.jameshub.fun`, which only exists with **Advanced Certificate Manager**
+(paid) or Total TLS.
 
-Dibuktikan, bukan ditebak:
+Demonstrated rather than guessed:
 
-| Hostname | Hasil |
+| Hostname | Result |
 | --- | --- |
-| `api.sterun.jameshub.fun` | `SSL alert number 40` — handshake ditolak di edge |
-| `api-sterun.jameshub.fun` | **14/14 lolos** |
+| `api.sterun.jameshub.fun` | `SSL alert number 40` — the handshake is refused at the edge |
+| `api-sterun.jameshub.fun` | **14/14 passing** |
 
-Yang bikin ini menyesatkan: request-nya **tidak pernah sampai** ke tunnel, jadi log cloudflared
-bersih dan keempat koneksinya sehat. Gejalanya persis seperti tunnel mati, padahal Cloudflare
-menolak sebelum meneruskan. Kalau suatu saat gejala ini muncul lagi untuk nama baru, cek dulu
-berapa tingkat sub-domainnya sebelum membongkar tunnel.
+What makes this misleading: the request **never reaches** the tunnel, so the cloudflared log is clean
+and all four connections are healthy. The symptom looks exactly like a dead tunnel while Cloudflare
+is refusing before it forwards. If this symptom ever appears again for a new name, count the
+sub-domain levels before taking the tunnel apart.
 
-> CNAME `api.sterun.jameshub.fun` sudah **dihapus** dari zona (lewat dashboard — `cloudflared`
-> tidak punya perintah untuk menghapus route DNS), dan aturan ingress-nya ikut dihapus dari
-> `deploy/cloudflared-config.yml`. Dua-duanya, sengaja: aturan tanpa DNS adalah kode mati yang
-> menyiratkan URL yang sebenarnya NXDOMAIN, dan DNS tanpa aturan adalah URL yang gagal dengan cara
-> yang membingungkan. Kalau ACM/Total TLS diaktifkan nanti, kembalikan keduanya dalam satu
-> perubahan — jangan salah satu saja.
+> The `api.sterun.jameshub.fun` CNAME has been **removed** from the zone (through the dashboard —
+> `cloudflared` has no command to delete a DNS route), and its ingress rule was removed from
+> `deploy/cloudflared-config.yml`. Both, deliberately: a rule without DNS is dead code implying a URL
+> that is really NXDOMAIN, and DNS without a rule is a URL that fails confusingly. If ACM or Total
+> TLS is ever enabled, restore both in one change — never just one of them.
 
-### `indexer rebuild` dan daftar scanner
+### `indexer rebuild` and the scanner list
 
-`rebuild` membangun ulang seluruh index dari state kontrak. Satu tabel tidak bisa ikut dibangun
-begitu: **`event_scanners`**. EventRegistry cuma punya `is_scanner(event_id, address)` — tanya satu
-address, jawab ya/tidak — dan tidak ada fungsi yang meng-enumerate isinya.
+`rebuild` reconstructs the whole index from contract state. One table cannot be reconstructed that
+way: **`event_scanners`**. EventRegistry only has `is_scanner(event_id, address)` — ask about one
+address, get yes or no — and there is no function that enumerates.
 
-Jadi `rebuild` memperlakukan tabel itu khusus:
+So `rebuild` treats that table specially:
 
-1. kumpulkan kandidat dari `event_scanners` **dan** dari replay `scanner_added`/`scanner_removed`
-   di `chain_events` (log mentah itu memang diselamatkan lewat rebuild),
-2. verifikasi tiap address ke chain dengan `is_scanner`,
-3. tulis balik yang masih diakui chain.
+1. gather candidates from `event_scanners` **and** from replaying `scanner_added`/`scanner_removed`
+   out of `chain_events` (that raw log is deliberately carried through a rebuild),
+2. verify each address against the chain with `is_scanner`,
+3. write back the ones the chain still recognises.
 
-Efeknya: `pnpm indexer rebuild` — termasuk sesudah tabelnya di-`TRUNCATE` tangan — mengembalikan
-daftar scanner, dan scanner yang dicabut saat index mati ikut hilang karena langkah 2.
+The effect: `pnpm indexer rebuild` — including after the table has been `TRUNCATE`d by hand —
+restores the scanner list, and a scanner revoked while the index was down disappears, thanks to step
+2.
 
-**Yang tetap tidak bisa dipulihkan**: scanner yang ditambahkan **sebelum** index ini pernah poll
-sama sekali. Tidak ada barisnya, tidak ada event-nya di log, dan chain tidak bisa ditanya "siapa
-saja". `/events/:eventId/scanners` akan under-report tanpa bisa tahu bahwa dia under-report.
+**What still cannot be recovered**: a scanner added **before** this index ever polled. There is no
+row, no event in the log, and the chain cannot be asked "who are they". `/events/:eventId/scanners`
+will under-report without any way to know that it is under-reporting.
 
-Kalau ragu daftarnya lengkap, jangan tebak — konfirmasi tiap address ke chain:
+When in doubt about whether the list is complete, do not guess — confirm each address against the
+chain:
 
 ```bash
-# organiser console memang sudah melakukan ini per address sebelum mempercayainya
+# the organiser console already does this per address before trusting one
 stellar contract invoke --id $EVENT_REGISTRY --network testnet \
   -- is_scanner --event_id 0 --address G...
 ```
 
-Dan ingat pembagian tugasnya: **otorisasi tidak pernah lewat tabel ini.** Roster bundle membaca
-allowlist dari chain (`reader.isScanner`) tiap request, jadi index yang under-report tidak pernah
-bisa memberi akses ke orang yang salah — paling buruk dia bikin console tidak menampilkan seseorang
-yang sebenarnya berhak.
+And remember the division of labour: **authorisation never goes through this table.** The roster
+bundle reads the allowlist from the chain (`reader.isScanner`) on every request, so an under-reporting
+index can never grant access to the wrong person — at worst it makes the console fail to show
+somebody who is genuinely entitled.
 
-### Pindah ke kontrak v2 — sudah dilakukan, dan begini caranya
+### Moving to the v2 contracts — done, and this is how
 
-Dilakukan 2026-09-09. Keputusannya James: pindah sekarang, karena makin lama makin banyak data yang
-harus dibuang. Saat itu isinya 3 participants (**semuanya `token_id` NULL** — tidak ada PII yang
-tertaut ke record on-chain), 7 event, 14 record.
+Done on 2026-09-09. James's decision: move now, because the longer it waits the more data has to be
+thrown away. At the time it held 3 participants (**all with a NULL `token_id`** — no PII was linked
+to an on-chain record), 7 events and 14 records.
 
-**Kenapa ini tidak pernah bisa jadi "ganti env lalu restart":** tidak ada kolom yang membedakan
-kontrak.
+**Why this could never be "change an env var and restart":** no column distinguishes one contract
+from another.
 
-| Tabel | Primary key | Bisa bedakan v1/v2? |
+| Table | Primary key | Can it tell v1 from v2? |
 | --- | --- | --- |
-| `events` | `event_id` | tidak |
-| `categories` | `(event_id, category_id)` | tidak |
-| `records` | `token_id` | tidak |
-| `participants` | `id` uuid, tapi menyimpan `event_id`/`token_id` | tidak |
-| `chain_events` | punya `contract_id` | **ya** — cuma log mentah |
+| `events` | `event_id` | no |
+| `categories` | `(event_id, category_id)` | no |
+| `records` | `token_id` | no |
+| `participants` | `id` uuid, but stores `event_id`/`token_id` | no |
+| `chain_events` | has `contract_id` | **yes** — but it is only the raw log |
 
-v2 menomori event dari 0 lagi, jadi v2 event 0 **menimpa** baris v1 event 0. Index bisa dibangun
-ulang dari state; `participants` tidak — dia menautkan dokumen identitas ke `token_id` yang sama, dan
-roster memetakan `token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah.
+v2 numbers events from 0 again, so v2 event 0 **overwrites** v1's event 0 row. The index can be
+rebuilt from state; `participants` cannot — it links identity documents to those same `token_id`s,
+and the roster maps `token_id` → `totp_secret`, so a scanner would validate the wrong person.
 
-**Cara alamatnya berpindah:** bukan env var. `docs/deployments.md` sekarang memakai nama **tanpa
-sufiks** untuk pasangan v2 (`| **EventRegistry** (C1) |`) dan melabeli yang lama `v1`. Parser di
-`src/deployments.ts` mencocokkan nama tanpa sufiks, jadi dokumen tetap satu-satunya sumber alamat —
-dan ada test yang gagal kalau parser me-resolve pasangan v1.
+**How the addresses moved:** not an environment variable. `docs/deployments.md` now uses the
+**unqualified** name for the v2 pair (`| **EventRegistry** (C1) |`) and labels the old one `v1`. The
+parser in `src/deployments.ts` matches the unqualified name, so the document remains the single
+source of addresses — and a test fails if the parser resolves the v1 pair.
 
-#### Prosedur (urutannya penting)
+#### The procedure (the order matters)
 
 ```bash
-# 1. BACKUP dulu. Tidak ada backup terjadwal; ini satu-satunya salinan.
+# 1. BACK UP FIRST. There is no scheduled backup; this is the only copy.
 mkdir -p /opt/sterun/backups
 docker exec sterun-postgres-1 pg_dump -U sterun -d sterun \
   | gzip > /opt/sterun/backups/pre-v2-$(date -u +%Y%m%dT%H%M%SZ).sql.gz
 
-# 2. Hentikan yang menulis. Poller yang jalan saat truncate akan mengisi
-#    ulang tabel dari kontrak LAMA di tengah proses.
+# 2. Stop the writers. A poller running during the truncate would refill the
+#    tables from the OLD contract halfway through.
 docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel stop indexer keeper api
 
-# 3. Kode baru (alamatnya ikut di image lewat docs/deployments.md).
+# 3. New code (the addresses travel in the image, via docs/deployments.md).
 git pull --ff-only origin main
 docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel up -d --build api
 
-# 4. Kosongkan index DAN vault. `indexer rebuild` TIDAK menyentuh participants —
-#    itu tabel yang tidak bisa dibangun ulang dari chain, jadi harus manual.
+# 4. Empty the index AND the vault. `indexer rebuild` does NOT touch participants —
+#    that is the table that cannot be rebuilt from the chain, so it has to be manual.
 docker exec sterun-postgres-1 psql -U sterun -d sterun -c \
   'TRUNCATE participants, records, events RESTART IDENTITY CASCADE'
 
-# 5. Bangun ulang dari state kontrak v2.
+# 5. Rebuild from v2 contract state.
 docker compose -f compose.prod.yml -f compose.homelab.yml run --rm indexer \
   node dist/cli/indexer.js rebuild
 
-# 6. Nyalakan lagi.
+# 6. Bring everything back up.
 docker compose -f compose.prod.yml -f compose.homelab.yml --profile tunnel up -d
 ```
 
-`chain_events` sengaja **tidak** di-truncate: dia punya `contract_id`, jadi log mentah v1 tetap jadi
-bukti yang bisa dibaca tanpa mencemari tabel materialisasi.
+`chain_events` is deliberately **not** truncated: it has a `contract_id`, so the raw v1 log stays as
+readable evidence without contaminating the materialised tables.
 
-#### Kalau harus mundur ke v1
+#### If it has to go back to v1
 
-Balikkan label di `docs/deployments.md`, deploy ulang, lalu `psql -f` backup dari langkah 1 ke
-database kosong. Jangan me-restore backup ke atas data v2 — hasilnya persis pencampuran yang
-seluruh prosedur ini hindari.
+Flip the labels in `docs/deployments.md`, redeploy, then `psql -f` the backup from step 1 into an
+empty database. Do **not** restore that backup on top of v2 data — the result is exactly the mixture
+this whole procedure avoids.
 
-### R2: object storage untuk file metadata
+### R2: object storage for metadata files
 
-Byte file event disimpan di **Cloudflare R2** kalau keempat variabel ini ada; kalau kosong, jatuh ke
-disk lokal.
+Event file bytes live in **Cloudflare R2** when all four of these variables are present; when they
+are all empty it falls back to local disk.
 
 ```bash
-STERUN_R2_ACCOUNT_ID=<32 hex, dari dashboard Cloudflare>
+STERUN_R2_ACCOUNT_ID=<32 hex, from the Cloudflare dashboard>
 STERUN_R2_BUCKET=sterun-files
 STERUN_R2_ACCESS_KEY_ID=<R2 API token: Access Key ID>
 STERUN_R2_SECRET_ACCESS_KEY=<R2 API token: Secret Access Key>
 ```
 
-**Keempatnya atau tidak sama sekali.** Tiga dari empat = proses start normal lalu gagal di upload
-pertama dengan 403 yang mirip secret salah. Startup menolak konfigurasi separuh.
+**All four or none.** Three of four means the process starts normally and then fails its first upload
+with a 403 that looks like a wrong secret. Startup refuses a half-configuration.
 
-Endpoint S3-nya dibentuk dari account id (`https://<id>.r2.cloudflarestorage.com`) dan region SigV4
-selalu **`auto`** — bukan `us-east-1`, walau itu di-alias.
+The S3 endpoint is built from the account id (`https://<id>.r2.cloudflarestorage.com`) and the SigV4
+region is always **`auto`** — not `us-east-1`, even though that is aliased.
 
-> `R2_TOKEN_VALUE` di `.env` adalah **API token Cloudflare**, bukan kredensial S3. Aplikasi tidak
-> memakainya; dia untuk mengelola bucket lewat `api.cloudflare.com` (membuat, melihat daftar).
-> Access Key ID + Secret Access Key yang di atas itu yang dipakai untuk baca/tulis objek.
+> `R2_TOKEN_VALUE` in `.env` is a **Cloudflare API token**, not an S3 credential. The application
+> does not use it; it is for managing buckets through `api.cloudflare.com` (creating them, listing
+> them). The Access Key ID + Secret Access Key above are what read and write objects.
 
-**URL publiknya tidak berubah.** File tetap disajikan API ini di `/files/:sha256`. Jangan
-menyalakan public bucket atau custom domain R2 lalu memindahkan URL ke sana: URL itu sudah
-di-commit on-chain permanen, dan header keamanan (CSP `sandbox`, `nosniff`) hilang begitu bucket
-yang menyajikan.
+**The public URL does not change.** Files are still served by this API at `/files/:sha256`. Do not
+switch on a public bucket or an R2 custom domain and move the URLs there: those URLs are committed
+on-chain permanently, and the security headers (the `sandbox` CSP, `nosniff`) disappear the moment a
+bucket is doing the serving.
 
-Cek isi bucket tanpa SSH ke box:
+Checking what a bucket holds without SSH-ing to the box:
 
 ```bash
-# butuh R2_TOKEN_VALUE (API token, bukan kredensial S3)
+# needs R2_TOKEN_VALUE (the API token, not the S3 credential)
 curl -s "https://api.cloudflare.com/client/v4/accounts/$ACC/r2/buckets" \
   -H "Authorization: Bearer $R2_TOKEN_VALUE" | jq '.result'
 ```
 
-**Pindah dari disk ke R2 (atau sebaliknya) tidak otomatis.** Objek yang sudah ada di volume tidak
-ikut berpindah, dan URL-nya akan 404 begitu store-nya berganti. Prosedurnya: unggah ulang tiap file
-dari volume ke bucket dengan key `files/<sha256>` dan content type yang benar, **sebelum** mengganti
-konfigurasi. Karena file-nya content-addressed, mengunggah ulang file yang sama tidak pernah
-menghasilkan URL berbeda — jadi migrasi ini aman diulang.
+**Moving from disk to R2 (or back) is not automatic.** Objects already on the volume do not travel,
+and their URLs 404 the moment the store changes. The procedure: re-upload every file from the volume
+into the bucket under the key `files/<sha256>` with the correct content type, **before** changing the
+configuration. Because the files are content-addressed, re-uploading the same file never produces a
+different URL — so this migration is safe to repeat.
 
-### File metadata event
+### Event metadata files
 
-Poster dan dokumen JSON tiap event disimpan **content-addressed**: nama file-nya adalah sha256
-isinya, dan itu juga angka yang masuk `create_event` sebagai `metadata_hash`.
+Each event's poster and JSON document are stored **content-addressed**: the filename is the sha256 of
+the contents, and that is also the number that goes into `create_event` as `metadata_hash`.
 
 ```bash
-# Yang harus ada di be/.env.production pada box publik:
+# What a public box must have in be/.env.production:
 STERUN_PUBLIC_BASE_URL=https://api-sterun.jameshub.fun
 ```
 
-Kalau variabel itu kosong, API menyusun URL dari header `Host` request. Header itu dikendalikan
-pemanggil, dan URL yang dikembalikan endpoint ini adalah URL yang organiser commit **permanen** ke
-ledger. Jadi di box yang bisa dijangkau internet, ini bukan opsional.
+When that variable is empty the API builds the URL from the request's `Host` header. That header is
+controlled by the caller, and the URL this endpoint returns is the one an organiser commits
+**permanently** to the ledger. So on a box reachable from the internet, this is not optional.
 
-**Volume `sterun-files` bukan cache — jangan pernah dihapus untuk "membersihkan".**
+**The `sterun-files` volume is not a cache — never delete it to "clean up".**
 
-Ini beda dengan `sterun-caddy-data` atau image yang bisa dibangun ulang. Hash file sudah ada di
-ledger dan tidak bisa dicabut; kalau byte-nya hilang, `uri` event itu menunjuk 404 selamanya dan
-halaman event menolak menampilkannya. Backup-nya barengan Postgres, bukan terpisah: satu baris event
-dan poster-nya itu satu fakta.
+This differs from `sterun-caddy-data` or an image, both of which can be rebuilt. A file's hash is
+already on the ledger and cannot be withdrawn; if the bytes are gone, that event's `uri` points at a
+404 forever and the event page refuses to display it. Back it up alongside Postgres rather than
+separately: an event row and its poster are one fact.
 
 ```bash
-# Cek isinya dan berapa besarnya
+# What it holds and how big it is
 docker exec sterun-api-1 du -sh /app/data/files
 docker exec sterun-api-1 find /app/data/files -type f | wc -l
 
-# Backup (bareng dump database, dalam satu jendela waktu)
+# Backup (together with the database dump, in one window)
 docker run --rm -v sterun_sterun-files:/data -v "$PWD:/out" alpine \
   tar czf /out/sterun-files-$(date -u +%Y%m%d).tar.gz -C /data .
 ```
 
-**Plafon store.** `STERUN_FILES_MAX_BYTES` (default 512 MiB) adalah satu-satunya hal yang membatasi
-pertumbuhan: siapa pun pemegang keypair Stellar boleh upload, dan keypair gratis dibikin, jadi
-aturan per-address tidak menahan apa pun. Kalau penuh, endpoint menjawab **507** dengan pesan yang
-menyebut variabel ini — naikkan, atau (nanti, kalau sweeper-nya sudah ada) bersihkan file yatim.
-Yang **jangan** dilakukan: menghapus file sembarangan, karena tidak ada cara membedakan poster yang
-sudah dirujuk on-chain dari yang belum tanpa membaca `uri` tiap event di index.
+**The store ceiling.** `STERUN_FILES_MAX_BYTES` (512 MiB by default) is the only thing bounding
+growth: anyone holding a Stellar keypair may upload, and keypairs are free to make, so a per-address
+rule holds nothing back. When it is full the endpoint answers **507** with a message naming this
+variable — raise it, or (later, once the sweeper exists) clear out orphaned files. What **not** to
+do: delete files at random, because there is no way to tell a poster already referenced on-chain from
+one that is not without reading every event's `uri` in the index.
 
-**Kalau upload gagal `EACCES`.** Artinya volume-nya dibuat sebelum image punya `/app/data/files`
-milik uid 1000 — Docker membuat volume kosong milik root kalau path-nya tidak ada di image. Perbaiki
-sekali:
+**If an upload fails with `EACCES`.** It means the volume was created before the image had
+`/app/data/files` owned by uid 1000 — Docker creates an empty volume owned by root when the path is
+absent from the image. Fix it once:
 
 ```bash
 docker run --rm -v sterun_sterun-files:/data alpine chown -R 1000:1000 /data
 docker compose -f compose.prod.yml -f compose.homelab.yml up -d api
 ```
 
-#### Tailscale Funnel: cadangan, sekarang mati
+#### Tailscale Funnel: the fallback, currently off
 
-Sebelum tunnel ada, ingress-nya Tailscale Funnel di pve01. Sudah dimatikan
-(`tailscale funnel --https=443 off`) supaya tidak ada dua pintu publik yang tidak diurus. Kalau
-tunnel bermasalah dan butuh jalan cepat:
+Before the tunnel existed, the ingress was Tailscale Funnel on pve01. It has been turned off
+(`tailscale funnel --https=443 off`) so there are not two public doors with only one being looked
+after. If the tunnel misbehaves and a quick way back is needed:
 
 ```bash
 ssh root@100.111.186.114 "tailscale funnel --bg http://192.168.18.42:3001"
 ```
 
-Itu memberi URL publik ber-TLS di `pve01.<tailnet>.ts.net` dalam hitungan detik, tanpa Cloudflare.
+That gives a public TLS URL at `pve01.<tailnet>.ts.net` within seconds, without Cloudflare.
 
-#### Keeper: cadence-nya urusan compose, bukan CLI
+#### The keeper: its cadence belongs to compose, not to the CLI
 
-`keeper run` **one-shot** — headernya sendiri bilang "intended as a weekly cron" — jadi dia exit 0
-begitu selesai. Menjalankannya telanjang dengan `restart: unless-stopped` berarti Docker
-menyalakannya lagi seketika, selamanya. Itu benar-benar terjadi di box ini: **37 restart, run
-#1766**, scan 42 key tiap beberapa detik, semuanya ke RPC testnet **publik**.
+`keeper run` is **one-shot** — its own header says "intended as a weekly cron" — so it exits 0 as
+soon as it finishes. Running it bare under `restart: unless-stopped` means Docker starts it again
+immediately, forever. That genuinely happened on this box: **37 restarts, run #1766**, scanning 42
+keys every few seconds, all of it against the **public** testnet RPC.
 
-Sekarang loop-nya ada di `command:` service keeper, dan intervalnya
-`TTL_KEEPER_INTERVAL_SECONDS` (default 604800 = seminggu). Run pertama tetap langsung, supaya
-deploy membuktikan keeper-nya jalan — bukan membuktikannya tujuh hari lagi.
+The loop now lives in the keeper service's `command:`, and the interval is
+`TTL_KEEPER_INTERVAL_SECONDS` (604800 by default, a week). The first run is still immediate, so a
+deploy proves the keeper works — rather than proving it seven days later.
 
-Cara memastikan dia sehat: `docker inspect sterun-keeper-1 --format "{{.RestartCount}}"` harus
-**0**, dan lognya berakhir di `keeper sleeping 604800s until the next run`. Kalau angkanya naik
-terus, dia balik ke restart storm.
+How to confirm it is healthy: `docker inspect sterun-keeper-1 --format "{{.RestartCount}}"` must be
+**0**, and its log should end at `keeper sleeping 604800s until the next run`. If that number keeps
+climbing, it is back in a restart storm.
 
-#### Operasional harian
+#### Day-to-day operations
 
 ```bash
 ssh root@192.168.18.42
@@ -736,112 +736,119 @@ docker compose -f compose.prod.yml -f compose.homelab.yml ps
 docker compose -f compose.prod.yml -f compose.homelab.yml logs -f api
 ```
 
-`compose.homelab.yml` cuma menambahkan satu hal: mem-publish port API **ke IP LAN saja**
-(`192.168.18.42:3001`), bukan `0.0.0.0`. Itu perlu karena ingress-nya ada di host lain (pve01);
-Postgres tetap tanpa `ports:` sama sekali.
+`compose.homelab.yml` adds exactly one thing: it publishes the API port **to the LAN IP only**
+(`192.168.18.42:3001`), not `0.0.0.0`. That is needed because the ingress lives on another host
+(pve01); Postgres still has no `ports:` at all.
 
-#### Yang berbeda dari `be/.env` laptop
+#### What differs from a laptop's `be/.env`
 
-- `PII_KEYS` produksi **berbeda** dari yang di laptop. Deployment baru, vault kosong, tidak ada yang
-  perlu didekripsi dengan kunci lama — dan satu kunci di dua tempat berarti bocornya laptop =
-  bocornya produksi.
-- `TTL_KEEPER_SECRET` adalah akun **baru** yang dibuat khusus untuk VPS ini
+- The production `PII_KEYS` are **different** from the laptop's. New deployment, empty vault, nothing
+  that needs decrypting with an old key — and one key in two places means a leaked laptop is a leaked
+  production.
+- `TTL_KEEPER_SECRET` is a **new** account created specifically for this VPS
   ([`GD3MSYCLECUOUQNFFXJLGB7ZKCUANIRNYM7QGKS2YUVRDLWY4IDAABL4`](https://stellar.expert/explorer/testnet/account/GD3MSYCLECUOUQNFFXJLGB7ZKCUANIRNYM7QGKS2YUVRDLWY4IDAABL4)),
-  bukan akun dari bukti STE-16. Cuma butuh XLM: memperpanjang TTL tidak butuh otorisasi siapa pun.
-- `SUSD_DISTRIBUTOR_SECRET` sengaja **tidak diisi**. API tidak pernah memakainya — faucet itu CLI,
-  bukan endpoint — dan kunci yang bisa memindahkan seluruh supply test tidak punya alasan berada di
-  host publik.
+  not the account from the STE-16 evidence. It only needs XLM: extending a TTL needs nobody's
+  authorisation.
+- `SUSD_DISTRIBUTOR_SECRET` is deliberately **left empty**. The API never uses it — the faucet is a
+  CLI, not an endpoint — and a key that can move the entire test supply has no reason to sit on a
+  public host.
 
-### Verifikasi — dari luar, tanpa SSH
+### Verification — from outside, without SSH
 
 ```bash
-./deploy/verify-deployment.sh https://api.sterun.example
+./deploy/verify-deployment.sh https://api-sterun.jameshub.fun
 ```
 
-13 pemeriksaan. Yang penting bukan cuma `/health`:
+Eighteen checks at present (the script counts what passes rather than asserting a fixed total, so the
+number grows as endpoints are added). What matters is not only `/health`:
 
-- **TLS** benar-benar terminasi, dan `--proto '=https'` menolak redirect dari plaintext — URL yang
-  diam-diam turun ke HTTP akan lolos semua cek lain sambil mengirim signature wallet telanjang.
-- **`/ready`** membuktikan database-nya kebaca. `/health` sengaja **tidak** menyentuh apa pun:
-  liveness probe yang memanggil dependency melaporkan outage orang lain sebagai outage kita, dan
-  container-nya di-restart karena itu. Caddy mengawasi `/ready`; Docker mengawasi `/health`.
-- **Endpoint sensitif tetap 401** tanpa signature. Deploy yang salah di sini akan menyajikan data
-  yang bersinggungan dengan identitas ke internet — dan kelihatan sehat sempurna dari semua cek lain.
+- **TLS** genuinely terminates, and `--proto '=https'` refuses a redirect from plaintext — a URL that
+  quietly drops to HTTP would pass every other check while sending wallet signatures in the clear.
+- **`/ready`** proves the database is readable. `/health` deliberately touches **nothing**: a liveness
+  probe that calls a dependency reports someone else's outage as ours, and gets the container
+  restarted for it. Caddy watches `/ready`; Docker watches `/health`.
+- **The sensitive endpoints still answer 401** without a signature. A deployment that gets this wrong
+  would serve identity-adjacent data to the internet — and look perfectly healthy in every other
+  check.
+- **SVG is absent from the accepted upload types.** SVG is XML that can carry `<script>`, served from
+  the same origin as the PII vault; the check exists so adding it can never pass unnoticed.
 
-Simpan output-nya (ada timestamp UTC) ke `docs/deployments.md` sebagai bukti Working agreement
-poin 8.
+Save the output (it carries a UTC timestamp) into `docs/deployments.md` as evidence, per working
+agreement point 8.
 
-### Yang bikin dia bertahan reboot
+### What makes it survive a reboot
 
-`restart: unless-stopped` di semua service. Bukan `always`: container yang **sengaja** dimatikan
-operator harus tetap mati setelah reboot, kalau tidak, mematikan sesuatu untuk maintenance akan
-dibatalkan oleh mati listrik berikutnya.
+`restart: unless-stopped` on every service. Not `always`: a container an operator **deliberately**
+stopped must stay stopped after a reboot, otherwise stopping something for maintenance gets undone by
+the next power cut.
 
-### Postgres tidak punya `ports:`
+### Postgres has no `ports:`
 
-Disengaja, dan ini satu baris yang menahan kesalahan firewall menaruh database PII di internet
-publik. Postgres cuma bisa dicapai dari network compose. Untuk `psql` dari VPS:
+Deliberate, and it is the one line that stops a firewall mistake from putting the PII database on the
+public internet. Postgres is reachable only from the compose network. For `psql` from the VPS:
 
 ```bash
 docker compose -f compose.prod.yml exec postgres psql -U sterun sterun
 ```
 
-### Setelah deploy
+### After a deploy
 
 ```bash
-# Index-nya kosong sampai poller menyusul. Ini normal, bukan bug.
+# The index is empty until the poller catches up. That is normal, not a bug.
 docker compose -f compose.prod.yml logs -f indexer
 
-# Kalau RPC sudah melewati jendela getEvents-nya, bangun ulang dari state kontrak:
+# If the RPC has already moved past its getEvents window, rebuild from contract state:
 docker compose -f compose.prod.yml run --rm indexer node dist/cli/indexer.js rebuild
 ```
 
-### Nonce sekarang di Postgres
+### Nonces now live in Postgres
 
-Sejak STE-31, nonce auth hidup di tabel `auth_nonces`, bukan di memori proses. Itu yang membuat
-**instance kedua mungkin**: nonce yang diterbitkan instance A dan dibelanjakan di instance B dulu
-gagal dengan `unknown-nonce` — kebohongan yang cuma muncul saat ramai, cuma kadang-kadang, dan
-menyuruh orang memeriksa kode signing-nya.
+Since STE-31, auth nonces live in the `auth_nonces` table rather than in process memory. That is what
+makes **a second instance possible**: a nonce issued by instance A and spent against instance B used
+to fail with `unknown-nonce` — a lie that only appears under load, only sometimes, and sends people
+to inspect their signing code.
 
-Sifat sekali-pakainya dijaga `DELETE … RETURNING`, satu statement yang atomik. Dua instance yang
-menyodorkan nonce sama pada saat bersamaan menghasilkan **satu** baris di antara mereka.
+Single use is held by `DELETE … RETURNING`, one atomic statement. Two instances presenting the same
+nonce at the same moment produce **one** row between them.
 
-Menambah replica API sekarang jadi perubahan config, bukan penulisan ulang — tapi tetap belum
-dilakukan dan belum diuji di bawah load nyata.
+Adding an API replica is now a configuration change rather than a rewrite — but it still has not been
+done, and has not been tested under real load.
 
 ### Rollback
 
 ```bash
-git checkout <commit sebelumnya>
+git checkout <the previous commit>
 docker compose -f compose.prod.yml up -d --build
 ```
 
-Migrasi **maju saja** — tidak ada `down`. Rollback ke commit yang schema-nya lebih tua akan jalan
-selama migrasi barunya aditif (sampai sekarang semuanya begitu). Migrasi yang menghapus kolom akan
-memutus ini, dan itu harus dibahas sebelum ditulis, bukan sesudah.
+Migrations are **forward-only** — there is no `down`. Rolling back to a commit with an older schema
+works as long as the newer migrations were additive (so far they all have been). A migration that
+drops a column would break this, and that has to be discussed before it is written, not afterwards.
 
-## Yang belum ada (jangan diasumsikan sudah)
+## Not there yet (do not assume otherwise)
 
-- **Nonce auth masih in-memory.** Aman untuk satu proses; **tidak** aman untuk dua. STE-31 wajib
-  memindahkannya ke Redis/Postgres sebelum ada instance kedua — nonce yang diterbitkan instance A
-  lalu dipakai di instance B akan gagal secara acak, dan itu cara terburuk untuk mengetahuinya.
-- **Belum ada rate limit** di `/auth/challenge` maupun `/participants`.
-- **Belum ada job re-encrypt** untuk rotasi (langkah 3 di atas).
-- **Belum ada backup policy.** Kalau backup dibuat: backup database dan kunci **tidak boleh**
-  disimpan di tempat yang sama.
-- **Belum ada penghapusan data** (right to erasure). Baris vault bisa dihapus; `participant_hash`
-  di chain tidak bisa.
-- **Belum ada alert otomatis** kalau keeper tidak jalan atau `missing_keys > 0`. Sekarang caranya
-  membaca `ttl_keeper_runs` (`pnpm keeper report`). STE-31 menjalankan keeper sebagai container yang
-  restart sendiri; **notifikasi kalau dia berhenti masih belum ada**.
-- **Keeper memindai per record.** Biayanya `2 x jumlah record + jumlah runner` simulasi per run.
-  Cukup untuk skala MVP (satu event, ratusan entry, mingguan) dan tidak cukup untuk puluhan ribu.
-  Perbaikan yang jujur saat itu tiba adalah memperpanjang **per kategori**, dan itu butuh perubahan
-  kontrak — bukan sekadar batch size yang lebih besar.
-- **Backfill `name_fragment` tidak mungkin** untuk baris yang dibuat sebelum migrasi 003: fragmennya
-  cuma bisa diturunkan dari plaintext saat submit. Roster melaporkannya `null`.
-- ~~**Indexer belum di-deploy sebagai service.**~~ STE-31: container `indexer` di
+- **No scheduled backups.** This is the next infrastructure step, and it blocks the two below it: a
+  replica is availability, a backup is recovery, and a replica copies a mistyped `DROP TABLE`
+  faithfully. When backups do exist: the database backup and the keys must **not** live in the same
+  place.
+- **The rate limiter's state is in memory.** The limits themselves exist and are per-endpoint since
+  STE-20, but two instances would mean twice the effective limit. Redis before a second replica.
+- **No re-encryption job** for rotation (step 3 above).
+- **No data erasure** (right to erasure). A vault row can be deleted; `participant_hash` on chain
+  cannot.
+- **No automatic alert** when the keeper stops or `missing_keys > 0`. For now the way to know is to
+  read `ttl_keeper_runs` (`pnpm keeper report`). STE-31 runs the keeper as a self-restarting
+  container; **being notified when it stops still does not exist**.
+- **No orphan-file sweeper.** A file no event's `uri` references stays stored. What bounds growth is
+  the store ceiling, not deletion.
+- **The keeper scans per record.** It costs `2 x records + runners` simulations per run. Enough at MVP
+  scale (one event, hundreds of entries, weekly) and not enough for tens of thousands. The honest
+  improvement when that arrives is extending **per category**, and that needs a contract change — not
+  merely a larger batch size.
+- **Backfilling `name_fragment` is impossible** for rows created before migration 003: the fragment
+  can only be derived from the plaintext at submit time. The roster reports `null`.
+- ~~**The indexer is not deployed as a service.**~~ STE-31: an `indexer` container in
   `compose.prod.yml`, `restart: unless-stopped`.
-- **Akun keeper masih akun testnet sekali pakai.** Yang dipakai di bukti (`GCYM7TQB…XV26`) dibuat
-  lewat friendbot dari laptop. Untuk VPS, STE-31 bikin akunnya sendiri dan menaruh secretnya di
-  secret manager — bukan menyalin yang ini.
+- **The keeper account is still a throwaway testnet account.** The one in the evidence
+  (`GCYM7TQB…XV26`) was made through friendbot from a laptop. For the VPS, STE-31 created its own and
+  put the secret in a secret manager — rather than copying this one.

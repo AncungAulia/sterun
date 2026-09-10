@@ -1,619 +1,627 @@
-# `be/` — backend Node/TS (CLAUDE.md)
+# `be/` — Node/TS backend (CLAUDE.md)
 
-API + helper Stellar + **PII vault** + **indexer** + **TTL keeper** + **results review** +
-**file metadata event**.
-Owner: **James**. Komponen **C7** (PII vault + API, STE-11; results CSV + hardening, STE-20) dan
-**C8** (indexer, TTL keeper, roster bundle, STE-16).
+API + Stellar helpers + **PII vault** + **indexer** + **TTL keeper** + **results review** + **event
+metadata files**. Owner: **James**. Components **C7** (PII vault + API, STE-11; results CSV +
+hardening, STE-20) and **C8** (indexer, TTL keeper, roster bundle, STE-16).
 
-Tiga proses, satu paket. Yang mana yang jalan ditentukan oleh perintah yang kamu ketik, bukan flag:
+Three processes, one package. Which one runs is decided by the command you type, not by a flag:
 
-| Proses | Perintah | Tugasnya |
+| Process | Command | Its job |
 | --- | --- | --- |
-| API | `pnpm dev` | melayani vault, directory/history, roster bundle, review hasil |
+| API | `pnpm dev` | serves the vault, directory/history, roster bundle, results review |
 | Poller | `pnpm indexer follow` | `getEvents` → Postgres |
-| Keeper | `pnpm keeper run` | bayar sewa record supaya tidak ter-archive (cron mingguan) |
+| Keeper | `pnpm keeper run` | pays record rent so entries are not archived (a weekly cron) |
 
-API **melayani** index; dia tidak mengisinya. Kalau `/events` kosong, yang belum jalan adalah
-poller-nya. Operasional lengkap (rebuild, runbook restore, format roster): [`OPERATIONS.md`](OPERATIONS.md).
+The API **serves** the index; it does not fill it. If `/events` is empty, the poller is what is not
+running. Full operational detail (rebuild, restore runbook, roster format):
+[`OPERATIONS.md`](OPERATIONS.md).
 
-## Stack (sudah dipilih, jangan diputuskan ulang tanpa alasan)
+## Stack (already chosen; do not reopen without a reason)
 
-| Bagian | Pilihan | Kenapa |
+| Part | Choice | Why |
 | --- | --- | --- |
-| Runtime | Node ≥ 22 (dipakai 24), ESM (`"type": "module"`) | Next.js dan bindings juga ESM |
-| Framework | **Fastify 5** | ringan, TS-first, schema validation bawaan |
-| Stellar | `@stellar/stellar-sdk` ^17 | mayor terbaru; be/ bicara langsung ke testnet protocol 26 |
-| Database | **Postgres 17** + `pg`, tanpa ORM | yang dilakukan service ini ke DB cuma segelintir statement tangan; ORM menambah lapisan mapping dan SQL kejutan tanpa imbalan |
-| Migrasi | script sendiri (~60 baris) di `src/db/migrate.ts` | urut nama, sekali jalan, dalam transaksi, sha256 dicatat; framework menambah DSL dan mode gagal untuk fitur yang tidak dipakai |
-| Test | **Vitest** | cepat, ESM native, `inject()` Fastify tanpa buka socket |
+| Runtime | Node ≥ 22 (we use 24), ESM (`"type": "module"`) | Next.js and the bindings are ESM too |
+| Framework | **Fastify 5** | light, TS-first, schema validation built in |
+| Stellar | `@stellar/stellar-sdk` ^17 | latest major; `be/` talks straight to protocol 26 testnet |
+| Database | **Postgres 17** + `pg`, no ORM | what this service does to the database is a handful of hand-written statements; an ORM adds a mapping layer and surprising SQL for nothing |
+| Migrations | a ~60-line script in `src/db/migrate.ts` | ordered by filename, applied once, inside a transaction, sha256 recorded; a framework adds a DSL and failure modes for features we do not use |
+| Tests | **Vitest** | fast, native ESM, Fastify `inject()` without opening a socket |
 | Lint | ESLint 10 flat config + typescript-eslint | |
-| Build | `tsc` ke `dist/`, `tsx` untuk dev/CLI | |
+| Build | `tsc` to `dist/`, `tsx` for dev and the CLIs | |
 
-`tsconfig.json` sengaja ketat: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
-`verbatimModuleSyntax`. `pnpm typecheck` mengecek **src + test** (dua tsconfig) — Vitest cuma
-mentranspilasi test, tidak mengecek tipenya.
+`tsconfig.json` is deliberately strict: `strict`, `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `verbatimModuleSyntax`. `pnpm typecheck` checks **src + test** (two
+tsconfigs) — Vitest only transpiles tests, it does not typecheck them.
 
 ```bash
-docker compose up -d postgres   # dari root — Postgres di :55432
-cp be/.env.example be/.env      # isi DATABASE_URL + PII_KEYS
-pnpm --filter be dev            # atau `pnpm dev` dari root
-pnpm --filter be test           # test DB di-skip kalau DATABASE_URL kosong
+docker compose up -d postgres   # from the root — Postgres on :55432
+cp be/.env.example be/.env      # fill in DATABASE_URL + PII_KEYS
+pnpm --filter be dev            # or `pnpm dev` from the root
+pnpm --filter be test           # database tests skip when DATABASE_URL is empty
 pnpm --filter be lint
 pnpm --filter be typecheck
-pnpm faucet --new               # dari root
-pnpm indexer follow             # poller (STE-16); `poll`, `rebuild`, `doctor`, `status`
-pnpm keeper scan                # TTL keeper dry run; `run`, `report`, `restore`
+pnpm faucet --new               # from the root
+pnpm indexer follow             # the poller (STE-16); also `poll`, `rebuild`, `doctor`, `status`
+pnpm keeper scan                # TTL keeper dry run; also `run`, `report`, `restore`
 ```
 
-Test yang butuh database **di-skip** lokal kalau `DATABASE_URL` kosong (dengan instruksinya), tapi
-**gagal keras** kalau `CI` di-set. Suite yang diam-diam melewati test terpentingnya lebih buruk
-daripada tidak ada suite.
+Tests that need a database **skip** locally when `DATABASE_URL` is empty (and say how to fix it),
+but **fail hard** when `CI` is set. A suite that quietly skips its most important tests is worse
+than no suite.
 
-## Aturan yang tidak bisa ditawar
+## The non-negotiable rules
 
-**1. Alamat Stellar TIDAK PERNAH di-hardcode.** Semuanya dibaca dari
-[`docs/deployments.md`](../docs/deployments.md) lewat `src/deployments.ts`, boleh ditimpa env var.
-Tidak ada fallback ketiga: dokumen tidak terbaca + env kosong = proses mati saat startup, bukan
-jalan sambil menunjuk kontrak yang salah. Parser-nya sekalian mengecek konsistensi dokumen itu —
-alamat SAC muncul di tiga tabel, ketiganya wajib sama.
+**1. Stellar addresses are NEVER hardcoded.** All of them are read from
+[`docs/deployments.md`](../docs/deployments.md) through `src/deployments.ts`, overridable by
+environment variable. There is no third fallback: an unreadable document plus an empty environment
+kills the process at startup rather than running while pointed at the wrong contract. The parser
+also checks that document for consistency — the SAC address appears in three tables and all three
+must agree.
 
-**2. PII tidak pernah menyentuh chain.** On-chain cuma `participant_hash`. Nama, NIK, kontak
-darurat: terenkripsi at rest, off-chain, tidak pernah masuk `uri`, tidak pernah masuk event.
-Sesuatu yang bisa mengidentifikasi orang dan terlanjur masuk chain **tidak bisa dihapus**.
+**2. PII never touches the chain.** On-chain there is only `participant_hash`. Names, national ID
+numbers and emergency contacts are encrypted at rest, off-chain, never in a `uri`, never in an
+event. Anything that can identify a person and reaches a chain **cannot be removed**.
 
-> Satu-satunya turunan nama yang keluar dari vault adalah **`name_fragment`** di roster bundle
-> (STE-16): nama depan utuh + inisial sisanya, dihitung sekali saat submit dan **itu** yang
-> disimpan, terenkripsi dengan AAD per-baris yang sama. Bukan nama yang dikaburkan — informasinya
-> memang sudah tidak ada di sana. Alasannya, batasannya, dan siapa yang boleh mengunduhnya:
-> [`OPERATIONS.md`](OPERATIONS.md) bagian roster bundle.
+> The only derivative of a name that leaves the vault is **`name_fragment`** in the roster bundle
+> (STE-16): the full given name plus initials for the rest, computed once at submit time and stored
+> in that form, encrypted with the same per-row AAD. It is not an obscured name — the information is
+> genuinely no longer there. Its reasoning, its limits and who may download it:
+> [`OPERATIONS.md`](OPERATIONS.md), the roster bundle section.
 
-**3. Uang tidak pernah lewat float.** sUSD itu `i128` stroop, 7 desimal. Round-trip float untuk
-0,1 sUSD meleset satu stroop, dan satu stroop meleset di biaya pendaftaran = `enter` gagal tanpa
-penjelasan. Pakai `BigInt`; `parseFloat` diblokir eslint di paket ini.
+**3. Money never travels through a float.** sUSD is `i128` stroops, 7 decimals. A float round trip
+of 0.1 sUSD is off by one stroop, and one stroop off in an entry fee means `enter` fails with no
+explanation. Use `BigInt`; `parseFloat` is blocked by eslint in this package.
 
-**4. Secret cuma di `be/.env`.** `SUSD_DISTRIBUTOR_SECRET` bisa memindahkan seluruh supply test;
-`PII_KEYS` membuka seluruh PII. `.env` di-gitignore, `.env.example` yang di-commit. Jangan pernah
-menaruh `S...` atau kunci PII di file lain, di tiket, di chat, atau di log.
+**4. Secrets live only in `be/.env`.** `SUSD_DISTRIBUTOR_SECRET` can move the entire test supply;
+`PII_KEYS` opens all of the PII. `.env` is gitignored and `.env.example` is what gets committed.
+Never put an `S...` key or a PII key in another file, in a ticket, in chat, or in a log.
 
-> **`maxLength` di response schema itu DOKUMENTASI, bukan penegakan.** Diuji, bukan diasumsikan:
-> `fast-json-stringify` mengabaikannya saat serialisasi dan mengirim string apa adanya. Yang
-> ditegakkan cuma **daftar propertinya** — field yang tidak disebut schema memang tidak bisa lewat.
-> Panjangnya harus dibatasi di nilainya, sebelum masuk object response (`bounded()` di
-> `routes/roster.ts`). Komentar lama di sana mengklaim sebaliknya; klaim keamanan yang dipercaya
-> tapi tidak ada lebih buruk daripada yang diketahui tidak ada, karena tidak ada yang mencari
-> penggantinya.
+> **`maxLength` in a response schema is DOCUMENTATION, not enforcement.** Tested rather than
+> assumed: `fast-json-stringify` ignores it during serialisation and emits the string it is given.
+> What *is* enforced is the **property list** — a field the schema does not name genuinely cannot get
+> through. Length has to be bounded on the value, before it reaches the response object (`bounded()`
+> in `routes/roster.ts`). An older comment there claimed the opposite; a security control that is
+> believed and absent is worse than one known to be missing, because nobody goes looking for the
+> real one.
 
-**5. Response tidak boleh bisa membawa PII.** Tiap response punya JSON schema eksplisit dengan
-`additionalProperties: false`. Fastify men-serialisasi **hanya** properti yang disebut schema, jadi
-field yang tidak ada di schema **tidak bisa** sampai ke client walaupun ada di object-nya. Ini
-kontrol keamanan, bukan dokumentasi — dan ada test yang membaca schema-nya untuk membuktikan tidak
-satu pun bisa mengekspresikan `name`/`national_id`/`emergency_contact`.
+**5. No response may be able to carry PII.** Every response has an explicit JSON schema with
+`additionalProperties: false`. Fastify serialises **only** the properties the schema names, so a
+field the schema does not mention **cannot** reach a client even when it is present on the object.
+This is a security control rather than documentation — and a test reads the schemas to prove that
+not one of them can express `name`/`national_id`/`emergency_contact`.
 
-`test/response-schemas.test.ts` menjalankan itu ke **seluruh** API sekaligus, jadi router baru ikut
-terjaga tanpa menambah test. Konsekuensi yang kelihatan aneh sampai kamu tahu alasannya: nama event
-on-chain dikirim sebagai **`event_name`**, bukan `name`. Satu aturan tanpa pengecualian bisa
-diperiksa; aturan dengan daftar "yang ini `name` boleh" berhenti menangkap apa pun.
+`test/response-schemas.test.ts` runs that across the **whole** API at once, so a new router is
+covered without adding a test. One consequence looks odd until you know why: the on-chain event name
+is sent as **`event_name`**, not `name`. A rule with no exceptions can be checked; a rule with a list
+of "this `name` is allowed" exceptions stops catching anything.
 
-**5b. Nilai yang tidak muat di JSON number dikirim sebagai string.** `starts_at`, `entered_at`,
-`price_stroops`, dan kawan-kawannya adalah u64/i128. Ada test yang membaca schema-nya dan menolak
-`type: "integer"` untuk field-field itu.
+**5b. Values that do not fit in a JSON number are sent as strings.** `starts_at`, `entered_at`,
+`price_stroops` and friends are u64/i128. A test reads the schemas and rejects `type: "integer"` for
+those fields.
 
-**6. `removeAdditional` dimatikan.** Default Fastify diam-diam **membuang** field yang tidak dikenal
-schema. Untuk API yang dipakai orang lain, itu mengubah typo nama field jadi request yang sukses
-sambil membuang sesuatu yang dikira terkirim. Sekarang `additionalProperties: false` berarti **400**.
+**6. `removeAdditional` is off.** Fastify's default silently **drops** a field the schema does not
+know. For an API other people write clients against, that turns a typo'd field name into a
+successful request that quietly discarded something the caller believed they sent. Now
+`additionalProperties: false` means **400**.
 
-## Kode error kontrak: pilih peta dari band-nya
+## Contract error codes: pick the map from the band
 
-`enter` cross-call ke EventRegistry **dan** SAC, dan revert mereka merambat apa adanya. `ScError`
-cuma `u32` tanpa identitas kontrak, jadi angkanya yang menentukan:
+`enter` cross-calls both EventRegistry **and** the SAC, and their reverts propagate as-is. An
+`ScError` is only a `u32` with no contract identity, so the number decides:
 
-| Band | Peta error yang benar |
+| Band | The correct error map |
 | --- | --- |
-| `1..=99` | `Errors` dari paket `event-registry` |
-| `100..=199` | `Errors` dari paket `race-record` |
-| `200..=214` | `NonFungibleTokenError` dari paket `race-record` |
+| `1..=99` | `Errors` from the `event-registry` package |
+| `100..=199` | `Errors` from the `race-record` package |
+| `200..=214` | `NonFungibleTokenError` from the `race-record` package |
 
-`Error(Contract, #4)` dari `enter` **bukan** error RaceRecord — itu `EventNotOpen` milik
-EventRegistry.
+`Error(Contract, #4)` out of `enter` is **not** a RaceRecord error — it is EventRegistry's
+`EventNotOpen`.
 
-## Memanggil kontrak
+## Calling the contracts
 
-Ada **dua** jalur, dan yang mana dipakai bukan selera:
+There are **two** paths, and which one applies is not a matter of taste:
 
-| Jalur | Dipakai oleh | Kenapa |
+| Path | Used by | Why |
 | --- | --- | --- |
-| `@stellar/stellar-sdk` ^17 langsung (`src/chain/`) | faucet (STE-6), indexer + keeper (STE-16) | satu versi SDK di dalam proses yang jalan terus, dan tidak menambah langkah build ke CI TS |
-| bindings di `sc/bindings/` lewat `file:` | `SterunClient` (STE-15) | tidak mengetik ulang signature kontrak untuk konsumen D2/D3 |
+| `@stellar/stellar-sdk` ^17 directly (`src/chain/`) | faucet (STE-6), indexer + keeper (STE-16) | one SDK version inside a long-running process, and no extra build step in TS CI |
+| the bindings in `sc/bindings/` | `SterunClient` (STE-15) | no retyping contract signatures for D2/D3 consumers |
 
-Alasan indexer **tidak** memakai bindings, ditulis supaya tidak dibahas ulang: bindings menyematkan
-`@stellar/stellar-sdk ^14.6.1` (dua RPC client dalam satu proses), `dist/`-nya tidak di-commit
-sehingga butuh `npm install && npm run build` di dua paket lagi — langkah yang tidak dimiliki
-`typescript.yml` dan tidak pantas ditambahkan hanya supaya indexer bisa membaca sebuah struct — dan
-yang dibutuhkan indexer cuma **bentuk** empat return value, yang dicek `src/chain/decode.ts` lebih
-ketat daripada parser hasil generate.
+Why the indexer does **not** use the bindings, written down so it is not re-argued: the bindings pin
+`@stellar/stellar-sdk ^14.6.1` (two RPC clients in one process), their `dist/` is not committed so
+they need `npm install && npm run build` in two more packages — a step `typescript.yml` does not have
+and does not deserve just so the indexer can read a struct — and what the indexer needs is only the
+**shape** of four return values, which `src/chain/decode.ts` checks more strictly than a generated
+parser would.
 
-```json
-{ "dependencies": { "race-record": "file:../sc/bindings/race-record" } }
-```
+Details plus the first three traps: [`sc/bindings/README.md`](../sc/bindings/README.md).
 
-Detail + tiga jebakan pertama: [`sc/bindings/README.md`](../sc/bindings/README.md).
+> **A seam worth remembering:** the bindings use `@stellar/stellar-sdk ^14.6.1` (generator output,
+> never hand-edited) and `be/` uses ^17. That is safe because what crosses the boundary is an **XDR
+> string**, not an SDK object — `signAndSend({ signTransaction })` takes a callback returning signed
+> XDR. Never pass a `Transaction` or `Account` object across it.
 
-> **Seam yang perlu diingat:** bindings memakai `@stellar/stellar-sdk ^14.6.1` (output generator,
-> jangan diedit), `be/` memakai ^17. Aman karena yang menyeberangi batas itu **string XDR**, bukan
-> objek SDK — `signAndSend({ signTransaction })` menerima callback yang mengembalikan XDR
-> ter-signed. Jangan mengoper objek `Transaction`/`Account` lintas batas itu.
+## Why the faucet exists
 
-## Kenapa faucet-nya ada
+sUSD is a **classic** asset: an account cannot hold it without a **trustline**. `RaceRecord.enter`
+pays through the SAC's `transfer`, so a runner with no trustline fails there — and because `enter` is
+atomic, the whole entry rolls back (no quota consumed, no mint). Technically correct, and a terrible
+first experience. `pnpm faucet` removes it.
 
-sUSD itu asset **classic**: akun tidak bisa memegangnya tanpa **trustline**. `RaceRecord.enter`
-membayar lewat `transfer` di SAC, jadi runner tanpa trustline gagal di situ — dan karena `enter`
-atomik, seluruh pendaftaran ter-rollback (kuota tidak terpakai, tidak ada mint). Benar secara
-teknis, buruk sebagai pengalaman pertama. `pnpm faucet` menghapusnya.
+The resulting balance is read back through the **SAC**, not through Horizon. That is the only reading
+that proves anything: `enter` calls `balance` on the SAC, so that is the number deciding whether a
+runner can pay.
 
-Saldonya dibaca ulang lewat **SAC**, bukan Horizon. Itu satu-satunya bacaan yang membuktikan
-sesuatu: `enter` memanggil `balance` di SAC, jadi itulah angka yang menentukan runner bisa bayar
-atau tidak.
+> Protocol 26 adds a `trust` function to the SAC that would let a contract open its own trustline.
+> Using it means changing RaceRecord, whose interface is **frozen** — that is a spec-change PR
+> (`docs/specs/CLAUDE.md`), not a backend decision. Recorded as a v2 simplification.
 
-> Protocol 26 menambah fungsi `trust` di SAC yang memungkinkan kontrak membuka trustline sendiri.
-> Memakainya berarti mengubah RaceRecord yang interface-nya **beku** v1.0.0 — itu PR spec-change
-> (`docs/specs/CLAUDE.md`), bukan keputusan backend. Dicatat sebagai penyederhanaan v2.
+## The PII vault (STE-11)
 
-## PII vault (STE-11)
+The product rule: **PII goes in and never comes out.** No method on `Vault` returns a name, a
+national ID or a contact — not because nobody got round to it, but because no part of the Sterun
+design needs to read them. What downstream actually needs is the hash (on-chain), the `totp_secret`
+(roster bundle, STE-16), and the link between a vault row and a `token_id`.
 
-Aturan produknya: **PII masuk, dan tidak pernah keluar.** Tidak ada method di `Vault` yang
-mengembalikan nama, NIK, atau kontak — bukan karena belum sempat, tapi karena tidak ada bagian
-desain Sterun yang perlu membacanya. Yang dibutuhkan hilir cuma hash (on-chain), `totp_secret`
-(roster bundle STE-16), dan tautan baris vault ↔ `token_id`.
+`decryptForAudit` is the single exception, and is deliberately named to be uncomfortable. It exists
+so that "we encrypt it" is a testable claim, and so a legitimate data-access request has a defined
+path. **It is wired to no route.**
 
-`decryptForAudit` satu-satunya pengecualian, dan sengaja dinamai bikin tidak nyaman. Dia ada supaya
-"kita enkripsi" jadi klaim yang bisa dites, dan supaya permintaan akses data yang sah punya jalur
-yang terdefinisi. **Tidak terhubung ke route mana pun.**
+Encryption: application-level AES-256-GCM, numbered keys (`PII_KEYS`), and an AAD of
+`"<column>:<row uuid>"` binding each ciphertext to its own row — without it, anyone who can write to
+the database could move person A's encrypted name onto person B's row and decryption would still
+succeed.
 
-Enkripsi: AES-256-GCM level aplikasi, kunci bernomor (`PII_KEYS`), AAD `"<kolom>:<row uuid>"` yang
-mengikat tiap ciphertext ke barisnya — tanpa itu, siapa pun yang bisa menulis ke DB bisa memindahkan
-nama terenkripsi orang A ke baris orang B dan decrypt-nya tetap sukses.
+**Key custody, the rotation procedure, and what a database leak would mean:
+[`OPERATIONS.md`](OPERATIONS.md).** Read it before running this anywhere but your own laptop.
 
-**Custody kunci, prosedur rotasi, dan dampak kalau DB bocor: [`OPERATIONS.md`](OPERATIONS.md).**
-Baca sebelum menyalakan ini di mana pun selain laptop sendiri.
+Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
+two minutes, and are bound to one address.
 
-Auth: signature wallet Stellar (challenge → sign → spend). Nonce sekali pakai, kedaluwarsa 2 menit,
-terikat ke satu address.
+**Two signature encodings are accepted, and that is not leniency.** A script holding a keypair signs
+the nonce bytes directly; a browser cannot, because the key lives in the wallet and wallets sign
+through **SEP-53** — what gets signed is the sha256 of the message under the fixed
+`Stellar Signed Message:` prefix, not the message. That indirection is the point of the standard: it
+guarantees that what a user approves in a popup can never also be a valid transaction. So a dapp
+cannot opt out of it, and accepting only the raw form would mean **no browser could ever
+authenticate** — which is most of this product. `ChallengeStore.verify` tries `verify` and then
+`verifyMessage`. Nothing weakens: the bytes still have to be this nonce, signed by this address's
+key, and the nonce is already spent before the check.
 
-**Dua encoding tanda tangan diterima, dan itu bukan kelonggaran.** Script yang memegang keypair
-menandatangani byte nonce langsung; browser tidak bisa, karena kuncinya ada di wallet dan wallet
-menandatangani lewat **SEP-53** — yang ditandatangani adalah sha256 dari pesan di bawah prefix tetap
-`Stellar Signed Message:`, bukan pesannya. Itu justru inti standarnya: yang di-approve user di popup
-dijamin tidak pernah bisa sekaligus jadi transaksi yang sah. Jadi dapp tidak punya pilihan untuk
-tidak memakainya, dan menerima cuma bentuk mentah berarti **tidak ada browser yang bisa login sama
-sekali** — yang mana itu sebagian besar produk ini. `ChallengeStore.verify` mencoba `verify` lalu
-`verifyMessage`. Tidak ada yang melemah: byte-nya tetap harus nonce ini, ditandatangani kunci
-address ini, dan nonce-nya sudah dibelanjakan sebelum pengecekan.
+**The nonce store can be either** (STE-31): `MemoryNonces` for one process, `PostgresNonces` for
+more. The entry point picks based on whether a pool exists. Single-use across instances is held by
+`DELETE … RETURNING` — one atomic statement; read-then-delete leaves a window, and behind a load
+balancer those two statements are on different machines.
 
-**Store-nya sekarang bisa dua-duanya** (STE-31): `MemoryNonces` untuk satu proses, `PostgresNonces`
-untuk lebih. Entry point memilih berdasarkan ada-tidaknya pool. Sifat sekali-pakai lintas instance
-dijaga `DELETE … RETURNING` — satu statement atomik; read-then-delete meninggalkan celah, dan di
-belakang load balancer dua statement itu ada di mesin berbeda.
-
-> Jebakan yang pasti kena client: `Keypair.sign()` mengembalikan `Uint8Array`, dan
-> `Uint8Array.toString("base64")` **mengabaikan argumennya** — hasilnya `"12,34,56,…"`. Bungkus:
-> `Buffer.from(kp.sign(msg)).toString("base64")`. Server menjawabnya dengan `malformed-signature`
-> yang menyebut perbaikannya, bukan `bad-signature` yang menyuruh orang mencurigai kuncinya.
+> A trap every client meets: `Keypair.sign()` returns a `Uint8Array`, and
+> `Uint8Array.toString("base64")` **ignores its argument** — you get `"12,34,56,…"`. Wrap it:
+> `Buffer.from(kp.sign(msg)).toString("base64")`. The server answers that with
+> `malformed-signature`, which names the fix, rather than `bad-signature`, which would send people
+> to suspect their key.
 
 ## Indexer, TTL keeper, roster (STE-16, C8)
 
-Aturan pokoknya satu: **chain sumber kebenaran, ini cache.** Tidak ada apa pun di Postgres yang jadi
-satu-satunya salinan, dan itulah yang membuat `pnpm indexer rebuild` mungkin — truncate semua tabel
-materialisasi, jalan ulang dari **state** kontrak, dan index-nya utuh lagi. Jalur itu ada karena RPC
-testnet cuma menyimpan jendela `getEvents` terbatas; desain yang butuh replay event akan berjarak
-satu minggu buruk dari index yang tidak bisa diperbaiki.
+One rule governs all of it: **the chain is the source of truth, this is a cache.** Nothing in
+Postgres is the only copy of anything, and that is what makes `pnpm indexer rebuild` possible —
+truncate every materialised table, walk contract **state** again, and the index is whole. That path
+exists because testnet RPC only retains a limited `getEvents` window; a design that needed event
+replay would be one bad week away from an index that could not be repaired.
 
-Lima hal yang akan bikin bingung kalau tidak disebut:
+Five things that confuse people when they are not spelled out:
 
-1. **`source` di tiap baris bukan hiasan.** `'event'` = poller melihatnya terjadi (ada ledger + tx
-   hash). `'state'` = rebuild membacanya dari storage: sama benarnya, tanpa provenance.
-2. **Event tidak pernah dipercaya sendirian.** `EventCreated` tidak membawa nama, `CategoryAdded`
-   tidak membawa jarak, `RecordEntered` tidak membawa kategori. Yang kurang dibaca ulang dari
-   kontrak, dan yang dibawa event **dicocokkan** dengan hasil bacaan itu. Beda = `throw`, bukan
-   pilih salah satu.
-3. **Filter per contract id, bukan per nama topic** (`INTERFACE.md` §2.3). `getEvents` itu feed
-   publik; siapa pun bisa men-deploy kontrak yang memancarkan topic `record_entered`.
-4. **Daftar scanner adalah satu-satunya tabel yang TIDAK bisa dibangun ulang dari state.**
-   EventRegistry cuma punya `is_scanner(event_id, address)` — tanya satu address, jawab ya/tidak.
-   Tidak ada fungsi yang meng-enumerate. Itulah kenapa `/events/:eventId/scanners` membaca index,
-   bukan chain. Konsekuensinya `rebuild` tidak boleh menghapus `event_scanners` begitu saja:
-   kandidatnya dikumpulkan dari tabelnya **dan** dari replay `scanner_added`/`scanner_removed` di
-   `chain_events` (log mentah itu sengaja diselamatkan lewat rebuild), lalu tiap address diverifikasi
-   ulang ke chain dengan `is_scanner` sebelum ditulis balik. Yang tetap **tidak** bisa dipulihkan:
-   scanner yang ditambahkan sebelum index ini pernah poll sama sekali — tidak ada barisnya, tidak
-   ada event-nya, dan chain tidak bisa ditanya "siapa saja". Hasilnya under-report, arah yang aman,
-   tapi tetap under-report. Ada test yang mengunci batas itu supaya tidak dibaca sebagai pemulihan
-   total.
+1. **The `source` column on each row is not decoration.** `'event'` means the poller watched it
+   happen (there is a ledger and a tx hash). `'state'` means a rebuild read it from storage: equally
+   true, with no provenance.
+2. **An event is never trusted on its own.** `EventCreated` does not carry the name, `CategoryAdded`
+   does not carry the distance, `RecordEntered` does not carry the category. What is missing is read
+   back from the contract, and what the event *does* carry is **cross-checked** against that reading.
+   A mismatch is a `throw`, not a choice between the two.
+3. **Filter by contract id, not by topic name** (`INTERFACE.md` §2.3). `getEvents` is a public feed;
+   anyone can deploy a contract that emits a `record_entered` topic.
+4. **The scanner list is the only table that CANNOT be rebuilt from state.** EventRegistry offers
+   only `is_scanner(event_id, address)` — ask about one address, get yes or no. There is no function
+   that enumerates. That is why `/events/:eventId/scanners` reads the index rather than the chain,
+   and it is why `rebuild` must not simply drop `event_scanners`: candidates are gathered from the
+   table **and** from replaying `scanner_added`/`scanner_removed` out of `chain_events` (that raw log
+   is deliberately preserved through a rebuild), then every address is re-checked against the chain
+   with `is_scanner` before being written back. What still **cannot** be recovered: a scanner added
+   before this index ever polled — no row, no logged event, and the chain cannot be asked "who are
+   they". The result is an under-report, which is the safe direction, but it is still an
+   under-report. A test locks that boundary so the recovery is not read as total.
+5. **The keeper extends ledger keys rather than calling `extend_record_ttl`.** That contract function
+   does not touch OpenZeppelin's `Owner` entry, and a record whose `Owner` entry is archived still
+   breaks `verify` and `records_of`. The keys come from a simulated footprint, not from being
+   assembled by hand.
 
-5. **Keeper memperpanjang ledger key, bukan memanggil `extend_record_ttl`.** Fungsi kontrak itu
-   tidak menyentuh entry `Owner` milik OpenZeppelin, dan record yang entry `Owner`-nya ter-archive
-   tetap mematahkan `verify` dan `records_of`. Key-nya didapat dari footprint hasil simulasi, bukan
-   disusun tangan.
+The TTL threshold **must match** `BUMP_THRESHOLD` in `sc/contracts/race_record/src/lib.rs` (120
+days). But the extension target is **one ledger below** `BUMP_TO` (3,110,399, not 3,110,400):
+`ExtendFootprintTTLOp` rejects the boundary value as malformed, while the `extend_ttl` host function
+the contract uses clamps to it instead. That one-ledger difference is deliberate and has its own
+comment in `src/keeper/ttl.ts` — do not "fix" it into agreement.
 
-Threshold TTL **wajib sama** dengan `BUMP_THRESHOLD` di `sc/contracts/race_record/src/lib.rs`
-(120 hari). Tapi target perpanjangannya **satu ledger di bawah** `BUMP_TO` (3.110.399, bukan
-3.110.400): `ExtendFootprintTTLOp` menolak angka batasnya sebagai malformed, sementara host function
-`extend_ttl` yang dipakai kontrak justru meng-clamp ke situ. Beda satu ledger itu disengaja dan ada
-komentarnya di `src/keeper/ttl.ts` — jangan "dibetulkan" biar cocok.
+## `be/.env` is genuinely read now
 
-## `be/.env` benar-benar dibaca sekarang
+`src/env.ts` loads `be/.env` at every entry point (the API and both CLIs). Before that nothing read
+it at all, even though the documentation had said `cp .env.example .env` since STE-6 — the secret sat
+in the file while the process ran without it, which looks exactly like a wrong key.
 
-`src/env.ts` memuat `be/.env` di tiap entry point (API + kedua CLI). Sebelumnya tidak ada yang
-membacanya sama sekali, padahal dokumennya sejak STE-6 menyuruh `cp .env.example .env` — secret-nya
-nangkring di file dan prosesnya jalan tanpa itu, persis kelihatan seperti kunci yang salah.
+Two rules: **real environment variables always win** (CI and systemd decide, not a stale `.env` on
+the same laptop — the opposite of `process.loadEnvFile()`), and **a missing file is not an error** (a
+fresh clone must still start). It is not called from `config.ts`: that module stays pure so tests
+inject an environment rather than inheriting the developer's `.env`.
 
-Dua aturannya: **env var asli selalu menang** (CI dan systemd yang menentukan, bukan `.env` basi di
-laptop yang sama — ini kebalikan dari `process.loadEnvFile()`), dan **file yang tidak ada bukan
-error** (clone baru harus tetap bisa start). Tidak dipanggil dari `config.ts`: modul itu tetap murni
-supaya test menyuntikkan environment, bukan mewarisi `.env` developer.
+## Tests
 
-## Test
+783 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+that is where the damage lives.
 
-783 test (`pnpm --filter be test`; sebagian butuh Postgres), dan sebagian besar kasus
-negatif — di situ kerusakannya.
-Tidak ada network call di test: `/health` sengaja tidak menyentuh Horizon (health check yang
-memanggil layanan orang lain melaporkan outage mereka sebagai outage kita), dan perilaku live
-faucet + indexer + keeper dibuktikan manual lalu dicatat di `docs/deployments.md`.
+No test makes a network call: `/health` deliberately does not touch Horizon (a health check that
+calls someone else's service reports their outage as ours), and the live behaviour of the faucet,
+indexer and keeper is proven by hand and written into `docs/deployments.md`.
 
-Yang dipalsukan hanya **network**, tidak pernah kode kita: `test/helpers/fake-chain.ts` meng-implement
-`ContractCaller` dan menjawab dengan `xdr.ScVal` sungguhan dalam bentuk yang dibekukan
-`INTERFACE.md`, jadi decoder, reader, indexer, dan keeper jalan apa adanya di atasnya.
+Only the **network** is faked, never our own code: `test/helpers/fake-chain.ts` implements
+`ContractCaller` and answers with real `xdr.ScVal` values in the shape `INTERFACE.md` froze, so the
+decoder, reader, indexer and keeper all run unmodified on top of it.
 
-Tiap file test dapat **schema Postgres sendiri** (`freshDatabase()`). Vitest menjalankan file secara
-paralel dan test-test ini men-truncate tabel; berbagi `public` bikin suite yang gagal satu dari lima
-run, dan suite begitu berhenti dibaca orang.
+Every test file gets **its own Postgres schema** (`freshDatabase()`). Vitest runs files in parallel
+and these tests truncate tables; sharing `public` produces a suite that fails one run in five, and a
+suite like that stops being read.
 
-Tiap tiket berikutnya: **e2e + edge + positive + negative**, sama seperti sisi kontrak.
+Every future ticket: **e2e + edge + positive + negative**, the same as on the contract side.
 
-## Pilihan race pack (STE-17): kolom `add_ons`
+## Race pack choices (STE-17): the `add_ons` column
 
-Migration **005**. Satu-satunya kolom per-pelari di tabel `participants` yang **tidak dienkripsi**,
-dan itu disengaja:
+Migration **005**. The only per-runner column in `participants` that is **not encrypted**, and that
+is deliberate:
 
-- **Bukan PII.** "Event jersey: L" tidak mengidentifikasi siapa pun. Dump kolom ini isinya daftar
-  ukuran kaos di sebelah nomor bib.
-- **Panitia HARUS bisa membacanya.** Gunanya mengumpulkan ukuran adalah memesan kaosnya. Vault
-  dibangun dengan arah sebaliknya (tidak ada route yang mengembalikan nama, `decryptForAudit`
-  sengaja dinamai bikin tidak nyaman), jadi menaruh ukuran di sana berarti memilih antara jalur
-  decrypt baru keluar dari vault atau panitia yang tidak bisa menghitung pesanannya sendiri. Dua-duanya
-  lebih buruk daripada kolom biasa berisi non-rahasia.
+- **It is not PII.** "Event jersey: L" identifies nobody. A dump of this column is a list of shirt
+  sizes next to bib numbers.
+- **The organiser HAS to read it.** The point of collecting a size is ordering the shirts. The vault
+  is built the other way round on purpose (no route returns a name, and `decryptForAudit` is named to
+  be uncomfortable), so putting a size in there would mean choosing between a new decrypt path out of
+  the vault and an organiser who cannot count their own order. Both are worse than a plain column
+  holding a non-secret.
 
-Bentuknya **array pasangan**, bukan object:
+The shape is an **array of pairs**, not an object:
 
 ```json
 [{ "item": "Event jersey", "choice": "L" }]
 ```
 
-Bukan selera: tiap response schema di service ini tertutup (`additionalProperties: false`) dan ada
-test yang gagal kalau ada satu yang tidak. Map tidak bisa ditutup, array of two-field object bisa —
-dan bentuk yang sama di kolom dan di wire berarti tidak ada terjemahan yang bisa salah.
+Not a preference: every response schema in this service is closed (`additionalProperties: false`) and
+a test fails if one is not. A map cannot be closed; an array of two-field objects can — and the same
+shape in the column and on the wire means there is no translation to get wrong.
 
-Nama item mengacu ke `add_ons` di **dokumen event** (`docs/WEB_APP_IA.md` §6), yang di-hash dan beku
-di `create_event`, jadi nama di sana tidak bisa berubah di bawah baris yang merujuknya. Itu properti
-yang biasanya dibeli dengan id, tanpa perlu mengarang id.
+Item names refer to `add_ons` in the **event document** (`docs/WEB_APP_IA.md` §6), which is hashed
+and frozen at `create_event`, so a name in it cannot change under a row that refers to it. That is
+the property an id would normally buy, without inventing an id.
 
-Tidak divalidasi terhadap dokumen itu: file-nya off-chain di url yang service ini tidak punya, dan
-mengambilnya tiap submit cuma untuk mencocokkan string berarti menambah dependency jaringan ke jalur
-tulis demi cek yang sudah dilakukan console dengan data yang sama di depannya. Yang membatasi:
-maksimal 20 item, masing-masing 128 karakter.
+It is not validated against that document: the file lives off-chain at a URL this service does not
+have, and fetching it on every submit just to match a string would add a network dependency to the
+write path in exchange for a check the console already performs with the same data in front of it.
+What bounds it instead: at most 20 items, 128 characters each.
 
-Ikut keluar di **roster bundle** (`GET /events/:eventId/roster`) karena di situlah satu-satunya
-tempat pemanggil berwenang mendapat seluruh pendaftar satu event dalam satu request, dan dua
-pembacanya sama-sama butuh: panitia menghitung ukuran, volunteer di meja race pack perlu tahu kaos
-mana yang masuk ke tas.
+It comes back out in the **roster bundle** (`GET /events/:eventId/roster`), because that is the one
+place an authorised caller gets a whole event's entries in a single request, and both readers need
+it: the organiser counts sizes, and a volunteer at the race pack desk needs to know which shirt goes
+in the bag.
 
-**Yang v1 tidak bisa: stok per ukuran.** Kuota di kontrak dihitung per kategori dan tidak tahu apa
-itu M atau L, jadi "M habis" tidak bisa ditegakkan. Cara panitia menjualnya adalah kategori terpisah
-(`10K` vs `10K_JERSEY`), dan kuota kategori jersey itulah jumlah kaos yang dipesan.
+**What v1 cannot do: per-size stock.** Contract quota is counted per category and knows nothing
+about M or L, so "M is sold out" cannot be enforced. The way an organiser sells that is separate
+categories (`10K` vs `10K_JERSEY`), and the jersey category's quota is the number of shirts ordered.
 
-## Kontrak v2 (STE-35): siap menerima, belum dipakai
+## The v2 contracts (STE-35): migrated
 
-Kontrak v2 live dengan alamat baru. `be/` **masih menunjuk v1**, dan itu disengaja.
+`be/` and `fe/` both point at the v2 pair as of 2026-09-09.
 
-Yang sudah dikerjakan supaya perpindahan nanti tidak gagal karena hal sepele — status `Cancelled`
-diterima di **tiga** lapis yang masing-masing gagal beda:
+Before the switch, the `Cancelled` status was accepted at **three** layers, each of which fails
+differently:
 
-| Lapis | Kalau tertinggal |
+| Layer | If it is missed |
 | --- | --- |
-| `EVENT_STATUSES` di `src/chain/decode.ts` | decoder melempar, poller berhenti |
-| dua JSON schema di `src/routes/directory.ts` | field-nya diam-diam hilang dari response |
-| **CHECK constraint `events_status_check`** (migrasi 006) | INSERT ditolak Postgres |
+| `EVENT_STATUSES` in `src/chain/decode.ts` | the decoder throws and the poller stops |
+| the JSON schemas in `src/routes/directory.ts` | the field silently disappears from responses |
+| **the `events_status_check` CHECK constraint** (migration 006) | Postgres rejects the INSERT |
 
-Lapis ketiga itu yang **tidak** disebut checklist `INTERFACE.md` §8, dan justru satu-satunya yang
-ditegakkan database. v1 tidak bisa memancarkan `Cancelled`, jadi melebarkan constraint sekarang
-tidak mengubah apa pun yang bisa terjadi hari ini — dia cuma menghapus satu cara perpindahan itu
-gagal.
+The third is the one `INTERFACE.md` §8's checklist does **not** mention, and the only one a database
+enforces. v1 cannot emit `Cancelled`, so widening the constraint changed nothing that could happen
+that day — it only removed a way for the switch to fail.
 
-**Sudah pindah ke v2** (2026-09-09). Alamatnya berpindah lewat `docs/deployments.md`, bukan env var:
-nama tanpa sufiks sekarang berarti v2, yang lama dilabeli `v1`, dan ada test yang gagal kalau parser
-me-resolve pasangan v1. Index dan vault di produksi **di-truncate** saat perpindahan, karena tidak
-ada kolom pembeda kontrak. Tidak ada kolom yang membedakan kontrak:
-`events.event_id` dan `records.token_id` primary key telanjang, dan v2 menomori event dari 0 lagi —
-jadi v2 event 0 **menimpa** v1 event 0. Yang paling berbahaya bukan index-nya (itu bisa di-`rebuild`)
-tapi `participants`, yang menautkan dokumen identitas asli ke `token_id` yang sama; roster memetakan
-`token_id` → `totp_secret`, jadi scanner akan memvalidasi orang yang salah. Tiga opsi dan biayanya:
-[`OPERATIONS.md`](OPERATIONS.md) bagian "Pindah ke kontrak v2".
+The addresses moved through `docs/deployments.md` rather than an environment variable: the
+unqualified row name now means v2, the old pair is labelled `v1`, and a test fails if the parser
+resolves the v1 pair.
+
+The production index and vault were **truncated** during the move, because nothing in the schema
+distinguishes one contract from another: `events.event_id` and `records.token_id` are bare primary
+keys, and v2 numbers events from zero again — so v2 event 0 would **overwrite** v1 event 0. The
+dangerous part is not the index (that can be rebuilt) but `participants`, which links real identity
+documents to those same `token_id`s; the roster maps `token_id` to `totp_secret`, so a scanner would
+validate the wrong person. Procedure, ordering and rollback: [`OPERATIONS.md`](OPERATIONS.md),
+"Moving to the v2 contracts".
 
 ## Results CSV (STE-20, C7)
 
-`POST /events/:eventId/results/preview` — organiser upload CSV, dapat preview + anomali per baris.
-Service ini **tidak menandatangani apa pun**: yang boleh mem-publish hasil adalah organiser, dan
-kuncinya harus tetap di perangkat organiser, bukan jadi kunci yang dipegang server ini.
+`POST /events/:eventId/results/preview` — the organiser uploads a CSV and gets a preview with
+per-row anomalies. This service **signs nothing**: the account allowed to publish results is the
+organiser's, and that key must stay on the organiser's device rather than becoming a key this server
+holds.
 
-Alasan seluruh langkah review ini ada: `record_finish` memindahkan record ke `Finished` yang
-**terminal**. Waktu yang salah dan terlanjur ter-publish tidak bisa dikoreksi oleh siapa pun.
+Why the review step exists at all: `record_finish` moves a record to `Finished`, which is
+**terminal**. A wrong time that has been published cannot be corrected by anyone.
 
-**Bib TIDAK unik dalam satu event.** `reserve_slot` mengembalikan `entered_count` milik
-**kategori**, jadi 5K dan 10K di event yang sama sama-sama mulai dari bib 0. CSV `(bib_no,
-finish_time)` — persis bentuk yang disebut tiket — jadi ambigu begitu event punya dua kategori.
-Karena itu ada kolom opsional `category_id`, bib telanjang cuma di-resolve kalau **tepat satu**
-kategori mengklaimnya, sisanya jadi anomali `ambiguous_bib`. Menebak di sini berarti mem-publish
-waktu pelari lain ke record seseorang, permanen.
+**Bib numbers are NOT unique within an event.** `reserve_slot` returns the **category's**
+`entered_count`, so a 5K and a 10K in the same event both start at bib 0. A CSV of `(bib_no,
+finish_time)` — exactly the shape the ticket described — is therefore ambiguous the moment an event
+has two categories. Hence the optional `category_id` column: a bare bib is resolved only when
+**exactly one** category claims it, and the rest become `ambiguous_bib` anomalies. Guessing here
+means publishing another runner's time onto someone's record, permanently.
 
-Tujuh anomali, dan `severity`-nya lebih penting daripada jumlahnya:
+Seven anomalies, and their `severity` matters more than their count:
 
-| severity | artinya |
+| severity | meaning |
 | --- | --- |
-| `reverts` | chain menolak baris itu; biayanya satu transaksi gagal (`unknown_bib`, `not_claimed`, `already_final`) |
-| `wrong` | chain **menerimanya** dan hasilnya bohong selamanya (`ambiguous_bib`, `impossible_time`, `duplicate_bib`, `malformed_row`) |
+| `reverts` | the chain rejects that row; the cost is one failed transaction (`unknown_bib`, `not_claimed`, `already_final`) |
+| `wrong` | the chain **accepts it** and the result is a lie forever (`ambiguous_bib`, `impossible_time`, `duplicate_bib`, `malformed_row`) |
 
-Parser-nya longgar soal **bentuk**, ketat soal **makna**: `52:41`, `1:02:41`, `3161`, `3161.4`
-semuanya diterima, header `Bib No`/`chip_time`/`;` sebagai delimiter juga. Membaca `52:41` sebagai
-5241 detik = hasil meleset 35 menit yang tidak bisa ditarik. Pecahan detik di-**truncate**, bukan
-dibulatkan — membulatkan berarti mengarang waktu yang tidak pernah dicatat.
+The parser is lenient about **shape** and strict about **meaning**: `52:41`, `1:02:41`, `3161` and
+`3161.4` are all accepted, as are headers like `Bib No`/`chip_time` and `;` as a delimiter. Reading
+`52:41` as 5241 seconds is a result 35 minutes wrong that cannot be withdrawn. Fractional seconds are
+**truncated**, not rounded — rounding invents a time that was never recorded.
 
-`source_sha256` di response adalah hash byte yang **persis** diunggah, dihitung sebelum parsing.
-Itu yang dicatat di event metadata supaya hasil yang ter-publish tetap tamper-evident
-(SYSTEM_DESIGN §11 risiko 4).
+`source_sha256` in the response is the hash of **exactly** the bytes uploaded, computed before any
+parsing. That is what gets recorded in the event metadata so published results stay tamper-evident
+(SYSTEM_DESIGN §11, risk 4).
 
 ```bash
-pnpm --filter be e2e:results   # butuh DATABASE_URL + PII_KEYS + STERUN_ADMIN_SECRET
+pnpm --filter be e2e:results   # needs DATABASE_URL + PII_KEYS + STERUN_ADMIN_SECRET
 ```
 
-`STERUN_ADMIN_SECRET` sejak STE-36: kedua script e2e (`e2e:results`, `e2e:addons`) membuat
-organiser sekali-pakai, dan `create_event` sekarang gated allowlist organiser milik admin. Jadi
-script-nya meng-`addOrganiser` dulu dengan kunci admin. Tanpa secret-nya mereka gagal keras di
-langkah itu, bukan di tengah flow.
+`STERUN_ADMIN_SECRET` since STE-36: both e2e scripts (`e2e:results`, `e2e:addons`) create a
+throwaway organiser, and `create_event` is now gated by the admin's organiser allowlist. So the
+scripts call `addOrganiser` with the admin key first. Without the secret they fail hard at that step
+rather than somewhere in the middle of the flow.
 
-## File metadata event (untuk STE-17)
+## Event metadata files (for STE-17)
 
-`POST /events/files` → `{ url, sha256, size, content_type, created }`, dan `GET /files/:sha256`
-menyajikannya kembali. Diminta Ancung buat organiser console: sebelum ini panitia disuruh hosting
-poster sendiri lalu menempel URL-nya, langkah paling nyebelin di wizard.
+`POST /events/files` → `{ url, sha256, size, content_type, created }`, and `GET /files/:sha256`
+serves it back. Asked for by Ancung for the organiser console: before this, organisers were told to
+host the poster themselves and paste a URL, the single most annoying step in the wizard.
 
-**Tidak menyentuh spec beku.** `create_event` sudah punya `metadata_hash: BytesN<32>` + `uri: String`
-(`INTERFACE.md` §1.1), jadi separuh on-chain-nya memang sudah ada; yang kurang cuma tempat menaruh
-byte-nya.
+**This touches no frozen spec.** `create_event` already takes `metadata_hash: BytesN<32>` and
+`uri: String` (`INTERFACE.md` §1.1), so the on-chain half existed; what was missing was somewhere to
+put the bytes.
 
-**Content-addressed, dan itu keseluruhan desainnya.** Key penyimpanan **adalah** sha256 byte-nya —
-bukan id acak dengan hash dicatat di sebelahnya, tapi satu angka yang dipakai untuk dua tugas.
-Konsekuensinya:
+**Content-addressed, and that is the whole design.** The storage key **is** the sha256 of the bytes —
+not a random id with a hash recorded beside it, but one number doing both jobs. What follows:
 
-- URL tidak bisa berubah isi. Byte berbeda = URL berbeda, jadi `metadata_hash` on-chain dan file
-  yang disajikan tidak mungkin berselisih.
-- Upload **idempoten**. Kirim file yang sama dua kali = satu file, URL sama, `created: false`.
-- Tidak ada jalur overwrite, jadi tidak ada cara satu organiser menimpa poster organiser lain.
-- `Cache-Control: immutable` jadi pernyataan fakta, bukan harapan.
+- A URL cannot come to hold different content. Different bytes mean a different URL, so the on-chain
+  `metadata_hash` and the file served can never disagree.
+- Upload is **idempotent**. The same file twice is one file, the same URL, and `created: false`.
+- There is no overwrite path, so no way for one organiser to replace another's poster.
+- `Cache-Control: immutable` becomes a statement of fact rather than a hope.
 
-Ini properti yang Ancung suka dari IPFS ("CID itu sendiri hash konten") tanpa pinning service dan
-tanpa gateway yang bisa mati.
+This is the property Ancung liked about IPFS ("the CID is itself the hash of the content") without a
+pinning service and without a gateway that can be down.
 
-**Tipe ditentukan dari BYTE, bukan dari header `Content-Type`.** Header itu klaim si pengunggah;
-mengecek allow-list terhadapnya cuma teater. `src/files/content-type.ts` mengendus signature-nya.
+**The type is decided by the BYTES, not by the `Content-Type` header.** The header is the uploader's
+claim; checking an allow-list against it is theatre. `src/files/content-type.ts` sniffs the
+signature.
 
-Yang diterima: `application/json`, `application/pdf`, dan lima tipe gambar raster
+Accepted: `application/json`, `application/pdf`, and five raster image types
 (PNG/JPEG/GIF/WebP/AVIF).
 
-**PDF diterima untuk surat waiver**, dan alasannya sama dengan alasan fitur ini ada: nilai hukum
-sebuah waiver bergantung pada bisa dibuktikannya apa yang disetujui orang saat itu. Content
-addressing memberikan persis itu — URL-nya sha256 isinya, jadi dokumen tidak bisa diedit setelah
-orang mendaftar. Panitia yang menempel link ke Drive-nya sendiri bisa menggantinya belakangan dan
-tidak ada yang bisa membuktikan itu berubah.
+**PDF is accepted for the liability waiver**, and for the same reason the feature exists: a waiver's
+legal value rests on being able to show what people agreed to at the time. Content addressing gives
+exactly that — the URL is the sha256 of the contents, so the document cannot be edited after people
+have entered. An organiser pasting a link to their own Drive can swap it afterwards, and nobody can
+prove it changed.
 
-PDF **bisa** membawa JavaScript, dan itu beda nyata dari gambar. Tetap diterima atas pertimbangan
-yang layak ditulis daripada diasumsikan: response-nya sudah mengirim `default-src 'none'; sandbox`
-+ `nosniff`, yang menaruh dokumen di origin buram tanpa jaringan sendiri, dan viewer PDF browser
-modern sendiri proses tersandbox. `Content-Disposition`-nya sengaja **`inline`**, bukan
-`attachment`: ini dokumen yang orang diminta menyetujuinya, dan memaksa unduh dulu itu hostile —
-CSP `sandbox` yang membuat `inline` bisa dipertanggungjawabkan.
+PDF **can** carry JavaScript, and that is a real difference from an image. It is accepted anyway on a
+judgement worth writing down rather than assuming: responses already send `default-src 'none';
+sandbox` and `nosniff`, which put the document in an opaque origin with no network of its own, and
+modern browser PDF viewers are themselves sandboxed processes. `Content-Disposition` is deliberately
+**`inline`**, not `attachment`: this is a document somebody is being asked to agree to, and forcing a
+download first is hostile — the sandbox CSP is what makes `inline` defensible.
 
-**Yang sengaja TIDAK dilakukan: memindai byte untuk `/JS` atau `/JavaScript`.** Object stream PDF
-bisa dikompres, jadi pemindaian string sekaligus meleset untuk kasus terobfuskasi dan salah tembak
-untuk konten sah. Cek yang bisa dilewati lebih buruk daripada tidak ada cek, karena dia dipercaya.
-Header penyajiannya tidak bergantung pada mendeteksi apa pun.
+**Deliberately NOT done: scanning the bytes for `/JS` or `/JavaScript`.** PDF object streams are
+compressible, so a string scan both misses obfuscated cases and fires on legitimate content. A check
+that can be walked past is worse than no check, because it gets believed. The serving headers depend
+on detecting nothing.
 
-PDF juga dicek **header DAN trailer**-nya (`%PDF-1.x`/`2.x` di awal, `%%EOF` di 1024 byte terakhir),
-bukan cuma magic bytes. Alasannya sama dengan JSON yang di-parse: upload terpotong harus ketahuan
-sekarang, bukan pas hari-H waktu waiver-nya tidak mau dibuka.
+PDFs are also checked at **header AND trailer** (`%PDF-1.x`/`2.x` at the start, `%%EOF` within the
+last 1024 bytes), not just magic bytes. Same reasoning as parsing the JSON: a truncated upload must
+be caught now, not on race day when the waiver will not open.
 
-> **SVG tidak ada di allow-list dan jangan ditambahkan.** SVG itu dokumen XML yang bisa membawa
-> `<script>`. Disajikan dari `api-sterun.jameshub.fun` — origin yang sama dengan PII vault — itu
-> stored XSS dari file yang bisa diunggah siapa saja pemegang keypair. Bedanya dengan PDF: SVG itu
-> script di origin halaman itu sendiri, bukan dokumen yang dirender viewer terpisah. Kalau nanti
-> perlu poster vektor, jawabannya raster saat upload atau origin terpisah, bukan menambah cabang.
+> **SVG is not on the allow-list and must not be added.** SVG is an XML document that can carry
+> `<script>`. Served from `api-sterun.jameshub.fun` — the same origin as the PII vault — that is
+> stored XSS from a file any keypair holder can upload. The difference from PDF: SVG is script in the
+> page's own origin, not a document rendered by a separate viewer. If vector posters are ever needed,
+> the answer is rasterising on upload or a separate origin, not another branch here.
 
-> **Daftar tipe yang di-parse Fastify DITURUNKAN dari allow-list**, bukan ditulis ulang. Fastify
-> menolak content type yang tidak punya parser dengan 415 miliknya sendiri **sebelum** handler jalan,
-> jadi tipe yang ditambahkan ke allow-list tapi lupa didaftarkan ke parser gagal dengan error yang
-> tidak menyebut penyendusan dan tidak menunjuk perbaikan apa pun. Sudah kejadian sekali waktu PDF
-> ditambahkan. Ada test yang membuktikan penurunan itu masih berlaku.
+> **The content types Fastify parses are DERIVED from the allow-list**, not written out again.
+> Fastify refuses a content type it has no parser for with its own 415 **before** the handler runs,
+> so a type added to the allow-list and forgotten in the parser list fails with an error that
+> mentions neither sniffing nor a fix. That happened once, when PDF was added. A test proves the
+> derivation still holds.
 
-**Waiver yang sudah DITANDATANGANI bukan untuk endpoint ini.** `/files/:sha256` publik tanpa auth —
-memang begitu desainnya, karena URL-nya masuk chain. Dokumen bertanda tangan berisi nama dan tanda
-tangan, itu PII, tempatnya vault. Dan kemungkinan besar tidak perlu disimpan sama sekali: pelari
-sudah menandatangani transaksi `enter` dengan wallet-nya, jadi "orang ini setuju dengan dokumen
-persis ini" sudah terbukti dari chain begitu waiver-nya tercakup `metadata_hash`. Apakah itu memenuhi
-syarat tanda tangan elektronik yang sah menurut hukum Indonesia adalah pertanyaan hukum, bukan
-teknis — belum dijawab.
+**A SIGNED waiver does not belong at this endpoint.** `/files/:sha256` is public and unauthenticated
+by design, because its URLs go on-chain. A signed document contains a name and a signature — that is
+PII, and it belongs in the vault. It probably does not need storing at all: the runner already signs
+the `enter` transaction with their wallet, so "this person agreed to exactly this document" is
+provable from the chain once the waiver is covered by `metadata_hash`. Whether that satisfies
+Indonesian law on electronic signatures is a legal question rather than a technical one, and it is
+unanswered.
 
-Lapisan kedua saat menyajikan: `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff`,
-tipe yang dikirim adalah tipe hasil endus, dan `Content-Disposition` menamai file dengan hash-nya —
-tidak ada apa pun pilihan pengunggah yang dipantulkan ke header.
+The second layer when serving: `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff`, the
+content type sent is the sniffed one, and `Content-Disposition` names the file by its hash — nothing
+the uploader chose is echoed into a header.
 
-**Siapa yang boleh upload: siapa pun dengan signature wallet yang sah, dan itu disengaja.** Brief-nya
-mengusulkan membatasi ke address yang sudah pernah bikin event. Itu justru mengunci organiser
-pertama kali — persis orang yang fiturnya dibuat untuk mereka — karena URL-nya dibutuhkan
-**sebelum** `create_event` dipanggil. Yang membatasi penyalahgunaan: 5 MB per file, rate limit
-12/menit, allow-list hasil endus, dan **plafon keras seluruh store** (`STERUN_FILES_MAX_BYTES`,
-default 512 MiB) yang menjawab **507**. Keypair Stellar gratis dibikin, jadi aturan per-address
-tidak membatasi apa pun; plafon itulah yang membatasi.
+**Who may upload: anyone with a valid wallet signature, deliberately.** The brief proposed
+restricting it to addresses that had already created an event. That would lock out exactly the
+first-time organiser the feature exists for, because the URL is needed **before** `create_event` is
+called. What bounds abuse instead: 5 MB per file, a 12/minute rate limit, the sniffed allow-list, and
+a **hard ceiling on the whole store** (`STERUN_FILES_MAX_BYTES`, 512 MiB by default) that answers
+**507**. Stellar keypairs are free to generate, so per-address rules bound nothing; the ceiling does.
 
-**`STERUN_PUBLIC_BASE_URL` wajib di-set di box yang publik.** Kalau kosong, origin diambil dari
-header `Host` — yang dikendalikan penyerang — dan URL yang dikembalikan endpoint ini adalah URL yang
-organiser commit **permanen** on-chain.
+**`STERUN_PUBLIC_BASE_URL` must be set on any public box.** When it is empty the origin comes from
+the `Host` header — which is attacker-controlled — and the URL this endpoint returns is one an
+organiser commits **permanently** on-chain.
 
-### Di mana byte-nya disimpan: R2, dengan disk sebagai fallback
+### Where the bytes live: R2, with disk as the fallback
 
-`FileStore` punya dua implementasi, dan yang dipakai ditentukan config — bukan flag:
+`FileStore` has two implementations, and configuration decides which one runs — not a flag:
 
-| Kondisi | Store | Dipakai di |
+| Condition | Store | Used in |
 | --- | --- | --- |
-| keempat `STERUN_R2_*` ada | `R2FileStore` | produksi |
-| keempatnya kosong | `LocalFileStore` (disk) | `pnpm dev`, test |
+| all four `STERUN_R2_*` present | `R2FileStore` | production |
+| all four empty | `LocalFileStore` (disk) | `pnpm dev`, tests |
 
-**Keempatnya atau tidak sama sekali.** Tiga dari empat membuat proses start dengan normal, melayani
-semua endpoint lain, lalu gagal di upload pertama dengan **403** dari R2 — yang persis mirip secret
-salah dan mengirim orang me-regenerate kredensial yang sebenarnya benar. `loadR2Config` menolak itu
-saat startup.
+**All four or none.** Three of four starts a process that runs normally, serves every other
+endpoint, and then fails its first upload with a **403** from R2 — which looks exactly like a wrong
+secret and sends whoever is debugging it to regenerate credentials that were fine. `loadR2Config`
+refuses that at startup.
 
-**Yang TIDAK berubah: URL publiknya.** File tetap disajikan API ini di `/files/:sha256`, bukan dari
-bucket publik atau custom domain R2. Ini keputusan paling berkonsekuensi di fitur ini:
+**What does NOT change: the public URL.** Files are still served by this API at `/files/:sha256`,
+not from a public bucket or an R2 custom domain. This is the most consequential decision in the
+feature:
 
-- **URL-nya di-commit on-chain, permanen.** `create_event` menyimpan `uri` di storage kontrak dan v1
-  non-upgradeable. URL yang menunjuk ke penyedia storage adalah taruhan bahwa kita tidak akan pernah
-  pindah penyedia; URL di domain sendiri selamat dari migrasi berikutnya — dan akan ada.
-- **Header keamanannya milik kita.** Byte ini diunggah siapa pun pemegang keypair dan disajikan dari
-  origin yang juga melayani PII vault. CSP `sandbox`, tipe hasil endus, dan nama file dari hash
-  semuanya di `routes/files.ts`. Bucket yang menyajikan sendiri menjawab dengan apa pun yang
-  dikonfigurasi di tempat yang `git log` tidak bisa menjawabnya.
-- Cloudflare sudah men-cache jalur baca, jadi API tidak ada di hot path untuk pembacaan berulang.
+- **The URL is committed on-chain, permanently.** `create_event` stores `uri` in contract storage. A
+  URL pointing at a storage provider is a bet that we never change provider; a URL on our own domain
+  survives the next migration, and there will be one.
+- **The security headers are ours to set.** These bytes are uploaded by anyone holding a keypair and
+  served from the origin that also serves the PII vault. The `sandbox` CSP, the sniffed type and the
+  hash-derived filename all live in `routes/files.ts`. A bucket serving bytes directly answers with
+  whatever it was configured to say, somewhere `git log` cannot explain.
+- Cloudflare already caches the read path, so the API is not in the hot path for repeat reads.
 
-Jadi R2 mengganti **di mana byte disimpan**, bukan **siapa yang menyajikannya**.
+So R2 replaces **where bytes live**, not **who serves them**.
 
-**SigV4-nya ditulis tangan** (`src/files/sigv4.ts`), bukan `@aws-sdk/client-s3`. Alasannya sama
-dengan migrator ~60 baris: paket ini punya **enam** dependency runtime dengan sengaja, dan SDK itu
-membawa puluhan paket transitif plus middleware stack-nya untuk empat operasi ke satu bucket.
-Risikonya rendah karena mode gagalnya keras dan langsung: signature meleset satu byte = `403
-SignatureDoesNotMatch` di request pertama, bukan kebocoran diam-diam. Cara membuktikannya ada tiga
-lapis, dan itu sengaja: **implementasi pembanding independen** di file test (pola yang sama dengan
-`docs/specs/verify.sh` — dua implementasi referensi wajib sepakat), aturan struktural, dan R2 sendiri
-yang menerima signature-nya (dicatat di `docs/deployments.md`, tidak bisa jalan di CI).
+**SigV4 is hand-written** (`src/files/sigv4.ts`) rather than pulled in with `@aws-sdk/client-s3`. The
+reasoning matches the ~60-line migrator: this package has **six** runtime dependencies on purpose,
+and that SDK brings dozens of transitive packages plus its own middleware stack to perform four
+operations against one bucket. The risk is low because the failure mode is loud and immediate: a
+signature off by one byte is `403 SignatureDoesNotMatch` on the first request, never a quiet
+weakening. It is proven three ways, deliberately: an **independent second implementation** in the
+test file (the same technique as `docs/specs/verify.sh`, where two reference implementations must
+agree), structural rules, and R2 itself accepting the signature (recorded in `docs/deployments.md`;
+it cannot run in CI).
 
-Satu detail yang enak: SigV4 butuh sha256 dari body, dan content-addressing sudah menghitung angka
-yang persis sama untuk dijadikan key. Satu hash, dua kegunaan.
+One detail worth enjoying: SigV4 needs the sha256 of the body, and content addressing has already
+computed exactly that number to use as the key. One hash, two uses.
 
-**Kegagalan R2 yang sementara di-retry, dan itu bukan hiasan.** Upload sungguhan pernah dapat 500
-karena R2 menjawab `InternalError` dengan badan pesan *"We encountered an internal error. Please try
-again."* — instruksi eksplisit yang kode ini abaikan, jadi gangguan sesaat di sisi Cloudflare jadi
-upload gagal buat panitia. Sekarang: 3 percobaan, backoff eksponensial + jitter, menghormati
-`Retry-After`, dan **cuma untuk 5xx/429**. 403 (kredensial salah) dan 404 (objek tidak ada) tidak
-di-retry — keduanya tidak membaik dengan waktu.
+**Transient R2 failures are retried, and that is not decoration.** A real upload once got a 500
+because R2 answered `InternalError` with the body *"We encountered an internal error. Please try
+again."* — an explicit instruction this code was ignoring, so a blip on Cloudflare's side became a
+failed upload for an organiser. Now: three attempts, exponential backoff with jitter, honouring
+`Retry-After`, and **only for 5xx and 429**. A 403 (wrong credentials) and a 404 (no such object) are
+not retried — neither improves with time.
 
-Retry di sini aman dengan cara yang tidak berlaku di kebanyakan tempat, dan itu bukan keberuntungan:
-**semua operasi store ini idempoten by construction.** PUT menulis byte di alamat hash byte itu
-sendiri, jadi tulis ganda adalah tulis yang sama; GET/HEAD/LIST tidak mengubah apa pun. Tidak ada
-operasi yang pengulangannya bisa menggandakan sesuatu.
+Retrying is safe here in a way it is not in most places, and not by luck: **every operation this
+store performs is idempotent by construction.** A PUT writes bytes at the address of those same
+bytes, so a duplicate write is the same write; GET, HEAD and LIST change nothing. There is no
+operation whose repetition could double anything.
 
-Request **ditandatangani ulang tiap percobaan**, bukan memakai header yang sama: signature mencakup
-`x-amz-date`, jadi retry yang menyeberang jendela clock skew akan gagal autentikasi karena alasan
-yang tidak ada hubungannya dengan kenapa dia di-retry.
+The request is **re-signed on each attempt** rather than reusing headers: the signature covers
+`x-amz-date`, so a retry crossing into the next clock-skew window would fail authentication for a
+reason unrelated to why it was retried.
 
-Kalau retry-nya habis, route menjawab **503 + `Retry-After`**, bukan 500 — "upstream lagi sakit,
-coba lagi" itu jawaban jujur yang menentukan apa yang orang lakukan berikutnya, dan aman diiklankan
-justru karena upload-nya idempoten.
+When the retries are exhausted the route answers **503 + `Retry-After`** rather than 500 — "upstream
+is unwell, try again" is the honest answer and it decides what the person on the other end does
+next, and it is safe to advertise precisely because uploads are idempotent.
 
-**Tipe objek dicek ulang saat dibaca**, tidak dipercaya karena kita yang menulisnya. Token yang
-menjangkau bucket bisa menulis objek apa pun dengan content type apa pun, dan bucket itu bukan milik
-kode ini sendirian. Satu perbandingan murah yang menahan objek `text/html` nyasar disajikan ke
-browser dari origin kita.
+**The stored content type is re-checked on read** rather than trusted because we wrote it. The token
+that reaches the bucket can write any object with any content type, and that bucket is not this
+code's alone. One cheap comparison keeps a stray `text/html` object from being handed to a browser
+from our own origin.
 
-**Volume `sterun-files` bukan cache** (dan sekarang cuma dipakai kalau R2 tidak dikonfigurasi). File
-hilang = event rusak selamanya, karena hash-nya sudah di ledger dan menunjuk 404. Dockerfile membuat
-`/app/data/files` milik uid 1000 lebih dulu: named volume kosong mewarisi ownership direktori itu
-dari image, dan kalau path-nya tidak ada di image Docker membuatnya milik root sehingga upload
-pertama gagal `EACCES`. Bentuk bug yang sama dengan cloudflared di STE-31, dan cuma muncul di
-deployment sungguhan.
+**The `sterun-files` volume is not a cache** (and is now only used when R2 is unconfigured). A lost
+file is a permanently broken event, because its hash is on the ledger pointing at a 404. The
+Dockerfile creates `/app/data/files` owned by uid 1000 first: an empty named volume inherits that
+directory's ownership from the image, and when the path is absent from the image Docker creates one
+owned by root, so the first upload fails `EACCES`. Same shape as the cloudflared permission bug in
+STE-31, and it only appears on a real deployment.
 
-**Belum ada: sweeper file yatim.** File yang tidak pernah dirujuk `uri` event mana pun tetap
-tersimpan. Plafon store yang menahan pertumbuhannya, bukan penghapusan. Kandidat perintah keeper
-berikutnya: index sudah menyimpan `uri` tiap event, jadi selisihnya bisa dihitung tanpa tabel baru.
+**Not there yet: an orphan-file sweeper.** A file never referenced by any event's `uri` stays
+stored. What bounds growth is the store ceiling, not deletion. A candidate for the next keeper
+command: the index already holds each event's `uri`, so the difference can be computed without a new
+table.
 
 ## Hardening (STE-20)
 
-**Satu bentuk error untuk seluruh API**, dari satu root handler di `src/http/errors.ts`:
+**One error shape for the whole API**, from a single root handler in `src/http/errors.ts`:
 
 ```json
-{ "error": "<kode kebab stabil>", "message": "<kalimat>", "details": [...] }
+{ "error": "<stable kebab code>", "message": "<a sentence>", "details": [...] }
 ```
 
-`error` milik mesin dan tidak pernah berubah untuk kondisi yang sama; `message` milik manusia dan
-boleh ditulis ulang. Handler per-router sudah **dihapus** — dulu ada tiga bentuk beredar, salah
-satunya `{"error": "Bad Request"}` bawaan Fastify yang isinya reason phrase HTTP, jadi client yang
-mem-branch ke situ mem-branch ke string yang berubah mengikuti status code.
+`error` belongs to machines and never changes for the same condition; `message` belongs to humans and
+may be rewritten. Per-router handlers have been **removed** — there used to be three shapes in
+circulation, one of them Fastify's default `{"error": "Bad Request"}`, whose content is an HTTP
+reason phrase, so a client branching on it was branching on a string that changes with the status
+code.
 
-Kode error sekarang **kebab-case semua**. `AuthError` memang sudah kebab (`unknown-nonce`),
-router-nya snake (`not_found`) — client harus tahu dua konvensi.
+Error codes are now **kebab-case everywhere**. `AuthError` already was (`unknown-nonce`) while the
+routers were snake (`not_found`) — clients had to know two conventions.
 
-**500 tidak membocorkan apa pun.** Teks exception membawa path file, potongan SQL, dan kadang nilai
-yang menyebabkan kegagalan — di service yang memegang dokumen identitas, itu persis yang tidak boleh
-sampai ke response body. Isinya kalimat tetap + `x-request-id` untuk dikutip; error aslinya masuk log.
+**A 500 leaks nothing.** Exception text carries file paths, fragments of SQL and sometimes the value
+that caused the failure — in a service holding identity documents, that is exactly what must not
+reach a response body. The body is a fixed sentence plus `x-request-id` to quote; the real error goes
+to the log.
 
-**Rate limit** per-endpoint sesuai biayanya: 240/menit global, 30 untuk `/auth/challenge`, 10 untuk
-upload hasil, 12 untuk upload file metadata. Key-nya hop pertama `x-forwarded-for` — di belakang reverse proxy (STE-31) semua
-request datang dari satu socket, dan tanpa itu satu client berisik akan mengunci seluruh event.
-**Mati saat `NODE_ENV=test`** supaya suite tidak gagal di request ke-241 karena alasan yang tidak
-ada hubungannya.
+**Rate limits** are per-endpoint, by cost: 240/minute globally, 30 for `/auth/challenge`, 10 for the
+results upload, 12 for the metadata file upload. The key is the first `x-forwarded-for` hop — behind
+a reverse proxy (STE-31) every request arrives from one socket, and without that one noisy client
+would lock out a whole event. **Disabled when `NODE_ENV=test`**, so the suite does not fail on its
+241st request for a reason unrelated to the assertion.
 
-**Log me-redact** `x-sterun-signature` dan `x-sterun-nonce`, dan membuang query string (bisa membawa
-address).
+**Logs redact** `x-sterun-signature` and `x-sterun-nonce`, and drop the query string (which can carry
+an address).
 
-**OpenAPI di `/openapi.json`**, di-generate dari schema yang sama yang dipakai Fastify untuk
-validasi dan serialisasi — jadi dia tidak bisa mendeskripsikan endpoint yang perilakunya berbeda.
+**OpenAPI at `/openapi.json`**, generated from the same schemas Fastify uses to validate and
+serialise — so it cannot describe an endpoint that behaves differently.
 
-> Jebakan Fastify yang menghabiskan waktu dan sudah ada komentarnya di `src/server.ts`: route yang
-> didaftarkan **sinkron** ter-mount sebelum plugin yang di-`register` sempat memasang hook
-> `onRoute`-nya. Akibatnya `/health` dan `/config` tidak terlihat oleh swagger. Semua route sekarang
-> lewat `register`.
+> A Fastify trap that cost real time and now has its own comment in `src/server.ts`: a route
+> registered **synchronously** mounts before a `register`ed plugin has installed its `onRoute` hook.
+> The effect was that `/health` and `/config` were invisible to swagger. Every route now goes through
+> `register`.
 
-## Deploy (STE-31)
+## Deployment (STE-31)
 
-`compose.prod.yml` di root: Postgres + API + poller + keeper + Caddy (TLS otomatis lewat ACME, tanpa
-cron renewal yang bisa diam-diam berhenti bekerja). Tiga service Node-nya **image yang sama dengan
-perintah berbeda** — memang begitu bentuknya.
+`compose.prod.yml` at the root: Postgres + API + poller + keeper + Caddy (automatic TLS over ACME,
+with no renewal cron that can quietly stop working). The three Node services are the **same image
+with different commands** — that is genuinely what they are.
 
-Dua hal yang layak diingat:
+Two things worth remembering:
 
-- **`/health` vs `/ready`.** `/health` sengaja tidak menyentuh apa pun (liveness probe yang memanggil
-  dependency melaporkan outage orang lain sebagai outage kita). `/ready` mengecek database dan
-  menjawab 503 kalau tidak bisa. Caddy mengawasi yang kedua, Docker yang pertama.
-- **Postgres tidak punya `ports:`.** Satu baris yang menahan kesalahan firewall menaruh database PII
-  di internet publik.
+- **`/health` vs `/ready`.** `/health` deliberately touches nothing (a liveness probe that calls a
+  dependency reports someone else's outage as ours and gets the container restarted for it).
+  `/ready` checks the database and answers 503 when it cannot. A proxy watches the second, Docker
+  watches the first.
+- **Postgres has no `ports:`.** One line that stops a firewall mistake from putting the PII database
+  on the public internet.
 
-`docs/deployments.md` **ikut masuk image**: `src/deployments.ts` mem-parse-nya untuk alamat kontrak,
-jadi aturan "alamat tidak pernah di-hardcode" tetap berlaku di dalam container.
+`docs/deployments.md` **ships inside the image**: `src/deployments.ts` parses it for contract
+addresses, so the "addresses are never hardcoded" rule still holds inside the container.
 
-Verifikasi dari luar tanpa SSH: `./deploy/verify-deployment.sh https://…` — 18 cek, termasuk bahwa
-endpoint sensitif tetap 401 dan bahwa SVG tidak ada di tipe upload yang diterima. Prosedur lengkap: [`OPERATIONS.md`](OPERATIONS.md) bagian "Deploy ke VPS".
+Verify from outside without SSH: `./deploy/verify-deployment.sh https://…` — 18 checks, including
+that sensitive endpoints still answer 401 and that SVG is absent from the accepted upload types. Full
+procedure: [`OPERATIONS.md`](OPERATIONS.md), "Deploying to the VPS".
 
-## Yang belum ada (jangan diasumsikan sudah)
+## Not built yet (do not assume otherwise)
 
-Job re-encrypt untuk rotasi kunci, alert kalau keeper berhenti, sweeper file yatim, dan backup
-Postgres terjadwal.
+A re-encryption job for key rotation, an alert for when the keeper stops, an orphan-file sweeper, and
+scheduled Postgres backups.
 
-**Blocker replica sudah HILANG.** `R2FileStore` menghapusnya: byte tidak lagi di disk satu box, jadi
-API sekarang stateless. Yang tersisa sebelum benar-benar menyalakan replica kedua:
+**The replica blocker is GONE.** `R2FileStore` removed it: bytes no longer live on one box's disk, so
+the API is stateless. What is left before actually running a second replica:
 
-1. **backup Postgres terjadwal** — dan ini harus duluan. Replica itu ketersediaan, backup itu
-   pemulihan; replica menyalin `DROP TABLE` yang salah ketik dengan setia.
-2. **Redis untuk rate limit** — limiter-nya sudah ada dan sudah per-endpoint, tapi state-nya
-   in-memory, jadi dua instance = limit efektif dua kali lipat.
+1. **scheduled Postgres backups** — and this has to come first. A replica is availability, a backup
+   is recovery; a replica copies a mistyped `DROP TABLE` faithfully.
+2. **Redis for rate limiting** — the limiter exists and is already per-endpoint, but its state is
+   in-memory, so two instances mean double the effective limit.
 
-**Poller dan keeper tetap singleton.** Dua poller berebut cursor yang sama; dua keeper membayar sewa
-dua kali. Yang di-replika cuma API.
+**The poller and the keeper stay singletons.** Two pollers fight over the same cursor; two keepers
+pay rent twice. Only the API gets replicated.
 
-Daftar lengkapnya di bagian akhir [`OPERATIONS.md`](OPERATIONS.md). Perbarui file ini begitu salah
-satunya mendarat.
+The full list is at the end of [`OPERATIONS.md`](OPERATIONS.md). Update this file as soon as one of
+them lands.
