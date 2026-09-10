@@ -1,78 +1,77 @@
-# `docs/specs/` — spec BEKU (CLAUDE.md)
+# `docs/specs/` — the FROZEN spec (CLAUDE.md)
 
-**Semua yang ada di folder ini sudah dibekukan.** Ini *handoff contract* C4 (STE-10): yang dipegang
-**James** (backend + indexer) dan **Ancung** (web app + QR pass + scanner PWA) supaya bisa jalan
-paralel tanpa membaca `lib.rs` siapa pun. Versi folder sekarang: **v2.1.0**.
+**Everything in this folder is frozen.** It is the C4 *handoff contract* (STE-10): what **James**
+(backend + indexer) and **Ancung** (web app + QR pass + scanner PWA) hold so they can work in
+parallel without reading anyone's `lib.rs`. Current folder version: **v2.1.0**.
 
-| File | Isi |
+| File | Contents |
 | --- | --- |
-| `INTERFACE.md` | signature fungsi + siapa yang authorize + error yang mungkin, layout `#[contractevent]` (topic vs data), kedua enum error + band, wasm hash, alamat SAC sUSD |
-| `HASH_AND_TOTP.md` | `participant_hash` + TOTP + payload QR, **byte-exact** |
-| `vectors/` | test vector JSON — **artefak beku** |
-| `reference/node/`, `reference/rust/` | dua implementasi referensi yang wajib sepakat |
-| `verify.sh` | menjalankan keduanya, gagal keras kalau tidak sepakat |
-| `CHANGELOG.md` | riwayat versi + **aturan perubahan** |
+| `INTERFACE.md` | function signatures + who authorizes + which errors are possible, `#[contractevent]` layout (topic vs data), both error enums and their bands, wasm hashes, the sUSD SAC address |
+| `HASH_AND_TOTP.md` | `participant_hash` + TOTP + the QR payload, **byte-exact** |
+| `vectors/` | JSON test vectors — **frozen artefacts** |
+| `reference/node/`, `reference/rust/` | two reference implementations that must agree |
+| `verify.sh` | runs both, and fails hard when they disagree |
+| `CHANGELOG.md` | version history + **the rules for changing it** |
 
-## Aturan nomor satu
+## Rule number one
 
-Kalau kode dan dokumen ini berbeda, **dokumen ini yang benar**, dan perbedaannya itu sendiri
-sebuah bug. Jangan pernah mengedit `INTERFACE.md` supaya cocok dengan wasm yang baru — arah
-perbaikannya kebalikannya.
+When the code and this document differ, **this document is right**, and the difference is itself a
+bug. Never edit `INTERFACE.md` to match a new wasm — the repair runs the other way.
 
-Dijaga mekanis oleh `node sc/scripts/check-interface.mjs`, yang mem-*diff* tiga sisi: wasm hasil
-build, tabel di `INTERFACE.md`, dan `sc/bindings/*/src/index.ts`. Jalan di CI tiap push.
+Enforced mechanically by `node sc/scripts/check-interface.mjs`, which diffs three sides: the built
+wasm, the tables in `INTERFACE.md`, and `sc/bindings/*/src/index.ts`. It runs in CI on every push.
 
-## Cara mengubah spec (kalau memang harus)
+## How to change the spec (when you really must)
 
-Berlaku untuk perubahan **signature fungsi**, **layout `#[contractevent]`**, **kode error**, atau
-**definisi hash/TOTP**:
+This applies to changes to a **function signature**, a **`#[contractevent]` layout**, an **error
+code**, or a **hash/TOTP definition**:
 
-1. **PR baru**, approval **@Axel (PM) + @fable**. Tidak ada self-merge untuk perubahan spec —
-   ini satu-satunya pengecualian dari workflow merge-langsung di `CLAUDE.md` root.
-2. **Entri di `CHANGELOG.md`**: versi baru, tanggal, apa yang berubah, alasannya, dampaknya ke
-   data yang sudah ada dan client yang sudah jalan.
-3. **Regenerate TS bindings** (`sc/bindings/`, prosedur di `sc/bindings/README.md`).
-4. `bash docs/specs/verify.sh` hijau **dan** `cd sc && cargo test` hijau.
-5. Kalau ada **vector lama yang nilainya berubah**, sebut **eksplisit** di entri changelog.
+1. **A new PR**, approved by **@Axel (PM) + @fable**. No self-merge for a spec change — this is the
+   single exception to the merge-directly workflow in the root `CLAUDE.md`.
+2. **An entry in `CHANGELOG.md`**: the new version, the date, what changed, why, and the impact on
+   data that already exists and on clients already running.
+3. **Regenerate the TS bindings** (`sc/bindings/`, procedure in `sc/bindings/README.md`).
+4. `bash docs/specs/verify.sh` green **and** `cd sc && cargo test` green.
+5. If **an existing vector's value changes**, say so **explicitly** in the changelog entry.
 
-**Vector tidak pernah di-regenerate diam-diam supaya test lewat.** Vector adalah artefak beku;
-kalau implementasi tidak setuju dengannya, implementasinya yang salah sampai terbukti sebaliknya.
+**Vectors are never quietly regenerated to make a test pass.** A vector is a frozen artefact; when
+an implementation disagrees with one, the implementation is wrong until proven otherwise.
 
-## Dua hal yang tidak boleh terjadi, titik
+## Two things that must never happen, full stop
 
-- **Kode error tidak pernah di-renumber.** `ScError` Soroban cuma `u32` tanpa identitas kontrak,
-  jadi angkanya sendiri yang menjadi kontrak. Nomor varian yang dihapus tidak boleh dipakai ulang.
-  Varian baru ambil nomor bebas berikutnya di band-nya (`1..=99` C1, `100..=199` C2, `200+` OZ).
-- **Definisi hash tidak diubah dengan patch.** Mengubahnya membatalkan **setiap**
-  `participant_hash` yang sudah ada on-chain — record lama tidak bisa diverifikasi ulang. Itu
-  minimal MAJOR, plus rencana migrasi tertulis.
+- **Error codes are never renumbered.** A Soroban `ScError` is only a `u32` with no contract
+  identity, so the number itself is the contract. A deleted variant's number is never reused. A new
+  variant takes the next free number in its band (`1..=99` C1, `100..=199` C2, `200+` OZ).
+- **Hash definitions are never changed in a patch release.** Changing one invalidates **every**
+  `participant_hash` already on chain — old records could no longer be re-verified. That is a MAJOR
+  at minimum, plus a written migration plan.
 
-## Versi per file
+## Versions per file
 
-Versinya satu untuk seluruh folder; judul tiap file membawa versi di mana **file itu** terakhir
-berubah. Jadi `INTERFACE.md (v2.1.0)` di sebelah `HASH_AND_TOTP.md (v1.0.1)` itu disengaja: v2
-mengubah interface kontrak dan **tidak menyentuh satu byte pun** definisi hash/TOTP. Yang berlaku
-selalu entri paling atas di `CHANGELOG.md`.
+There is one version for the whole folder; each file's title carries the version at which **that
+file** last changed. So `INTERFACE.md (v2.1.0)` sitting next to `HASH_AND_TOTP.md (v1.0.1)` is
+deliberate: v2 changed the contract interface and did **not touch a single byte** of the hash/TOTP
+definitions. What is in force is always the topmost entry in `CHANGELOG.md`.
 
-## v2 dan alamat kontrak
+## v2 and contract addresses
 
-v1 non-upgradeable, jadi v2 adalah **pasangan alamat baru** — bukan pengganti di tempat.
-`INTERFACE.md` mendokumentasikan v2; alamat v1 tetap ada dan tetap dijalankan oleh wasm v1-nya
-sendiri. Kalau kamu men-debug sesuatu yang bicara ke alamat lama, dokumen yang berlaku adalah
-entri `[1.0.1]` di `CHANGELOG.md`, bukan `INTERFACE.md` yang sekarang.
+v1 is non-upgradeable, so v2 was a **new address pair** rather than a replacement in place.
+`INTERFACE.md` documents v2; the v1 addresses still exist and are still driven by their own v1 wasm.
+If you are debugging something that talks to an old address, the document in force is the `[1.0.1]`
+entry in `CHANGELOG.md`, not the current `INTERFACE.md`.
 
-Mulai v2 kedua kontrak **upgradeable**, dan itu menambah satu aturan yang tidak bisa dijaga gate
-mana pun di sini: **storage key append-only selamanya**. Alasan dan konsekuensinya ada di entri
-`[2.0.0]` `CHANGELOG.md` dan di `sc/CLAUDE.md`.
+From v2 onwards both contracts are **upgradeable**, and that adds one rule no gate in this folder
+can enforce: **storage keys are append-only, forever**. The reasoning and consequences are in the
+`[2.0.0]` entry of `CHANGELOG.md` and in `sc/CLAUDE.md`.
 
-## Verifikasi
+## Verification
 
 ```bash
-bash docs/specs/verify.sh          # dua implementasi referensi harus sepakat
+bash docs/specs/verify.sh           # the two reference implementations must agree
 node sc/scripts/check-interface.mjs # wasm ↔ INTERFACE.md ↔ bindings
-cd sc && cargo test                 # termasuk test yang membaca vectors/ yang sama
+cd sc && cargo test                 # includes tests that read the same vectors/
 ```
 
-Ketiganya jalan di CI. `reference/node/` sengaja **nol dependency npm** dan `reference/rust/`
-adalah crate berdiri sendiri (`[workspace]` sendiri, **bukan** member `sc/`) — supaya keduanya
-benar-benar independen dan kesepakatannya bermakna.
+All three run in CI. `reference/node/` deliberately has **zero npm dependencies** and
+`reference/rust/` is a standalone crate (its own `[workspace]`, deliberately **not** a member of
+`sc/`) — so that the two are genuinely independent and their agreement means something.
