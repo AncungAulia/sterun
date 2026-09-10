@@ -50,6 +50,15 @@ export const CONTRACTS = {
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /**
+ * Reown (WalletConnect) project id. Optional on purpose: the relay refuses
+ * pairings from an app it does not know, so without one WalletConnect is left
+ * out of the picker rather than offered as a button that can only fail.
+ */
+export const WALLET_CONNECT_PROJECT_ID = (
+  process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID ?? ""
+).trim();
+
+/**
  * Explorer base for the configured network. Only the testnet and the public
  * network have a stellar.expert instance; anything else gets an empty string so
  * callers can hide the link rather than render a dead one.

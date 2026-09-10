@@ -223,6 +223,23 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   only `participant_hash`.
 - **Wallets: Stellar Wallets Kit** (Freighter, xBull, Albedo, WalletConnect, Ledger) — the decision in
   `docs/SYSTEM_DESIGN.md` §8. Passkey smart accounts are not in v1's scope.
+- **WalletConnect only exists when `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` is set** (a Reown project
+  id; put it in `.env.local` and in Vercel's environment). Empty means the option **does not appear**,
+  rather than a button that is certain to fail: the relay refuses pairing from an unregistered app.
+  There are two shapes, both in `src/lib/wallet.ts`:
+  - **An ordinary browser** (desktop or phone) → a `WalletConnect` entry in the kit's picker, pairing
+    by QR or a deep link to a wallet on the phone (Freighter mobile, LOBSTR).
+  - **Inside the Freighter mobile browser** (`window.stellar` = `{ provider: "freighter", platform:
+    "mobile" }`) → the kit is bypassed and `src/lib/freighter-mobile.ts` pairs directly through
+    `UniversalProvider`. The kit's module is subclassed so `isPlatformWrapper()` answers `false`;
+    without that, the kit's picker skips itself in that browser and pairs through its own path. The
+    pattern is taken from SoroSense, which is proven to work on a phone.
+  - The WalletConnect chains are only `stellar:pubnet` and `stellar:testnet`. Any other network means
+    WalletConnect is not offered, so nothing signs on the wrong ledger silently.
+  - **`@reown/appkit` `1.8.21` and `@walletconnect/universal-provider` `2.23.7` are pinned EXACTLY**,
+    matching the versions the kit carries. A caret pulls a newer version, and that means two copies of
+    AppKit on one page. Raise them only together with the kit, and check `pnpm-lock.yaml` still holds
+    a single `@reown/appkit@` entry.
 
 ## Conventions
 
