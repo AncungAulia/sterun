@@ -1,130 +1,131 @@
-# Brand Sterun — aset, warna, huruf
+# The Sterun brand — assets, colours, type
 
-Owner: **Nabil** (C13, STE-7). Ini panduan, bukan peraturan. Kalau sebuah aturan di bawah membuat
-sebuah halaman jadi lebih jelek, halamannya yang menang — tapi tulis alasannya di PR.
+Owner: **Nabil** (C13, STE-7). This is guidance, not law. If a rule below makes a page worse, the
+page wins — but write the reason in the PR.
 
-Yang **tidak** fleksibel cuma tiga, dan ketiganya bukan soal selera:
+Only three things are **not** flexible, and none of them is a matter of taste:
 
-1. Warna diambil dari token, tidak pernah diketik sebagai hex di komponen.
-2. Istilahnya **"race record"**, tidak pernah "participation record".
-3. Warna tidak pernah jadi satu-satunya penanda arti — selalu ada ikon atau teks.
-
----
-
-## File aset
-
-Semua ada di `landing-page/public/brand/logo/` dan salinan identik di `fe/public/brand/logo/`.
-Dua salinan memang disengaja: kedua app punya lockfile, `node_modules`, dan deploy sendiri
-(lihat `landing-page/CLAUDE.md`). Ubah satu, ubah yang lain di commit yang sama.
-
-| File | Bentuk | Dipakai di mana |
-| --- | --- | --- |
-| `sterun-logo-black.svg` | mark saja, 400×400 | slot persegi di atas latar terang: favicon, avatar, header app |
-| `sterun-logo-white.svg` | mark saja, 400×400 | slot persegi di atas latar gelap |
-| `sterun-lockup-black.svg` | mark + wordmark, 1245×400 | slot lebar di atas latar terang: header situs, banner, slide |
-| `sterun-lockup-white.svg` | mark + wordmark, 1245×400 | slot lebar di atas latar gelap |
-| `sterun-background.png` | mark di atas kotak `#F8F8F8`, 400×400 | sumber favicon; avatar X |
-
-Keempat SVG **transparan** — tidak ada kotak putih di belakangnya, jadi masing-masing mengambil
-warna apa pun yang ada di bawahnya.
-
-### Pilih file, jangan pakai filter CSS
-
-Versi terang bukan versi gelap yang di-`invert()`. Kalau latarnya gelap, pakai file `-white`.
-`filter: invert()` juga membalik warna lain di dalam gambar dan hasilnya tidak pernah persis.
+1. Colours come from tokens, never typed as hex in a component.
+2. The term is **"race record"**, never "participation record".
+3. Colour is never the only carrier of meaning — there is always an icon or text as well.
 
 ---
 
-## Ukuran dan jarak
+## Asset files
 
-**Minimum mark: 32px.** Runner-nya digambar dengan garis tipis terbuka, dan garis tipis adalah hal
-pertama yang hancur saat diperkecil. Di 32px — yang memang dipakai tab browser modern — masih
-terbaca. Di 24px ke bawah garisnya mulai menyatu jadi gumpalan.
+They all live in `landing-page/public/brand/logo/`, with identical copies in
+`fe/public/brand/logo/`. Two copies is deliberate: each app has its own lockfile, `node_modules` and
+deployment (see `landing-page/CLAUDE.md`). Change one, change the other in the same commit.
 
-Kalau suatu saat butuh mark di bawah 32px, jawabannya bukan memaksa file ini, tapi menggambar
-varian sederhana khusus ukuran kecil. Itu hal normal yang dimiliki hampir semua logo.
+| File | Shape | Where it is used |
+| --- | --- | --- |
+| `sterun-logo-black.svg` | the mark alone, 400×400 | square slots on a light background: favicon, avatar, app header |
+| `sterun-logo-white.svg` | the mark alone, 400×400 | square slots on a dark background |
+| `sterun-lockup-black.svg` | mark + wordmark, 1245×400 | wide slots on a light background: site header, banners, slides |
+| `sterun-lockup-white.svg` | mark + wordmark, 1245×400 | wide slots on a dark background |
+| `sterun-background.png` | the mark on a `#F8F8F8` square, 400×400 | the favicon source; the X avatar |
 
-**Lockup:** minimum lebar 160px. Di bawah itu wordmark-nya tidak terbaca; pakai mark saja.
+All four SVGs are **transparent** — there is no white box behind them, so each takes on whatever
+colour is underneath it.
 
-**Clear space:** `viewBox` tiap file sudah memuat jarak amannya. Selama file dipakai apa adanya
-tanpa dipotong, jaraknya sudah benar. Patokan kasar kalau harus mengukur manual: sisakan ruang
-kosong selebar tinggi kepala runner di setiap sisi.
+### Pick the right file; do not use a CSS filter
+
+The light version is not the dark one run through `invert()`. If the background is dark, use the
+`-white` file. `filter: invert()` also inverts every other colour in the image, and the result is
+never quite right.
 
 ---
 
-## Warna
+## Size and spacing
 
-Sumber kebenarannya `landing-page/app/tokens.css` (dan salinannya di `fe/`), bukan dokumen ini.
-Yang di bawah ini rangkuman supaya bisa dibaca tanpa membuka kode.
+**Minimum mark: 32px.** The runner is drawn with thin open strokes, and thin strokes are the first
+thing to fall apart when scaled down. At 32px — which is what a modern browser tab actually uses —
+it still reads. At 24px and below the strokes start merging into a blob.
 
-### Brand — tiga warna
+If a mark below 32px is ever needed, the answer is not to force this file but to draw a simplified
+variant for small sizes. That is a normal thing for almost every logo to have.
 
-| Token | Hex | Peran |
-| --- | --- | --- |
-| `paper` | `#F8F8F8` | latar halaman |
-| `ink` | `#1E232B` | teks utama, permukaan gelap |
-| `teal` | `#016985` | satu-satunya aksen — kalau teal, berarti bisa diklik |
+**Lockup:** minimum width 160px. Below that the wordmark is unreadable; use the mark alone.
 
-Turunannya: `n-50`…`n-950` (sepuluh tingkat abu-abu yang dicondongkan ke arah ink) dan
-`teal-50`…`teal-800` (tombol punya empat state yang harus terlihat berbeda).
-
-### Status — berpasangan
-
-| Arti | Gelap (teks) | Terang (layar penuh) |
-| --- | --- | --- |
-| sukses | `#067A38` | `#0FA047` |
-| bahaya | `#A31C11` | `#E23B22` |
-| peringatan | `#8F5200` | `#D18700` |
-
-Yang gelap untuk teks di atas latar terang; yang terang untuk panel penuh layar di hari lomba,
-selalu dengan huruf 32px ke atas. Hijau digeser ke arah kuning menjauh dari teal, dan peringatan
-digeser ke amber menjauh dari merah, supaya tiap pasangan tetap bisa dibedakan oleh mata yang buta
-warna merah-hijau.
-
-Semua warna teks di atas lolos 4.5:1 terhadap `paper`. Yang `-strong` lolos 3:1 terhadap putih, dan
-itu cukup karena cuma dipakai di bawah huruf besar.
+**Clear space:** each file's `viewBox` already contains its safe margin. As long as the file is used
+as-is without cropping, the spacing is correct. A rough guide if you have to measure by hand: leave
+empty space the height of the runner's head on every side.
 
 ---
 
-## Huruf
+## Colour
 
-| Kelas | Font | Untuk apa |
+The source of truth is `landing-page/app/tokens.css` (and its copy in `fe/`), not this document.
+What follows is a summary so it can be read without opening code.
+
+### Brand — three colours
+
+| Token | Hex | Role |
 | --- | --- | --- |
-| `.heading-hero` | Big Shoulders 700 | hero landing, vonis scanner — satu per layar |
-| `.heading-strong` | Poppins italic 600 | wordmark, judul section |
-| `.heading` | Poppins italic 500 | judul kartu |
-| (default) | Poppins roman 400–500 | body, form, tabel, angka |
-| `.numeric` | Poppins + tabular figures | nomor bib, kode 6 digit, alamat kontrak |
+| `paper` | `#F8F8F8` | page background |
+| `ink` | `#1E232B` | primary text, dark surfaces |
+| `teal` | `#016985` | the only accent — if it is teal, it is clickable |
 
-**Poppins tidak pernah melewati 600.** Bukan sekadar imbauan: `layout.tsx` cuma memuat weight
-400/500/600, jadi `font-bold` akan menghasilkan tebal palsu buatan browser yang kelihatan jelek —
-pelanggarannya ketahuan sendiri. Penekanan datang dari ukuran, italic, dan warna.
+Their derivatives: `n-50`…`n-950` (ten steps of grey pulled towards ink) and `teal-50`…`teal-800`
+(a button has four states that must look different).
 
-`.numeric` menyalakan *tabular figures* dan *slashed zero*: semua angka jadi selebar, sehingga kode
-yang berganti tiap 30 detik tidak bergoyang, dan `0` tidak terbaca sebagai `O` oleh volunteer yang
-membacanya keras-keras.
+### Status — in pairs
+
+| Meaning | Dark (text) | Light (full screen) |
+| --- | --- | --- |
+| success | `#067A38` | `#0FA047` |
+| danger | `#A31C11` | `#E23B22` |
+| warning | `#8F5200` | `#D18700` |
+
+The dark ones are for text on a light background; the light ones for full-screen panels on race day,
+always at 32px type or above. The green is pushed towards yellow and away from teal, and the warning
+towards amber and away from red, so each pair stays distinguishable to a red-green colour-blind eye.
+
+Every text colour above passes 4.5:1 against `paper`. The `-strong` ones pass 3:1 against white,
+which is enough because they are only ever used under large type.
+
+---
+
+## Type
+
+| Class | Font | What for |
+| --- | --- | --- |
+| `.heading-hero` | Big Shoulders 700 | the landing hero, the scanner's verdict — one per screen |
+| `.heading-strong` | Poppins italic 600 | the wordmark, section titles |
+| `.heading` | Poppins italic 500 | card titles |
+| (default) | Poppins roman 400–500 | body, forms, tables, numbers |
+| `.numeric` | Poppins + tabular figures | bib numbers, 6-digit codes, contract addresses |
+
+**Poppins never goes above 600.** Not merely a request: `layout.tsx` only loads weights 400/500/600,
+so `font-bold` produces browser-synthesised faux bold that looks bad — the violation announces
+itself. Emphasis comes from size, italics and colour.
+
+`.numeric` switches on *tabular figures* and a *slashed zero*: every digit becomes the same width, so
+a code that changes every 30 seconds does not jitter, and a `0` is not read as an `O` by a volunteer
+reading it aloud.
 
 ---
 
 ## Favicon
 
-`app/icon.png` (256px), `app/apple-icon.png` (180px), dan `app/favicon.ico` (16/32/48) di **kedua**
-app. Ketiganya di-generate dari `sterun-background.png` dengan cara memotong kanvas 400×400 ke
-kotak pembatas mark-nya lalu menambah margin 14%, supaya runner-nya mengisi ruang alih-alih
-mengambang di tengah padding.
+`app/icon.png` (256px), `app/apple-icon.png` (180px) and `app/favicon.ico` (16/32/48) in **both**
+apps. All three are generated from `sterun-background.png` by cropping the 400×400 canvas to the
+mark's bounding box and adding a 14% margin, so the runner fills the space instead of floating in the
+middle of padding.
 
-Next.js memasang ketiganya otomatis lewat konvensi nama file di `app/` — tidak ada `<link>` yang
-perlu ditulis tangan. Kalau mark-nya berubah, generate ulang ketiganya, jangan edit satu-satu.
+Next.js installs all three automatically through file-name conventions in `app/` — there is no
+`<link>` to write by hand. If the mark changes, regenerate all three rather than editing them one at
+a time.
 
 ---
 
-## Melihat semuanya sekaligus
+## Seeing it all at once
 
 ```bash
-cd landing-page && npx next dev --port 4311   # lalu buka /tokens
+cd landing-page && npx next dev --port 4311   # then open /tokens
 ```
 
-Route `/tokens` menampilkan setiap token di situasi tempat ia dipilih: logo di empat ukuran, lockup
-di tiga latar, tujuh warna status berdampingan, tangga berat huruf, dan dua layar scanner. Halaman
-itu ada supaya ketidaksetujuan muncul sebelum Ancung membangun di atasnya, bukan sesudah. Hapus
-atau kunci di balik flag begitu tokennya disepakati.
+The `/tokens` route shows every token in the situation it was chosen for: the logo at four sizes, the
+lockup on three backgrounds, the seven status colours side by side, the type weight ladder, and two
+scanner screens. That page exists so disagreements surface before Ancung builds on top of the tokens
+rather than after. Delete it or put it behind a flag once the tokens are settled.

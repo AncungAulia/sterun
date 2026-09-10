@@ -1,32 +1,33 @@
 # Information architecture — web app (`fe/`)
 
-Peta halaman aplikasi web Sterun: URL apa saja yang ada, siapa yang membukanya, apa yang tampil di
-situ, dan dari mana datanya. Dokumen ini turunan dari SOW Deliverable 3, `SYSTEM_DESIGN.md` §6a–6e
-dan §7, serta enam tiket `fe/` (STE-8, 13, 17, 21, 22, 24).
+A map of the Sterun web app's pages: which URLs exist, who opens them, what appears there, and where
+the data comes from. This document derives from SOW Deliverable 3, `SYSTEM_DESIGN.md` §6a–6e and §7,
+and the six `fe/` tickets (STE-8, 13, 17, 21, 22, 24).
 
-**Status: rencana, belum ada implementasi.** Per 2026-09-06 `fe/` masih scaffold
-`create-next-app` dengan satu halaman kosong. Owner: Ancung (flow) + Nabil (desain, STE-12/18/23).
+**Status: a plan, largely unimplemented.** As of 2026-09-06 `fe/` was still a `create-next-app`
+scaffold with one empty page; STE-8 and STE-13 have landed since. Owner: Ancung (flow) + Nabil
+(design, STE-12/18/23).
 
-Kalau implementasi menyimpang dari dokumen ini, perbarui dokumennya di commit yang sama — aturan
-yang sama dengan `SYSTEM_DESIGN.md`.
+If an implementation diverges from this document, update the document in the same commit — the same
+rule as for `SYSTEM_DESIGN.md`.
 
 ---
 
-## 1. Poros pembagian: asumsi jaringan, bukan audiens
+## 1. The axis of division: a network assumption, not an audience
 
-App ini dibelah bukan berdasarkan siapa penggunanya, melainkan berdasarkan **boleh basi atau
-tidak**, karena itu yang menentukan scope service worker:
+This app is split not by who its users are but by **whether staleness is acceptable**, because that
+is what decides the service worker's scope:
 
-- Directory dan profile **wajib segar dari chain**. Kalau di-cache, klaim "chain is authoritative"
-  yang jadi jualan utama Sterun tidak lagi benar.
-- QR pass dan scanner **wajib hidup penuh tanpa sinyal** (`SYSTEM_DESIGN.md` §7: verifikasi di
-  venue mengasumsikan konektivitas nol).
+- The directory and profiles **must be fresh from the chain**. If they were cached, the "the chain is
+  authoritative" claim that is Sterun's whole pitch would no longer be true.
+- The QR pass and the scanner **must work fully without a signal** (`SYSTEM_DESIGN.md` §7:
+  verification at a venue assumes zero connectivity).
 
-Dua tuntutan itu berlawanan, jadi tidak boleh satu service worker menguasai seluruh origin.
+Those two demands are opposed, so no single service worker may own the whole origin.
 
 ```
 fe/app/
-  (browse)/                          network-only, service worker tidak menyentuh sini
+  (browse)/                          network-only; the service worker does not touch this
     page.tsx                         /
     events/[eventId]/                /events/:id
     events/[eventId]/enter/          /events/:id/enter
@@ -40,305 +41,324 @@ fe/app/
     org/events/[eventId]/scanners/   /org/events/:id/scanners
     org/events/[eventId]/results/    /org/events/:id/results
 
-  (offline)/                         PWA, service worker HANYA di-scope ke sini
+  (offline)/                         the PWA; the service worker is scoped ONLY to this
     pass/[tokenId]/                  /pass/:token
     scan/                            /scan
     scan/[eventId]/                  /scan/:id
     scan/[eventId]/flagged/          /scan/:id/flagged
 ```
 
-Scanner sengaja **tidak** dipisah jadi app/origin sendiri untuk MVP: ongkosnya (shell kedua, wiring
-design token dua kali, deploy ketiga, STE-32 ditulis ulang) tidak sebanding untuk testnet dengan
-20-an record, dan `CLAUDE.md` root melarang menambah folder layout tanpa alasan kuat.
+The scanner is deliberately **not** split into its own app or origin for the MVP: the cost (a second
+shell, wiring the design tokens twice, a third deployment, rewriting STE-32) is not worth it for a
+testnet with a couple of dozen records, and the root `CLAUDE.md` forbids adding a layout folder
+without a strong reason.
 
-**Aturan kapan keputusan itu dibalik:** scanner menyimpan `totp_secret` *seluruh peserta* satu
-event di IndexedDB — payload paling sensitif di sistem ini. Satu origin berarti XSS di halaman
-publik secara teori bisa membacanya. Begitu scanner memegang roster event nyata di mainnet,
-pisahkan ke origin sendiri (`scan.sterun.xyz`). Karena logikanya sudah terkurung di route group
-`(offline)` dan modulnya sendiri, itu pekerjaan memindah, bukan menulis ulang.
+**The condition for reversing that decision:** the scanner stores the `totp_secret` of *every
+participant* in an event in IndexedDB — the most sensitive payload in the system. A single origin
+means an XSS on a public page could in theory read it. As soon as the scanner holds a real event's
+roster on mainnet, split it onto its own origin (`scan.sterun.xyz`). Because the logic is already
+confined to the `(offline)` route group and its own modules, that is a move rather than a rewrite.
 
 ---
 
-## 2. Tiga batasan data yang membentuk seluruh IA ini
+## 2. Three data constraints that shape this whole IA
 
-Dilanggar sekali, salah satu klaim inti Sterun ikut batal. Ketiganya berulang kali menentukan isi
-halaman di bawah, jadi dibaca duluan.
+Break one and one of Sterun's core claims goes with it. All three decide the contents of pages
+below repeatedly, so read them first.
 
-### 2.1 Tidak ada nama peserta, untuk siapa pun
+### 2.1 No participant names, for anyone
 
-On-chain cuma ada `participant_hash`. Di backend, `be/src/routes/participants.ts` mengembalikan
-ringkasan tanpa PII dan menolak pemanggil yang bukan pemilik barisnya (`403`). **Panitia pun tidak
-bisa melihat daftar nama pendaftarnya.** Satu-satunya tempat potongan nama muncul adalah roster
-bundle, dan itu diautentikasi ke address scanner.
+On chain there is only `participant_hash`. In the backend, `be/src/routes/participants.ts` returns a
+summary with no PII and refuses a caller who does not own the row (`403`). **Not even the organiser
+can see a list of the names that entered.** The only place a fragment of a name appears is the roster
+bundle, and that is authenticated to a scanner's address.
 
-Konsekuensi: tidak ada avatar, tidak ada daftar nama, tidak ada export peserta. Yang boleh tampil
-adalah angka (`entered_count` dari chain), bib, state, dan address.
+The consequence: no avatars, no name lists, no participant export. What may be shown is numbers
+(`entered_count` from the chain), bibs, states, and addresses.
 
-### 2.2 Bukan CRUD — nyaris tidak ada update, dan tidak ada delete
+### 2.2 Not CRUD — almost no updates, and no deletes
 
-| Objek | Create | Update | Delete |
+| Object | Create | Update | Delete |
 | --- | --- | --- | --- |
-| Event | `create_event` | **hanya status** (`set_event_status`) | tidak ada |
-| Kategori | `add_category` | **tidak ada sama sekali** | tidak ada |
+| Event | `create_event` | **status only** (`set_event_status`) | none |
+| Category | `add_category` | **none whatsoever** | none |
+| Add-on | `add_addon` | **none whatsoever** | none |
 | Scanner | `add_scanner` | — | `remove_scanner` |
 
-Nama event, tanggal, `metadata_hash`, `uri`, dan seluruh isi kategori (kode, jarak, kuota, harga)
-**tidak punya setter**. Salah ketik harga = permanen; jalan keluarnya cuma `Closed` lalu bikin event
-baru.
+An event's name, date, `metadata_hash` and `uri`, and everything about a category (code, distance,
+quota, price) have **no setter**. A mistyped price is permanent; the only way out is `Closed` and
+then a new event.
 
-`Draft` **bukan** draft dalam arti Google Docs: dia cuma berarti pendaftaran belum dibuka, isinya
-tetap beku sejak detik pertama. Karena itu form panitia tidak boleh berpola "isi → Save → edit
-nanti", dan wajib punya langkah review sebelum tanda tangan.
+`Draft` is **not** a draft in the Google Docs sense: it only means entries are not open yet; the
+contents are frozen from the first second. So an organiser form must not follow a "fill in → Save →
+edit later" pattern, and must have a review step before signing.
 
-Transisi status yang legal (`InvalidStatus(11)` selain ini, termasuk ke dirinya sendiri):
+The legal status transitions (anything else is `InvalidStatus(11)`, including to itself):
 
 ```
-Draft  -> Open | Closed        Open      -> Closed | Completed
-Closed -> Open | Completed     Completed -> (terminal)
+Draft  -> Open | Closed | Cancelled        Open      -> Closed | Completed | Cancelled
+Closed -> Open | Completed | Cancelled     Completed -> (terminal)
+                                           Cancelled -> (terminal)
 ```
 
-### 2.3 `create_event` permissionless
+`Cancelled` arrived with the v2 contracts (STE-35). It is not a synonym for `Closed`: `Closed` means
+entries are shut while the race still happens and can be reopened; `Cancelled` means the race is off,
+and it is terminal.
 
-Yang mengotorisasi cuma `organiser.require_auth()`. Tidak ada allowlist, dan admin EventRegistry
-kewenangannya hanya `set_race_record`. **Siapa pun yang punya wallet bisa membuat event**, termasuk
-event bodong.
+### 2.3 `create_event` is allowlisted (since STE-36)
 
-Tidak ada halaman "daftar jadi organiser", tidak ada approval, tidak ada admin panel. Gerbang
-seperti itu juga tidak akan menahan apa pun: `@sterunxyz/sdk` terbit publik di npm dan bisa memanggil
-`createEvent()` langsung — justru itu yang dijanjikan SOW Deliverable 2.
+**This section said the opposite until 2026-09-10, and the change matters for the console.** Two
+gates now apply, answering different questions: `organiser.require_auth()` proves the caller holds
+the keypair, and an admin-held allowlist proves that keypair has been vetted. A caller who is not
+allowlisted gets `NotAllowlistedOrganiser(18)` — the signature did not change, only when it
+succeeds.
 
-Penggantinya adalah **transparansi**: tampilkan address organiser apa adanya, plus berapa event
-yang pernah dia buat dan berapa yang `Completed`. Tidak menyaring siapa pun, tapi tidak ada yang
-bisa bersembunyi.
+What this means for `fe/`:
+
+- **A "create event" form shown to any connected wallet will fail for most of them.** Read
+  `is_organiser(address)` first and say so plainly, rather than letting someone fill in a whole
+  wizard and meet a revert at the signature. `is_organiser` is a view that never reverts, so this is
+  cheap.
+- **`is_organiser` is not an enforcer.** It decides what to show. A client that skips it still gets a
+  revert, not an event — which is the correct order of responsibility.
+- **It is contract-wide and per-address, not per-event.** Per-event authority is still
+  `EventData.organiser`, read via `get_organiser(event_id)`. `is_organiser(addr)` does not answer "is
+  this the organiser of event X".
+- Getting on the allowlist is an off-chain request to the admin; there is no self-service page, and
+  §8 explains why there should not be one.
+
+Transparency is still part of the answer rather than a replacement for it: show the organiser's
+address as it is, plus how many events they have created and how many reached `Completed`.
 
 ---
 
-## 3. Halaman publik — tanpa wallet
+## 3. Public pages — no wallet
 
-| URL | Menampilkan | Sumber data | Tiket |
+| URL | Shows | Data source | Ticket |
 | --- | --- | --- | --- |
-| `/` | Kartu event: nama, tanggal, badge status, ringkasan kategori. Hanya `Open` yang punya CTA daftar. Loading + empty state (testnet lambat / belum ada event). | chain (RPC) — indexer sebagai fast path, kebenaran tetap dari chain | STE-13 |
-| `/events/[id]` | lihat §3.1 | chain + dokumen metadata | STE-13 |
-| `/runner/[address]` | Riwayat race per baris: event, kategori, bib, state, waktu finish, link transaksi. Blok identity check. Empty state. Paginasi 20. | chain (kebenaran), indexer (enrich metadata event) | STE-24 |
+| `/` | Event cards: name, date, status badge, category summary. Only `Open` events get an enter CTA. Loading + empty states (slow testnet / no events yet). | the chain (RPC) — the indexer as a fast path, with truth still from the chain | STE-13 |
+| `/events/[id]` | see §3.1 | the chain + the metadata document | STE-13 |
+| `/runner/[address]` | Race history per row: event, category, bib, state, finish time, transaction link. An identity-check block. An empty state. Paginated at 20. | the chain (truth), the indexer (to enrich event metadata) | STE-24 |
 
-`/runner/[address]` adalah halaman yang di SOW disebut *"the part no ticketing platform
-produces"*. Wajib bisa dibuka dari link telanjang: tanpa login, tanpa wallet, tanpa akun.
+`/runner/[address]` is the page the SOW calls *"the part no ticketing platform produces"*. It must
+open from a bare link: no login, no wallet, no account.
 
-Blok identity check bekerja dengan consent runner: dia memasukkan nama + NIK + kontak darurat +
-salt receipt, **hash dihitung lokal di browser** per `docs/specs/HASH_AND_TOTP.md`, lalu
-`verify(token_id, hash)` dipanggil. PII tidak dikirim ke server mana pun, termasuk server kita.
+The identity-check block works with the runner's consent: they enter their name + national ID +
+emergency contact + salt receipt, the **hash is computed locally in the browser** per
+`docs/specs/HASH_AND_TOTP.md`, and then `verify(token_id, hash)` is called. The PII is not sent to any
+server, ours included.
 
-### 3.1 `/events/[id]` — detail event
+### 3.1 `/events/[id]` — event detail
 
-Layout: poster di kiri, kartu ringkas di kanan, tab di bawah.
+Layout: the poster on the left, a summary card on the right, tabs below.
 
-**Kartu kanan** berisi tanggal, judul, lokasi, badge status, jumlah pendaftar (angka saja, tanpa
-avatar — §2.1), dan **daftar kategori sebagai baris yang bisa dipilih**:
+**The right-hand card** holds the date, title, location, status badge, the number of entrants (a
+number only, no avatars — §2.1), and **the categories as selectable rows**:
 
 ```
-5K     sUSD 15   sisa 120 dari 300   [ Daftar ]
-10K    sUSD 25   sisa   8 dari 200   [ Daftar ]
-Half   sUSD 40   PENUH               [   —    ]
+5K     sUSD 15   120 of 300 left   [ Enter ]
+10K    sUSD 25     8 of 200 left   [ Enter ]
+Half   sUSD 40   FULL              [   —   ]
 ```
 
-Kategori tidak boleh diringkas jadi satu baris teks dengan satu tombol Daftar: **pendaftaran selalu
-per kategori**, dan tiap kategori punya harga, kuota, dan sisa kuota sendiri. Sisa kuota adalah
-satu-satunya kelangkaan yang benar-benar dipaksa kontrak (`reserve_slot` revert `QuotaFull(5)`, cek
-dan increment dalam satu invocation), jadi angka itu jujur dan layak ditonjolkan.
+Categories must not be collapsed into one line of text with a single Enter button: **entry is always
+per category**, and each has its own price, quota and remaining quota. Remaining quota is the only
+scarcity the contract genuinely enforces (`reserve_slot` reverts with `QuotaFull(5)`, checking and
+incrementing in one invocation), so that number is honest and worth featuring.
 
-Halaman untuk event `Closed`/`Completed` tetap harus ada — ia jadi tujuan link dari profile runner.
-Tombol Daftar diganti keterangan status.
+The page for a `Closed`/`Completed` event must still exist — it is the destination of links from a
+runner's profile. The Enter button is replaced by a statement of status.
 
-Harga di chain adalah `i128` 7 desimal; halaman menampilkannya dalam bentuk manusiawi.
+Prices on chain are `i128` with 7 decimals; the page displays them in human form.
 
-**Tab: belum dibangun di STE-13.** Halaman detail v1 adalah satu kolom, bukan tab. Alasannya
-dua-duanya soal isi, bukan soal layout: **People** perlu halaman `/runner/G...` untuk dituju dan itu
-STE-24, sedangkan **Timeline** perlu tanggal fase yang hidup di dokumen metadata — dan tidak ada satu
-pun event di testnet yang benar-benar menyajikan dokumennya (semua `uri` menunjuk `sterun.xyz` yang
-belum melayani file itu). Tiga tab dengan dua di antaranya kosong lebih buruk daripada satu halaman
-yang menyebutkan apa yang dia tahu. Tab dipasang di STE-24, waktu People punya isi.
+**Tabs: not built in STE-13.** The v1 detail page is a single column, not tabs. Both reasons are
+about content rather than layout: **People** needs `/runner/G...` pages to link to and that is
+STE-24, while **Timeline** needs phase dates that live in the metadata document — and no event on
+testnet actually served its document (every `uri` pointed at `sterun.xyz`, which was not serving
+those files). Three tabs with two of them empty is worse than one page that states what it knows.
+The tabs go in at STE-24, when People has content.
 
-Rancangan tab-nya tetap berlaku dan ditulis di bawah ini supaya tidak dirancang ulang:
+The tab design still stands and is written down here so it does not get designed twice:
 
+- **Overview** — the description from the metadata document. The eventual home of the route map (§6).
+- **Timeline** — three phases, each carrying a live count from the chain, because those phases are
+  exactly the contract's state machine:
 
-- **Overview** — deskripsi dari dokumen metadata. Tempat peta rute nanti (§6).
-- **Timeline** — tiga fase, masing-masing membawa hitungan hidup dari chain karena fase-fase itu
-  persis state machine kontrak:
-
-  | Fase | State record |
+  | Phase | Record state |
   | --- | --- |
-  | Pendaftaran | `Entered` |
-  | Penyerahan race pack | `RacepackClaimed` |
+  | Registration | `Entered` |
+  | Race pack collection | `RacepackClaimed` |
   | Race day | `Finished` / `DNF` |
 
   ```
-  ● Pendaftaran            1-20 Sep    312 terdaftar
-  ● Penyerahan race pack   27 Sep      180 sudah ambil
-  ○ Race day               28 Sep      belum mulai
+  ● Registration            1-20 Sep    312 entered
+  ● Race pack collection    27 Sep      180 collected
+  ○ Race day                28 Sep      not started
   ```
 
-  **Tanggalnya tidak mengikat apa pun.** Di chain hanya ada `starts_at`; tanggal buka/tutup
-  pendaftaran dan penyerahan racepack hidup di dokumen metadata. Yang benar-benar mengunci
-  pendaftaran adalah `EventStatus`, dan itu diganti manual oleh panitia. Karena itu perannya
-  dipisah: **tanggal = informasi jadwal; penanda "sekarang di sini" = dari state chain**. Fase
-  Pendaftaran ditandai aktif kalau `EventStatus == Open`, bukan kalau hari ini kebetulan ada di
-  antara dua tanggal. Halaman tidak pernah mengklaim yang tidak dijamin kontrak.
+  **The dates bind nothing.** The chain has only `starts_at`; the dates for opening and closing
+  entries and for race pack collection live in the metadata document. What actually locks entries is
+  `EventStatus`, changed by hand by the organiser. So the two roles are separated: **dates are
+  schedule information; the "you are here" marker comes from chain state**. The Registration phase is
+  marked active when `EventStatus == Open`, not when today happens to fall between two dates. The
+  page never claims something the contract does not guarantee.
 
-- **People** — bib, kategori, state, dan address yang bisa diklik ke `/runner/G...`. Tanpa nama
-  (§2.1). Tab ini menutup loop verifikasi: dari event, orang bisa loncat ke riwayat seorang pelari
-  dan mengeceknya sendiri. Data dari `GET /events/:id/records`.
+- **People** — bib, category, state, and a clickable address to `/runner/G...`. No names (§2.1).
+  This tab closes the verification loop: from an event, a person can jump to a runner's history and
+  check it themselves. Data from `GET /events/:id/records`.
 
-**Poster dan integritas metadata.** Backend tidak punya endpoint upload (`be/src/routes/`: auth,
-directory, participants, results, roster), jadi panitia menempelkan URL gambar ke dokumen metadata,
-bukan meng-upload file. Karena `EventData` menyimpan `metadata_hash` **dan** `uri`, halaman ini
-mengunduh dokumennya, menghitung ulang hash-nya, dan bisa menunjukkan bahwa poster, lokasi, jadwal,
-dan rute belum diubah sejak event dibuat.
+**Posters and metadata integrity.** Since the file endpoint landed (`POST /events/files`), the
+organiser uploads a poster and gets back a content-addressed URL rather than hosting it themselves —
+see §5.1. Because `EventData` stores both `metadata_hash` **and** `uri`, this page downloads the
+document, recomputes its hash, and can show that the poster, location, schedule and route have not
+changed since the event was created.
 
-### 3.2 Isi halaman profile
+### 3.2 What is on a profile page
 
-`/runner/[address]` dan `/profile` adalah halaman yang sama; yang membedakan cuma address-nya
-datang dari URL atau dari wallet yang tersambung. Keduanya sengaja tidak disatukan penamaannya:
-`/runner/G...` dikirim ke orang lain dan URL-nya sendiri sudah menjelaskan isinya, sedangkan
-`/profile` terbaca sebagai milik sendiri.
+`/runner/[address]` and `/profile` are the same page; the only difference is whether the address
+comes from the URL or from the connected wallet. The two names are deliberately not merged:
+`/runner/G...` is what gets sent to other people and its URL already explains itself, while
+`/profile` reads as one's own.
 
-**Identicon, bukan foto.** Runner tidak punya foto profil (tidak ada endpoint upload, dan menyimpan
-foto orang berarti kelas PII baru — §2.1). Yang dipakai adalah **identicon deterministik yang
-dihitung dari address**: pola unik per address, konsisten di semua halaman, dihitung di browser
-sehingga tetap muncul offline, nol storage dan nol backend. Jangan memakai layanan avatar jarak
-jauh (gravatar dan sejenisnya) — itu membocorkan siapa melihat profile siapa ke pihak ketiga, dan
-mati begitu sinyal hilang.
+**An identicon, not a photo.** Runners have no profile photo (there is no upload endpoint for one,
+and storing photographs of people would be a new class of PII — §2.1). What is used is a
+**deterministic identicon computed from the address**: a unique pattern per address, consistent
+across pages, computed in the browser so it still appears offline, with zero storage and zero
+backend. Do not use a remote avatar service (gravatar and the like) — that leaks who is looking at
+whose profile to a third party, and dies as soon as the signal does.
 
-**Statistik, semuanya turunan data yang sudah ada.** `GET /runners/:address/records` mengembalikan
-`state`, `finish_time_s`, `category_id`, dan `event_id` per record; data kategori (`distance_m`)
-memang sudah diambil untuk menampilkan nama event. Dari situ:
+**Statistics, all derived from data already fetched.** `GET /runners/:address/records` returns
+`state`, `finish_time_s`, `category_id` and `event_id` per record; the category data (`distance_m`) is
+already fetched in order to show the event name. From that:
 
-| Angka | Dihitung dari |
+| Number | Computed from |
 | --- | --- |
-| jumlah race | banyaknya record |
-| total jarak | jumlah `distance_m` kategori tiap record |
-| jumlah selesai | record ber-state `Finished` |
-| PB per jarak | `finish_time_s` terkecil per `distance_m` |
+| races | the number of records |
+| total distance | the sum of each record's category `distance_m` |
+| finishes | records in state `Finished` |
+| PB per distance | the smallest `finish_time_s` per `distance_m` |
 
 ```
 [identicon]  GABC…7XQ2
 
-   4 race        42.2 km        3 selesai
+   4 races       42.2 km        3 finished
 
    PB 5K  22:41        PB 10K  48:03
 ```
 
-Yang membedakan ini dari aplikasi lari biasa: **tiap angka bisa diklik ke transaksinya.** "42.2 km"
-bukan angka yang kita catat sendiri di database kita, melainkan jumlah dari empat record yang
-masing-masing bisa dicek orang lain di explorer. Itu kalimat SOW — *"a race history that belongs to
-the runner and that anyone can verify against the chain"* — dalam bentuk yang enak dilihat.
+What separates this from an ordinary running app: **every number links to its transaction.** "42.2
+km" is not a figure we recorded in our own database; it is the sum of four records each of which
+anyone else can check on an explorer. That is the SOW's sentence — *"a race history that belongs to
+the runner and that anyone can verify against the chain"* — in a form that is pleasant to look at.
 
-Thumbnail poster event di tiap baris riwayat juga gratis: poster sudah ada di dokumen metadata yang
-tetap diunduh untuk halaman event.
+A poster thumbnail on each history row is free as well: the poster is already in the metadata document
+that gets downloaded for the event page anyway.
 
-**Urutan kerjanya:** tabel riwayat yang benar dan blok verify yang jalan dulu. Identicon, statistik,
-dan thumbnail adalah lapisan di atasnya — bukan fondasinya, dan STE-24 adalah tiket paling akhir.
+**The order of work:** a correct history table and a working verify block first. The identicon,
+statistics and thumbnails are a layer on top — not the foundation, and STE-24 is the last ticket.
 
 ---
 
-## 4. Halaman peserta — wallet tersambung
+## 4. Entrant pages — wallet connected
 
-| URL | Menampilkan | Tiket |
+| URL | Shows | Ticket |
 | --- | --- | --- |
-| `/events/[id]/enter` | Stepper: pilih kategori → form PII → review → **satu tanda tangan** (`enter`, fee sUSD tercakup di auth tree) | STE-21 |
-| ↳ layar sukses | Bib, `token_id`, link transaksi testnet, dan **salt receipt** | STE-21 |
-| `/pass/[tokenId]` | QR regenerate tiap 30 detik + kode 6 digit untuk fallback manual, bib, nama event, state. Installable. Jalan penuh di airplane mode. | STE-21 |
-| `/profile` | Race saya + shortcut ke pass masing-masing. Tipis: isinya `/runner/[address-ku]` (§3.2) | STE-21 |
+| `/events/[id]/enter` | A stepper: choose a category → PII form → review → **one signature** (`enter`, with the sUSD fee covered by the auth tree) | STE-21 |
+| ↳ the success screen | Bib, `token_id`, a testnet transaction link, and the **salt receipt** | STE-21 |
+| `/pass/[tokenId]` | A QR regenerating every 30 seconds + a 6-digit code for the manual fallback, the bib, the event name, the state. Installable. Fully functional in airplane mode. | STE-21 |
+| `/profile` | My races + a shortcut to each pass. Thin: its contents are `/runner/[my-address]` (§3.2) | STE-21 |
 
-**Layar sukses halaman sendiri, bukan modal.** Salt receipt cuma muncul sekali seumur hidup; kalau
-hilang, identity check di `/runner/[address]` mati selamanya untuk record itu. Layar ini tidak boleh
-bisa terlewat tanpa sadar.
+**The success screen is its own page, not a modal.** The salt receipt appears exactly once in its
+life; if it is lost, the identity check at `/runner/[address]` is dead forever for that record. This
+screen must not be dismissable by accident.
 
-`totp_secret` disimpan di IndexedDB device runner dan tidak pernah menyentuh chain.
+The `totp_secret` is stored in the runner's device IndexedDB and never touches the chain.
 
-**Error yang wajib punya tampilan sendiri**, bukan alert mentah: `QuotaFull(5)`, `EventNotOpen(4)`,
-saldo sUSD kurang, user menolak tanda tangan. Ditambah satu kasus licin: **PII sudah terkirim tapi
-`enter` gagal** — user harus bisa mengulang tanpa membuat baris dobel (idempotency key per submisi,
-disepakati dengan James).
+**Errors that must have their own presentation**, not a raw alert: `QuotaFull(5)`, `EventNotOpen(4)`,
+insufficient sUSD balance, and the user declining to sign. Plus one slippery case: **the PII was
+submitted but `enter` failed** — the user has to be able to retry without creating a duplicate row
+(an idempotency key per submission, agreed with James).
 
-Kode error adalah `u32` tanpa identitas kontrak; pilih peta error dari bandnya — `1..=99`
+An error code is a `u32` with no contract identity; pick the error map from its band — `1..=99`
 EventRegistry, `100..=199` RaceRecord, `200+` OZ.
 
 ---
 
-## 5. Halaman panitia dan volunteer
+## 5. Organiser and volunteer pages
 
-### 5.1 Panitia (wallet organiser) — STE-17
+### 5.1 Organiser (organiser wallet) — STE-17
 
-| URL | Menampilkan |
+| URL | Shows |
 | --- | --- |
-| `/org` | Event yang aku buat (query by address), empty state, tombol buat event |
-| `/org/new` | Wizard 3 langkah: **Details → Distances → Review** (review yang menandatangani semuanya) |
-| `/org/events/[id]` | Kuota terisi per kategori (live dari chain), kontrol status, hitungan per state, roster **anonim**: bib, kategori, state, `token_id` |
-| `/org/events/[id]/scanners` | Daftar scanner aktif, tambah/hapus address |
-| `/org/events/[id]/results` | Upload CSV (bib_no, finish_time) → preview + anomali → submit batch `recordFinish`/`recordDnf` |
+| `/org` | The events I created (queried by address), an empty state, a create-event button |
+| `/org/new` | A 3-step wizard: **Details → Distances → Review** (review is what signs everything) |
+| `/org/events/[id]` | Quota filled per category (live from the chain), status controls, counts per state, an **anonymous** roster: bib, category, state, `token_id` |
+| `/org/events/[id]/scanners` | The active scanner list, add/remove an address |
+| `/org/events/[id]/results` | Upload a CSV (bib_no, finish_time) → preview + anomalies → submit a batch of `recordFinish`/`recordDnf` |
 
-Tidak ada tombol Edit maupun Hapus di mana pun (§2.2), dan tidak ada nama peserta (§2.1).
+There is no Edit or Delete button anywhere (§2.2), and no participant names (§2.1).
 
-**Tanda tangannya banyak dan tidak bisa dikurangi**: publish file detail satu, `create_event`
-satu, tiap kategori satu, buka pendaftaran satu. Panitia dengan 3 kategori diminta approve 6 kali.
-Satu transaksi cuma boleh memanggil satu fungsi kontrak, kontraknya tidak punya entry point batch,
-dan `add_category` butuh `event_id` yang baru lahir setelah `create_event` mendarat.
+**There are many signatures and the number cannot be reduced**: one to publish the detail file, one
+`create_event`, one per category, one to open entries. An organiser with 3 categories is asked to
+approve 6 times. One transaction may only call one contract function, the contract has no batch entry
+point, and `add_category` needs an `event_id` that only exists once `create_event` has landed.
 
-Yang **bisa** diperbaiki cuma kagetnya, dan itu memutuskan bentuk wizard-nya (STE-17, 8 Sep 2026):
+What **can** be improved is the surprise, and that decided the wizard's shape (STE-17, 8 Sep 2026):
 
-- **Langkahnya 3, bukan 6.** Yang dulu enam langkah itu memetakan transaksi satu-satu — publish,
-  create, add, open — padahal transaksi adalah cara kita mengantar, bukan pekerjaan panitia.
-  Pekerjaan panitia cuma dua: menggambarkan lomba, lalu menyetujui ongkosnya.
-- **Step "Details file" diganti step Review.** Dulu isinya dump JSON mentah + tombol Publish. Itu
-  meminta orang memeriksa hal yang tidak bisa mereka periksa, dan meminta mereka tahu ada "file" —
-  itu pipa kita. Review menampilkan lombanya sebagai lomba: tanggal, kota, jarak beserta jam
-  start-nya. **File mentahnya tetap ada satu klik di balik toggle**, karena sha256 byte itulah yang
-  masuk chain dan orang yang mau mengecek klaim kita harus bisa melihatnya.
-- **Daftar tanda tangan ditampilkan SEBELUM yang pertama diminta**, lalu dicentang satu per satu
-  sambil jalan. Enam popup yang tidak disebut siapa pun terasa seperti retry loop; enam popup yang
-  sudah ditulis sebagai daftar bernomor terasa seperti pekerjaan yang ada ujungnya.
-- **Berhenti di tengah aman dan bisa dilanjutkan.** Yang sudah mendarat tidak bisa dibatalkan, jadi
-  layar yang me-reset akan berbohong soal apa yang ada di chain. Tombolnya jadi "Carry on" dan
-  melanjutkan dari langkah pertama yang belum mendarat.
-- **Jalan keluar dokumen (host sendiri / tanpa dokumen) cuma muncul setelah publish gagal.** `uri`
-  itu string biasa di chain dan kontrak tidak peduli host-nya siapa, jadi backend kita mati tidak
-  boleh ikut mematikan pembuatan event. Tapi itu bukan pilihan yang pantas disodorkan ke orang yang
-  tidak sedang punya masalah.
+- **Three steps, not six.** The old six mapped the transactions one to one — publish, create, add,
+  open — when transactions are how we deliver, not what an organiser does. The organiser's job is only
+  two things: describe the race, then approve its cost.
+- **The "Details file" step became a Review step.** It used to be a raw JSON dump plus a Publish
+  button. That asks people to check something they cannot check, and asks them to know there is a
+  "file" — that is our plumbing. Review shows the race as a race: dates, city, distances with their
+  start times. **The raw file is still one click away behind a toggle**, because the sha256 of those
+  bytes is what goes on chain, and someone who wants to check our claim has to be able to see it.
+- **The list of signatures is shown BEFORE the first one is requested**, then ticked off one by one
+  as it proceeds. Six popups nobody mentioned feel like a retry loop; six popups already written out
+  as a numbered list feel like work that has an end.
+- **Stopping halfway is safe and resumable.** What has landed cannot be undone, so a screen that
+  resets would lie about what is on the chain. The button becomes "Carry on" and resumes from the
+  first step that has not landed.
+- **The document escape hatches (self-host / no document) only appear after a publish fails.** `uri`
+  is an ordinary string on chain and the contract does not care who hosts it, so our backend being
+  down must not also stop events being created. But that is not a choice worth putting in front of
+  someone who does not currently have a problem.
 
-Kolom harga dan kuota perlu peringatan permanen karena tidak bisa diperbaiki.
+The price and quota fields need a permanent warning, because they cannot be corrected.
 
-**Poster dan waiver di-upload, bukan ditempel URL-nya** (`POST /events/files`, terima gambar dan
-PDF, maks 5 MB). Dua alasan: menyuruh panitia meng-hosting sendiri adalah langkah yang paling
-mungkin membuat wizard-nya tidak dipakai, dan file di tempat lain bisa **ditukar** setelah orang
-mendaftar — persis penipuan yang produk ini ada untuk menutupnya. Yang dikembalikan store itu
-content-addressed, jadi poster dan waiver ikut beku seperti dokumen yang menyebutnya. Upload jalan
-**saat file dipilih**, bukan di akhir: endpoint-nya butuh tanda tangan, dan menumpuknya di akhir
-berarti popup beruntun di saat yang paling tidak enak.
+**Posters and waivers are uploaded rather than having their URL pasted** (`POST /events/files`,
+accepting images and PDFs, 5 MB max). Two reasons: telling an organiser to host it themselves is the
+step most likely to make the wizard go unused, and a file somewhere else can be **swapped** after
+people have entered — exactly the fraud this product exists to close. What the store returns is
+content-addressed, so the poster and waiver freeze along with the document that names them. The
+upload runs **when the file is chosen**, not at the end: the endpoint needs a signature, and stacking
+those at the end means a run of popups at the least welcome moment.
 
-Console tidak boleh mengirim baris CSV yang gagal preview. Aksi oleh wallet non-organiser harus
-memunculkan pesan yang bisa dibaca, bukan crash.
+The console must not submit CSV rows that failed the preview. An action by a non-organiser wallet
+must produce a readable message, not a crash.
 
-### 5.2 Volunteer (keypair scanner, berbeda dari organiser) — STE-22
+### 5.2 Volunteer (a scanner keypair, distinct from the organiser) — STE-22
 
-| URL | Menampilkan |
+| URL | Shows |
 | --- | --- |
-| `/scan` | Pilih event, unduh roster bundle + snapshot state on-chain. Butuh online, sekali saja |
-| `/scan/[id]` | Kamera + hasil **GREEN/RED di bawah 2 detik**, input manual (kode 6 digit + bib), banner kalau jam device melenceng, indikator antrian |
-| `/scan/[id]/flagged` | Claim yang revert `AlreadyClaimed(102)` — meja lain menang. Untuk direkonsiliasi, bukan hilang diam-diam |
+| `/scan` | Choose an event, download the roster bundle + an on-chain state snapshot. Needs to be online, once |
+| `/scan/[id]` | Camera + a **GREEN/RED verdict in under 2 seconds**, manual input (6-digit code + bib), a banner if the device clock has drifted, a queue indicator |
+| `/scan/[id]/flagged` | Claims that reverted with `AlreadyClaimed(102)` — another desk won. For reconciliation, rather than disappearing quietly |
 
-Organiser **bukan** otomatis scanner: `claim_racepack` menuntut address yang ada di allowlist
-`is_scanner`. Panitia yang ingin ikut memindai mendaftarkan address-nya sendiri lewat console.
+An organiser is **not** automatically a scanner: `claim_racepack` demands an address on the
+`is_scanner` allowlist. An organiser who wants to scan registers their own address through the
+console.
 
-Verifikasi TOTP dilakukan lokal dengan toleransi ±1 step; claim di-antre di IndexedDB dan dikirim
-saat online kembali.
+TOTP verification happens locally with ±1 step tolerance; claims are queued in IndexedDB and sent
+when connectivity returns.
 
 ---
 
-## 6. Dokumen metadata event
+## 6. The event metadata document
 
-Dibaca `/events/[id]` (STE-13), ditulis console (STE-17) — dua tiket yang sama-sama milik Ancung,
-jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_event`, di-host di
-`uri`.
+Read by `/events/[id]` (STE-13), written by the console (STE-17) — two tickets both belonging to
+Ancung, so the agreement is in one pair of hands. Hashed into `metadata_hash` at `create_event`,
+hosted at `uri`.
 
 ```json
 {
@@ -355,89 +375,87 @@ jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_ev
 }
 ```
 
-- **Fase `racepack` menyimpan rentang hari + jam harian**, bukan satu jendela waktu menerus.
-  `starts_at` / `ends_at` tetap ada (hari pertama jam buka, hari terakhir jam tutup) supaya pembaca
-  lama tidak berubah artinya, plus `daily_opens` / `daily_closes`.
-  Alasannya: "buka 1 Agustus 09:00, tutup 9 Agustus 21:00" secara harfiah berarti mejanya dijaga
-  semalaman tanggal 2 sampai 8. Pengambilan race pack itu manusia duduk di meja, dan mereka pulang.
-  **Registrasi sengaja tetap satu jendela menerus** — form online memang tidak tutup semalam. Bentuk
-  keduanya beda karena barangnya beda.
-- **Start time dan cut off ada di tiap kategori**, bukan di event. Satu pagi bisa punya 5K start
-  06:00 dan half marathon start 05:00; kontrak tidak punya kolom untuk itu, jadi tempatnya di
-  dokumen (`categories[].start_time` / `.cut_off`). Yang masuk chain sebagai `starts_at` adalah
-  **wave paling awal**, karena event cuma punya satu timestamp sedangkan lomba punya beberapa.
-  Konsekuensi urutan di console: kategori harus diisi **sebelum** dokumen dibuat, karena dokumen
-  di-hash oleh `create_event` yang jalan sebelum `add_category`.
-- **`links`**: `{ instagram, website }`. Lomba beneran hidup di Instagram — pengumuman rute
-  berubah, cuaca, hasil — jadi halaman event tanpa link ke situ kehilangan link keluar yang paling
-  sering diklik. Yang disimpan **handle**-nya, bukan URL: Instagram pernah mengubah bentuk URL-nya,
-  dan dokumen ini tidak bisa diedit selamanya. Console tetap menerima URL profil yang ditempel dan
-  mengambil handle-nya sendiri.
-  Efek samping yang berguna: link ini ikut ter-hash, jadi **akun yang dicantumkan waktu event dibuat
-  tidak bisa diam-diam ditukar** jadi akun lain setelah orang mendaftar.
-- **Koordinat masuk lewat link Google Maps yang ditempel, bukan lewat dropdown negara/provinsi/kota.**
-  Console mengekstrak `lat`/`lng` dari URL-nya (`@-6.2185,106.8026` atau `?q=`) — tanpa API, tanpa
-  key, tanpa rate limit. Cascade tiga dropdown tidak menjawab pertanyaan siapa pun (yang orang mau
-  itu **pin yang bisa dibuka**), dan geocoding API (Nominatim gratis dan tanpa key) menambah
-  dependency jaringan plus kewajiban atribusi ke sebuah field form. Link pendek
-  (`maps.app.goo.gl`) tidak membawa koordinat sampai diikuti, dan mengikutinya dari browser
-  diblokir cross-origin — console bilang begitu apa adanya waktu ditempel, bukan setelah event beku.
-  Yang disimpan **dua angkanya**, bukan URL-nya: link bisa basi, koordinat tidak.
-- Fase `racepack` boleh membawa `venue_lat` / `venue_lng` dengan aturan yang sama. `venue` tetap
-  string supaya pembaca STE-13 tidak berubah artinya.
-- **`cut_off` itu waktu**, batas terakhir sebuah finish masih dihitung — dan **kontrak tidak
-  menegakkannya sama sekali**. `record_finish` menerima waktu apa pun yang panitia kirim. Halaman
-  dan form wajib menyebutnya sebagai informasi, bukan aturan.
-- **`metadata_hash` = sha256 dari byte persis yang disajikan di `uri`.** Tanpa kanonikalisasi,
-  tanpa aturan urutan key, tanpa re-serialisasi. Siapa pun bisa mengeceknya dengan `curl` +
-  `sha256sum`, dan tidak ada "bentuk kanonik" yang bisa dibaca beda oleh dua implementasi.
-  Ongkosnya nyata dan disengaja: meng-upload ulang dokumen yang sama dengan whitespace berbeda
-  merusak pengecekannya selamanya, karena event beku (§2.2). Ditetapkan di STE-13 (`fe/src/lib/
-  metadata.ts`) dan dipakai STE-17 waktu menulis dokumennya.
-- Dokumen yang gagal pengecekan hash **tidak ditampilkan sama sekali**, bukan ditampilkan dengan
-  peringatan. Konten yang tidak bisa dibuktikan tetap tidak bisa dibuktikan walau diberi label.
-- `gun_start` **harus sama** dengan `starts_at` di chain. Kalau berbeda, halaman menampilkan
-  peringatan — salah satunya pasti salah.
-- `route_geojson` sudah disediakan tempatnya walau petanya dikerjakan belakangan, supaya panitia
-  tidak perlu membuat ulang event hanya untuk menambahkan rute.
-- **Dokumen ini ikut beku** (§2.2): kalau race diundur, jadwalnya tidak bisa diperbaiki.
+- **The `racepack` phase stores a range of days plus daily hours**, not one continuous window.
+  `starts_at` / `ends_at` remain (the first day's opening time, the last day's closing time) so
+  existing readers do not change meaning, plus `daily_opens` / `daily_closes`.
+  The reason: "opens 1 August 09:00, closes 9 August 21:00" literally means the desk is staffed
+  overnight from the 2nd to the 8th. Race pack collection is humans sitting at a desk, and they go
+  home. **Registration deliberately stays one continuous window** — an online form genuinely does not
+  close overnight. The two shapes differ because the things differ.
+- **Start times and cut-offs belong to each category**, not to the event. One morning can have a 5K
+  starting at 06:00 and a half marathon at 05:00; the contract has no field for that, so it lives in
+  the document (`categories[].start_time` / `.cut_off`). What goes on chain as `starts_at` is the
+  **earliest wave**, because an event has only one timestamp while a race has several.
+  The ordering consequence in the console: categories have to be filled in **before** the document is
+  built, because the document is hashed by `create_event`, which runs before `add_category`.
+- **`links`**: `{ instagram, website }`. Real races live on Instagram — route changes, weather,
+  results — so an event page without a link there loses the outbound link people click most. What is
+  stored is the **handle**, not a URL: Instagram has changed its URL shape before, and this document
+  can never be edited. The console still accepts a pasted profile URL and extracts the handle itself.
+  A useful side effect: these links are hashed too, so **the account named when the event was created
+  cannot quietly be swapped** for another after people have entered.
+- **Coordinates arrive through a pasted Google Maps link, not a country/province/city dropdown.**
+  The console extracts `lat`/`lng` from the URL (`@-6.2185,106.8026` or `?q=`) — no API, no key, no
+  rate limit. A cascade of three dropdowns answers nobody's question (what people want is **a pin
+  they can open**), and a geocoding API (Nominatim is free and keyless) adds a network dependency plus
+  an attribution obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates
+  until followed, and following one from a browser is blocked cross-origin — the console says so
+  plainly at paste time, rather than after the event is frozen. What is stored is **the two numbers**,
+  not the URL: links go stale, coordinates do not.
+- The `racepack` phase may carry `venue_lat` / `venue_lng` under the same rule. `venue` stays a string
+  so STE-13's reader does not change meaning.
+- **`cut_off` is a time**, the last moment a finish still counts — and **the contract does not enforce
+  it at all**. `record_finish` accepts whatever time the organiser sends. The page and the form must
+  present it as information, not as a rule.
+- **`metadata_hash` = the sha256 of exactly the bytes served at `uri`.** No canonicalisation, no key
+  ordering rule, no re-serialisation. Anyone can check it with `curl` + `sha256sum`, and there is no
+  "canonical form" two implementations could read differently. The cost is real and deliberate:
+  re-uploading the same document with different whitespace breaks the check forever, because events
+  are frozen (§2.2). Established in STE-13 (`fe/src/lib/metadata.ts`) and used by STE-17 when it
+  writes the document.
+- A document that fails its hash check is **not displayed at all**, rather than displayed with a
+  warning. Content that cannot be proven remains unproven however it is labelled.
+- `gun_start` **must equal** `starts_at` on chain. If they differ, the page shows a warning — one of
+  them is certainly wrong.
+- `route_geojson` has its place reserved even though the map comes later, so an organiser does not
+  have to recreate an event just to add a route.
+- **This document is frozen too** (§2.2): if a race is postponed, its schedule cannot be corrected.
 
-Peta rute (opsional, §8): render GeoJSON dengan **Leaflet + tile OpenStreetMap** — tanpa API key,
-tanpa billing. Mapbox dan Google keduanya menuntut kartu kredit untuk sesuatu yang bisa gratis.
-Karena rute ikut ter-hash, rute tidak bisa diam-diam diubah setelah orang mendaftar.
+The route map (optional, §8): render the GeoJSON with **Leaflet + OpenStreetMap tiles** — no API key,
+no billing. Mapbox and Google both demand a credit card for something that can be free. Because the
+route is hashed too, a route cannot be quietly changed after people have entered.
 
 ---
 
-## 7. Urutan bangun
+## 7. Build order
 
-Semua tiket `fe/` sudah tidak terhalang: SDK (STE-15) dan backend (STE-16, STE-20) sudah Done.
+None of the `fe/` tickets are blocked: the SDK (STE-15) and the backend (STE-16, STE-20) are Done.
 
 ```
-STE-8   shell + wallet connect        <- fondasi, semua numpang di sini
-  └─ STE-13  directory + detail       <- pintu masuk semua flow
-       └─ STE-17  organiser console   <- bikin event buat diuji
-            └─ STE-21  entry + pass   <- baru ada peserta
-                 └─ STE-22  scanner   <- butuh scanner terdaftar dari STE-17
+STE-8   shell + wallet connect        <- the foundation; everything sits on it
+  └─ STE-13  directory + detail       <- the entrance to every flow
+       └─ STE-17  organiser console   <- creates events to test against
+            └─ STE-21  entry + pass   <- only now are there entrants
+                 └─ STE-22  scanner   <- needs scanners registered by STE-17
                       └─ STE-24  profile
 ```
 
-Urutan ini bukan sekadar `blockedBy` Linear: tiap langkah **menghasilkan data untuk menguji langkah
-berikutnya**. Tanpa console tidak ada event untuk didaftari; tanpa entry tidak ada QR untuk
-dipindai.
+This order is more than Linear's `blockedBy`: each step **produces the data needed to test the next**.
+Without the console there is no event to enter; without entry there is no QR to scan.
 
-Due date (per Linear): STE-13 17 Sep · STE-17 25 Sep · STE-21 dan STE-22 29 Sep · STE-24 1 Okt.
+Due dates (per Linear): STE-13 17 Sep · STE-17 25 Sep · STE-21 and STE-22 29 Sep · STE-24 1 Oct.
 
 ---
 
-## 8. Sengaja tidak dibangun
+## 8. Deliberately not built
 
-| Yang tidak dibangun | Alasan |
+| Not built | Why |
 | --- | --- |
-| Halaman daftar jadi organiser, KYC/KYB (NPWP), admin panel penyeleksi | Tidak bisa ditegakkan: `create_event` permissionless dan SDK publik bisa melewatinya (§2.3). Menegakkannya butuh allowlist on-chain, sedangkan kontrak v1 non-upgradeable dan sudah live. KYC juga menabrak cerita "PII tetap off-chain" dan menuntut entitas hukum yang belum ada. Dicatat sebagai v2. |
-| Subdomain `org.` dan `admin.` | `admin.` tidak punya fungsi. `org.` mahal dan menjebak: **wallet connection tidak ikut lintas origin**, jadi panitia yang juga ikut lari harus connect dua kali. SOW juga menaruh domain di out-of-scope ("dev/test deployment only"). `sterun.xyz` (landing) dan `app.sterun.xyz` (web app) sudah tercermin sebagai `landing-page/` dan `fe/` yang memang dua deploy terpisah. |
-| Avatar peserta, daftar nama, export peserta | Datanya tidak pernah ada (§2.1) |
-| Tombol edit / hapus event dan kategori | Fungsinya tidak ada di kontrak (§2.2) |
-| Peta rute | Bisa dan murah (Leaflet + OSM, §6), tapi tidak ada di tiket mana pun dan tidak dinilai reviewer grant. Kerjakan setelah STE-24, atau serahkan ke Nabil sebagai polish. Kalau sempat, ia jadi bintang di video demo 3 menit. |
-| Username / display name runner | Bukan cuma soal ongkos (tabel baru, endpoint baru, bukti kepemilikan address, duplikat dan squatting tanpa admin yang bisa menengahi). Alasan utamanya: username adalah **klaim identitas yang tidak diverifikasi siapa pun, ditempel di halaman yang seluruh gunanya adalah membuktikan sesuatu** — tidak ada yang menghalangi orang menamai dirinya "Eliud Kipchoge". Begitu satu baris di halaman itu tidak bisa dibuktikan, keraguan menular ke baris lain yang sebenarnya benar. Identitas terverifikasinya sudah ada di blok identity check: anonim secara default, bisa dibuktikan atas izin runner. |
-| Foto profil | Tidak ada endpoint upload, dan menyimpan foto orang berarti kelas PII baru. Diganti identicon deterministik (§3.2) |
-| Profile handle / klaim profil | v2; routing memakai address mentah `/runner/G...` |
+| A "become an organiser" signup page, KYC/KYB, an admin approval panel | The allowlist that arrived in STE-36 is a contract-level gate the admin operates; a self-service page would either be theatre (anyone can request) or a claim we cannot verify. Access is requested off-chain. KYC also collides with the "PII stays off-chain" story and needs a legal entity that does not exist yet. Still recorded as post-pilot. |
+| `org.` and `admin.` subdomains | `admin.` has no function. `org.` is expensive and a trap: **wallet connections do not travel across origins**, so an organiser who also runs would have to connect twice. The SOW also puts domains out of scope ("dev/test deployment only"). `sterun.xyz` (landing) and `app.sterun.xyz` (web app) are already reflected as `landing-page/` and `fe/`, which genuinely are two deployments. |
+| Participant avatars, name lists, participant export | The data never exists (§2.1) |
+| Edit / delete buttons for events and categories | The functions do not exist in the contract (§2.2) |
+| The route map | Possible and cheap (Leaflet + OSM, §6), but it is on no ticket and no grant reviewer scores it. Do it after STE-24, or hand it to Nabil as polish. If it happens, it is the star of the 3-minute demo video. |
+| Runner usernames / display names | Not merely a matter of cost (a new table, a new endpoint, proof of address ownership, duplicates and squatting with no admin to arbitrate). The main reason: a username is **an identity claim nobody verified, attached to a page whose entire purpose is proving something** — nothing stops a person naming themselves "Eliud Kipchoge". Once one line on that page cannot be proven, the doubt spreads to the lines that are true. The verified identity already exists in the identity-check block: anonymous by default, provable with the runner's consent. |
+| Profile photos | There is no upload endpoint for them, and storing photographs of people is a new class of PII. Replaced by a deterministic identicon (§3.2) |
+| Profile handles / profile claiming | Post-pilot; routing uses the raw address `/runner/G...` |
