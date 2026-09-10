@@ -1,50 +1,60 @@
 "use client";
 
 /**
- * STE-13 — one event, read from the chain.
+ * One race, read from the chain and from its own frozen document.
  *
- * The page is built around the categories, because a category is what a runner
- * enters: each has its own price, its own quota and its own remaining places,
- * and there is no such thing as entering "the event". That is why there is no
- * single enter button anywhere on this page.
+ * ## Two sources, kept apart on purpose
  *
- * The off-chain document is a separate read with its own failure mode, and it
- * is kept visibly separate. Everything above it comes from the contract and is
- * as true as the ledger; the document is only as true as its hash check, which
- * is why that check is stated rather than assumed.
+ * The distances, their prices, their remaining places and the add-on stock all
+ * come from the contract, and are as true as the ledger. Everything a person
+ * reads — the poster, the description, the timeline, the rules — comes from a
+ * file the organiser published, and is only as true as its hash check. So the
+ * check is a tab of its own rather than a line somebody scrolls past, and a
+ * document that fails it is withheld everywhere rather than shown under a
+ * caution: a file that breaks its own commitment is exactly what this product
+ * exists to catch.
  *
- * Not here, deliberately: the Overview / Timeline / People tabs from
- * WEB_APP_IA.md §3.1. People needs runner pages to link to (STE-24) and a
- * timeline needs the phase dates that live in the document, which no event on
- * testnet currently serves. Three tabs where two are empty is worse than one
- * page that says what it knows.
+ * ## Why the poster and the entry card sit together, above the tabs
+ *
+ * A runner arrives with one question, and it is not "what is in the race
+ * pack". Can I enter, what does it cost, is there room. That is the card on
+ * the right, it is entirely chain state, and it stays put while the tabs
+ * change under it. The tabs are the reading, and reading is what people do
+ * second.
  */
+import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
-import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
-import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
 import { ChainSource } from "@/components/layouts/ChainSource";
-import { useEvent } from "@/hooks/useEvents";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
-import { EXPLORER_BASE } from "@/lib/env";
-import { formatEventDateTime, shortAddress } from "@/utils/format";
 
-import { CategoryRow } from "./component/CategoryRow";
-import { EventDocument } from "./component/EventDocument";
+import { EntryCard } from "./component/EntryCard";
+import { TabAddOns } from "./component/TabAddOns";
+import { TabCategories } from "./component/TabCategories";
+import { TabDetails } from "./component/TabDetails";
+import { TabProofs } from "./component/TabProofs";
+import { TabTerms } from "./component/TabTerms";
+import { TabTimeline } from "./component/TabTimeline";
 
 export function EventDetail({ eventId }: { eventId: number }) {
   const { data, isPending, isError, refetch } = useEvent(eventId);
   const metadata = useEventMetadata(data?.event.uri ?? "", data?.event.metadataHash ?? "");
+  const addOns = useEventAddOns(eventId);
+  const [tab, setTab] = useState("details");
 
   if (isPending) {
     return (
-      <div className="mx-auto w-full max-w-4xl px-4 py-12">
-        <div role="status" aria-label="Reading this event from the chain">
-          <div className="h-9 w-2/3 animate-pulse rounded-sm bg-n-100" />
-          <div className="mt-4 h-5 w-1/3 animate-pulse rounded-sm bg-n-100" />
-          <div className="mt-10 h-40 w-full animate-pulse rounded-lg bg-n-100" />
+      <div className="mx-auto w-full max-w-5xl px-4 py-12">
+        <div role="status" aria-label="Reading this race from the chain">
+          <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+            <div className="h-64 animate-pulse rounded-lg bg-n-100" />
+            <div className="h-64 animate-pulse rounded-lg bg-n-100" />
+          </div>
+          <div className="mt-8 h-40 w-full animate-pulse rounded-lg bg-n-100" />
         </div>
       </div>
     );
@@ -52,13 +62,16 @@ export function EventDetail({ eventId }: { eventId: number }) {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto w-full max-w-4xl px-4 py-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-12">
         <ErrorNotice
-          title="This event could not be read"
+          title="This race could not be read"
           detail="The registry has no event with this id, or the node could not be reached. Check the link, or go back to the directory."
           onRetry={() => void refetch()}
         />
-        <Link href="/" className="mt-6 inline-block text-base text-teal-500 underline underline-offset-4">
+        <Link
+          href="/"
+          className="mt-6 inline-block text-base text-teal-500 underline underline-offset-4"
+        >
           Back to all races
         </Link>
       </div>
@@ -66,71 +79,84 @@ export function EventDetail({ eventId }: { eventId: number }) {
   }
 
   const { event, categories } = data;
-  const openForEntry = event.status === "Open";
+  /*
+    Only a verified document is ever read from. `modified` and `unavailable`
+    both mean there is nothing here that can be trusted, and the difference
+    between them belongs in Proofs, not scattered through every tab.
+  */
+  const document = metadata.data?.status === "verified" ? metadata.data.document : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-12">
-      <div>
-        <Link href="/" className="text-sm text-teal-500 underline underline-offset-4">
-          All races
-        </Link>
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="heading-hero text-4xl text-ink">{event.name}</h1>
-            <p className="numeric mt-2 text-lg text-n-600">{formatEventDateTime(event.startsAt)}</p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-12">
+      <Link href="/" className="text-sm text-teal-500 underline underline-offset-4">
+        All races
+      </Link>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+        {document?.posterUrl ? (
+          <Image
+            src={document.posterUrl}
+            alt=""
+            width={1200}
+            height={900}
+            unoptimized
+            /* Contained, not cover: the poster is whatever the organiser had,
+               at whatever shape it was, and cropping a portrait one to fill a
+               landscape box cuts the date off the bottom of half of them. */
+            className="max-h-[26rem] w-full rounded-lg border border-n-200 object-contain"
+          />
+        ) : (
+          <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-n-300">
+            <p className="text-sm text-n-500">This race has not published a poster.</p>
           </div>
-          <EventStatusBadge status={event.status} />
-        </div>
-        <p className="mt-4 text-sm text-n-500">
-          Organised by{" "}
-          {EXPLORER_BASE ? (
-            <a
-              href={`${EXPLORER_BASE}/account/${event.organiser}`}
-              target="_blank"
-              rel="noreferrer"
-              className="numeric text-teal-500 underline underline-offset-4"
-            >
-              {shortAddress(event.organiser, 6, 6)}
-            </a>
-          ) : (
-            <span className="numeric">{shortAddress(event.organiser, 6, 6)}</span>
-          )}
-        </p>
+        )}
+
+        <EntryCard event={event} categories={categories} onEnter={() => setTab("categories")} />
       </div>
 
-      <Card className="gap-0 px-6 py-2">
-        <div className="flex items-baseline justify-between gap-4 border-b border-n-200 py-4">
-          <h2 className="heading text-xl text-n-700">Categories</h2>
-          {!openForEntry ? (
-            <p className="text-sm text-n-500">This event is not open for entries.</p>
-          ) : null}
-        </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="terms">Terms</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="categories">Distances</TabsTrigger>
+          <TabsTrigger value="add-ons">Race pack</TabsTrigger>
+          <TabsTrigger value="proofs">Proofs</TabsTrigger>
+        </TabsList>
 
-        {categories.length === 0 ? (
-          <div className="py-6">
-            <EmptyState title="No categories yet">
-              The organiser has created this event but has not added a distance to it. Categories are
-              added one at a time, so this may be a race still being set up.
-            </EmptyState>
-          </div>
-        ) : (
-          <ul>
-            {categories.map((category) => (
-              <CategoryRow
-                key={category.categoryId}
-                category={category}
-                openForEntry={openForEntry}
-              />
-            ))}
-          </ul>
-        )}
-      </Card>
+        <TabsContent value="details">
+          <TabDetails
+            document={document}
+            organiser={event.organiser}
+            startsAt={event.startsAt}
+          />
+        </TabsContent>
 
-      <EventDocument
-        result={metadata.data}
-        isPending={metadata.isPending && metadata.fetchStatus !== "idle"}
-        startsAt={event.startsAt}
-      />
+        <TabsContent value="terms">
+          <TabTerms terms={document?.terms} />
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <TabTimeline document={document ?? {}} startsAt={event.startsAt} />
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <TabCategories categories={categories} openForEntry={event.status === "Open"} />
+        </TabsContent>
+
+        <TabsContent value="add-ons">
+          <TabAddOns items={document?.addOns ?? []} onChain={addOns.data ?? []} />
+        </TabsContent>
+
+        <TabsContent value="proofs">
+          <TabProofs
+            result={metadata.data}
+            uri={event.uri}
+            metadataHash={event.metadataHash}
+            startsAt={event.startsAt}
+          />
+        </TabsContent>
+      </Tabs>
 
       <ChainSource />
     </div>

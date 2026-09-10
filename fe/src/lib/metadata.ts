@@ -44,6 +44,14 @@ export interface EventMetadata {
   schedule?: MetadataPhase[];
   /** What each distance includes: jersey, medal, whatever is in the pack. */
   addOns?: MetadataAddOn[];
+  /**
+   * The rules a runner agreed to, as plain text with its line breaks intact.
+   *
+   * Inside the document rather than on a page the organiser hosts, which is
+   * the point: the hash on chain covers it, so these are provably the rules
+   * that were published, not the ones being served today.
+   */
+  terms?: string;
 }
 
 export interface MetadataAddOn {
@@ -51,8 +59,15 @@ export interface MetadataAddOn {
   photoUrl?: string;
   /** Distance codes that receive this one. */
   includedIn: string[];
+  /**
+   * The `AddOnData` row this is, when the item has no sizes.
+   *
+   * The join to the chain, where the price and the stock live. Absent on an
+   * older document, and on anything sized: a size carries its own.
+   */
+  code?: string;
   /** Flat measurements, absent on anything without sizes. */
-  sizes?: { label: string; chestCm?: number; lengthCm?: number }[];
+  sizes?: { label: string; chestCm?: number; lengthCm?: number; code?: string }[];
 }
 
 export interface MetadataPhase {
@@ -154,6 +169,7 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
   return {
     ...str(raw.poster_url, "posterUrl"),
     ...str(raw.description, "description"),
+    ...str(raw.terms, "terms"),
     ...str(raw.waiver_url, "waiverUrl"),
     ...(isRecord(raw.location) ? { location: parseLocation(raw.location) } : {}),
     ...(schedule ? { schedule } : {}),
@@ -187,6 +203,7 @@ function parseAddOns(raw: unknown): MetadataAddOn[] | undefined {
               label,
               ...(typeof size.chest_cm === "number" ? { chestCm: size.chest_cm } : {}),
               ...(typeof size.length_cm === "number" ? { lengthCm: size.length_cm } : {}),
+              ...str(size.code, "code"),
             },
           ];
         })
@@ -196,6 +213,7 @@ function parseAddOns(raw: unknown): MetadataAddOn[] | undefined {
         name,
         includedIn,
         ...str(entry.photo_url, "photoUrl"),
+        ...str(entry.code, "code"),
         ...(sizes.length > 0 ? { sizes } : {}),
       },
     ];

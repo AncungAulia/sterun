@@ -9,6 +9,12 @@ Owner: **Ancung** (flow) + **Nabil** (design system). Komponen C9/C10/C11/C12. S
 **STE-8** (shell + wallet connect) dan **STE-13** (directory `/` + detail `/events/[id]`).
 Berikutnya STE-17 (organiser console), lalu STE-21/22 (QR pass + scanner PWA), STE-24 (profile).
 
+Halaman `/events/[id]` sudah **di-revamp** (bagian dari STE-17): poster + kartu keputusan di atas,
+lalu enam tab — Details, Terms, Timeline, Distances, Race pack, Proofs. Pembagiannya satu aturan:
+**apa yang dari chain dan apa yang dari dokumen**. Kartu keputusan seluruhnya chain; tab-nya bacaan.
+Dokumen yang gagal cek hash **ditahan di semua tab**, dan bedanya `modified` vs `unavailable` cuma
+diceritakan di **Proofs**.
+
 Stack terpasang: **Next.js 16.3.3**, React 19.2.8, Tailwind v4 (`@tailwindcss/postcss`),
 TypeScript 5 (`target: ES2022` — harga kontrak `i128` datang sebagai `bigint`, dan literal
 `bigint` tidak lolos typecheck di bawah ES2020), ESLint 9, **`@tanstack/react-query`** untuk cache
@@ -68,9 +74,16 @@ Tiga hal yang bikin bingung kalau tidak tahu:
 
 ### Varian yang kita tambahkan sendiri
 
-`ui/badge.tsx` dapat `success`, `warning`, dan `accent` — shadcn tidak mengirim ketiganya, dan app
-ini butuh: event itu `Open` atau bukan, dokumen itu cocok hash-nya atau tidak terbaca. Ketiganya
-dibangun dari token Nabil seperti varian lain, jadi tetap satu palet.
+`ui/badge.tsx` dapat `success`, `warning`, `accent`, dan `muted` — shadcn tidak mengirim
+keempatnya, dan app ini butuh: event itu `Open` atau bukan, dokumen itu cocok hash-nya atau tidak
+terbaca. Semuanya dibangun dari token Nabil seperti varian lain, jadi tetap satu palet.
+
+`muted` ada karena `secondary` memetakan ke `n-100`, satu tingkat dari warna halaman sendiri,
+sehingga chip yang memakainya terbaca sebagai chip outline yang kehilangan garisnya. Itu ketahuan
+dari **screenshot**, bukan dari test: `Draft` dan `Closed` kembar di layar padahal artinya
+berlawanan arah waktu. Lihat header `elements/EventStatusBadge.tsx`.
+
+`ui/tabs.tsx` juga kita tambahkan sendiri (halaman event dibangun di atasnya).
 
 ## Yang WAJIB dibaca sebelum bikin flow
 
@@ -116,9 +129,18 @@ output generator, edit tangan hilang tanpa jejak pada regenerate berikutnya.
 
 ## Organiser console: bentuk wizard (STE-17)
 
-`/org/new` = **3 langkah**: Details → Distances → Review. Jangan menambah langkah yang cuma
-memetakan satu transaksi; alasannya di `docs/WEB_APP_IA.md` §5.1 dan di header
-`modules/organiser/CreateEvent.tsx`.
+`/org/new` = **6 langkah**: Details → Distances → Terms → Add-ons → Review → Done. Aturannya tetap
+sama dan tidak melunak: **jangan menambah langkah yang cuma memetakan satu transaksi** (alasannya
+di `docs/WEB_APP_IA.md` §5.1 dan di header `modules/organiser/CreateEvent.tsx`). Tiga yang
+ditambahkan bukan itu:
+
+- **Terms** — satu bidang teks, nol transaksi. Isinya masuk ke dokumen event, jadi ikut ditutup
+  `metadata_hash`: aturan lomba jadi beku dan bisa dibuktikan.
+- **Add-ons** — satu langkah, tapi **banyak** transaksi (satu per ukuran), jadi justru kebalikan
+  dari yang dilarang.
+- **Done** — nol transaksi. Layar selesai, dengan receipt tiap tanda tangan. `Done` **diturunkan**
+  dari `run.isComplete`, bukan di-`setStep`: run yang memiliki fakta "sudah selesai", dan menyimpan
+  ulang fakta itu sebagai state kedua adalah dua sumber kebenaran untuk satu hal.
 
 - `modules/organiser/run.ts` — daftar tanda tangan (murni, tanpa React). Urutannya terpaksa:
   dokumen di-hash `create_event`, jadi harus online dulu; `add_category` butuh `event_id`.
@@ -135,9 +157,17 @@ memetakan satu transaksi; alasannya di `docs/WEB_APP_IA.md` §5.1 dan di header
   di-commit `create_event` dan tidak ada `update_event`), ditawarkan tepat saat orang lagi kesal.
   Jalan keluar kalau publish gagal cuma satu: **host file-nya sendiri**, yang tetap menghasilkan
   event utuh.
-- `component/StepAddOns.tsx` — isi race pack. Nama item pakai `elements/CreatableSelect.tsx`:
-  saran boleh, tapi apa pun yang diketik bisa ditambahkan lewat baris "Add …" di dasar daftar.
-  Lomba membagikan barang yang tidak mungkin didaftar di muka.
+- `component/StepAddOns.tsx` — isi race pack, **dua daftar**: yang termasuk tiket, dan yang dijual
+  di atasnya. Dua-duanya ditulis ke chain; bedanya cuma harga, karena add-on gratis itu sah
+  (`price_usdc == 0`) supaya lomba bisa membagikan sesuatu **dan** tetap membatasi jumlahnya.
+  Nama item pakai `elements/CreatableSelect.tsx`: saran boleh, tapi apa pun yang diketik bisa
+  ditambahkan lewat baris "Add …" di dasar daftar.
+- `addons.ts` — model add-on **murni**, di luar komponen. `run.ts` butuh `addOnUnits` untuk
+  merencanakan tanda tangan, dan mengimpornya dari step ikut menyeret komponen client, file picker,
+  dan wallet SDK ke modul yang cuma menghitung jersey. **Stok itu per ukuran**: kontrak memegang
+  satu kuota per add-on, jadi `EVENT_JERSEY_M` adalah barisnya sendiri, dan itu satu-satunya cara
+  "ukuran M habis" bisa benar. Kode `Symbol`-nya **diturunkan** dari nama + ukuran, tidak diketik,
+  tapi tetap **ditampilkan** di baris item: tidak ada yang mengetiknya dan hasilnya permanen.
 - `component/DocumentFallback.tsx` — cuma dirender setelah publish gagal.
 - `component/FileField.tsx` (di `components/elements/`) — poster & waiver. Upload saat dipilih.
   `ACCEPTED` di situ mencerminkan `be/src/files/content-type.ts`; **SVG sengaja tidak ada dan
