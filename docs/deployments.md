@@ -1152,9 +1152,9 @@ dan beri tahu semua konsumen di tabel handoff; jangan biarkan dua pasang alamat 
 
 ---
 
-## Bukti e2e STE-15 — seluruh flow lewat `@sterun/sdk`, nol Rust
+## Bukti e2e STE-15 — seluruh flow lewat `@sterunxyz/sdk`, nol Rust
 
-Dijalankan **2026-09-05** dengan `pnpm --filter @sterun/sdk e2e` terhadap testnet yang live, memakai
+Dijalankan **2026-09-05** dengan `pnpm --filter @sterunxyz/sdk e2e` terhadap testnet yang live, memakai
 `EVENT_REGISTRY` dan `RACE_RECORD` di tabel paling atas file ini (dibaca dari dokumen ini, bukan
 di-hardcode). Semua aktor adalah akun Friendbot baru yang dibuat saat itu juga dan dibuang setelahnya —
 jadi run ini tidak memakai secret siapa pun dan **tidak** menumpang event rehearsal STE-33 (kategori
@@ -1249,7 +1249,7 @@ organiser diperiksa sebelum dan sesudah, dan selisihnya persis biaya pendaftaran
 
 ---
 
-## Bukti STE-19 — `@sterun/sdk` dipasang dari tarball di project kosong
+## Bukti STE-19 — `@sterunxyz/sdk` dipasang dari tarball di project kosong
 
 Dijalankan **2026-09-05**. Yang dibuktikan: paket yang akan di-`npm publish` benar-benar bisa
 dipakai orang di luar tim, tanpa akses ke repo ini.
@@ -1281,7 +1281,7 @@ Project TypeScript kosong **di luar repo** (`/tmp/…/thirdparty`), cuma `packag
 
 ```bash
 npm install ./sterun-sdk-0.1.0.tgz
-npx tsc --noEmit     # bersih — nol error dari @sterun/sdk
+npx tsc --noEmit     # bersih — nol error dari @sterunxyz/sdk
 npx tsx quickstart.ts
 ```
 
@@ -1316,7 +1316,7 @@ Empat hal yang dibuktikan sekaligus:
 ```bash
 npm login                                   # akun yang memiliki scope @sterun
 cd sdk
-pnpm --filter @sterun/sdk test              # 134 test harus hijau
+pnpm --filter @sterunxyz/sdk test              # 134 test harus hijau
 npm publish --access public                 # prepack menjalankan build otomatis
 ```
 
@@ -1324,11 +1324,11 @@ Setelah itu, verifikasi dari mesin bersih:
 
 ```bash
 mkdir /tmp/verify && cd /tmp/verify && npm init -y
-npm install @sterun/sdk
-node -e "import('@sterun/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VERSION))"   # 1.0.0
+npm install @sterunxyz/sdk
+node -e "import('@sterunxyz/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VERSION))"   # 1.0.0
 ```
 
-> Scope `@sterun` di npm belum ada saat catatan ini ditulis (`npm view @sterun/sdk` → 404), jadi
+> Scope `@sterun` di npm belum ada saat catatan ini ditulis (`npm view @sterunxyz/sdk` → 404), jadi
 > publish pertama sekaligus membuat scope-nya. Kepemilikan org npm ada di owner tiket, sesuai
 > "Left to the owner" di STE-19.
 
@@ -1337,7 +1337,7 @@ node -e "import('@sterun/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VERSIO
 ## Bukti e2e STE-20 — review hasil CSV terhadap testnet yang live
 
 Dijalankan **2026-09-05** dengan `pnpm --filter be e2e:results`. Bukan simulasi: event-nya dibuat
-sungguhan di testnet lewat `@sterun/sdk`, di-index oleh indexer STE-16 dari **state kontrak**, lalu
+sungguhan di testnet lewat `@sterunxyz/sdk`, di-index oleh indexer STE-16 dari **state kontrak**, lalu
 dibaca ulang lewat route yang sama yang dilayani `pnpm dev`. Semua akun adalah akun Friendbot sekali
 pakai, jadi tidak butuh secret siapa pun; kategorinya gratis, jadi jalur `transfer` SEP-41 memang
 tidak tersentuh.

@@ -20,7 +20,7 @@
  * and repeated in `data-status`.
  */
 import { Badge, type BadgeTone } from "./Badge";
-import type { EventStatus } from "@sterun/sdk";
+import type { EventStatus } from "@sterunxyz/sdk";
 
 const TONES: Record<EventStatus, BadgeTone> = {
   Open: "positive",

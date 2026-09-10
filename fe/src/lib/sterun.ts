@@ -17,7 +17,7 @@
  * RPC connection and no request-specific state, and rebuilding it per render
  * would throw away nothing useful while making the config live in two places.
  */
-import { SterunClient } from "@sterun/sdk";
+import { SterunClient } from "@sterunxyz/sdk";
 
 import { CONTRACTS, NETWORK } from "./env";
 

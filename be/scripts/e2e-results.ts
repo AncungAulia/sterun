@@ -4,7 +4,7 @@
  * The ticket's acceptance scenario: upload a CSV mixing valid rows with every
  * anomaly, and check the response flags each one with a reason while the valid
  * rows pass. This runs it for real — a fresh event created on testnet through
- * `@sterun/sdk`, indexed by the STE-16 indexer from contract state, then read
+ * `@sterunxyz/sdk`, indexed by the STE-16 indexer from contract state, then read
  * back through the actual route.
  *
  * Nothing here is faked except the socket: the chain is testnet, the database is
@@ -23,7 +23,7 @@
 import { randomBytes } from "node:crypto";
 import { Keypair } from "@stellar/stellar-sdk";
 import { Pool } from "pg";
-import { SterunClient, TESTNET } from "@sterun/sdk";
+import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 import { ChallengeStore } from "../src/auth.js";
 import { ChainReader, RpcContractCaller } from "../src/chain/reader.js";
 import { loadConfig } from "../src/config.js";

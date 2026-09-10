@@ -1,7 +1,7 @@
 /**
  * STE-19 — the vendored bindings are byte-identical to the generated ones.
  *
- * `@sterun/sdk` is published, and a `file:` dependency cannot be, so the binding
+ * `@sterunxyz/sdk` is published, and a `file:` dependency cannot be, so the binding
  * code ships inside this package. A copy of generated code is a liability
  * exactly as long as nothing checks it: regenerate the bindings after a contract
  * change, forget the SDK, and the published client keeps speaking the old

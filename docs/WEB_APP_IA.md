@@ -104,7 +104,7 @@ kewenangannya hanya `set_race_record`. **Siapa pun yang punya wallet bisa membua
 event bodong.
 
 Tidak ada halaman "daftar jadi organiser", tidak ada approval, tidak ada admin panel. Gerbang
-seperti itu juga tidak akan menahan apa pun: `@sterun/sdk` terbit publik di npm dan bisa memanggil
+seperti itu juga tidak akan menahan apa pun: `@sterunxyz/sdk` terbit publik di npm dan bisa memanggil
 `createEvent()` langsung — justru itu yang dijanjikan SOW Deliverable 2.
 
 Penggantinya adalah **transparansi**: tampilkan address organiser apa adanya, plus berapa event

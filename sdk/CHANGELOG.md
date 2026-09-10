@@ -1,8 +1,15 @@
-# Changelog — `@sterun/sdk`
+# Changelog — `@sterunxyz/sdk`
+
+> **Renamed from `@sterun/sdk` before the first publish (2026-09-10).** No
+> version of this package was ever published under the old name, so nothing to
+> migrate — but the old name appears in tickets, in `docs/`, and in commit
+> history from before the rename, which is why it is recorded here rather than
+> quietly dropped. The scope moved because the `sterun` npm org already belonged
+> to another account of the same owner and an org name cannot be changed.
 
 Two things are versioned here and they move independently:
 
-- **the package**, `@sterun/sdk`, following semver;
+- **the package**, `@sterunxyz/sdk`, following semver;
 - **RaceRecord JSON Schema**, whose version is written inside every document it
   describes and inside `schema/race-record-v*.json`.
 

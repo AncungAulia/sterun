@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EventDetail } from "@/modules/event-detail/EventDetail";
 import type { EventSummary } from "@/lib/events";
 import type { MetadataResult } from "@/lib/metadata";
-import type { EventStatus, SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { EventStatus, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 const getEventSummary = vi.hoisted(() => vi.fn());
 const fetchEventMetadata = vi.hoisted(() => vi.fn());

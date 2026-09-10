@@ -1,5 +1,5 @@
 {
-  "name": "@sterun/sdk",
+  "name": "@sterunxyz/sdk",
   "version": "0.1.0",
   "type": "module",
   "description": "Sterun SDK — call the Stellar race-record contracts from TypeScript, no Rust required (component C5)",

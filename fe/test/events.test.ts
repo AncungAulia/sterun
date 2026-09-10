@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { getEventSummary, listEvents, sortEvents, type EventSummary } from "@/lib/events";
-import type { SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 const ORGANISER = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
 const NOW_S = 1_790_000_000n;

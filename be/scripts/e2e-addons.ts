@@ -23,7 +23,7 @@
 import { randomBytes } from "node:crypto";
 import { Keypair } from "@stellar/stellar-sdk";
 import { Pool } from "pg";
-import { SterunClient, TESTNET } from "@sterun/sdk";
+import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 import { ChallengeStore } from "../src/auth.js";
 import { ChainReader, RpcContractCaller } from "../src/chain/reader.js";
 import { loadConfig } from "../src/config.js";

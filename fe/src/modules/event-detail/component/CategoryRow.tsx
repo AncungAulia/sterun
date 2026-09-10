@@ -14,7 +14,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/elements/Badge";
 import { formatPrice } from "@/utils/format";
-import type { SterunCategory } from "@sterun/sdk";
+import type { SterunCategory } from "@sterunxyz/sdk";
 
 interface CategoryRowProps {
   category: SterunCategory;

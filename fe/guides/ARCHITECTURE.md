@@ -37,7 +37,7 @@ Pemisahan tanggung jawabnya:
 | `next` 16 (App Router) | framework |
 | `typescript` 5 | bahasa |
 | `tailwindcss` v4 | styling — token dari `app/tokens.css`, bukan config JS |
-| `@sterun/sdk` | **satu-satunya** jalan bicara ke kontrak |
+| `@sterunxyz/sdk` | **satu-satunya** jalan bicara ke kontrak |
 | `@creit-tech/stellar-wallets-kit` | koneksi wallet (Freighter, xBull, Albedo, WalletConnect, Ledger) |
 | `@tanstack/react-query` | cache dan refetch hasil baca chain |
 | `zustand` | state global kecil (wallet aktif, status online) |
@@ -59,10 +59,10 @@ tiketnya.
 
 Yang **tidak** dipakai, dan alasannya:
 
-- **`@stellar/stellar-sdk` langsung** — dipakai `@sterun/sdk` di dalam, jangan dipanggil sendiri
+- **`@stellar/stellar-sdk` langsung** — dipakai `@sterunxyz/sdk` di dalam, jangan dipanggil sendiri
   dari komponen. Versinya sudah dipaksa satu lewat `pnpm.overrides` di root; dua salinan dalam satu
   graph berarti dua RPC client dan objek signer lintas-mayor.
-- **`sc/bindings/*` langsung** — itu output generator. `@sterun/sdk` sudah membungkusnya dan
+- **`sc/bindings/*` langsung** — itu output generator. `@sterunxyz/sdk` sudah membungkusnya dan
   menambahkan penanganan error yang kita butuhkan.
 - **Dark mode / `next-themes`** — keputusan STE-7: v1 light only. QR pass juga memaksa permukaan
   terang karena kamera butuh kontras.
@@ -332,7 +332,7 @@ mati memberi tahu tiap pengunjung bahwa protokolnya tidak dipakai siapa-siapa.
 
 | Sumber | Dipakai untuk | Sifat |
 | --- | --- | --- |
-| Chain via `@sterun/sdk` | semua yang harus benar | **otoritatif** |
+| Chain via `@sterunxyz/sdk` | semua yang harus benar | **otoritatif** |
 | Indexer `be/` (`/events`, `/records`) | daftar panjang, filter, kecepatan | cepat, bisa tertinggal |
 | Vault `be/` (`/participants`) | submit PII, ringkasan milik sendiri | tidak pernah mengembalikan PII |
 | Roster `be/` (`/events/:id/roster`) | scanner saja | berisi `totp_secret`, paling sensitif |
@@ -347,7 +347,7 @@ Halaman publik **tidak butuh wallet sama sekali**:
 
 ```ts
 // src/lib/sterun.ts
-import { SterunClient, TESTNET } from "@sterun/sdk";
+import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 import { CONTRACTS } from "./env";
 
 export const readClient = new SterunClient({ ...TESTNET, contracts: CONTRACTS });
@@ -380,7 +380,7 @@ bukti yang jadi jualan seluruh produk ini.
 
 ### 5.3 Alamat kontrak dari env, tidak pernah di-hardcode
 
-`@sterun/sdk` sengaja tidak membawa alamat kontrak (baca alasannya di `sdk/src/network.ts`):
+`@sterunxyz/sdk` sengaja tidak membawa alamat kontrak (baca alasannya di `sdk/src/network.ts`):
 kontrak v1 non-upgradeable, jadi deploy ulang berarti **pasangan alamat baru**, dan konstanta di
 dalam paket akan diam-diam menunjuk ke pasangan lama.
 
@@ -473,10 +473,10 @@ Focus ring sudah didefinisikan global di `tokens.css`. Jangan menimpanya, dan ja
 ### 6.4 Error selalu dipetakan, tidak pernah mentah
 
 Kode error kontrak adalah `u32` tanpa identitas kontrak. `Error(Contract, #4)` bisa berarti dua hal
-tergantung kontrak mana yang melemparnya. `@sterun/sdk` sudah menyediakan pemetaannya:
+tergantung kontrak mana yang melemparnya. `@sterunxyz/sdk` sudah menyediakan pemetaannya:
 
 ```ts
-import { classifyContractError, SterunContractError } from "@sterun/sdk";
+import { classifyContractError, SterunContractError } from "@sterunxyz/sdk";
 ```
 
 Band-nya: `1..=99` EventRegistry, `100..=199` RaceRecord, `200+` OpenZeppelin.

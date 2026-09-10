@@ -44,18 +44,18 @@ dengan `TS2304: Cannot find name 'LayoutProps'` — itu tipe yang belum di-gener
 | `docs/specs/INTERFACE.md` | signature fungsi + kode error |
 | `sc/bindings/README.md` | cara memakai client TS hasil generate |
 
-## Kontrak: lewat `@sterun/sdk`, bukan bindings mentah
+## Kontrak: lewat `@sterunxyz/sdk`, bukan bindings mentah
 
 ```json
-{ "dependencies": { "@sterun/sdk": "workspace:*" } }
+{ "dependencies": { "@sterunxyz/sdk": "workspace:*" } }
 ```
 
 Catatan ini dulu menyuruh memakai `file:../sc/bindings/*`; itu ditulis waktu SDK belum ada.
-Sekarang `@sterun/sdk` (STE-15/STE-19) sudah jadi dan sudah diuji ke testnet live, dan
+Sekarang `@sterunxyz/sdk` (STE-15/STE-19) sudah jadi dan sudah diuji ke testnet live, dan
 `fe/guides/ARCHITECTURE.md` §2 menetapkan SDK sebagai **satu-satunya** jalan bicara ke kontrak.
 `workspace:*` karena paketnya belum di-publish ke npm.
 
-**SDK harus di-build dulu** sebelum `fe` bisa typecheck/test/build: `pnpm --filter @sterun/sdk
+**SDK harus di-build dulu** sebelum `fe` bisa typecheck/test/build: `pnpm --filter @sterunxyz/sdk
 build` (menghasilkan `sdk/dist/`). `pnpm -r build` dari root sudah urut topologis, jadi ini cuma
 menggigit kalau kamu menjalankan `fe` sendirian di clone baru.
 
