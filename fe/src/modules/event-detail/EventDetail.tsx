@@ -14,45 +14,24 @@
  * caution: a file that breaks its own commitment is exactly what this product
  * exists to catch.
  *
- * ## Why the poster and the entry card sit together, above the tabs
- *
- * A runner arrives with one question, and it is not "what is in the race
- * pack". Can I enter, what does it cost, is there room. That is the card on
- * the right, it is entirely chain state, and it stays put while the tabs
- * change under it. The tabs are the reading, and reading is what people do
- * second.
+ * The page itself is drawn by `EventView`, which the organiser's review draws
+ * too. This file is the half the review has no use for: fetching, waiting, and
+ * proving what was fetched.
  */
-import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import {
-  CalendarClockIcon,
-  InfoIcon,
-  RouteIcon,
-  ScrollTextIcon,
-  ShieldCheckIcon,
-  ShirtIcon,
-} from "lucide-react";
 
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { ChainSource } from "@/components/layouts/ChainSource";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 
-import { EntryCard } from "./component/EntryCard";
-import { TabAddOns } from "./component/TabAddOns";
-import { TabCategories } from "./component/TabCategories";
-import { TabDetails } from "./component/TabDetails";
+import { EventView } from "./EventView";
 import { TabProofs } from "./component/TabProofs";
-import { TabTerms } from "./component/TabTerms";
-import { TabTimeline } from "./component/TabTimeline";
 
 export function EventDetail({ eventId }: { eventId: number }) {
   const { data, isPending, isError, refetch } = useEvent(eventId);
   const metadata = useEventMetadata(data?.event.uri ?? "", data?.event.metadataHash ?? "");
   const addOns = useEventAddOns(eventId);
-  const [tab, setTab] = useState("details");
 
   if (isPending) {
     return (
@@ -100,107 +79,20 @@ export function EventDetail({ eventId }: { eventId: number }) {
         All races
       </Link>
 
-      {/*
-        Both columns end on the same line. `min-h` rather than a fixed height
-        so a card with eight distances in it can still push the row taller;
-        the poster then letterboxes inside its frame rather than the two
-        columns drifting apart.
-      */}
-      <div className="grid gap-6 lg:min-h-[26rem] lg:grid-cols-[1fr_22rem]">
-        {document?.posterUrl ? (
-          <div className="flex h-full items-center justify-center overflow-hidden rounded-lg border border-n-200 bg-n-100">
-            <Image
-              src={document.posterUrl}
-              alt=""
-              width={1200}
-              height={900}
-              unoptimized
-              /* Contained, not cover: the poster is whatever the organiser had,
-                 at whatever shape it was, and cropping a portrait one to fill a
-                 landscape box cuts the date off the bottom of half of them. */
-              className="max-h-[26rem] w-full object-contain"
-            />
-          </div>
-        ) : (
-          <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed border-n-300">
-            <p className="text-sm text-n-500">This race has not published a poster.</p>
-          </div>
-        )}
-
-        <EntryCard event={event} categories={categories} onEnter={() => setTab("categories")} />
-      </div>
-
-      <Tabs value={tab} onValueChange={setTab}>
-        {/* The strip divides the full width evenly, and on a phone it scrolls
-            rather than wrapping: six tabs on two rows would put an active
-            underline in the middle of the block.
-
-            `overflow-y-hidden` is not decoration. Setting one axis to `auto`
-            promotes the other one out of `visible` too, and the triggers hang
-            a pixel past the rule with `-mb-px`, so the strip grew a vertical
-            scrollbar of its own next to the last tab. */}
-        <div className="overflow-x-auto overflow-y-hidden">
-          <TabsList>
-            <TabsTrigger value="details">
-              <InfoIcon aria-hidden="true" />
-              Details
-            </TabsTrigger>
-            <TabsTrigger value="terms">
-              <ScrollTextIcon aria-hidden="true" />
-              Terms
-            </TabsTrigger>
-            <TabsTrigger value="timeline">
-              <CalendarClockIcon aria-hidden="true" />
-              Timeline
-            </TabsTrigger>
-            <TabsTrigger value="categories">
-              <RouteIcon aria-hidden="true" />
-              Distances
-            </TabsTrigger>
-            <TabsTrigger value="add-ons">
-              <ShirtIcon aria-hidden="true" />
-              Race pack
-            </TabsTrigger>
-            <TabsTrigger value="proofs">
-              <ShieldCheckIcon aria-hidden="true" />
-              Proofs
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="details">
-          <TabDetails
-            document={document}
-            organiser={event.organiser}
-            startsAt={event.startsAt}
-          />
-        </TabsContent>
-
-        <TabsContent value="terms">
-          <TabTerms terms={document?.terms} />
-        </TabsContent>
-
-        <TabsContent value="timeline">
-          <TabTimeline document={document ?? {}} startsAt={event.startsAt} />
-        </TabsContent>
-
-        <TabsContent value="categories">
-          <TabCategories categories={categories} openForEntry={event.status === "Open"} />
-        </TabsContent>
-
-        <TabsContent value="add-ons">
-          <TabAddOns items={document?.addOns ?? []} onChain={addOns.data ?? []} />
-        </TabsContent>
-
-        <TabsContent value="proofs">
+      <EventView
+        event={event}
+        categories={categories}
+        document={document}
+        addOns={addOns.data ?? []}
+        proofs={
           <TabProofs
             result={metadata.data}
             uri={event.uri}
             metadataHash={event.metadataHash}
             startsAt={event.startsAt}
           />
-        </TabsContent>
-      </Tabs>
+        }
+      />
 
       <ChainSource />
     </div>

@@ -148,8 +148,15 @@ ditambahkan bukan itu:
   mendarat tetap tercatat, `start()` lagi = lanjut dari yang belum. **Loop-nya memegang salinan
   lokal `landed`**, karena `setState` baru berlaku render berikutnya dan loop-nya selesai dalam satu
   render.
-- `component/StepReview.tsx` — lomba dalam bahasa manusia + toggle file mentah. Tombol **Create
-  event** ada di kanan bawah seperti tiap step lain, dan membuka **Dialog** yang memuat **seluruh
+- `component/StepReview.tsx` — **preview halaman event yang asli**: menggambar
+  `modules/event-detail/EventView.tsx`, komponen yang sama dengan `/events/[id]`, diisi
+  `modules/organiser/preview.ts` dari apa yang akan ditandatangani run. Dokumennya dibaca lewat
+  `readEventDocument` (parser yang sama dengan halaman publik), jadi yang tidak dibaca halaman
+  juga tidak muncul di preview. **Jangan bikin ringkasan review sendiri lagi**: versi lama begitu,
+  dan dia melenceng diam-diam (deskripsi kehilangan baris baru, halaman publik tidak). Link
+  "Enter …" di preview tidak mengarah ke mana pun (`linkEntries={false}`), karena meninggalkan
+  wizard membuang semua isian. File mentah + fingerprint pindah ke tab **Proofs** preview.
+  Tombol **Create event** ada di kanan bawah seperti tiap step lain, dan membuka **Dialog** yang memuat **seluruh
   rangkaian**: daftar tanda tangan, centangnya, kegagalannya, dan jalan keluarnya. Mulainya tekanan
   kedua. Dialog-nya tidak bisa ditutup selama jalan, dan menutup sendiri begitu selesai.
 - **Tidak ada "buat event tanpa dokumen".** Pernah ada, dan itu jebakan: yang dihasilkan bukan event
@@ -238,6 +245,11 @@ membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
   STE-21 harus memasangnya lagi** di dekat tombol tanda tangan. Ditampilkan cuma kalau memang ada
   jalan masuk (`Open` dan masih ada slot) — peringatan yang muncul di tempat yang tidak berlaku
   adalah cara peringatan berhenti dibaca.
+- **Deskripsi dan Terms event = teks polos**, dirender dengan `whitespace-pre-line`. Diputuskan
+  Aulia 10 Sep 2026, bukan rich text ala Notion. Alasannya: dokumen itu di-hash, jadi markup
+  berarti memutuskan byte mana yang di-hash dan renderer mana yang benar (dua renderer beda =
+  pembaca melihat lain dari yang ditandatangani), dan HTML dari dokumen organiser itu permukaan
+  XSS. Kalau nanti butuh format, jawabannya markdown, bukan HTML.
 - **Jangan pernah memakai em dash (`—`) atau en dash (`–`) di teks UI.** Pecah jadi dua kalimat,
   pakai koma, atau tanda kurung. Kalau benar-benar perlu pemisah, pakai tanda hubung biasa.
   Larangan ini khusus teks UI; komentar kode dan `.md` tidak terpengaruh.

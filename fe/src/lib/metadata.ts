@@ -115,17 +115,34 @@ export async function fetchEventMetadata(
     return { status: "modified", expectedHash: expectedHash.toLowerCase(), actualHash };
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(body);
-  } catch {
+  const document = readEventDocument(body);
+  if (document === "not-json") {
     return { status: "unavailable", reason: "The metadata document is not valid JSON." };
   }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+  if (document === "not-object") {
     return { status: "unavailable", reason: "The metadata document is not an object." };
   }
 
-  return { status: "verified", document: parseDocument(raw as Record<string, unknown>) };
+  return { status: "verified", document };
+}
+
+/**
+ * The document text as the event page reads it, without the fetch or the hash.
+ *
+ * Exported for the organiser's review, which previews a race before its file
+ * exists anywhere. Reading the draft through this same parser is what makes the
+ * preview honest: a field the page would ignore is ignored there too, so the
+ * organiser sees what runners will see rather than what the form collected.
+ */
+export function readEventDocument(text: string): EventMetadata | "not-json" | "not-object" {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return "not-json";
+  }
+  if (!isRecord(raw)) return "not-object";
+  return parseDocument(raw);
 }
 
 /**

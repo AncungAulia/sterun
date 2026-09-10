@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -235,6 +235,15 @@ async function fillAddOn(
 async function startRun(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Create event" }));
   await user.click(await screen.findByRole("button", { name: /start signing/i }));
+}
+
+/**
+ * Open the raw file on the review. It lives in the preview's Proofs tab now,
+ * where a reader of the published page looks for it.
+ */
+async function openPublishedFile(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("tab", { name: "Proofs" }));
+  await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
 }
 
 beforeEach(() => {
@@ -521,7 +530,7 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
-      await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+      await openPublishedFile(user);
 
       const file = await screen.findByText(/"add_ons"/);
       expect(file).toHaveTextContent(/"name": "Event jersey"/);
@@ -552,7 +561,7 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
-      await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+      await openPublishedFile(user);
 
       expect(await screen.findByText(/"name": "Meal ticket"/)).toBeInTheDocument();
     });
@@ -632,23 +641,64 @@ describe("CreateEvent", () => {
       const { user } = await renderForm();
       await reachReview(user);
 
-      expect(screen.queryByText("What runners get")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("tab", { name: "Race pack" }));
+      expect(screen.getByText(/has not published a race pack/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Create event" })).toBeInTheDocument();
+    });
+
+    it("shows an item sold on top at the price it will be sold for", async () => {
+      const { user } = await renderForm();
+      await fillDetails(user);
+      await fillDistances(user);
+      await fillAddOn(user, { name: "Tumbler", kind: "extra", price: "30", stock: "50" });
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      await user.click(screen.getByRole("tab", { name: "Race pack" }));
+
+      expect(screen.getByText("Tumbler")).toBeInTheDocument();
+      expect(screen.getByText("sUSD 30")).toBeInTheDocument();
     });
   });
 
   describe("the review itself", () => {
-    it("shows the race in words rather than as a file", async () => {
+    it("shows the race as its event page rather than as a file", async () => {
+      // The review draws the public page's own components, so what the
+      // organiser signs off on is what runners get, not a summary of it.
       const { user } = await renderForm();
       await reachReview(user);
 
-      expect(screen.getByText("Jakarta Sunrise 10K")).toBeInTheDocument();
-      expect(screen.getByText("Two laps of the park.")).toBeInTheDocument();
+      const preview = screen.getByRole("region", { name: /preview of your event page/i });
+      expect(within(preview).getByRole("heading", { name: "Jakarta Sunrise 10K" })).toBeInTheDocument();
+      expect(within(preview).getByText("Two laps of the park.")).toBeInTheDocument();
+
+      await user.click(within(preview).getByRole("tab", { name: "Distances" }));
+      expect(within(preview).getByText("300 of 300 entries left")).toBeInTheDocument();
       // The asset name comes from `formatPrice` and must not be added twice.
-      expect(screen.getByRole("row", { name: /10K/ })).toHaveTextContent("sUSD 25");
-      expect(screen.getByRole("row", { name: /10K/ })).not.toHaveTextContent("sUSD 25 sUSD");
+      expect(within(preview).getAllByText("sUSD 25").length).toBeGreaterThan(0);
+      expect(within(preview).queryByText(/sUSD 25 sUSD/)).not.toBeInTheDocument();
       // The document is not on screen until it is asked for.
       expect(screen.queryByText(/"schedule"/)).not.toBeInTheDocument();
+    });
+
+    it("keeps the description's line breaks, the way the public page does", async () => {
+      // The old summary ran paragraphs together while the event page kept
+      // them, which is exactly the drift one shared page cannot have.
+      const { user } = await renderForm();
+      await reachReview(user);
+
+      expect(screen.getByText("Two laps of the park.")).toHaveClass("whitespace-pre-line");
+    });
+
+    it("draws the entry buttons without letting them leave the wizard", async () => {
+      // Following one would drop everything typed so far, for a race that
+      // cannot be entered yet.
+      const { user } = await renderForm();
+      await reachReview(user);
+
+      await user.click(screen.getByRole("tab", { name: "Distances" }));
+
+      expect(screen.getByText("Enter 10K")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Enter 10K" })).not.toBeInTheDocument();
     });
 
     it("still hands over the exact bytes, for anybody who wants to check them", async () => {
@@ -657,7 +707,7 @@ describe("CreateEvent", () => {
       const { user } = await renderForm();
       await reachReview(user);
 
-      await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+      await openPublishedFile(user);
 
       expect(await screen.findByText(/"schedule"/)).toBeInTheDocument();
       expect(screen.getByText(/^Fingerprint /)).toBeInTheDocument();

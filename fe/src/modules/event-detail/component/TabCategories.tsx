@@ -23,12 +23,22 @@ import { NonRefundableNotice } from "@/components/elements/NonRefundableNotice";
 import { formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterun/sdk";
 
+/** The entry button's look, shared by the link and by its preview stand-in. */
+const ENTER = "inline-flex h-10 items-center justify-center rounded-md bg-teal-500 px-4 text-base font-medium text-paper";
+
 export function TabCategories({
   categories,
   openForEntry,
+  linkEntries = true,
 }: {
   categories: SterunCategory[];
   openForEntry: boolean;
+  /**
+   * False in the organiser's review. The button is drawn, because it is what
+   * runners will press, but it goes nowhere: the event has no id yet, and
+   * following it would throw away the wizard the organiser is halfway through.
+   */
+  linkEntries?: boolean;
 }) {
   if (categories.length === 0) {
     return (
@@ -70,12 +80,18 @@ export function TabCategories({
                 {formatPrice(category.priceStroops)}
               </p>
               {openForEntry && !full ? (
-                <Link
-                  href={`/events/${category.eventId}/enter?category=${category.categoryId}`}
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-teal-500 px-4 text-base font-medium text-paper transition-colors hover:bg-teal-600 active:bg-teal-700"
-                >
-                  Enter {category.code}
-                </Link>
+                linkEntries ? (
+                  <Link
+                    href={`/events/${category.eventId}/enter?category=${category.categoryId}`}
+                    className={`${ENTER} transition-colors hover:bg-teal-600 active:bg-teal-700`}
+                  >
+                    Enter {category.code}
+                  </Link>
+                ) : (
+                  <span aria-disabled="true" className={ENTER}>
+                    Enter {category.code}
+                  </span>
+                )
               ) : null}
             </div>
           </Card>
