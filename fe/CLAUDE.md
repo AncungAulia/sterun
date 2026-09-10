@@ -214,6 +214,23 @@ membawa polyfill Buffer yang meng-extend `Uint8Array` milik halaman).
   `participant_hash`.
 - **Wallet: Stellar Wallets Kit** (Freighter, xBull, Albedo, WalletConnect, Ledger) — keputusan
   `docs/SYSTEM_DESIGN.md` §8. Passkey smart account bukan scope v1.
+- **WalletConnect cuma hidup kalau `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` diisi** (project id
+  Reown; isi di `.env.local` dan env Vercel). Kosong = opsinya **tidak muncul**, bukan tombol yang
+  pasti gagal: relay menolak pairing dari app yang tidak terdaftar. Ada dua bentuk, dua-duanya di
+  `src/lib/wallet.ts`:
+  - **Browser biasa** (desktop atau HP) → entri `WalletConnect` di picker kit, pairing lewat QR atau
+    deep link ke wallet di HP (Freighter mobile, LOBSTR).
+  - **Di dalam browser Freighter mobile** (`window.stellar` = `{ provider: "freighter", platform:
+    "mobile" }`) → kit dilewati, `src/lib/freighter-mobile.ts` pairing langsung lewat
+    `UniversalProvider`. Modul kit di-subclass supaya `isPlatformWrapper()` menjawab `false`; tanpa
+    itu picker kit melompati dirinya sendiri di browser itu dan pairing lewat jalurnya sendiri.
+    Pola ini diambil dari SoroSense, yang sudah terbukti jalan di HP.
+  - Chain WalletConnect cuma `stellar:pubnet` dan `stellar:testnet`. Network lain = WalletConnect
+    tidak ditawarkan, supaya tidak menandatangani di ledger yang salah tanpa suara.
+  - **`@reown/appkit` `1.8.21` dan `@walletconnect/universal-provider` `2.23.7` dipin EXACT**, sama
+    dengan versi yang dibawa kit. Caret menarik versi lebih baru, dan itu berarti dua salinan AppKit
+    di satu halaman. Naikkan cuma bareng kit, dan cek `pnpm-lock.yaml` tetap satu entri
+    `@reown/appkit@`.
 
 ## Konvensi
 
