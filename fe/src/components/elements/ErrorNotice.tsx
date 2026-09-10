@@ -5,7 +5,7 @@
  * between "there are no races" and "we could not ask", and a screen reader has
  * to be told which one it is looking at.
  *
- * Contract reverts arrive here already classified by @sterun/sdk, so the
+ * Contract reverts arrive here already classified by @sterunxyz/sdk, so the
  * message can name what happened instead of printing `Error(Contract, #4)`.
  */
 import { Button } from "@/components/ui/button";

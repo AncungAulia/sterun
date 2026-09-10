@@ -29,7 +29,7 @@ import { Card } from "@/components/ui/card";
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
 import { EXPLORER_BASE } from "@/lib/env";
 import { formatPrice, shortAddress } from "@/utils/format";
-import type { SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 /** What the status means for entering, in the words a runner needs. */
 const CLOSED_REASON: Record<string, string> = {

@@ -20,7 +20,7 @@
  * `addOnUnits`, so a preview cannot show a stock or a price the run would not
  * write.
  */
-import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 import { readEventDocument, type EventMetadata } from "@/lib/metadata";
 import { parseStroops } from "@/utils/format";

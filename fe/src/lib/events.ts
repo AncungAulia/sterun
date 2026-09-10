@@ -12,7 +12,7 @@
  * the interesting behaviour is how it handles a count that does not match what
  * can actually be read, and that deserves tests without a testnet in the loop.
  */
-import type { SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 /** One directory row: the event, and the categories a runner picks between. */
 export interface EventSummary {

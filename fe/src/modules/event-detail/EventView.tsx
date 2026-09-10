@@ -34,7 +34,7 @@ import {
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { EventMetadata } from "@/lib/metadata";
-import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 import { EntryCard } from "./component/EntryCard";
 import { TabAddOns } from "./component/TabAddOns";

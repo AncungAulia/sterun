@@ -88,7 +88,7 @@ export function onWalletStateChange(callback: (address: string | null) => void):
 /**
  * Signs an XDR with the connected wallet.
  *
- * Shaped to match what `@sterun/sdk` expects for `signTransaction`, so later
+ * Shaped to match what `@sterunxyz/sdk` expects for `signTransaction`, so later
  * tickets can hand this straight to `SterunClient` without an adapter.
  */
 export async function signTransaction(

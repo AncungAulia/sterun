@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Directory } from "@/modules/directory/Directory";
 import type { EventSummary } from "@/lib/events";
-import type { SterunCategory, SterunEvent, EventStatus } from "@sterun/sdk";
+import type { SterunCategory, SterunEvent, EventStatus } from "@sterunxyz/sdk";
 
 const listEvents = vi.hoisted(() => vi.fn());
 

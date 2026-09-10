@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^2.6.0",
-    "@sterun/sdk": "workspace:*",
+    "@sterunxyz/sdk": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",

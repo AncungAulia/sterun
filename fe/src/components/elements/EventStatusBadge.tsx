@@ -25,7 +25,7 @@
  * written out and repeated in `data-status`.
  */
 import { Badge } from "@/components/ui/badge";
-import type { EventStatus } from "@sterun/sdk";
+import type { EventStatus } from "@sterunxyz/sdk";
 
 const VARIANTS = {
   Open: "success",
