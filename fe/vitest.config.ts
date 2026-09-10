@@ -28,6 +28,9 @@ export default defineConfig({
       NEXT_PUBLIC_EVENT_REGISTRY: "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
       NEXT_PUBLIC_RACE_RECORD: "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
       NEXT_PUBLIC_SUSD_SAC: "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU",
+      // STE-17: lib/api throws without it, and every backend call goes through
+      // that module. Same value as fe/.env, which is the live deployment.
+      NEXT_PUBLIC_API_URL: "https://api-sterun.jameshub.fun",
     },
   },
   resolve: {

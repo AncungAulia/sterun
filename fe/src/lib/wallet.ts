@@ -102,6 +102,39 @@ export async function signTransaction(
 }
 
 /**
+ * Signs an arbitrary string with the connected wallet.
+ *
+ * Used for `POST /auth/challenge` -> sign the nonce -> send
+ * `x-sterun-address` / `x-sterun-nonce` / `x-sterun-signature`, which is how
+ * every authenticated backend route identifies a caller (be/src/auth.ts). The
+ * runner already holds a Stellar keypair, so there is no second credential to
+ * invent — but the browser never sees that key, hence the wallet round-trip.
+ *
+ * The kit hands back base64 already, which is what the backend parses, so the
+ * value is passed through untouched. Re-encoding it here is the mistake the
+ * backend's "expected 64 bytes, got 47" error exists to catch.
+ *
+ * `signMessage` is optional in the kit — Albedo and some hardware modules do
+ * not implement it — so a wallet that returns nothing is named as the problem
+ * rather than surfacing as a TypeError from inside our own code.
+ */
+export async function signMessage(
+  message: string,
+  opts?: { address?: string; networkPassphrase?: string },
+): Promise<string> {
+  const { signedMessage } = await StellarWalletsKit.signMessage(message, {
+    networkPassphrase: opts?.networkPassphrase ?? NETWORK.networkPassphrase,
+    address: opts?.address,
+  });
+  if (!signedMessage) {
+    throw new Error(
+      "This wallet cannot sign messages. Freighter and xBull can; try one of those.",
+    );
+  }
+  return signedMessage;
+}
+
+/**
  * Kit errors carry a code and a message; anything else is passed through as a
  * plain string. Wallet rejections are the common case and must read as a
  * cancellation rather than a failure.

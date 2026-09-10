@@ -26,12 +26,61 @@
 /** The parts of the document this app reads. Everything is optional. */
 export interface EventMetadata {
   posterUrl?: string;
-  location?: { name?: string; lat?: number; lng?: number };
+  location?: {
+    name?: string;
+    city?: string;
+    province?: string;
+    country?: string;
+    countryCode?: string;
+    lat?: number;
+    lng?: number;
+  };
   description?: string;
   waiverUrl?: string;
+  /** Where the race talks to people. Covered by the hash like everything else. */
+  links?: { instagram?: string; website?: string };
   /** ISO 8601 from the `race_day` schedule entry, if the document has one. */
   gunStart?: string;
   schedule?: MetadataPhase[];
+  /** What each distance includes: jersey, medal, whatever is in the pack. */
+  addOns?: MetadataAddOn[];
+  /**
+   * The rules a runner agreed to, as plain text with its line breaks intact.
+   *
+   * Inside the document rather than on a page the organiser hosts, which is
+   * the point: the hash on chain covers it, so these are provably the rules
+   * that were published, not the ones being served today.
+   */
+  terms?: string;
+  /**
+   * When each distance goes, which the contract has no field for. A 5K and a
+   * half marathon on one morning do not start together, and `starts_at` on
+   * chain is only the first of them.
+   */
+  categories?: MetadataCategory[];
+}
+
+export interface MetadataCategory {
+  code: string;
+  /** ISO 8601. */
+  startTime?: string;
+  cutOff?: string;
+}
+
+export interface MetadataAddOn {
+  name: string;
+  photoUrl?: string;
+  /** Distance codes that receive this one. */
+  includedIn: string[];
+  /**
+   * The `AddOnData` row this is, when the item has no sizes.
+   *
+   * The join to the chain, where the price and the stock live. Absent on an
+   * older document, and on anything sized: a size carries its own.
+   */
+  code?: string;
+  /** Flat measurements, absent on anything without sizes. */
+  sizes?: { label: string; chestCm?: number; lengthCm?: number; code?: string }[];
 }
 
 export interface MetadataPhase {
@@ -41,6 +90,12 @@ export interface MetadataPhase {
   gunStart?: string;
   cutOff?: string;
   venue?: string;
+  /** Where that venue is, when the organiser pasted a link with a pin in it. */
+  venueLat?: number;
+  venueLng?: number;
+  /** `HH:mm` opening hours that apply to each day of the phase. */
+  dailyOpens?: string;
+  dailyCloses?: string;
 }
 
 export type MetadataResult =
@@ -76,17 +131,34 @@ export async function fetchEventMetadata(
     return { status: "modified", expectedHash: expectedHash.toLowerCase(), actualHash };
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(body);
-  } catch {
+  const document = readEventDocument(body);
+  if (document === "not-json") {
     return { status: "unavailable", reason: "The metadata document is not valid JSON." };
   }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+  if (document === "not-object") {
     return { status: "unavailable", reason: "The metadata document is not an object." };
   }
 
-  return { status: "verified", document: parseDocument(raw as Record<string, unknown>) };
+  return { status: "verified", document };
+}
+
+/**
+ * The document text as the event page reads it, without the fetch or the hash.
+ *
+ * Exported for the organiser's review, which previews a race before its file
+ * exists anywhere. Reading the draft through this same parser is what makes the
+ * preview honest: a field the page would ignore is ignored there too, so the
+ * organiser sees what runners will see rather than what the form collected.
+ */
+export function readEventDocument(text: string): EventMetadata | "not-json" | "not-object" {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return "not-json";
+  }
+  if (!isRecord(raw)) return "not-object";
+  return parseDocument(raw);
 }
 
 /**
@@ -125,17 +197,73 @@ function parseDocument(raw: Record<string, unknown>): EventMetadata {
   const schedule = Array.isArray(raw.schedule)
     ? raw.schedule.filter(isRecord).map(parsePhase)
     : undefined;
+  const addOns = parseAddOns(raw.add_ons);
+  const categories = parseCategories(raw.categories);
 
   return {
     ...str(raw.poster_url, "posterUrl"),
     ...str(raw.description, "description"),
+    ...str(raw.terms, "terms"),
     ...str(raw.waiver_url, "waiverUrl"),
     ...(isRecord(raw.location) ? { location: parseLocation(raw.location) } : {}),
     ...(schedule ? { schedule } : {}),
+    ...(isRecord(raw.links) ? { links: parseLinks(raw.links) } : {}),
     ...(schedule?.find((phase) => phase.gunStart)?.gunStart
       ? { gunStart: schedule.find((phase) => phase.gunStart)!.gunStart }
       : {}),
+    ...(addOns && addOns.length > 0 ? { addOns } : {}),
+    ...(categories.length > 0 ? { categories } : {}),
   };
+}
+
+/** A distance is only worth keeping with a code, since the code is the join to the chain. */
+function parseCategories(raw: unknown): MetadataCategory[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isRecord).flatMap((entry): MetadataCategory[] => {
+    const code = typeof entry.code === "string" ? entry.code.trim() : "";
+    if (!code) return [];
+    return [{ code, ...str(entry.start_time, "startTime"), ...str(entry.cut_off, "cutOff") }];
+  });
+}
+
+/**
+ * An add-on is only shown when it has a name and at least one distance that
+ * receives it. Anything else is a row somebody abandoned, and this file is
+ * permanent: it will still be there on race day.
+ */
+function parseAddOns(raw: unknown): MetadataAddOn[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const addOns = raw.filter(isRecord).flatMap((entry): MetadataAddOn[] => {
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    const includedIn = Array.isArray(entry.included_in)
+      ? entry.included_in.filter((code): code is string => typeof code === "string")
+      : [];
+    if (!name || includedIn.length === 0) return [];
+    const sizes = Array.isArray(entry.sizes)
+      ? entry.sizes.filter(isRecord).flatMap((size): NonNullable<MetadataAddOn["sizes"]> => {
+          const label = typeof size.label === "string" ? size.label.trim() : "";
+          if (!label) return [];
+          return [
+            {
+              label,
+              ...(typeof size.chest_cm === "number" ? { chestCm: size.chest_cm } : {}),
+              ...(typeof size.length_cm === "number" ? { lengthCm: size.length_cm } : {}),
+              ...str(size.code, "code"),
+            },
+          ];
+        })
+      : [];
+    return [
+      {
+        name,
+        includedIn,
+        ...str(entry.photo_url, "photoUrl"),
+        ...str(entry.code, "code"),
+        ...(sizes.length > 0 ? { sizes } : {}),
+      },
+    ];
+  });
+  return addOns.length > 0 ? addOns : undefined;
 }
 
 function parsePhase(raw: Record<string, unknown>): MetadataPhase {
@@ -146,12 +274,27 @@ function parsePhase(raw: Record<string, unknown>): MetadataPhase {
     ...str(raw.gun_start, "gunStart"),
     ...str(raw.cut_off, "cutOff"),
     ...str(raw.venue, "venue"),
+    ...(typeof raw.venue_lat === "number" ? { venueLat: raw.venue_lat } : {}),
+    ...(typeof raw.venue_lng === "number" ? { venueLng: raw.venue_lng } : {}),
+    ...str(raw.daily_opens, "dailyOpens"),
+    ...str(raw.daily_closes, "dailyCloses"),
+  };
+}
+
+function parseLinks(raw: Record<string, unknown>): NonNullable<EventMetadata["links"]> {
+  return {
+    ...str(raw.instagram, "instagram"),
+    ...str(raw.website, "website"),
   };
 }
 
 function parseLocation(raw: Record<string, unknown>): NonNullable<EventMetadata["location"]> {
   return {
     ...str(raw.name, "name"),
+    ...str(raw.city, "city"),
+    ...str(raw.province, "province"),
+    ...str(raw.country, "country"),
+    ...str(raw.country_code, "countryCode"),
     ...(typeof raw.lat === "number" ? { lat: raw.lat } : {}),
     ...(typeof raw.lng === "number" ? { lng: raw.lng } : {}),
   };

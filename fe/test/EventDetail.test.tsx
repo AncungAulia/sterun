@@ -1,20 +1,28 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EventDetail } from "@/modules/event-detail/EventDetail";
 import type { EventSummary } from "@/lib/events";
 import type { MetadataResult } from "@/lib/metadata";
-import type { EventStatus, SterunCategory, SterunEvent } from "@sterun/sdk";
+import type { EventStatus, SterunAddOn, SterunCategory, SterunEvent } from "@sterun/sdk";
 
 const getEventSummary = vi.hoisted(() => vi.fn());
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
+/*
+ * The add-ons are a chain read of their own now. Mocked rather than left to
+ * run: `readClient` here is the real one, and typescript.yml is built so that
+ * a public node being slow cannot turn CI red.
+ */
+const listAddOns = vi.hoisted(() => vi.fn(async (): Promise<SterunAddOn[]> => []));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/events")>()),
   getEventSummary,
 }));
+vi.mock("@/lib/sterun", () => ({ readClient: { listAddOns } }));
 vi.mock("@/lib/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/metadata")>()),
   fetchEventMetadata,
@@ -73,7 +81,19 @@ beforeEach(() => {
   getEventSummary.mockReset();
   fetchEventMetadata.mockReset();
   fetchEventMetadata.mockResolvedValue(UNAVAILABLE);
+  listAddOns.mockResolvedValue([]);
 });
+
+/**
+ * Move to a tab and wait for it.
+ *
+ * The page is tabbed now, so most of what used to be on screen at once is a
+ * click away. Which tab a fact lives on is part of what these tests check.
+ */
+async function showTab(name: RegExp) {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("tab", { name }));
+}
 
 describe("EventDetail", () => {
   describe("positive", () => {
@@ -103,24 +123,246 @@ describe("EventDetail", () => {
       );
 
       renderDetail();
+      await showTab(/distances/i);
 
-      expect(await screen.findByText("10K")).toBeInTheDocument();
-      expect(screen.getByText("sUSD 25")).toBeInTheDocument();
-      expect(screen.getByText("5K")).toBeInTheDocument();
-      expect(screen.getByText("Free")).toBeInTheDocument();
-      expect(screen.getByText(/120 of 300 left/)).toBeInTheDocument();
-      expect(screen.getByText(/60 of 100 left/)).toBeInTheDocument();
+      // Scoped to the panel: the entry card carries the cheapest price too, so
+      // "Free" is on screen twice and both of them are right.
+      const panel = within(screen.getByRole("tabpanel"));
+      expect(panel.getByText("sUSD 25")).toBeInTheDocument();
+      expect(panel.getByText("Free")).toBeInTheDocument();
+      expect(panel.getByText(/120 of 300 entries left/)).toBeInTheDocument();
+      expect(panel.getByText(/60 of 100 entries left/)).toBeInTheDocument();
+    });
+
+    it("calls an add-on the entry fee already covers Included, not Free", async () => {
+      // "Free" next to a jersey reads as a giveaway, or as something still to
+      // be claimed. Zero on an add-on means the ticket paid for it.
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0)]));
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            { name: "Event jersey", includedIn: ["10K"], code: "EVENT_JERSEY" },
+            { name: "Tumbler", includedIn: ["10K"], code: "TUMBLER" },
+          ],
+        },
+      } satisfies MetadataResult);
+      const row = { eventId: 2, quota: 50, reservedCount: 0, unitsLeft: 50 };
+      listAddOns.mockResolvedValue([
+        { ...row, addonId: 0, code: "EVENT_JERSEY", priceStroops: 0n },
+        { ...row, addonId: 1, code: "TUMBLER", priceStroops: 300_000_000n },
+      ]);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      const panel = within(screen.getByRole("tabpanel"));
+      expect(await panel.findByText("Included")).toBeInTheDocument();
+      expect(panel.getByText("sUSD 30")).toBeInTheDocument();
+      expect(panel.queryByText("Free")).not.toBeInTheDocument();
     });
 
     it("offers entry per category while the event is open", async () => {
       getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0), category(1)]));
 
       renderDetail();
+      await showTab(/distances/i);
 
       const links = await screen.findAllByRole("link", { name: /enter/i });
       expect(links).toHaveLength(2);
       expect(links[0]).toHaveAttribute("href", "/events/2/enter?category=0");
       expect(links[1]).toHaveAttribute("href", "/events/2/enter?category=1");
+    });
+
+    it("says entry is non-refundable above the links that take the money", async () => {
+      // STE-38. Not a footer and not a modal: it has to be on the way in, and
+      // the way in is the per-distance link, so the notice sits before it.
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0)]));
+
+      renderDetail();
+      await showTab(/distances/i);
+
+      const notice = await screen.findByText(/non-refundable/i);
+      const link = screen.getByRole("link", { name: /enter/i });
+      expect(notice.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("links the location to a map when the document carries a pin", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { location: { name: "Gelora Bung Karno", lat: -6.2185, lng: 106.8026 } },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      const link = await screen.findByRole("link", { name: /open in maps/i });
+      expect(link).toHaveAttribute("href", "https://www.google.com/maps?q=-6.2185,106.8026");
+    });
+
+    it("shows a location with no pin as plain text", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { location: { name: "Somewhere" } },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      expect(await screen.findByText(/somewhere/i)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /open in maps/i })).not.toBeInTheDocument();
+    });
+
+    it("links the race's own Instagram, built from the handle", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { links: { instagram: "jakartarun" } },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      const link = await screen.findByRole("link", { name: "@jakartarun" });
+      expect(link).toHaveAttribute("href", "https://www.instagram.com/jakartarun");
+    });
+
+    it("shows no social links when the document carries none", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { description: "A road race." },
+      } satisfies MetadataResult);
+
+      renderDetail();
+
+      await screen.findByText("A road race.");
+      expect(screen.queryByRole("link", { name: /race website/i })).not.toBeInTheDocument();
+    });
+
+    it("shows the jersey with the price and stock the chain holds", async () => {
+      // Two sources joined by a code: the document knows what it looks like,
+      // the chain knows what it costs and how many are left. The chain wins,
+      // because the stock is what decides whether it can still be sold.
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            {
+              name: "Event jersey",
+              photoUrl: "https://cdn.example.test/jersey.png",
+              includedIn: ["10K", "HALF"],
+              sizes: [
+                { label: "M", chestCm: 52, lengthCm: 70, code: "EVENT_JERSEY_M" },
+                { label: "L", chestCm: 54, lengthCm: 72, code: "EVENT_JERSEY_L" },
+              ],
+            },
+          ],
+        },
+      } satisfies MetadataResult);
+      listAddOns.mockResolvedValue([
+        {
+          eventId: 2,
+          addonId: 0,
+          code: "EVENT_JERSEY_M",
+          priceStroops: 300_000_000n,
+          quota: 100,
+          reservedCount: 40,
+          unitsLeft: 60,
+        },
+        {
+          eventId: 2,
+          addonId: 1,
+          code: "EVENT_JERSEY_L",
+          priceStroops: 300_000_000n,
+          quota: 100,
+          reservedCount: 100,
+          unitsLeft: 0,
+        },
+      ]);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      expect(await screen.findByText("Event jersey")).toBeInTheDocument();
+      expect(screen.getByText("sUSD 30")).toBeInTheDocument();
+    });
+
+    it("says a size is gone, which is the whole reason stock is per size", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            {
+              name: "Event jersey",
+              includedIn: ["10K"],
+              sizes: [
+                { label: "M", code: "EVENT_JERSEY_M" },
+                { label: "L", code: "EVENT_JERSEY_L" },
+              ],
+            },
+          ],
+        },
+      } satisfies MetadataResult);
+      listAddOns.mockResolvedValue([
+        {
+          eventId: 2,
+          addonId: 0,
+          code: "EVENT_JERSEY_M",
+          priceStroops: 0n,
+          quota: 100,
+          reservedCount: 40,
+          unitsLeft: 60,
+        },
+        {
+          eventId: 2,
+          addonId: 1,
+          code: "EVENT_JERSEY_L",
+          priceStroops: 0n,
+          quota: 100,
+          reservedCount: 100,
+          unitsLeft: 0,
+        },
+      ]);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: /view details/i }));
+
+      expect(await screen.findByRole("row", { name: /L .* sold out/i })).toBeInTheDocument();
+      expect(screen.getByRole("row", { name: /M .* 60/ })).toBeInTheDocument();
+    });
+
+    it("still describes an item the chain knows nothing about", async () => {
+      // An event created before add-ons existed on chain still has a race
+      // pack, and the document is the only description of it there is.
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { addOns: [{ name: "Finisher medal", includedIn: ["10K"] }] },
+      } satisfies MetadataResult);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      expect(await screen.findByText("Finisher medal")).toBeInTheDocument();
+      expect(screen.getByText(/part of the race pack/i)).toBeInTheDocument();
+    });
+
+    it("shows nothing about a race pack when the document has no add-ons", async () => {
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: { description: "A road race." },
+      } satisfies MetadataResult);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      expect(await screen.findByText(/has not published a race pack/i)).toBeInTheDocument();
     });
 
     it("shows the verified document once it checks out", async () => {
@@ -133,7 +375,9 @@ describe("EventDetail", () => {
       renderDetail();
 
       expect(await screen.findByText("Two laps of the temple.")).toBeInTheDocument();
-      expect(screen.getByText(/matches the hash/i)).toBeInTheDocument();
+
+      await showTab(/proofs/i);
+      expect(screen.getByText(/hashes to exactly/i)).toBeInTheDocument();
     });
   });
 
@@ -153,7 +397,7 @@ describe("EventDetail", () => {
 
       await screen.findByText("Borobudur Marathon");
       expect(screen.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
-      expect(screen.getByText(/not open for entries/i)).toBeInTheDocument();
+      expect(screen.getByText(/has not opened this race yet/i)).toBeInTheDocument();
     });
 
     it("marks a full category as full rather than offering entry", async () => {
@@ -164,17 +408,57 @@ describe("EventDetail", () => {
       );
 
       renderDetail();
+      await showTab(/distances/i);
 
-      expect(await screen.findByText(/full/i)).toBeInTheDocument();
+      expect(await screen.findAllByText(/sold out/i)).not.toHaveLength(0);
       expect(screen.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
+    });
+
+    it("tells a cancelled race apart from a closed one, and offers no way in", async () => {
+      // STE-38. `Cancelled` is terminal and rejects entry on chain, so a
+      // button here would spend a wallet prompt to be told EventNotOpen. The
+      // pair a runner must never confuse is this one: Closed still has a race
+      // at the end of it.
+      getEventSummary.mockResolvedValue(summary({ status: "Cancelled" }, [category(0)]));
+
+      renderDetail();
+
+      expect(await screen.findByText(/this race has been cancelled/i)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
+      expect(screen.getByText("Cancelled")).toHaveAttribute("data-status", "Cancelled");
+    });
+
+    it("says nothing about refunds where there is no way in", async () => {
+      // The notice belongs to the act of paying. On a race nobody can enter it
+      // is noise, and noise is how a warning stops being read.
+      getEventSummary.mockResolvedValue(summary({ status: "Cancelled" }, [category(0)]));
+
+      renderDetail();
+      await showTab(/distances/i);
+
+      await screen.findByText(/entries left/i);
+      expect(screen.queryByText(/non-refundable/i)).not.toBeInTheDocument();
+    });
+
+    it("says nothing about refunds when every distance is full", async () => {
+      getEventSummary.mockResolvedValue(
+        summary({ status: "Open" }, [category(0, { quota: 5, enteredCount: 5 })]),
+      );
+
+      renderDetail();
+      await showTab(/distances/i);
+
+      await screen.findAllByText(/sold out/i);
+      expect(screen.queryByText(/non-refundable/i)).not.toBeInTheDocument();
     });
 
     it("says an event has no categories rather than showing an empty list", async () => {
       getEventSummary.mockResolvedValue(summary({}, []));
 
       renderDetail();
+      await showTab(/distances/i);
 
-      expect(await screen.findByText(/no categories/i)).toBeInTheDocument();
+      expect(await screen.findByText(/no distances yet/i)).toBeInTheDocument();
     });
 
     it("still shows the race when its document cannot be reached", async () => {
@@ -186,7 +470,9 @@ describe("EventDetail", () => {
       renderDetail();
 
       expect(await screen.findByText("Borobudur Marathon")).toBeInTheDocument();
-      expect(await screen.findByText(/could not be read/i)).toBeInTheDocument();
+
+      await showTab(/proofs/i);
+      expect(screen.getByText(/could not be read/i)).toBeInTheDocument();
     });
 
     it("warns when the document disagrees with the chain about the start time", async () => {
@@ -197,6 +483,7 @@ describe("EventDetail", () => {
       } satisfies MetadataResult);
 
       renderDetail();
+      await showTab(/proofs/i);
 
       expect(await screen.findByText(/disagrees with the chain/i)).toBeInTheDocument();
     });
@@ -220,6 +507,7 @@ describe("EventDetail", () => {
       } satisfies MetadataResult);
 
       renderDetail();
+      await showTab(/proofs/i);
 
       expect(await screen.findByText(/has been changed/i)).toBeInTheDocument();
       expect(screen.queryByText("Two laps of the temple.")).not.toBeInTheDocument();

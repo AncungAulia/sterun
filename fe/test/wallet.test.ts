@@ -13,6 +13,7 @@ const kit = {
   getAddress: vi.fn(),
   disconnect: vi.fn(),
   signTransaction: vi.fn(),
+  signMessage: vi.fn(),
   on: vi.fn(),
 };
 
@@ -185,6 +186,46 @@ describe("signTransaction", () => {
       "unsigned-xdr",
       expect.objectContaining({ address: ADDRESS }),
     );
+  });
+});
+
+describe("signMessage", () => {
+  describe("positive", () => {
+    it("returns the signature the wallet produced", async () => {
+      // The backend wants base64 of 64 raw bytes as x-sterun-signature
+      // (be/src/auth.ts), and that is exactly what the kit hands back, so this
+      // wrapper must not re-encode it on the way through.
+      kit.signMessage.mockResolvedValue({ signedMessage: "c2ln", signerAddress: ADDRESS });
+      const wallet = await loadWallet();
+
+      expect(await wallet.signMessage("nonce-abc")).toBe("c2ln");
+    });
+
+    it("signs as the account the caller names", async () => {
+      // The wallet may hold several accounts. Signing a nonce issued to one of
+      // them with another is a bad-signature the organiser cannot diagnose.
+      kit.signMessage.mockResolvedValue({ signedMessage: "c2ln" });
+      const wallet = await loadWallet();
+
+      await wallet.signMessage("nonce-abc", { address: ADDRESS });
+
+      expect(kit.signMessage).toHaveBeenCalledWith("nonce-abc", {
+        networkPassphrase: "Test SDF Network ; September 2015",
+        address: ADDRESS,
+      });
+    });
+  });
+
+  describe("negative", () => {
+    it("refuses a wallet that cannot sign messages, by name", async () => {
+      // signMessage is optional in the kit: Albedo and some hardware modules do
+      // not implement it. "undefined is not a function" would send the reader
+      // into our code; the wallet is what has to change.
+      kit.signMessage.mockResolvedValue({ signedMessage: undefined });
+      const wallet = await loadWallet();
+
+      await expect(wallet.signMessage("nonce-abc")).rejects.toThrow(/cannot sign messages/i);
+    });
   });
 });
 

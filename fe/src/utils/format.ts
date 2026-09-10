@@ -1,7 +1,7 @@
 /**
  * Pure formatting helpers. No chain coupling, no React, no side effects.
  */
-import { formatStroops } from "@sterun/sdk";
+import { STROOPS_PER_UNIT, formatStroops } from "@sterun/sdk";
 
 const GROUPED = new Intl.NumberFormat("en-US");
 
@@ -77,6 +77,85 @@ export function formatEventDateTime(startsAt: bigint, timeZone?: string): string
     minute: "2-digit",
     hour12: false,
     timeZoneName: "short",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/**
+ * Just the clock time of an instant, `05:30`, in the same timezone the dates
+ * beside it are shown in. For a line that already sits under its own date,
+ * where repeating the day and the zone would only be noise.
+ */
+export function formatEventTime(startsAt: bigint, timeZone?: string): string {
+  const date = toDate(startsAt);
+  if (!date) return "Unknown time";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/**
+ * A price typed by a person, as the stroops the contract takes.
+ *
+ * Parsed digit by digit rather than through `Number`. An entry fee is money:
+ * `parseFloat("0.1") * 10_000_000` is 1000000.0000000001, and the price a
+ * runner is charged must be the price the organiser typed, exactly. The
+ * fractional part is padded rather than multiplied for the same reason.
+ *
+ * Too much precision is refused instead of rounded. Rounding here would take a
+ * number somebody entered deliberately and quietly charge a different one.
+ */
+export function parseStroops(input: string): bigint {
+  const text = input.trim();
+  if (!text) return 0n;
+  if (!/^\d+(\.\d+)?$/.test(text)) {
+    throw new Error(`"${input}" is not an amount. Use digits and at most one dot, like 25.5`);
+  }
+
+  const [whole, fraction = ""] = text.split(".");
+  if (fraction.length > 7) {
+    throw new Error(`sUSD has 7 decimal places; "${input}" has ${fraction.length}.`);
+  }
+
+  return BigInt(whole) * STROOPS_PER_UNIT + BigInt(fraction.padEnd(7, "0") || "0");
+}
+
+/**
+ * The same instant, spelled out, for confirming what somebody just typed.
+ *
+ * The weekday is the point. A date entered one month off still looks perfectly
+ * plausible as digits, and stops looking plausible the moment it says the wrong
+ * day of the week. `starts_at` cannot be corrected after create_event, so this
+ * is the last chance anybody gets to notice.
+ */
+export function formatEventDateTimeLong(startsAt: bigint, timeZone?: string): string {
+  const date = toDate(startsAt);
+  if (!date) return "Unknown date";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+}
+
+/** The same as formatEventDateTimeLong, for a field that has no time in it. */
+export function formatEventDayLong(startsAt: bigint, timeZone?: string): string {
+  const date = toDate(startsAt);
+  if (!date) return "Unknown date";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
     ...(timeZone ? { timeZone } : {}),
   }).format(date);
 }

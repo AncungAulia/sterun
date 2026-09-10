@@ -595,20 +595,6 @@ export interface ScannerRow {
 }
 
 /**
- * The scanners an event currently allows.
- *
- * `removed_ledger IS NULL` rather than deleting the row: the table is the
- * replay of scanner_added / scanner_removed events, and a removal is a fact
- * worth keeping. It also makes a re-add cheap, since addScanner clears the
- * column rather than inserting a second row.
- *
- * This is the only place a *list* of scanners can come from. EventRegistry
- * exposes `is_scanner(event_id, addr)` and nothing that enumerates, so a caller
- * that needs the set has to reconstruct it from events. Callers who need to act
- * on the answer should still check each address against the chain: this is an
- * index, and an index can lag.
- */
-/**
  * Every scanner a rebuild should consider re-inserting.
  *
  * This exists because the scanner allowlist is the one materialised table that
@@ -680,6 +666,20 @@ export async function listScannerCandidates(db: Queryable): Promise<ScannerRow[]
   );
 }
 
+/**
+ * The scanners an event currently allows.
+ *
+ * `removed_ledger IS NULL` rather than deleting the row: the table is the
+ * replay of scanner_added / scanner_removed events, and a removal is a fact
+ * worth keeping. It also makes a re-add cheap, since addScanner clears the
+ * column rather than inserting a second row.
+ *
+ * This is the only place a *list* of scanners can come from. EventRegistry
+ * exposes `is_scanner(event_id, addr)` and nothing that enumerates, so a caller
+ * that needs the set has to reconstruct it from events. Callers who need to act
+ * on the answer should still check each address against the chain: this is an
+ * index, and an index can lag.
+ */
 export async function listScanners(db: Queryable, eventId: number): Promise<ScannerRow[]> {
   const { rows } = await db.query<{
     event_id: number;

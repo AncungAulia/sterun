@@ -272,17 +272,48 @@ EventRegistry, `100..=199` RaceRecord, `200+` OZ.
 | URL | Menampilkan |
 | --- | --- |
 | `/org` | Event yang aku buat (query by address), empty state, tombol buat event |
-| `/org/new` | Wizard: event → kategori → jadwal → review → tanda tangan |
+| `/org/new` | Wizard 3 langkah: **Details → Distances → Review** (review yang menandatangani semuanya) |
 | `/org/events/[id]` | Kuota terisi per kategori (live dari chain), kontrol status, hitungan per state, roster **anonim**: bib, kategori, state, `token_id` |
 | `/org/events/[id]/scanners` | Daftar scanner aktif, tambah/hapus address |
 | `/org/events/[id]/results` | Upload CSV (bib_no, finish_time) → preview + anomali → submit batch `recordFinish`/`recordDnf` |
 
 Tidak ada tombol Edit maupun Hapus di mana pun (§2.2), dan tidak ada nama peserta (§2.1).
 
-Wizard bertahap karena **tiap langkah adalah transaksi terpisah**: bikin event satu tanda tangan,
-tiap kategori satu lagi, buka pendaftaran satu lagi. Panitia dengan 3 kategori diminta approve 5
-kali — UI harus menjelaskan itu di depan, bukan mengejutkan di tengah jalan. Kolom harga dan kuota
-perlu peringatan permanen karena tidak bisa diperbaiki.
+**Tanda tangannya banyak dan tidak bisa dikurangi**: publish file detail satu, `create_event`
+satu, tiap kategori satu, buka pendaftaran satu. Panitia dengan 3 kategori diminta approve 6 kali.
+Satu transaksi cuma boleh memanggil satu fungsi kontrak, kontraknya tidak punya entry point batch,
+dan `add_category` butuh `event_id` yang baru lahir setelah `create_event` mendarat.
+
+Yang **bisa** diperbaiki cuma kagetnya, dan itu memutuskan bentuk wizard-nya (STE-17, 8 Sep 2026):
+
+- **Langkahnya 3, bukan 6.** Yang dulu enam langkah itu memetakan transaksi satu-satu — publish,
+  create, add, open — padahal transaksi adalah cara kita mengantar, bukan pekerjaan panitia.
+  Pekerjaan panitia cuma dua: menggambarkan lomba, lalu menyetujui ongkosnya.
+- **Step "Details file" diganti step Review.** Dulu isinya dump JSON mentah + tombol Publish. Itu
+  meminta orang memeriksa hal yang tidak bisa mereka periksa, dan meminta mereka tahu ada "file" —
+  itu pipa kita. Review menampilkan lombanya sebagai lomba: tanggal, kota, jarak beserta jam
+  start-nya. **File mentahnya tetap ada satu klik di balik toggle**, karena sha256 byte itulah yang
+  masuk chain dan orang yang mau mengecek klaim kita harus bisa melihatnya.
+- **Daftar tanda tangan ditampilkan SEBELUM yang pertama diminta**, lalu dicentang satu per satu
+  sambil jalan. Enam popup yang tidak disebut siapa pun terasa seperti retry loop; enam popup yang
+  sudah ditulis sebagai daftar bernomor terasa seperti pekerjaan yang ada ujungnya.
+- **Berhenti di tengah aman dan bisa dilanjutkan.** Yang sudah mendarat tidak bisa dibatalkan, jadi
+  layar yang me-reset akan berbohong soal apa yang ada di chain. Tombolnya jadi "Carry on" dan
+  melanjutkan dari langkah pertama yang belum mendarat.
+- **Jalan keluar dokumen (host sendiri / tanpa dokumen) cuma muncul setelah publish gagal.** `uri`
+  itu string biasa di chain dan kontrak tidak peduli host-nya siapa, jadi backend kita mati tidak
+  boleh ikut mematikan pembuatan event. Tapi itu bukan pilihan yang pantas disodorkan ke orang yang
+  tidak sedang punya masalah.
+
+Kolom harga dan kuota perlu peringatan permanen karena tidak bisa diperbaiki.
+
+**Poster dan waiver di-upload, bukan ditempel URL-nya** (`POST /events/files`, terima gambar dan
+PDF, maks 5 MB). Dua alasan: menyuruh panitia meng-hosting sendiri adalah langkah yang paling
+mungkin membuat wizard-nya tidak dipakai, dan file di tempat lain bisa **ditukar** setelah orang
+mendaftar — persis penipuan yang produk ini ada untuk menutupnya. Yang dikembalikan store itu
+content-addressed, jadi poster dan waiver ikut beku seperti dokumen yang menyebutnya. Upload jalan
+**saat file dipilih**, bukan di akhir: endpoint-nya butuh tanda tangan, dan menumpuknya di akhir
+berarti popup beruntun di saat yang paling tidak enak.
 
 Console tidak boleh mengirim baris CSV yang gagal preview. Aksi oleh wallet non-organiser harus
 memunculkan pesan yang bisa dibaca, bukan crash.
@@ -324,6 +355,39 @@ jadi kesepakatannya di satu tangan. Di-hash jadi `metadata_hash` saat `create_ev
 }
 ```
 
+- **Fase `racepack` menyimpan rentang hari + jam harian**, bukan satu jendela waktu menerus.
+  `starts_at` / `ends_at` tetap ada (hari pertama jam buka, hari terakhir jam tutup) supaya pembaca
+  lama tidak berubah artinya, plus `daily_opens` / `daily_closes`.
+  Alasannya: "buka 1 Agustus 09:00, tutup 9 Agustus 21:00" secara harfiah berarti mejanya dijaga
+  semalaman tanggal 2 sampai 8. Pengambilan race pack itu manusia duduk di meja, dan mereka pulang.
+  **Registrasi sengaja tetap satu jendela menerus** — form online memang tidak tutup semalam. Bentuk
+  keduanya beda karena barangnya beda.
+- **Start time dan cut off ada di tiap kategori**, bukan di event. Satu pagi bisa punya 5K start
+  06:00 dan half marathon start 05:00; kontrak tidak punya kolom untuk itu, jadi tempatnya di
+  dokumen (`categories[].start_time` / `.cut_off`). Yang masuk chain sebagai `starts_at` adalah
+  **wave paling awal**, karena event cuma punya satu timestamp sedangkan lomba punya beberapa.
+  Konsekuensi urutan di console: kategori harus diisi **sebelum** dokumen dibuat, karena dokumen
+  di-hash oleh `create_event` yang jalan sebelum `add_category`.
+- **`links`**: `{ instagram, website }`. Lomba beneran hidup di Instagram — pengumuman rute
+  berubah, cuaca, hasil — jadi halaman event tanpa link ke situ kehilangan link keluar yang paling
+  sering diklik. Yang disimpan **handle**-nya, bukan URL: Instagram pernah mengubah bentuk URL-nya,
+  dan dokumen ini tidak bisa diedit selamanya. Console tetap menerima URL profil yang ditempel dan
+  mengambil handle-nya sendiri.
+  Efek samping yang berguna: link ini ikut ter-hash, jadi **akun yang dicantumkan waktu event dibuat
+  tidak bisa diam-diam ditukar** jadi akun lain setelah orang mendaftar.
+- **Koordinat masuk lewat link Google Maps yang ditempel, bukan lewat dropdown negara/provinsi/kota.**
+  Console mengekstrak `lat`/`lng` dari URL-nya (`@-6.2185,106.8026` atau `?q=`) — tanpa API, tanpa
+  key, tanpa rate limit. Cascade tiga dropdown tidak menjawab pertanyaan siapa pun (yang orang mau
+  itu **pin yang bisa dibuka**), dan geocoding API (Nominatim gratis dan tanpa key) menambah
+  dependency jaringan plus kewajiban atribusi ke sebuah field form. Link pendek
+  (`maps.app.goo.gl`) tidak membawa koordinat sampai diikuti, dan mengikutinya dari browser
+  diblokir cross-origin — console bilang begitu apa adanya waktu ditempel, bukan setelah event beku.
+  Yang disimpan **dua angkanya**, bukan URL-nya: link bisa basi, koordinat tidak.
+- Fase `racepack` boleh membawa `venue_lat` / `venue_lng` dengan aturan yang sama. `venue` tetap
+  string supaya pembaca STE-13 tidak berubah artinya.
+- **`cut_off` itu waktu**, batas terakhir sebuah finish masih dihitung — dan **kontrak tidak
+  menegakkannya sama sekali**. `record_finish` menerima waktu apa pun yang panitia kirim. Halaman
+  dan form wajib menyebutnya sebagai informasi, bukan aturan.
 - **`metadata_hash` = sha256 dari byte persis yang disajikan di `uri`.** Tanpa kanonikalisasi,
   tanpa aturan urutan key, tanpa re-serialisasi. Siapa pun bisa mengeceknya dengan `curl` +
   `sha256sum`, dan tidak ada "bentuk kanonik" yang bisa dibaca beda oleh dua implementasi.

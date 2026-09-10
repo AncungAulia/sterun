@@ -8,7 +8,7 @@
  * Contract reverts arrive here already classified by @sterun/sdk, so the
  * message can name what happened instead of printing `Error(Contract, #4)`.
  */
-import { Button } from "./Button";
+import { Button } from "@/components/ui/button";
 
 interface ErrorNoticeProps {
   title: string;
