@@ -9,6 +9,12 @@
  *
  * The kit renders its modal with Preact and touches `document`, so every
  * function here is browser-only. Call them from a client component.
+ *
+ * WalletConnect comes in two shapes, both switched on by
+ * NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID. Everywhere except Freighter's mobile
+ * browser it is one more entry in the kit's picker, which pairs a phone wallet
+ * by QR code or deep link. Inside Freighter's mobile browser the kit is bypassed
+ * and `lib/freighter-mobile.ts` pairs directly.
  */
 import {
   KitEventType,
@@ -18,8 +24,18 @@ import {
 } from "@creit.tech/stellar-wallets-kit";
 // Not re-exported from the package root: only the `modules/utils` subpath has it.
 import { defaultModules } from "@creit.tech/stellar-wallets-kit/modules/utils";
+import {
+  WalletConnectModule,
+  WalletConnectTargetChain,
+} from "@creit.tech/stellar-wallets-kit/modules/wallet-connect";
 
-import { NETWORK } from "./env";
+import { NETWORK, WALLET_CONNECT_PROJECT_ID } from "./env";
+import {
+  freighterMobileSession,
+  isFreighterMobile,
+  type FreighterMobileSession,
+  type WalletConnectMetadata,
+} from "./freighter-mobile";
 
 /**
  * The kit takes an enum member, not a free string, so the configured passphrase
@@ -37,13 +53,81 @@ function kitNetwork(passphrase: string): Networks {
   return match;
 }
 
+/**
+ * WalletConnect names only pubnet and testnet. On any other network it is left
+ * out entirely: pairing on the nearest named chain would sign for the wrong
+ * ledger without a word.
+ */
+function walletConnectChain(): WalletConnectTargetChain | null {
+  if (!WALLET_CONNECT_PROJECT_ID) return null;
+  switch (NETWORK.networkPassphrase) {
+    case Networks.PUBLIC:
+      return WalletConnectTargetChain.PUBLIC;
+    case Networks.TESTNET:
+      return WalletConnectTargetChain.TESTNET;
+    default:
+      return null;
+  }
+}
+
+/** What the wallet shows the user about who is asking to connect. */
+function walletConnectMetadata(): WalletConnectMetadata {
+  const origin = window.location.origin;
+  return {
+    name: "Sterun",
+    description: "Race records on Stellar",
+    url: origin,
+    icons: [`${origin}/icon.png`],
+  };
+}
+
+/**
+ * The kit's module with one answer changed. Inside Freighter's mobile browser
+ * the stock module calls itself a "platform wrapper", and the picker then skips
+ * itself and pairs through the kit. That browser is paired by
+ * `lib/freighter-mobile.ts` instead, so this module must not claim it.
+ */
+class PickerWalletConnectModule extends WalletConnectModule {
+  async isPlatformWrapper(): Promise<boolean> {
+    return false;
+  }
+}
+
+function walletModules() {
+  const modules = defaultModules();
+  const chain = walletConnectChain();
+  if (!chain) return modules;
+  return [
+    ...modules,
+    new PickerWalletConnectModule({
+      projectId: WALLET_CONNECT_PROJECT_ID,
+      allowedChains: [chain],
+      metadata: walletConnectMetadata(),
+    }),
+  ];
+}
+
+let mobile: FreighterMobileSession | null = null;
+
+/** The direct WalletConnect session inside Freighter's mobile browser, or null anywhere else. */
+function freighterMobile(): FreighterMobileSession | null {
+  const chain = walletConnectChain();
+  if (!chain || !isFreighterMobile()) return null;
+  mobile ??= freighterMobileSession({
+    projectId: WALLET_CONNECT_PROJECT_ID,
+    chain,
+    metadata: walletConnectMetadata(),
+  });
+  return mobile;
+}
+
 let started = false;
 
 /** Idempotent: React strict mode mounts effects twice in development. */
 export function initWallet(): void {
   if (started) return;
   StellarWalletsKit.init({
-    modules: defaultModules(),
+    modules: walletModules(),
     network: kitNetwork(NETWORK.networkPassphrase),
     authModal: { showInstallLabel: true },
   });
@@ -52,6 +136,8 @@ export function initWallet(): void {
 
 /** Opens the kit's wallet picker. Resolves with the address once approved. */
 export async function connectWallet(): Promise<string> {
+  const direct = freighterMobile();
+  if (direct) return direct.connect();
   const { address } = await StellarWalletsKit.authModal();
   return address;
 }
@@ -64,6 +150,8 @@ export async function connectWallet(): Promise<string> {
  */
 export async function restoreAddress(): Promise<string | null> {
   try {
+    const direct = freighterMobile();
+    if (direct) return await direct.address();
     const { address } = await StellarWalletsKit.getAddress();
     return address || null;
   } catch {
@@ -72,6 +160,8 @@ export async function restoreAddress(): Promise<string | null> {
 }
 
 export async function disconnectWallet(): Promise<void> {
+  const direct = freighterMobile();
+  if (direct) return direct.disconnect();
   await StellarWalletsKit.disconnect();
 }
 
@@ -95,6 +185,11 @@ export async function signTransaction(
   xdr: string,
   opts?: { address?: string; networkPassphrase?: string },
 ): Promise<{ signedTxXdr: string; signerAddress?: string }> {
+  const direct = freighterMobile();
+  if (direct) {
+    const { signedXDR } = await direct.request<{ signedXDR: string }>("stellar_signXDR", { xdr });
+    return { signedTxXdr: signedXDR };
+  }
   return StellarWalletsKit.signTransaction(xdr, {
     networkPassphrase: opts?.networkPassphrase ?? NETWORK.networkPassphrase,
     address: opts?.address,
@@ -122,10 +217,15 @@ export async function signMessage(
   message: string,
   opts?: { address?: string; networkPassphrase?: string },
 ): Promise<string> {
-  const { signedMessage } = await StellarWalletsKit.signMessage(message, {
-    networkPassphrase: opts?.networkPassphrase ?? NETWORK.networkPassphrase,
-    address: opts?.address,
-  });
+  const direct = freighterMobile();
+  const signedMessage = direct
+    ? (await direct.request<{ signature?: string }>("stellar_signMessage", { message })).signature
+    : (
+        await StellarWalletsKit.signMessage(message, {
+          networkPassphrase: opts?.networkPassphrase ?? NETWORK.networkPassphrase,
+          address: opts?.address,
+        })
+      ).signedMessage;
   if (!signedMessage) {
     throw new Error(
       "This wallet cannot sign messages. Freighter and xBull can; try one of those.",
