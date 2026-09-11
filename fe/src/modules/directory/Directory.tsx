@@ -1,50 +1,144 @@
 "use client";
 
 /**
- * STE-13 — the public event directory, read from the chain on every visit.
+ * STE-13 — the public race directory, read from the chain on every visit.
+ * Redesigned poster-first on 2026-09-11
+ * (docs/superpowers/specs/2026-09-11-directory-redesign-design.md).
  *
  * Four states, and the distinction between three of them is the whole point of
  * the page: loading, empty, failed, and a list. An empty registry and an
  * unreachable RPC must never look alike, because "no races exist" is a claim
  * about the protocol and "we could not ask" is a claim about the network.
  *
- * The refresh control is here for the acceptance scenario in the ticket:
- * create an event with the CLI or the organiser console, press refresh, and it
- * appears without this app being rebuilt or redeployed. Nothing about this page
- * is baked in at build time.
+ * Everything a card shows beyond the chain (poster, venue, province) comes from
+ * each event's document through the same verified query the event page uses,
+ * so an unproven document contributes nothing here either. The featured row and
+ * the area row wait until every document has answered, so they are chosen once
+ * instead of reshuffling as posters arrive.
+ *
+ * The refresh control stays for the acceptance scenario in the ticket: create
+ * an event, press refresh, and it appears without this app being redeployed.
  */
 import { useQueryClient } from "@tanstack/react-query";
+import { RefreshCwIcon, SearchIcon } from "lucide-react";
+import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { ChainSource } from "@/components/layouts/ChainSource";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useArea } from "@/hooks/useArea";
+import { useEventDocuments } from "@/hooks/useEventDocuments";
 import { eventKeys, useEvents } from "@/hooks/useEvents";
+import { useNowSeconds } from "@/hooks/useNowSeconds";
+import { cn } from "@/utils/cn";
 
+import {
+  inArea,
+  matchesSearch,
+  pickFeatured,
+  sortByDate,
+  type DateOrder,
+  type DirectoryEntry,
+} from "./browse";
+import { AreaPicker } from "./component/AreaPicker";
 import { DirectorySkeleton } from "./component/DirectorySkeleton";
 import { EventCard } from "./component/EventCard";
+import { FeaturedEvents } from "./component/FeaturedEvents";
+import { FilterChips } from "./component/FilterChips";
+import { FilterDrawer } from "./component/FilterDrawer";
+import { NO_FILTERS, activeFilterCount, matchesFilters, type Filters } from "./filters";
 
 export function Directory() {
   const queryClient = useQueryClient();
   const { data, isPending, isError, isFetching, refetch } = useEvents();
+  const summaries = data?.events ?? [];
+  const documents = useEventDocuments(summaries);
+  const { area, setArea, clearArea } = useArea();
+  const nowS = useNowSeconds();
+
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [order, setOrder] = useState<DateOrder>("soonest");
+
+  const entries: DirectoryEntry[] = summaries.map((summary) => ({
+    summary,
+    document: documents.byEvent.get(summary.event.eventId) ?? null,
+  }));
+  const searched = entries.filter((item) => matchesSearch(item, query));
+  const results = sortByDate(
+    searched.filter((item) => matchesFilters(item, filters)),
+    order,
+    nowS ?? 0n,
+  );
+  const narrowing = query.trim().length > 0 || activeFilterCount(filters) > 0;
+  const featured =
+    !narrowing && documents.settled && nowS !== undefined ? pickFeatured(entries, nowS) : [];
+  const nearby =
+    !narrowing && area && documents.settled
+      ? sortByDate(
+          entries.filter((item) => inArea(item, area)),
+          order,
+          nowS ?? 0n,
+        )
+      : null;
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: eventKeys.all });
   }
 
+  function clearNarrowing() {
+    setQuery("");
+    setFilters(NO_FILTERS);
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl">
-          <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Races</h1>
-          <p className="mt-3 text-lg text-n-600">
-            Every race here is read live from the Stellar testnet. Nothing on this page comes from a
-            database of ours.
-          </p>
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-8 sm:py-10">
+      <header className="flex flex-col gap-6">
+        <div className="flex items-center justify-between gap-4">
+          <AreaPicker area={area} onSave={setArea} onClear={clearArea} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={isFetching ? "Refreshing" : "Refresh"}
+            onClick={refresh}
+            disabled={isFetching}
+          >
+            <RefreshCwIcon aria-hidden className={cn(isFetching && "animate-spin motion-reduce:animate-none")} />
+          </Button>
         </div>
-        <Button variant="secondary" size="sm" onClick={refresh} disabled={isFetching}>
-          {isFetching ? "Refreshing" : "Refresh"}
-        </Button>
+
+        <div className="flex flex-col items-center gap-5 text-center">
+          <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Browse races</h1>
+          <div className="flex w-full max-w-xl items-center gap-2">
+            <div className="relative flex-1">
+              <SearchIcon
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-n-400"
+              />
+              <Input
+                type="search"
+                aria-label="Search races"
+                placeholder="Search by race, venue or city"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <FilterDrawer
+              entries={searched}
+              filters={filters}
+              order={order}
+              preferredCountry={area?.countryCode}
+              onApply={(nextFilters, nextOrder) => {
+                setFilters(nextFilters);
+                setOrder(nextOrder);
+              }}
+            />
+          </div>
+          <FilterChips filters={filters} onChange={setFilters} onClear={() => setFilters(NO_FILTERS)} />
+        </div>
       </header>
 
       {isPending ? <DirectorySkeleton /> : null}
@@ -65,15 +159,40 @@ export function Directory() {
       ) : null}
 
       {data && data.events.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {data.events.map((summary) => (
-            <EventCard
-              key={summary.event.eventId}
-              entry={{ summary, document: null }}
-              documentLoading={false}
-            />
-          ))}
-        </div>
+        <>
+          <FeaturedEvents entries={featured} />
+
+          {nearby && area ? (
+            <section aria-labelledby="directory-nearby" className="flex flex-col gap-4">
+              <h2 id="directory-nearby" className="heading-strong text-2xl text-ink">
+                Races in your area
+              </h2>
+              {nearby.length > 0 ? (
+                <EventGrid entries={nearby} pending={documents.pending} />
+              ) : (
+                <p className="text-base text-n-500">No races in {area.province} yet.</p>
+              )}
+            </section>
+          ) : null}
+
+          <section aria-labelledby="directory-all" className="flex flex-col gap-4">
+            <h2 id="directory-all" className="heading-strong text-2xl text-ink">
+              {narrowing
+                ? `${results.length} ${results.length === 1 ? "race matches" : "races match"}`
+                : "All races"}
+            </h2>
+            {results.length > 0 ? (
+              <EventGrid entries={results} pending={documents.pending} />
+            ) : (
+              <>
+                <EmptyState title="No races match">Try a different search or fewer filters.</EmptyState>
+                <Button variant="link" className="self-center" onClick={clearNarrowing}>
+                  Clear search and filters
+                </Button>
+              </>
+            )}
+          </section>
+        </>
       ) : null}
 
       {data && data.unreadable.length > 0 ? (
@@ -85,5 +204,23 @@ export function Directory() {
 
       <ChainSource />
     </div>
+  );
+}
+
+function EventGrid({
+  entries,
+  pending,
+}: {
+  entries: readonly DirectoryEntry[];
+  pending: ReadonlySet<number>;
+}) {
+  return (
+    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {entries.map((item) => (
+        <li key={item.summary.event.eventId}>
+          <EventCard entry={item} documentLoading={pending.has(item.summary.event.eventId)} />
+        </li>
+      ))}
+    </ul>
   );
 }
