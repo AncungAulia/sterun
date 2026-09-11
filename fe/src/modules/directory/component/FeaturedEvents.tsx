@@ -11,8 +11,11 @@ import type { DirectoryEntry } from "../browse";
 import { EventCard } from "./EventCard";
 
 export function FeaturedEvents({ entries }: { entries: readonly DirectoryEntry[] }) {
-  const [lead, ...rest] = entries;
+  const [lead, ...others] = entries;
   if (!lead) return null;
+  // The layout is one large card and two beside it, whatever a caller passes:
+  // a third side card would stretch the column past the lead card.
+  const rest = others.slice(0, 2);
 
   return (
     <section aria-label="Featured races" className={cn("grid gap-4", rest.length > 0 && "lg:grid-cols-3")}>

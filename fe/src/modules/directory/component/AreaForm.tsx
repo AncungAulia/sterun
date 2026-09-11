@@ -48,10 +48,14 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
             options={countries.map((item) => ({ value: item.iso2, label: item.name }))}
             value={country}
             onChange={(next) => {
+              // The select reports a choice even when it is the same country,
+              // and that must not throw away the province picked under it.
+              if (next === country) return;
               setCountry(next);
               setProvince("");
             }}
             placeholder="Select country"
+            modal
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -64,6 +68,7 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
               value={province}
               onChange={setProvince}
               placeholder="Search provinces"
+              modal
             />
           ) : (
             <Input

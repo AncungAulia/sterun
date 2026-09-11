@@ -47,6 +47,42 @@ describe("AreaPicker", () => {
       expect(await screen.findAllByRole("option", { name: "Maluku" })).toHaveLength(1);
     });
 
+    it("keeps the province when the same country is picked again", async () => {
+      render(<AreaPicker area={YOGYA} onSave={vi.fn()} onClear={vi.fn()} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" }));
+      await userEvent.click(await screen.findByRole("combobox", { name: "Country" }));
+      await userEvent.click(await screen.findByRole("option", { name: "Indonesia" }));
+
+      expect(await screen.findByRole("combobox", { name: "Province" })).toHaveTextContent("DI Yogyakarta");
+    });
+
+    it("clears the province when another country is picked", async () => {
+      render(<AreaPicker area={YOGYA} onSave={vi.fn()} onClear={vi.fn()} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" }));
+      await userEvent.click(await screen.findByRole("combobox", { name: "Country" }));
+      await userEvent.type(await screen.findByPlaceholderText("Select country"), "Malaysia");
+      await userEvent.click(await screen.findByRole("option", { name: "Malaysia" }));
+
+      expect(await screen.findByRole("combobox", { name: "Province" })).toHaveTextContent("Search provinces");
+      expect(screen.getByRole("button", { name: "Save area" })).toBeDisabled();
+    });
+
+    it("takes a typed province for a country the data has no provinces for", async () => {
+      const onSave = vi.fn();
+      render(<AreaPicker area={null} onSave={onSave} onClear={vi.fn()} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Choose your area" }));
+      await userEvent.click(await screen.findByRole("combobox", { name: "Country" }));
+      await userEvent.type(await screen.findByPlaceholderText("Select country"), "Gibraltar");
+      await userEvent.click(await screen.findByRole("option", { name: "Gibraltar" }));
+      await userEvent.type(await screen.findByRole("textbox", { name: "Province" }), "Upper Town");
+      await userEvent.click(screen.getByRole("button", { name: "Save area" }));
+
+      expect(onSave).toHaveBeenCalledWith({ countryCode: "GI", country: "Gibraltar", province: "Upper Town" });
+    });
+
     it("clears a saved area", async () => {
       const onClear = vi.fn();
       render(<AreaPicker area={YOGYA} onSave={vi.fn()} onClear={onClear} />);
