@@ -44,6 +44,32 @@ describe("EventCard", () => {
 
       expect(screen.getByRole("heading", { name: "Jakarta Marathon 7" })).toHaveClass("heading-hero");
     });
+
+    it("keeps a featured title to two lines", () => {
+      render(
+        <EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} variant="featured" />,
+      );
+
+      expect(screen.getByRole("heading", { name: "Jakarta Marathon 7" })).toHaveClass("line-clamp-2");
+    });
+
+    it("names the link by the race alone, even with No image in the card", () => {
+      render(<EventCard entry={entry(summary(7, {}, [category(0)]), null)} documentLoading={false} />);
+
+      expect(screen.getByText("No image")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Jakarta Marathon 7" })).toHaveAttribute("href", "/events/7");
+    });
+
+    it("keeps a side card to title, date and entries left", () => {
+      const race = summary(7, {}, [category(0)]);
+
+      render(<EventCard entry={entry(race, metadata())} documentLoading={false} variant="side" />);
+
+      expect(screen.getByText(formatEventDate(race.event.startsAt))).toBeInTheDocument();
+      expect(screen.getByText("120 entries left")).toBeInTheDocument();
+      expect(screen.queryByText("FT UGM, Sleman")).not.toBeInTheDocument();
+      expect(screen.queryByText("From sUSD 25")).not.toBeInTheDocument();
+    });
   });
 
   describe("edge", () => {

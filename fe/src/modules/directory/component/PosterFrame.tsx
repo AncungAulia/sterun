@@ -37,6 +37,13 @@ export function PosterFrame({ posterUrl, loading, sizes, className, children }: 
     <div className={cn("relative aspect-video w-full overflow-hidden bg-n-100", className)}>
       {showPoster ? (
         <>
+          {/*
+            Poster URLs come from organisers and can live on any host, so both
+            layers are shown as-is (`unoptimized`, same as the event page's
+            poster) rather than through Next's image optimiser, which would need
+            every host allow-listed. `scale-125` pushes the blur's soft,
+            see-through edge outside the frame.
+          */}
           <Image
             src={posterUrl}
             alt=""

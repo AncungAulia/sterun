@@ -117,7 +117,7 @@ describe("Directory", () => {
       expect(await screen.findByText("From sUSD 25")).toBeInTheDocument();
     });
 
-    it("counts the places left across an event's categories", async () => {
+    it("counts the entries left across an event's categories", async () => {
       listEvents.mockResolvedValue({
         events: [summary(0, {}, [category(0), category(1, { quota: 50, enteredCount: 20 })])],
         unreadable: [],
@@ -128,7 +128,7 @@ describe("Directory", () => {
       expect(await screen.findByText("150 entries left")).toBeInTheDocument();
     });
 
-    it("says one place, not one places", async () => {
+    it("says one entry, not one entries", async () => {
       // Seen on the live testnet directory: the rehearsal event has exactly one
       // slot left, and the card read "1 places left".
       listEvents.mockResolvedValue({

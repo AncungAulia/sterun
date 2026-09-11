@@ -12,6 +12,7 @@
  */
 import { CalendarDaysIcon, MapPinIcon, TicketIcon } from "lucide-react";
 import Link from "next/link";
+import { useId } from "react";
 
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
 import { cn } from "@/utils/cn";
@@ -22,6 +23,10 @@ import { PosterFrame } from "./PosterFrame";
 
 export type EventCardVariant = "grid" | "featured" | "side";
 
+/**
+ * `sizes` does nothing while PosterFrame sets `unoptimized`: Next emits no
+ * `srcset` then. It is kept so the frame is ready if posters are ever optimised.
+ */
 const SIZES: Record<EventCardVariant, string> = {
   grid: "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw",
   featured: "(min-width: 1024px) 66vw, 100vw",
@@ -40,10 +45,15 @@ export function EventCard({ entry, documentLoading, variant = "grid" }: EventCar
   const entries = entriesLine(entry.summary);
   const price = variant === "side" ? null : priceLine(categories);
   const featured = variant === "featured";
+  // The same race can be on the page twice (featured row and grid), so the
+  // title's id comes from useId, not from the event id.
+  const titleId = useId();
 
   return (
     <Link
       href={`/events/${event.eventId}`}
+      // Named by the race alone, not by everything inside the card ("No image, Open, ...").
+      aria-labelledby={titleId}
       className={cn(
         "flex h-full flex-col overflow-hidden rounded-lg border border-n-200 bg-paper shadow-card",
         "transition-[box-shadow,transform] duration-150 ease-out hover:shadow-lifted active:scale-[0.98]",
@@ -62,9 +72,10 @@ export function EventCard({ entry, documentLoading, variant = "grid" }: EventCar
 
       <div className={cn("flex flex-1 flex-col gap-3", featured ? "p-6" : "p-4")}>
         <h3
+          id={titleId}
           className={cn(
-            "text-ink",
-            featured ? "heading-hero text-4xl" : "heading-strong line-clamp-2 text-xl",
+            "line-clamp-2 text-ink",
+            featured ? "heading-hero text-4xl" : "heading-strong text-xl",
           )}
         >
           {event.name}

@@ -82,6 +82,7 @@ page and the wizard are considered good and are not part of this change.
 - Grid and side cards: title `heading-strong text-xl`. Featured card: title in `heading-hero` at
   `text-4xl` or larger (Big Shoulders is only used at 48px+, per `tokens.css`), info below the
   poster, **never over it** — every poster we have carries its own title text.
+- **Side cards are compact**: title, date and entries left only. No venue and no price, matching the wireframe, so the two stacked cards stay no taller than the featured card beside them.
 - Colours, radii and shadows come from tokens only. Hover lifts the shadow (`shadow-lifted`) on
   pointer devices only; press gives `scale(0.98)`; both respect `prefers-reduced-motion`.
 
