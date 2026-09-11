@@ -193,6 +193,21 @@ Form validation has two classes that appear at different times (`modules/organis
 other) appears immediately. An empty field is not necessarily wrong; contradictory dates certainly
 are.
 
+### `/org` — the events this wallet organises
+
+`modules/organiser/OrganiserHome.tsx`. Three things are settled:
+
+- **The data is the directory's own `useEvents()`**, filtered by `event.organiser === address`. The
+  registry has no events-by-organiser view (for the same reason it has no list-events view), and
+  sharing the query means `/` followed by `/org` asks the chain only once.
+- **The allowlist decides the Create event button, not the page.** A wallet removed from the
+  allowlist still sees its existing events, because the contract still lets it manage them (STE-36).
+  A refused wallet gets `NotAllowedNotice` (a note, not the full-screen `NotAllowlisted`). The button
+  is hidden **while** the allowlist is being asked, and still appears when the node fails to answer.
+- **The card is not the directory's `EventCard`.** An organiser needs "how many entered out of the
+  quota" per distance, sold-out ones included, not price and places left. For now it links to
+  `/events/[id]`, because `/org/events/[id]` (scanner, results) is not built yet.
+
 ## Tests
 
 ```bash
