@@ -71,13 +71,20 @@ export function EventCard({ entry, documentLoading, variant = "grid" }: EventCar
         posterUrl={entry.document?.posterUrl ?? null}
         loading={documentLoading}
         sizes={SIZES[variant]}
+        // At lg the two side cards stack taller than the featured card, and the
+        // grid stretches it to match. That height goes to the poster, not to a
+        // gap above the price: `grow` alone keeps 16:9 as the frame's base size
+        // (`flex-1` would reset it to zero), and `shrink-0` stops it going below.
+        // A taller frame only shows more blurred band, since the poster is never cropped.
+        className={featured ? "shrink-0 lg:grow" : undefined}
       >
         <div className="absolute top-3 right-3">
           <EventStatusBadge status={event.status} />
         </div>
       </PosterFrame>
 
-      <div className={cn("flex flex-1 flex-col gap-3", featured ? "p-6" : "p-4")}>
+      {/* Grid and side bodies fill the card so their prices line up across a row. */}
+      <div className={cn("flex flex-col gap-3", featured ? "p-6" : "flex-1 p-4")}>
         <h3
           id={titleId}
           className={cn(

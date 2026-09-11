@@ -70,6 +70,30 @@ describe("EventCard", () => {
       expect(link).toHaveAccessibleDescription(expect.stringContaining("FT UGM, Sleman"));
     });
 
+    it("gives a stretched featured card's spare height to the poster, not to a gap above the price", () => {
+      render(
+        <EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} variant="featured" />,
+      );
+
+      const heading = screen.getByRole("heading", { name: "Jakarta Marathon 7" });
+      const body = heading.parentElement;
+      const frame = body?.previousElementSibling;
+      expect(frame?.querySelector("img")).not.toBeNull();
+      expect(frame).toHaveClass("lg:grow", "shrink-0");
+      expect(body).not.toHaveClass("flex-1");
+    });
+
+    it("keeps a grid card's body filling the card, so prices line up across a row", () => {
+      render(<EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} />);
+
+      const heading = screen.getByRole("heading", { name: "Jakarta Marathon 7" });
+      const body = heading.parentElement;
+      const frame = body?.previousElementSibling;
+      expect(frame?.querySelector("img")).not.toBeNull();
+      expect(frame).not.toHaveClass("lg:grow");
+      expect(body).toHaveClass("flex-1");
+    });
+
     it("keeps a side card to title, date and entries left", () => {
       const race = summary(7, {}, [category(0)]);
 
