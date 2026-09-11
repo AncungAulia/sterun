@@ -71,8 +71,8 @@ page and the wizard are considered good and are not part of this change.
 │ Elektro Dash 2026   │   title, 2 lines max
 │ ⌖ FT UGM, Sleman    │   only when the document verified with a location
 │ ▦ Nov 5, 2026       │
-│ 🎟 500 entries left │   Open events only; "Sold out" when every category is full
-│ from sUSD 25        │   lowest category price; "Free" when it is 0
+│ 🎟 500 entries left │   Open events only; "1 entry left"; "Sold out" when every category is full
+│ From sUSD 25        │   lowest price; "Free" when every distance is free; "Free to sUSD 40" when some are
 └─────────────────────┘
 ```
 
@@ -101,9 +101,12 @@ page and the wizard are considered good and are not part of this change.
 
 - The header location button opens a small dialog: country (default Indonesia), then province, from
   the existing places data. City is not asked; matching is by province.
-- The choice is stored in `localStorage` under one key and read with `useSyncExternalStore` (server
-  snapshot `undefined`), per the React Compiler lint rule recorded in `fe/CLAUDE.md`. A "Clear" action
-  removes it.
+- The choice is stored in `localStorage` under one key (`sterun.area`, holding country code, country
+  name and province name) and read with `useSyncExternalStore` (server snapshot `undefined`), per the
+  React Compiler lint rule recorded in `fe/CLAUDE.md`. A "Clear area" action removes it.
+- The country name is stored with it so the header label never needs the places dataset
+  (`src/data/places.json`, 176 KB, 50 KB gzipped). The dialog's form is `React.lazy`-loaded, so a
+  visitor who never opens it never downloads that file.
 - No geolocation and no geocoding API.
 
 ## Search, sort and the filter drawer
@@ -124,13 +127,16 @@ Drawer contents, top to bottom:
    its number of races, so no option can lead to zero results. Grouped by country; the country of the
    chosen area (see Location picker) is listed first, otherwise the country with the most races.
    Events whose document has no location only appear when no location is selected.
-3. **Price** (checkboxes, multi-select): Free · Under sUSD 25 · sUSD 25–50 · sUSD 50–100 ·
-   Over sUSD 100. Lower bound inclusive, upper bound exclusive (a sUSD 50 race is in "sUSD 50–100").
+3. **Price** (checkboxes, multi-select): Free · Under sUSD 25 · sUSD 25 to 50 · sUSD 50 to 100 ·
+   sUSD 100 and up. Lower bound inclusive, upper bound exclusive (a sUSD 50 race is in
+   "sUSD 50 to 100"). Labels say "to", never a dash: `fe/test/ui-rules.test.ts` bans em and en
+   dashes in UI text.
    Fixed buckets rather than a slider: with a few dozen races a slider mostly lands on empty ranges,
    and fixed buckets read the same on every visit. They live in one constant, so retuning them for
    mainnet prices is a one-line change. Current testnet prices run from free to sUSD 50.
-4. **Distance** (checkboxes, multi-select): 5K and under (≤5,000 m) · 6–10K · 11–21K · Over 21K.
-5. **Open for entry only** (switch).
+4. **Distance** (checkboxes, multi-select): 5K and under (≤5,000 m) · 6K to 10K · 11K to 21K
+   (up to 21,100 m, so a half marathon typed as 21097, 21098 or 21100 stays here) · Over 21K.
+5. **Open for entry only** (checkbox).
 
 Matching rules:
 - Within a group, options are OR; across groups, AND.
