@@ -106,13 +106,46 @@ page and the wizard are considered good and are not part of this change.
   removes it.
 - No geolocation and no geocoding API.
 
-## Search and filter
+## Search, sort and the filter drawer
 
-- Search matches, case-insensitively, the event name, venue name, city and province.
-- The filter button opens a popover with:
-  - **Distance** (multi-select): 5K and under (≤5,000 m) · 6–10K · 11–21K · Over 21K. An event matches
-    when any of its categories falls in a selected bucket.
-  - **Open for entry only** (toggle).
+**Search** stays in the header and applies as you type. It matches, case-insensitively, the event
+name, venue name, city and province.
+
+**The filter button opens a drawer**: shadcn `sheet` (Radix Dialog, already a dependency through
+`radix-ui` — no new package). It slides in from the right at ≥640px (about 24rem wide) and up from
+the bottom below that (at most 85% of the viewport tall, scrolling inside). The button shows how many
+filters are active.
+
+Drawer contents, top to bottom:
+
+1. **Sort by race date** (radio): Soonest first (default) · Latest first. Past races always come after
+   upcoming ones, in either order.
+2. **Location** (checkboxes, multi-select): provinces **taken from the events themselves**, each with
+   its number of races, so no option can lead to zero results. Grouped by country; the country of the
+   chosen area (see Location picker) is listed first, otherwise the country with the most races.
+   Events whose document has no location only appear when no location is selected.
+3. **Price** (checkboxes, multi-select): Free · Under sUSD 25 · sUSD 25–50 · sUSD 50–100 ·
+   Over sUSD 100. Lower bound inclusive, upper bound exclusive (a sUSD 50 race is in "sUSD 50–100").
+   Fixed buckets rather than a slider: with a few dozen races a slider mostly lands on empty ranges,
+   and fixed buckets read the same on every visit. They live in one constant, so retuning them for
+   mainnet prices is a one-line change. Current testnet prices run from free to sUSD 50.
+4. **Distance** (checkboxes, multi-select): 5K and under (≤5,000 m) · 6–10K · 11–21K · Over 21K.
+5. **Open for entry only** (switch).
+
+Matching rules:
+- Within a group, options are OR; across groups, AND.
+- **Price and distance are checked on the same category.** A race matches only when one of its
+  categories satisfies both, so "Over 21K" + "Under sUSD 25" does not match a race whose cheap
+  category is the 5K and whose marathon costs sUSD 60.
+
+Behaviour:
+- Changes inside the drawer are staged. The footer holds **Clear all** and **Show {n} races**, where
+  `n` updates live as options change; pressing it applies and closes. Closing any other way discards
+  the staged changes.
+- Applied filters appear as removable chips under the header, so they are visible without opening the
+  drawer. Sort is not a chip.
+- Search or any applied filter hides Featured and Races in your area (see Page structure §5). A sort
+  change alone does not.
 - State is local to the page. Not in the URL.
 
 ## Data flow
@@ -139,10 +172,13 @@ No crop tool (deferred).
 ## Tests
 
 - Unit: featured pick (poster/status/date/ordering, 0/1/2/3+ candidates), area match (country +
-  province, missing location), search fields, distance buckets and boundaries, price/entries lines.
+  province, missing location), search fields, sort both ways with past races last, location options
+  and counts, price bucket boundaries (0, 25, 50, 100), distance bucket boundaries, price and distance
+  matched on the same category, OR within / AND across groups, price/entries lines.
 - Component: card with a verified poster, with no poster, with a `modified` document, with an image
-  load error, Draft with no categories; directory with search active hides featured and area;
-  location picker stores and clears.
+  load error, Draft with no categories; directory with search active hides featured and area; drawer
+  stages changes, "Show n races" count, apply, discard on close, clear all, chip removal; location
+  picker stores and clears.
 - All network mocked (`vitest.config.ts` points at the production API).
 - By eye: screenshots at 1440px and 390px against the live dev server before calling it done.
 
