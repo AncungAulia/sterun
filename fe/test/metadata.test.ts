@@ -3,7 +3,12 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildEventDocument } from "@/lib/event-document";
-import { fetchEventMetadata, gunStartConflict, readEventDocument } from "@/lib/metadata";
+import {
+  METADATA_TIMEOUT_MS,
+  fetchEventMetadata,
+  gunStartConflict,
+  readEventDocument,
+} from "@/lib/metadata";
 
 const DOCUMENT = {
   poster_url: "https://cdn.example.test/poster.png",
@@ -313,6 +318,40 @@ describe("reading the timeline's details back", () => {
     it("tells text that is not JSON apart from JSON that is not a document", () => {
       expect(readEventDocument("{nope")).toBe("not-json");
       expect(readEventDocument("[]")).toBe("not-object");
+    });
+  });
+});
+
+describe("fetchEventMetadata deadline", () => {
+  it("gives the request a deadline", async () => {
+    const fetchMock = vi.fn<(uri: string, init?: RequestInit) => Promise<unknown>>(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => BODY,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchEventMetadata(URI, HASH);
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(METADATA_TIMEOUT_MS).toBe(8_000);
+  });
+
+  it("reports a host that never answered as unavailable, and says it was slow", async () => {
+    // A host that accepts the connection and never replies used to leave the
+    // query pending for good, which held the whole directory's featured row.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }),
+    );
+
+    const result = await fetchEventMetadata(URI, HASH);
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "The metadata document took too long to answer.",
     });
   });
 });
