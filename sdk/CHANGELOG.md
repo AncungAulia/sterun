@@ -32,6 +32,30 @@ already in other people's hands.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `recordFinishUntimed(tokenId, options?)` — marks a finish with **no official
+  time**, for events without chip timing (STE-41, `docs/specs/INTERFACE.md`
+  v2.2.0). Organiser only, from `RacepackClaimed` only, terminal. The record
+  comes back as `state: "Finished"` with `finishTimeS: null`, and that pair is
+  the marker for "finished, no official time". It is **not**
+  `recordFinish(tokenId, 0)`, which the contract still refuses
+  (`InvalidFinishTime`, 105).
+- The vendored race-record bindings carry `record_finish_untimed` and the
+  `RecordFinishedUntimed` event.
+
+### Behaviour to be aware of
+
+- A `Finished` `SterunRecord` may now have `finishTimeS === null`. Code that
+  formatted every finished record's time must handle that case and must never
+  render it as `0`.
+- Not published yet: needs the live contract upgraded to v2.2 (done at the same
+  address — see `docs/deployments.md`) and a version bump by the package owner.
+
+---
+
 ## [0.1.0] — 2026-09-05
 
 First release. RaceRecord JSON Schema **v1.0.0**.

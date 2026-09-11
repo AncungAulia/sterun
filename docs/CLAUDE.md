@@ -1,86 +1,92 @@
-# `docs/` — dokumen (CLAUDE.md)
+# `docs/` — documentation (CLAUDE.md)
 
-| File | Apa itu | Boleh diubah? |
+| File | What it is | Editable? |
 | --- | --- | --- |
-| `SYSTEM_DESIGN.md` | desain otoritatif C1–C14: arsitektur, storage model, lifecycle, TOTP, user flow, 30-day plan | ya, tapi lihat di bawah |
-| `deployments.md` | **bukti** deploy: contract address, link stellar.expert, wasm hash, tanggal | append-only |
-| `brand.md` | panduan aset, warna, huruf (C13) — rangkuman yang bisa dibaca tanpa buka kode | ya, tapi lihat di bawah |
-| `social/` | draft konten publik sebelum tayang, plus URL-nya sesudah tayang | ya |
-| `WEB_APP_IA.md` | information architecture `fe/`: peta halaman, batasan data per halaman, bentuk dokumen metadata event, urutan bangun | ya, sama aturannya dengan `SYSTEM_DESIGN.md` |
-| `specs/` | handoff contract **BEKU** (C4) | punya aturannya sendiri → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
+| `SYSTEM_DESIGN.md` | the authoritative C1–C14 design: architecture, storage model, lifecycle, TOTP, user flows, the 30-day plan | yes, but see below |
+| `deployments.md` | deployment **evidence**: contract addresses, stellar.expert links, wasm hashes, dates | append-only |
+| `brand.md` | asset, colour and type guidance (C13) — a summary readable without opening code | yes, but see below |
+| `social/` | drafts of public content before it goes out, plus its URL afterwards | yes |
+| `WEB_APP_IA.md` | information architecture for `fe/`: the page map, the data limits per page, the shape of the event metadata document, the build order | yes, same rules as `SYSTEM_DESIGN.md` |
+| `specs/` | the **FROZEN** handoff contract (C4) | has its own rules → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
 
 ## `SYSTEM_DESIGN.md`
 
-Ini yang dibaca duluan siapa pun sebelum kerja, dan yang dirujuk deskripsi tiket Linear. Kalau
-implementasi ternyata menyimpang dari dokumen ini, **jangan diam-diam**: perbarui dokumennya di
-commit yang sama, atau tulis alasan menyimpangnya. Dokumen desain yang bohong lebih berbahaya
-daripada tidak ada dokumen.
+This is what anyone reads first before starting work, and what Linear ticket descriptions point at.
+If an implementation ends up diverging from this document, **do not let it diverge quietly**: update
+the document in the same commit, or write down why the divergence is deliberate. A design document
+that lies is more dangerous than no document at all.
 
-Yang sudah dipindah ke tempat yang lebih ketat, jangan diduplikasi di sini:
+Things that have moved somewhere stricter — do not duplicate them here:
 
-- signature fungsi, layout event, kode error → `specs/INTERFACE.md` (beku)
-- definisi `participant_hash` dan TOTP → `specs/HASH_AND_TOTP.md` (beku)
-- konvensi build/test kontrak → `sc/CLAUDE.md` dan `sc/README.md`
+- function signatures, event layouts, error codes → `specs/INTERFACE.md` (frozen)
+- the definitions of `participant_hash` and TOTP → `specs/HASH_AND_TOTP.md` (frozen)
+- contract build/test conventions → `sc/CLAUDE.md` and `sc/README.md`
 
-Nilai konkret di `SYSTEM_DESIGN.md` (mis. "USDC") boleh tertinggal di belakang keputusan final
-(testnet = **sUSD**); `CLAUDE.md` root yang berlaku kalau bentrok.
+Concrete values in `SYSTEM_DESIGN.md` (for instance "USDC") may lag behind a settled decision
+(testnet is **sUSD**); the root `CLAUDE.md` wins on any conflict.
 
-## `brand.md` — rangkuman, bukan sumber kebenaran
+## `brand.md` — a summary, not a source of truth
 
-Nilai token yang sebenarnya hidup di `landing-page/app/tokens.css` (dan salinannya di
-`fe/app/tokens.css`). `brand.md` menyalin sebagiannya supaya orang yang tidak membuka kode tetap
-bisa membacanya. Kalau keduanya bentrok, **token yang menang** — dan `brand.md` yang salah, perbaiki
-di commit yang sama.
+The real token values live in `landing-page/app/tokens.css` (and its copy in `fe/app/tokens.css`).
+`brand.md` copies part of them so that someone who does not open the code can still read them. When
+the two disagree, **the tokens win** — `brand.md` is the one that is wrong, and it gets fixed in the
+same commit.
 
-Aset logo sendiri tidak di sini: `landing-page/public/brand/logo/` + salinan di `fe/`.
+The logo assets themselves are not here: `landing-page/public/brand/logo/`, with a copy in `fe/`.
 
-## `social/` — draft dulu, tayang belakangan
+## `social/` — draft first, publish later
 
-Konten yang mewakili project di depan publik ditulis sebagai file di sini, direview Axel (PM),
-baru diposting. Setelah tayang, URL-nya dicatat balik ke file yang sama.
+Content that represents the project in public is written as a file here, reviewed by Axel (PM), and
+only then posted. Once it is live, its URL is recorded back into the same file.
 
-Alasannya sama dengan `deployments.md`: klaim yang tidak bisa dicek orang lain dianggap tidak
-terjadi. Bedanya di sini yang diperiksa adalah **akurasi klaim teknis** — post yang menyebut
-mainnet, USDC, atau tanggal rilis, padahal belum ada, lebih mahal daripada tidak posting sama
-sekali.
+The reasoning matches `deployments.md`: a claim nobody else can check is treated as not having
+happened. What is being checked here is the **accuracy of technical claims** — a post mentioning
+mainnet, USDC or a release date that does not exist yet costs more than not posting at all.
 
-## `deployments.md` — aturan bukti
+## `deployments.md` — the evidence rules
 
-Setiap deploy **wajib** di-commit ke sini. Yang minimal harus ada per entri:
+Every deploy **must** be committed here. The minimum per entry:
 
-| Kolom | Kenapa |
+| Column | Why |
 | --- | --- |
-| tanggal + network | membedakan testnet dan mainnet, dan deploy ulang |
-| contract address (`C…`) | identitas on-chain-nya |
-| link stellar.expert | supaya orang lain bisa cek tanpa CLI |
-| **sha256 wasm yang benar-benar di-upload** | bukan hash dari tabel README — build Rust tidak reproducible lintas mesin (buktinya di `sc/README.md`) |
-| tiket | STE-# yang menghasilkannya |
+| date + network | separates testnet from mainnet, and one deploy from a redeploy |
+| contract address (`C…`) | its on-chain identity |
+| stellar.expert link | so someone else can check without a CLI |
+| **sha256 of the wasm that was actually uploaded** | not the hash from a README table — Rust builds are not reproducible across machines, and `sc/README.md` shows the proof |
+| ticket | the STE-# that produced it |
 
-Sudah tercatat, semuanya **live di testnet**:
+Recorded so far, all **live on testnet**:
 
-| Apa | Address | Tiket |
+| What | Address | Ticket |
 | --- | --- | --- |
-| SAC sUSD | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` | STE-30 |
+| sUSD SAC | `CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU` | STE-30 |
 | EventRegistry v1 | `CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64` | STE-33 |
 | RaceRecord v1 | `CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4` | STE-33 |
-| EventRegistry v2 | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` | STE-35 |
-| RaceRecord v2 | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | STE-35 |
+| EventRegistry (current, v2) | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` | STE-35, upgraded in place by STE-36 |
+| RaceRecord (current, v2) | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | STE-35, upgraded in place by STE-41 |
 
-**Dua pasang, dan keduanya hidup.** v1 non-upgradeable jadi tidak bisa diganti di tempat; v2 punya
-add-on berbayar, status `Cancelled`, dan `upgrade`. `be/` masih dijalankan terhadap v1 — dan
-`be/src/deployments.ts` **mem-parse file ini** untuk mendapat alamatnya, dengan aturan "semua baris
-berlabel sama harus sepakat". Jadi baris v2 diberi label `**EventRegistry v2**` / `**RaceRecord
-v2**`, bukan label yang sama: kalau tidak, `pnpm test` merah dengan pesan tentang alamat yang
-bentrok. Kalau kamu menambahkan pasangan berikutnya, ikuti pola itu.
+**Two pairs, and both are alive.** v1 is non-upgradeable so it cannot be replaced in place; v2 has
+paid add-ons, the `Cancelled` status, the organiser allowlist and `upgrade`. `be/` and `fe/` both
+run against **v2**.
 
-Entri STE-33 juga memuat rehearsal on-chain penuh (`enter` → `claim_racepack` → `record_finish`)
-berikut kasus negatifnya. Kalau kamu perlu contoh bentuk bukti yang cukup, itu contohnya. Entri
-STE-35 (v2) menambah pola yang layak ditiru: angka yang di-*assert* script, bukan cuma dicetak —
-saldo organiser dibaca sebelum dan sesudah `enter`, dan selisih yang salah menggagalkan deploy.
+This file is **parsed by `be/src/deployments.ts`** to resolve those addresses, under the rule that
+every row carrying the same label must agree. That is why the **unqualified** label
+(`**EventRegistry**` / `**RaceRecord**`) belongs to the pair currently in use, and the older pair is
+labelled `**EventRegistry v1**` / `**RaceRecord v1**`. Give two live pairs the same label and
+`pnpm test` goes red with a message about conflicting addresses; give the unqualified label to the
+wrong pair and the whole backend quietly points at a dead contract, which is worse because nothing
+fails. A test asserts the parser does not resolve the v1 pair. If you add a third pair, follow the
+same pattern.
 
-Klaim "sudah deploy" tanpa entri di file ini dianggap tidak terjadi. Reviewer grant memverifikasi
-dari sini.
+The STE-33 entry also carries a full on-chain rehearsal (`enter` → `claim_racepack` →
+`record_finish`) with its negative cases. If you need an example of what "enough evidence" looks
+like, that is the one. The STE-35 (v2) entry adds a pattern worth copying: numbers the script
+**asserts** rather than merely prints — the organiser's balance is read before and after `enter`,
+and a wrong difference fails the deploy.
 
-> `deployments.md` lahir di branch STE-30 (`ops/26-issue-susd-deploy-sac`). Kalau kamu ada di
-> branch kontrak yang belum menariknya, file-nya memang belum ada di working tree — itu bukan
-> salah tulis, dan jangan di-cherry-pick. Di `main` dia sudah ada.
+A claim that something "is deployed" without an entry in this file is treated as not having
+happened. Grant reviewers verify from here.
+
+> `deployments.md` was born on the STE-30 branch (`ops/26-issue-susd-deploy-sac`). If you are on a
+> contract branch that has not pulled it yet, the file genuinely is not in your working tree — that
+> is not a typo, and it should not be cherry-picked. It is on `main`.

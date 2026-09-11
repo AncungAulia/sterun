@@ -2,7 +2,7 @@
 //
 // STE-14 (C3) — the freeze regression guard.
 //
-// `docs/specs/INTERFACE.md` is FROZEN at v2.1.0. A frozen document that nobody
+// `docs/specs/INTERFACE.md` is FROZEN at v2.2.0. A frozen document that nobody
 // re-checks is just a document: the wasm can drift away from it in one commit
 // and nothing goes red. This script closes that gap by reading BOTH sides
 // mechanically and diffing them:
@@ -216,7 +216,7 @@ function tableRows(text) {
 
 const ticks = (cell) => [...cell.matchAll(/`([^`]*)`/g)].map((m) => m[1]);
 const firstTick = (cell) => (ticks(cell)[0] ?? null);
-const EMPTY = /^(—|-|\*\(kosong\)\*)$/;
+const EMPTY = /^(—|-|\*\(none\)\*)$/;
 
 function mdFunctions(sec) {
   const fns = new Map();
@@ -477,7 +477,7 @@ if (problems.length) {
   console.log("==============================================================");
   for (const p of problems) console.log(`  FAIL  ${p}`);
   console.log(
-    "\nThe freeze is v2.1.0 and is NOT edited to match the code. Either revert the\n" +
+    "\nThe freeze is v2.2.0 and is NOT edited to match the code. Either revert the\n" +
       "contract change, or open a spec-change PR: approval from @Axel + @fable, a new\n" +
       "entry in docs/specs/CHANGELOG.md, and regenerated bindings (see §7 of\n" +
       "docs/specs/INTERFACE.md). Error codes are never renumbered.",
@@ -487,5 +487,5 @@ if (problems.length) {
 
 console.log("==============================================================");
 console.log(" INTERFACE OK — built wasm and generated bindings still match");
-console.log(" the frozen docs/specs/INTERFACE.md v2.1.0.");
+console.log(" the frozen docs/specs/INTERFACE.md v2.2.0.");
 console.log("==============================================================");

@@ -1,50 +1,92 @@
-# BRIEF — Organiser allowlist di EventRegistry v2 (via UPGRADE IN-PLACE)
+# BRIEF — The organiser allowlist in EventRegistry v2 (via an IN-PLACE UPGRADE)
 
-Kamu agent engineering **Opus, effort TINGGI**. Fitur fokus, tapi ini **upgrade IN-PLACE ke kontrak LIVE** — hati-hati storage compat. Commit kecil, English Conventional Commits. **JANGAN pakai fable.**
+> **A completed brief, kept as a record.** This is the instruction under which STE-36 was built and
+> upgraded in place on 2026-09-09/10. It was originally written in Indonesian and translated on
+> 2026-09-10 when the repository moved to English; nothing about the instruction itself was changed.
+> What actually shipped is recorded in `docs/deployments.md` and `docs/specs/CHANGELOG.md` [2.1.0].
 
-## Keputusan (dari Axel PM, Linear STE-36 — Opsi A)
-Sekarang siapa pun bisa `create_event` dengan nama apa pun → impersonation panitia. Fix: **allowlist organiser di EventRegistry v2**, gerbang keras. Admin = **STERUN_ADMIN** (di `.env`). Organiser minta akses off-chain, admin `add_organiser`. B/KYC = pasca-pilot (BUKAN sekarang).
+You are an engineering agent, **high effort**. The feature is focused, but this is an **IN-PLACE
+UPGRADE of a LIVE contract** — be careful with storage compatibility. Small commits, English
+Conventional Commits.
 
-**PENTING: ini UPGRADE, bukan redeploy.** EventRegistry v2 sudah live + upgradeable di `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`. Tambah fitur → build wasm baru → `upgrade(new_wasm_hash)` → **alamat TETAP**, event lama utuh. RaceRecord v2 TIDAK berubah.
+## The decision (from Axel, PM — Linear STE-36, option A)
+Today anyone can `create_event` under any name → organiser impersonation. The fix: **an organiser
+allowlist in EventRegistry v2**, as a hard gate. The admin is **STERUN_ADMIN** (in `.env`). An
+organiser requests access off-chain and the admin calls `add_organiser`. KYC/KYB is post-pilot (NOT
+now).
 
-## 0. Baca dulu
-`sc/contracts/event_registry/src/lib.rs` (khususnya `add_scanner`/`remove_scanner`/`is_scanner` + `create_event`), `docs/specs/INTERFACE.md` + `docs/specs/CLAUDE.md` (prosedur ubah spec), `sc/scripts/upgrade-testnet.sh`, `docs/deployments.md` (entry v2).
+**IMPORTANT: this is an UPGRADE, not a redeploy.** EventRegistry v2 is already live and upgradeable
+at `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`. Add the feature → build new wasm →
+`upgrade(new_wasm_hash)` → **the address STAYS**, and existing events are intact. RaceRecord v2 does
+NOT change.
 
-## 1. Scope kontrak (EventRegistry v2 saja)
-Cermin persis pola scanner yang sudah ada + teruji:
-- Storage: `DataKey::Organiser(Address) -> bool`. **APPEND variant baru di AKHIR enum DataKey** (jangan sisipkan di tengah / jangan ubah variant lama — storage compat upgrade). 
-- `add_organiser(env, organiser: Address)` — admin-gated (`read_admin(&env)?.require_auth()`), tulis key, revert kalau sudah ada (`OrganiserAlreadyAdded`). Emit `OrganiserAdded`.
-- `remove_organiser(env, organiser: Address)` — admin-gated, hapus key, revert kalau tak ada (`OrganiserNotFound`). Emit `OrganiserRemoved`.
-- `is_organiser(env, addr: Address) -> bool` — view (`.unwrap_or(false)`).
-- **Gerbang `create_event`**: setelah `organiser.require_auth()`, tolak kalau `!is_organiser(organiser)` → revert error baru `NotAllowlistedOrganiser`. (require_auth tetap ada; allowlist adalah lapis identitas di atasnya.)
-- Error baru: kode BEBAS BERIKUTNYA di band EventRegistry (1..=99). Sekarang max 13 (`ScannerNotFound`) → pakai 14, 15, 16. **JANGAN renumber ABI lama.**
+## 0. Read first
+`sc/contracts/event_registry/src/lib.rs` (especially `add_scanner`/`remove_scanner`/`is_scanner` +
+`create_event`), `docs/specs/INTERFACE.md` + `docs/specs/CLAUDE.md` (the spec-change procedure),
+`sc/scripts/upgrade-testnet.sh`, `docs/deployments.md` (the v2 entry).
 
-## 2. Test (WAJIB, replikasi rigor v1)
-- `add_organiser` oleh admin OK; oleh non-admin revert.
-- `create_event` oleh wallet TIDAK di-allowlist → revert `NotAllowlistedOrganiser`; oleh yang di-allowlist → sukses.
-- `remove_organiser` lalu `create_event` → revert lagi.
-- `is_organiser` view benar (true/false/after-remove).
-- **Upgrade storage-compat**: event yang ditulis SEBELUM variant Organiser ditambah tetap kebaca benar (pakai pola test upgrade yang sudah ada di `test.rs` mod `upgrade`). Ini bukti in-place upgrade aman.
-- `cargo llvm-cov` >80%. Semua jalur revert.
+## 1. Contract scope (EventRegistry v2 only)
+Mirror the existing, already-tested scanner pattern exactly:
+- Storage: `DataKey::Organiser(Address) -> bool`. **APPEND the new variant at the END of the DataKey
+  enum** (do not insert it in the middle, do not change an existing variant — storage compatibility
+  across the upgrade).
+- `add_organiser(env, organiser: Address)` — admin-gated (`read_admin(&env)?.require_auth()`), writes
+  the key, reverts if it already exists (`OrganiserAlreadyAdded`). Emits `OrganiserAdded`.
+- `remove_organiser(env, organiser: Address)` — admin-gated, deletes the key, reverts if absent
+  (`OrganiserNotFound`). Emits `OrganiserRemoved`.
+- `is_organiser(env, addr: Address) -> bool` — a view (`.unwrap_or(false)`).
+- **The `create_event` gate**: after `organiser.require_auth()`, refuse when `!is_organiser(organiser)`
+  → revert with the new error `NotAllowlistedOrganiser`. (`require_auth` stays; the allowlist is an
+  identity layer on top of it.)
+- New errors: the NEXT FREE codes in the EventRegistry band (1..=99). The current maximum is 13
+  (`ScannerNotFound`) → use 14, 15, 16. **DO NOT renumber the existing ABI.**
+
+## 2. Tests (MANDATORY, matching v1's rigour)
+- `add_organiser` by the admin succeeds; by a non-admin it reverts.
+- `create_event` from a wallet NOT on the allowlist → reverts with `NotAllowlistedOrganiser`; from an
+  allowlisted one → succeeds.
+- `remove_organiser` then `create_event` → reverts again.
+- The `is_organiser` view is correct (true/false/after-remove).
+- **Upgrade storage compatibility**: an event written BEFORE the Organiser variant was added still
+  reads back correctly (use the existing upgrade test pattern in `test.rs`, module `upgrade`). This
+  is the evidence the in-place upgrade is safe.
+- `cargo llvm-cov` >80%. Every revert path.
 
 ## 3. Spec + docs
-- Update `docs/specs/INTERFACE.md` lewat prosedur di `docs/specs/CLAUDE.md` (naikkan versi, mis. v2.1.0 — fungsi baru = minor). Dokumentasikan add/remove/is_organiser + gerbang create_event.
-- Update CLAUDE.md relevan (root + sc/contracts/event_registry/).
+- Update `docs/specs/INTERFACE.md` through the procedure in `docs/specs/CLAUDE.md` (bump the version,
+  e.g. v2.1.0 — new functions are a minor). Document add/remove/is_organiser + the `create_event`
+  gate.
+- Update the relevant CLAUDE.md files (root + `sc/contracts/event_registry/`).
 
-## 4. Deploy = UPGRADE IN-PLACE (Axel pre-authorize, TANPA gate ACC)
-1. Semua test/e2e HIJAU dulu (gate merge).
-2. Build wasm baru EventRegistry. Pakai `sc/scripts/upgrade-testnet.sh` (atau `stellar contract invoke ... -- upgrade --new_wasm_hash <hash>`) dengan **STERUN_ADMIN** dari `.env`, target kontrak LIVE `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`. **Alamat TETAP.**
-3. **Seed allowlist**: `add_organiser` untuk wallet organiser pilot supaya demo tetap jalan — minimal `STERUN_ORGANISER_ADDRESS` dari `.env`. (Catat di deployments.md wallet mana yang di-allowlist.)
-4. Sanity on-chain: (a) `create_event` dari wallet TIDAK di-allowlist (mis. STERUN_TEST_A) → **DITOLAK** `NotAllowlistedOrganiser`; (b) dari STERUN_ORGANISER (allowlisted) → sukses; (c) event lama masih kebaca (`get_event 0`) — bukti storage selamat. Bukti tx.
-5. Catat di `docs/deployments.md`: entry UPGRADE (contract CAPB6NQP…, wasm lama→baru hash, tx upgrade, wallet yang di-allowlist, link stellar.expert). Alamat TIDAK berubah.
-6. **Merge ke main** (setelah e2e hijau): push branch → PR → merge (terdokumentasi). Kunci deploy baru (kalau ada) simpan di `.env` gitignored.
-7. STOP + set worktree comment diawali `ALLOWLIST DEPLOYED:` berisi: alamat (tetap), wasm lama→baru, wallet allowlisted, ringkas bukti sanity.
+## 4. Deploy = AN IN-PLACE UPGRADE (Axel pre-authorises this, WITHOUT an ACC gate)
+1. All tests and e2e GREEN first (the merge gate).
+2. Build the new EventRegistry wasm. Use `sc/scripts/upgrade-testnet.sh` (or
+   `stellar contract invoke ... -- upgrade --new_wasm_hash <hash>`) with **STERUN_ADMIN** from
+   `.env`, targeting the LIVE contract `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`.
+   **The address STAYS.**
+3. **Seed the allowlist**: `add_organiser` for the pilot organiser wallet so the demo keeps working —
+   at minimum `STERUN_ORGANISER_ADDRESS` from `.env`. (Record in deployments.md which wallets were
+   allowlisted.)
+4. On-chain sanity: (a) `create_event` from a wallet NOT on the allowlist (e.g. STERUN_TEST_A) →
+   **REFUSED** with `NotAllowlistedOrganiser`; (b) from STERUN_ORGANISER (allowlisted) → succeeds;
+   (c) an existing event still reads (`get_event 0`) — the evidence storage survived. With
+   transaction evidence.
+5. Record in `docs/deployments.md`: an UPGRADE entry (contract CAPB6NQP…, the old→new wasm hashes,
+   the upgrade tx, the allowlisted wallets, stellar.expert links). The address does NOT change.
+6. **Merge to main** (after e2e are green): push the branch → PR → merge (documented). Any new deploy
+   key goes in the gitignored `.env`.
+7. STOP and set the worktree comment, starting with `ALLOWLIST DEPLOYED:` and holding the address
+   (unchanged), the old→new wasm, the allowlisted wallets, and a summary of the sanity evidence.
 
-## 5. Konvensi
-- **MCP Stellar Raven wajib** verifikasi keputusan (upgrade storage-compat, allowlist pattern, auth). Load: `ToolSearch "select:mcp__stellar-raven__search,mcp__stellar-raven__execute"`.
-- Commit kecil English Conventional Commits, akhiri pesan commit dengan:
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
-- HARAM bertanya — ambil best-practice Raven, putuskan, dokumentasikan di commit.
-- Scope guard: HANYA EventRegistry v2 + spec/docs terkait. JANGAN sentuh RaceRecord, be/, fe/, sdk/. JANGAN redeploy alamat baru — WAJIB upgrade in-place.
+## 5. Conventions
+- **MCP Stellar Raven is mandatory** for verifying decisions (upgrade storage compatibility, the
+  allowlist pattern, auth). Load with
+  `ToolSearch "select:mcp__stellar-raven__search,mcp__stellar-raven__execute"`.
+- Small commits, English Conventional Commits, following the repository's commit convention in the
+  root `CLAUDE.md`.
+- Asking questions is forbidden — take Raven's best practice, decide, and document it in the commit.
+- Scope guard: ONLY EventRegistry v2 and its spec/docs. Do not touch RaceRecord, `be/`, `fe/` or
+  `sdk/`. Do not redeploy to a new address — an in-place upgrade is mandatory.
 
-Mulai: baca file, verifikasi via Raven, bangun fitur (commit kecil), test penuh, upgrade in-place kontrak live, seed allowlist, sanity on-chain, merge, lapor.
+Begin: read the files, verify through Raven, build the feature (small commits), test fully, upgrade
+the live contract in place, seed the allowlist, run the on-chain sanity checks, merge, report.

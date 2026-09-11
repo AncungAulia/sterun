@@ -30,7 +30,7 @@
 -- so the damage would not stop at the index.
 --
 -- That is a migration with a plan behind it, not a column added in passing.
--- Written up in be/OPERATIONS.md under "Pindah ke kontrak v2".
+-- Written up in be/OPERATIONS.md under "Moving to the v2 contracts".
 ALTER TABLE events
     DROP CONSTRAINT IF EXISTS events_status_check;
 

@@ -1,89 +1,84 @@
 # Sterun Web App — Architecture Guide
 
-> Baca ini sebelum menulis satu baris kode pun di `fe/`.
-> Baca bersama [`docs/WEB_APP_IA.md`](../../docs/WEB_APP_IA.md) (halaman apa saja dan isinya),
-> [`fe/app/tokens.css`](../app/tokens.css) (token desain milik Nabil), dan
-> [`docs/specs/`](../../docs/specs/) (interface kontrak + spec hash/TOTP, keduanya **beku**).
+> Read this before writing a single line of code in `fe/`.
+> Read it alongside [`docs/WEB_APP_IA.md`](../../docs/WEB_APP_IA.md) (which pages exist and what is
+> on them), [`fe/app/tokens.css`](../app/tokens.css) (Nabil's design tokens), and
+> [`docs/specs/`](../../docs/specs/) (the contract interface + the hash/TOTP spec, both **frozen**).
 
 ---
 
 ## 1. Overview
 
-`fe/` adalah aplikasi Next.js App Router yang menampung **empat permukaan berbeda** dalam satu
-deploy: directory publik, flow pendaftaran peserta, console panitia, dan scanner volunteer yang
-harus jalan tanpa sinyal.
+`fe/` is a Next.js App Router application holding **four different surfaces** in one deployment: the
+public directory, the entrant flow, the organiser console, and a volunteer scanner that has to work
+without a signal.
 
-Ini bukan situs marketing (itu `landing-page/`, punya Nabil), dan bukan aplikasi CRUD. Kebenaran
-data ada di blockchain, bukan di database kita. Sebagian besar aturan di dokumen ini turun dari dua
-kenyataan itu.
+It is not a marketing site (that is `landing-page/`, Nabil's), and it is not a CRUD app. The truth
+lives on a blockchain, not in a database of ours. Most of the rules in this document follow from
+those two facts.
 
-Pemisahan tanggung jawabnya:
+How responsibility is split:
 
-| Lapisan | Isinya |
+| Layer | Contents |
 | --- | --- |
-| `app/` | routing saja — tidak ada logic, tidak ada UI |
-| `src/modules/` | satu folder per halaman: logic + UI |
-| `src/components/` | primitif dan layout yang dipakai lintas modul |
-| `src/hooks/` | semua hook: baca chain, tulis chain, state |
-| `src/lib/` | urusan chain dan backend: client, TOTP, hash, storage |
-| `src/utils/` | helper murni tanpa efek samping |
+| `app/` | routing only — no logic, no UI |
+| `src/modules/` | one folder per page: logic + UI |
+| `src/components/` | primitives and layouts used across modules |
+| `src/hooks/` | every hook: reading the chain, writing to it, state |
+| `src/lib/` | chain and backend concerns: clients, TOTP, hashing, storage |
+| `src/utils/` | pure helpers with no side effects |
 
 ---
 
 ## 2. Stack
 
-| Paket | Untuk apa |
+| Package | What for |
 | --- | --- |
-| `next` 16 (App Router) | framework |
-| `typescript` 5 | bahasa |
-| `tailwindcss` v4 | styling — token dari `app/tokens.css`, bukan config JS |
-| `@sterunxyz/sdk` | **satu-satunya** jalan bicara ke kontrak |
-| `@creit-tech/stellar-wallets-kit` | koneksi wallet (Freighter, xBull, Albedo, WalletConnect, Ledger) |
-| `@tanstack/react-query` | cache dan refetch hasil baca chain |
-| `zustand` | state global kecil (wallet aktif, status online) |
-| `idb` | wrapper IndexedDB untuk pass secret, roster, antrean claim |
-| `qrcode` | render QR pass |
-| `lucide-react` | ikon |
+| `next` 16 (App Router) | the framework |
+| `typescript` 5 | the language |
+| `tailwindcss` v4 | styling — tokens from `app/tokens.css`, not a JS config |
+| `@sterunxyz/sdk` | the **only** way to talk to the contracts |
+| `@creit.tech/stellar-wallets-kit` | wallet connections (Freighter, xBull, Albedo, WalletConnect, Ledger) |
+| `@tanstack/react-query` | caching and refetching chain reads |
+| `zustand` | small global state (the active wallet, online status) |
+| `idb` | an IndexedDB wrapper for pass secrets, rosters, and the claim queue |
+| `qrcode` | rendering the QR pass |
+| `lucide-react` | icons |
 
-Catatan pemasangan Wallets Kit: dokumentasi resminya
-([stellarwalletskit.dev](https://stellarwalletskit.dev)) saat ini menginstruksikan lewat **JSR**,
-bukan npm:
+**The Wallets Kit question is settled: npm, scope `@creit.tech` (with a dot), `^2.6.0`.** The
+official documentation ([stellarwalletskit.dev](https://stellarwalletskit.dev)) points at **JSR**
+under a differently spelled scope (`@creit-tech`, with a hyphen). The npm package is the one that
+fits this pnpm workspace and requires `@stellar/stellar-sdk ^17.0.0`, matching `pnpm.overrides` at
+the root. Kit v2 uses a **static** class rather than an instance and persists the chosen wallet and
+address to localStorage itself, which is what keeps a refresh connected without us storing anything.
 
-```bash
-npx jsr add @creit-tech/stellar-wallets-kit
-```
+What is **not** used, and why:
 
-Versi npm lama memakai nama scope yang berbeda (`@creit.tech/...`, dengan titik). **Pastikan ulang
-saat STE-8 dikerjakan** dan catat pilihan finalnya di file ini — itu memang salah satu task di
-tiketnya.
-
-Yang **tidak** dipakai, dan alasannya:
-
-- **`@stellar/stellar-sdk` langsung** — dipakai `@sterunxyz/sdk` di dalam, jangan dipanggil sendiri
-  dari komponen. Versinya sudah dipaksa satu lewat `pnpm.overrides` di root; dua salinan dalam satu
-  graph berarti dua RPC client dan objek signer lintas-mayor.
-- **`sc/bindings/*` langsung** — itu output generator. `@sterunxyz/sdk` sudah membungkusnya dan
-  menambahkan penanganan error yang kita butuhkan.
-- **Dark mode / `next-themes`** — keputusan STE-7: v1 light only. QR pass juga memaksa permukaan
-  terang karena kamera butuh kontras.
+- **`@stellar/stellar-sdk` directly** — `@sterunxyz/sdk` uses it internally; do not call it yourself
+  from a component. Its version is already forced to one through `pnpm.overrides` at the root; two
+  copies in one graph means two RPC clients and signer objects crossing a major version.
+- **`sc/bindings/*` directly** — that is generator output. `@sterunxyz/sdk` already wraps it and adds
+  the error handling we need.
+- **Dark mode / `next-themes`** — an STE-7 decision: v1 is light only. The QR pass also forces a
+  light surface, because a camera needs the contrast.
 
 ---
 
-## 3. Struktur folder
+## 3. Folder structure
 
 ```
 fe/
-├── app/                              ← ROUTING SAJA. Tidak ada logic, tidak ada UI.
+├── app/                              ← ROUTING ONLY. No logic, no UI.
 │   │
-│   ├── (browse)/                     ← network-only, service worker tidak menyentuh sini
+│   ├── (browse)/                     ← network-only; the service worker does not touch this
 │   │   ├── page.tsx                  /              → <Directory />
 │   │   ├── events/[eventId]/
 │   │   │   ├── page.tsx              /events/:id    → <EventDetail />
 │   │   │   └── enter/page.tsx        /events/:id/enter → <Entry />
 │   │   ├── runner/[address]/page.tsx /runner/G…     → <Profile />
-│   │   └── profile/page.tsx          /profile       → <Profile /> (address dari wallet)
+│   │   └── profile/page.tsx          /profile       → <Profile /> (address from the wallet)
 │   │
-│   ├── (organiser)/                  ← wallet-gated, selalu online
+│   ├── (organiser)/                  ← wallet-gated, always online
 │   │   └── org/
 │   │       ├── page.tsx              /org
 │   │       ├── new/page.tsx          /org/new
@@ -92,7 +87,7 @@ fe/
 │   │           ├── scanners/page.tsx /org/events/:id/scanners
 │   │           └── results/page.tsx  /org/events/:id/results
 │   │
-│   ├── (offline)/                    ← PWA. Service worker HANYA di-scope ke sini.
+│   ├── (offline)/                    ← the PWA. The service worker is scoped ONLY to this.
 │   │   ├── pass/[tokenId]/page.tsx   /pass/:token
 │   │   └── scan/
 │   │       ├── page.tsx              /scan
@@ -100,71 +95,69 @@ fe/
 │   │           ├── page.tsx          /scan/:id
 │   │           └── flagged/page.tsx  /scan/:id/flagged
 │   │
-│   ├── layout.tsx                    ← root shell: next/font, <Providers>, header
+│   ├── layout.tsx                    ← the root shell: next/font, <Providers>, the header
 │   ├── providers.tsx                 ← Wallets Kit + TanStack Query
-│   ├── globals.css                   ← import tailwind + tokens
-│   ├── tokens.css                    ← MILIK NABIL. Jangan diedit tanpa bicara dengannya.
-│   ├── manifest.ts                   ← PWA manifest
+│   ├── globals.css                   ← imports tailwind + the tokens
+│   ├── tokens.css                    ← NABIL'S. Do not edit without talking to him.
+│   ├── manifest.ts                   ← the PWA manifest
 │   └── icon.png / apple-icon.png / favicon.ico
 │
 ├── public/
-│   └── brand/logo/                   ← SVG dari STE-7
+│   └── brand/logo/                   ← the SVGs from STE-7
 │
 ├── guides/
-│   └── ARCHITECTURE.md               ← file ini
+│   └── ARCHITECTURE.md               ← this file
 │
 └── src/
     ├── components/
-    │   ├── elements/                 ← primitif kecil, dipakai di mana saja
-    │   │   ├── Button.tsx
-    │   │   ├── Card.tsx
-    │   │   ├── Badge.tsx
-    │   │   ├── Input.tsx
-    │   │   ├── EventStatusBadge.tsx  ← Draft | Open | Closed | Completed
+    │   ├── ui/                       ← shadcn. Generated, but ours: editing is allowed.
+    │   ├── elements/                 ← small primitives, usable anywhere
+    │   │   ├── EventStatusBadge.tsx  ← Draft | Open | Closed | Completed | Cancelled
     │   │   ├── RecordStateBadge.tsx  ← Entered | RacepackClaimed | Finished | DNF
-    │   │   ├── AddressLink.tsx       ← potong address + link stellar.expert
-    │   │   ├── TxLink.tsx            ← link transaksi
-    │   │   ├── Identicon.tsx         ← avatar deterministik dari address
+    │   │   ├── AddressLink.tsx       ← a truncated address + a stellar.expert link
+    │   │   ├── TxLink.tsx            ← a transaction link
+    │   │   ├── Identicon.tsx         ← a deterministic avatar from an address
     │   │   ├── EmptyState.tsx
-    │   │   └── ErrorNotice.tsx       ← menerima SterunContractError, bukan string mentah
+    │   │   └── ErrorNotice.tsx       ← takes a SterunContractError, not a raw string
     │   │
     │   └── layouts/
     │       ├── PageShell.tsx
     │       ├── Header.tsx
-    │       ├── WalletButton.tsx      ← connect / disconnect / address aktif
+    │       ├── WalletButton.tsx      ← connect / disconnect / the active address
     │       └── OfflineBanner.tsx
     │
-    ├── modules/                      ← satu folder per halaman
+    ├── modules/                      ← one folder per page
     │   ├── directory/
-    │   │   ├── Directory.tsx         ← entry point, dirender app/(browse)/page.tsx
+    │   │   ├── Directory.tsx         ← the entry point, rendered by app/(browse)/page.tsx
     │   │   └── component/
     │   │       ├── EventCard.tsx
     │   │       └── DirectorySkeleton.tsx
     │   ├── event-detail/
     │   │   ├── EventDetail.tsx
+    │   │   ├── EventView.tsx         ← the page body; the organiser preview reuses it
     │   │   └── component/
-    │   │       ├── CategoryRow.tsx   ← harga + sisa kuota + CTA per kategori
-    │   │       ├── OverviewTab.tsx
-    │   │       ├── TimelineTab.tsx
-    │   │       └── PeopleTab.tsx
+    │   │       ├── TabCategories.tsx ← price + remaining quota + CTA per category
+    │   │       ├── TabDetails.tsx
+    │   │       ├── TabTimeline.tsx
+    │   │       └── TabProofs.tsx
     │   ├── entry/
-    │   │   ├── Entry.tsx             ← stepper: kategori → PII → review → sign
+    │   │   ├── Entry.tsx             ← the stepper: category → PII → review → sign
     │   │   └── component/
     │   │       ├── StepCategory.tsx
     │   │       ├── StepParticipant.tsx
     │   │       ├── StepReview.tsx
-    │   │       └── EntrySuccess.tsx  ← bib, tx link, salt receipt, kode pemulihan
+    │   │       └── EntrySuccess.tsx  ← bib, tx link, salt receipt, recovery code
     │   ├── pass/
     │   │   ├── Pass.tsx
     │   │   └── component/
     │   │       ├── RotatingQr.tsx
     │   │       └── RecoveryImport.tsx
     │   ├── profile/
-    │   │   ├── Profile.tsx           ← dipakai /runner/[address] DAN /profile
+    │   │   ├── Profile.tsx           ← used by /runner/[address] AND /profile
     │   │   └── component/
     │   │       ├── ProfileStats.tsx
     │   │       ├── RecordRow.tsx
-    │   │       └── IdentityCheck.tsx ← hash dihitung di browser, tidak dikirim ke server
+    │   │       └── IdentityCheck.tsx ← the hash is computed in the browser, never sent to a server
     │   ├── organiser/
     │   │   ├── OrganiserHome.tsx
     │   │   ├── CreateEvent.tsx
@@ -173,50 +166,50 @@ fe/
     │   │   ├── Results.tsx
     │   │   └── component/
     │   └── scanner/
-    │       ├── ScannerHome.tsx       ← pilih event, unduh roster
-    │       ├── Scanning.tsx          ← kamera, GREEN/RED, manual entry
+    │       ├── ScannerHome.tsx       ← choose an event, download the roster
+    │       ├── Scanning.tsx          ← camera, GREEN/RED, manual entry
     │       ├── Flagged.tsx
     │       └── component/
     │
     ├── hooks/
-    │   │   ── Baca chain (via SterunClient read-only + React Query) ──
-    │   ├── useEvents.ts              ← daftar event untuk directory
-    │   ├── useEvent.ts               ← satu event + kategorinya
-    │   ├── useEventMetadata.ts       ← unduh uri + verifikasi metadata_hash
-    │   ├── useRecordsOf.ts           ← riwayat satu runner
-    │   ├── useEventRecords.ts        ← record satu event (tab People, dashboard panitia)
+    │   │   ── Reading the chain (via a read-only SterunClient + React Query) ──
+    │   ├── useEvents.ts              ← the event list for the directory
+    │   ├── useEvent.ts               ← one event and its categories
+    │   ├── useEventMetadata.ts       ← download the uri and verify metadata_hash
+    │   ├── useRecordsOf.ts           ← one runner's history
+    │   ├── useEventRecords.ts        ← one event's records (the People tab, the organiser dashboard)
     │   │
-    │   │   ── Tulis chain (wallet menandatangani) ──
+    │   │   ── Writing to the chain (the wallet signs) ──
     │   ├── useCreateEvent.ts
     │   ├── useAddCategory.ts
     │   ├── useSetEventStatus.ts
-    │   ├── useScannerAllowlist.ts    ← add / remove scanner
-    │   ├── useEnter.ts               ← satu transaksi atomik
-    │   ├── useRecordFinish.ts        ← batch dari CSV
-    │   ├── useClaimQueue.ts          ← antrean offline scanner → chain
+    │   ├── useScannerAllowlist.ts    ← add / remove a scanner
+    │   ├── useEnter.ts               ← one atomic transaction
+    │   ├── useRecordFinish.ts        ← a batch from a CSV
+    │   ├── useClaimQueue.ts          ← the scanner's offline queue → the chain
     │   │
-    │   │   ── Backend (be/) ──
+    │   │   ── The backend (be/) ──
     │   ├── useSubmitParticipant.ts   ← POST /participants
-    │   ├── useRoster.ts              ← GET /events/:id/roster (scanner)
+    │   ├── useRoster.ts              ← GET /events/:id/roster (the scanner)
     │   ├── useResultsPreview.ts      ← POST /events/:id/results/preview
     │   │
     │   │   ── App ──
     │   ├── useWallet.ts              ← Wallets Kit: connect, address, signTransaction
-    │   ├── useTotpCode.ts            ← kode berjalan untuk pass
+    │   ├── useTotpCode.ts            ← the running code for the pass
     │   ├── useOnlineStatus.ts
-    │   └── useClockSkew.ts           ← banner kalau jam device melenceng
+    │   └── useClockSkew.ts           ← the banner for a drifted device clock
     │
     ├── lib/
-    │   ├── sterun.ts                 ← factory SterunClient (read-only + bertanda tangan)
-    │   ├── events.ts                 ← daftar event dari event_count + get_event per id
-    │   ├── env.ts                    ← contract address dari env, divalidasi saat boot
-    │   ├── wallet.ts                 ← setup Wallets Kit
-    │   ├── api.ts                    ← fetch ke backend be/
-    │   ├── totp.ts                   ← hitung kode per docs/specs/HASH_AND_TOTP.md
-    │   ├── hash.ts                   ← participant_hash, dihitung di browser
-    │   ├── identicon.ts              ← address → SVG deterministik
-    │   ├── db.ts                     ← IndexedDB: pass secret, roster, antrean claim
-    │   └── metadata.ts               ← parse + verifikasi dokumen metadata event
+    │   ├── sterun.ts                 ← the SterunClient factory (read-only + signing)
+    │   ├── events.ts                 ← the event list from event_count + get_event per id
+    │   ├── env.ts                    ← contract addresses from env, validated at boot
+    │   ├── wallet.ts                 ← the Wallets Kit setup
+    │   ├── api.ts                    ← fetching from the be/ backend
+    │   ├── totp.ts                   ← computing the code per docs/specs/HASH_AND_TOTP.md
+    │   ├── hash.ts                   ← participant_hash, computed in the browser
+    │   ├── identicon.ts              ← address → a deterministic SVG
+    │   ├── db.ts                     ← IndexedDB: pass secrets, rosters, the claim queue
+    │   └── metadata.ts               ← parse + verify the event metadata document
     │
     └── utils/
         └── format.ts                 ← shortAddress, formatPrice, formatDuration, formatDistance
@@ -224,11 +217,11 @@ fe/
 
 ---
 
-## 4. Aturan per lapisan
+## 4. The rules per layer
 
-### 4.1 `app/` — routing saja
+### 4.1 `app/` — routing only
 
-`page.tsx` melakukan satu hal: merender komponen modul yang bersangkutan.
+A `page.tsx` does one thing: render its module's component.
 
 ```tsx
 // app/(browse)/page.tsx
@@ -239,111 +232,111 @@ export default function DirectoryPage() {
 }
 ```
 
-Tidak ada logic, tidak ada hook, tidak ada UI. Kalau kamu tergoda menulis `useState` di
-`page.tsx`, itu tandanya kodenya milik `modules/`.
+No logic, no hooks, no UI. If you are tempted to write a `useState` in a `page.tsx`, that is a sign
+the code belongs in `modules/`.
 
-Route group (`(browse)`, `(organiser)`, `(offline)`) **tidak mengubah URL**. Dia ada untuk dua hal:
-memberi layout berbeda per permukaan, dan menandai batas service worker.
+Route groups (`(browse)`, `(organiser)`, `(offline)`) **do not change URLs**. They exist for two
+things: giving each surface a different layout, and marking the service worker's boundary.
 
-### 4.2 `src/components/elements/` — primitif
+### 4.2 `src/components/elements/` — primitives
 
-Komponen kecil yang bisa dipakai di mana saja.
+Small components usable anywhere.
 
-Aturan:
-- Punya varian (`Button`: `primary | secondary | ghost | danger`)
-- **Tanpa business logic** — tidak boleh ada hook baca chain, tidak boleh ada panggilan SDK
-- Digerakkan props saja
-- Semua nilai visual dari token (§6)
+The rules:
+- They have variants (`Button`: `primary | secondary | ghost | danger`)
+- **No business logic** — no chain-reading hooks, no SDK calls
+- Driven by props alone
+- Every visual value comes from a token (§6)
 
-### 4.3 `src/components/layouts/` — struktur
+### 4.3 `src/components/layouts/` — structure
 
-Header, shell halaman, tombol wallet. Dipakai lintas halaman, tanpa logic spesifik fitur.
+The header, the page shell, the wallet button. Used across pages, with no feature-specific logic.
 
-### 4.4 `src/modules/` — satu folder per halaman
+### 4.4 `src/modules/` — one folder per page
 
-File utama adalah entry point yang dirender `app/`. Komponen yang cuma dipakai di dalam modul itu
-masuk `component/`.
+The main file is the entry point `app/` renders. A component used only inside that module goes in
+its `component/`.
 
-**Aturan promosi:** dipakai di satu modul → tetap di `component/`. Dipakai di dua modul atau lebih →
-naik ke `components/elements/`. Jangan meng-import dari `component/` milik modul lain — kalau
-butuh, promosikan dulu.
+**The promotion rule:** used in one module → it stays in `component/`. Used in two or more → it
+moves up to `components/elements/`. Never import from another module's `component/` — if you need to,
+promote it first.
 
-**Satu aturan khusus Sterun:** modul di `(offline)` (`pass/`, `scanner/`) **tidak boleh meng-import
-apa pun dari modul `(browse)` atau `(organiser)`**. Keduanya harus bisa hidup di bundle yang
-di-precache service worker tanpa menyeret halaman yang justru tidak boleh di-cache.
+**One Sterun-specific rule:** a module in `(offline)` (`pass/`, `scanner/`) **must not import
+anything from a `(browse)` or `(organiser)` module**. Both have to live in a bundle the service
+worker precaches, without dragging in pages that must not be cached.
 
-### 4.5 `src/hooks/` — semua hook
+### 4.5 `src/hooks/` — every hook
 
-Aturan:
-- Satu hook satu file, dinamai `use*.ts`
-- **Hook baca** memakai React Query di atas `SterunClient` read-only. Jangan `fetch` ke RPC langsung
-  dari modul.
-- **Hook tulis** memakai `SterunClient` bertanda tangan dan **wajib** mengekspos `isPending`
-  (menunggu wallet) dan `isConfirming` (menunggu chain). Dua keadaan itu terasa sangat berbeda buat
-  pengguna: yang satu menunggu dia, yang satu menunggu jaringan.
-- Selalu jaga dengan `enabled: !!address` sebelum wallet tersambung
-- Store Zustand juga di sini, dinamai `use*Store.ts`
+The rules:
+- One hook per file, named `use*.ts`
+- **Read hooks** use React Query on top of a read-only `SterunClient`. Do not `fetch` the RPC
+  directly from a module.
+- **Write hooks** use a signing `SterunClient` and **must** expose `isPending` (waiting for the
+  wallet) and `isConfirming` (waiting for the chain). Those two states feel very different to a user:
+  one is waiting for them, the other for the network.
+- Always guard with `enabled: !!address` before a wallet is connected
+- Zustand stores live here too, named `use*Store.ts`
 
-### 4.6 `src/lib/` — chain dan backend
+### 4.6 `src/lib/` — chain and backend
 
-Semua yang tahu soal Stellar, backend, atau storage. Komponen tidak boleh tahu detailnya.
+Everything that knows about Stellar, the backend, or storage. A component must not know the details.
 
-| File | Isi |
+| File | Contents |
 | --- | --- |
-| `sterun.ts` | factory `SterunClient` — read-only dan bertanda tangan |
-| `events.ts` | `listEvents` / `getEventSummary`, plus urutan directory |
-| `env.ts` | `EVENT_REGISTRY`, `RACE_RECORD`, `API_URL` dari env, divalidasi saat boot |
-| `wallet.ts` | setup Wallets Kit, adapter `signTransaction` |
-| `api.ts` | `apiFetch()` ke backend `be/` |
-| `totp.ts` | hitung kode 6 digit, **byte-exact** per spec beku |
+| `sterun.ts` | the `SterunClient` factory — read-only and signing |
+| `events.ts` | `listEvents` / `getEventSummary`, plus the directory's ordering |
+| `env.ts` | `EVENT_REGISTRY`, `RACE_RECORD`, `API_URL` from env, validated at boot |
+| `wallet.ts` | the Wallets Kit setup, the `signTransaction` adapter |
+| `api.ts` | `apiFetch()` to the `be/` backend |
+| `totp.ts` | computing the 6-digit code, **byte-exact** per the frozen spec |
 | `hash.ts` | `participant_hash` = sha256(name ‖ national_id ‖ emergency_contact ‖ salt) |
-| `identicon.ts` | address → SVG, deterministik, dihitung lokal |
-| `db.ts` | IndexedDB: pass secret, roster event, antrean claim |
-| `metadata.ts` | unduh `uri`, hitung ulang sha256, bandingkan `metadata_hash` |
+| `identicon.ts` | address → SVG, deterministic, computed locally |
+| `db.ts` | IndexedDB: pass secrets, event rosters, the claim queue |
+| `metadata.ts` | download the `uri`, recompute its sha256, compare against `metadata_hash` |
 
-### 4.7 `src/utils/` — helper murni
+### 4.7 `src/utils/` — pure helpers
 
-Fungsi tanpa state dan tanpa kopling ke chain. `shortAddress()`, `formatPrice()` (stroops 7 desimal
-→ tampilan manusiawi), `formatDuration()` (detik → `hh:mm:ss`), `formatDistance()`.
+Functions with no state and no coupling to the chain. `shortAddress()`, `formatPrice()` (7-decimal
+stroops → a human display), `formatDuration()` (seconds → `hh:mm:ss`), `formatDistance()`.
 
 ---
 
-## 5. Aturan akses data
+## 5. Data access rules
 
-### 5.0 Tidak ada "list events" di kontrak, dan itu disengaja
+### 5.0 There is no "list events" in the contract, and that is deliberate
 
-`EventRegistry` cuma punya `event_count` + `get_event(id)`. View yang mengembalikan vector tak
-terbatas akan makin lambat dan makin mahal justru waktu protokolnya laku, sampai suatu hari
-melewati batas resource dan directory berhenti memuat untuk semua orang. Jadi daftarnya disusun
-di klien (`lib/events.ts`): baca `event_count`, lalu `get_event` tiap id secara paralel.
+`EventRegistry` has only `event_count` + `get_event(id)`. A view returning an unbounded vector gets
+slower and more expensive exactly as the protocol succeeds, until one day it crosses a resource limit
+and the directory stops loading for everyone. So the list is assembled client-side
+(`lib/events.ts`): read `event_count`, then `get_event` for each id in parallel.
 
-Dua kegagalan di situ **tidak sama**, dan bedanya kelihatan di layar:
+Two failures there are **not the same**, and the difference is visible on screen:
 
-| Yang gagal | Yang dilakukan |
+| What failed | What is done |
 | --- | --- |
-| satu id yang dihitung registry tapi tidak bisa dibaca | masuk `unreadable`, sisanya tetap tampil (entry ledger bisa kedaluwarsa di Soroban) |
-| kategori satu event | event tetap tampil tanpa kategori |
-| `event_count` sendiri (RPC mati) | **throw** — RPC mati dan registry kosong tidak boleh kelihatan sama |
+| one id the registry counted but which cannot be read | it goes into `unreadable`, the rest still display (a ledger entry can expire in Soroban) |
+| one event's categories | the event still displays, without its categories |
+| `event_count` itself (the RPC is down) | **throw** — a dead RPC and an empty registry must never look the same |
 
-Yang terakhir itu aturannya, bukan preferensi: menggambar "no events yet" di atas jaringan yang
-mati memberi tahu tiap pengunjung bahwa protokolnya tidak dipakai siapa-siapa.
+That last one is a rule, not a preference: drawing "no events yet" on top of a dead network tells
+every visitor the protocol is used by nobody.
 
-### 5.1 Empat sumber, dan mana yang benar
+### 5.1 Four sources, and which one is right
 
-| Sumber | Dipakai untuk | Sifat |
+| Source | Used for | Nature |
 | --- | --- | --- |
-| Chain via `@sterunxyz/sdk` | semua yang harus benar | **otoritatif** |
-| Indexer `be/` (`/events`, `/records`) | daftar panjang, filter, kecepatan | cepat, bisa tertinggal |
-| Vault `be/` (`/participants`) | submit PII, ringkasan milik sendiri | tidak pernah mengembalikan PII |
-| Roster `be/` (`/events/:id/roster`) | scanner saja | berisi `totp_secret`, paling sensitif |
+| The chain via `@sterunxyz/sdk` | everything that has to be correct | **authoritative** |
+| The `be/` indexer (`/events`, `/records`) | long lists, filtering, speed | fast, may lag |
+| The `be/` vault (`/participants`) | submitting PII, one's own summary | never returns PII |
+| The `be/` roster (`/events/:id/roster`) | the scanner only | contains `totp_secret`, the most sensitive thing there is |
 
-Aturannya: **indexer boleh mempercepat, tidak boleh menentukan**. Angka yang menentukan keputusan —
-sisa kuota, state record, hasil `verify` — dibaca dari chain. Kalau keduanya berbeda, chain yang
-benar dan UI tidak boleh diam-diam menampilkan yang salah.
+The rule: **the indexer may accelerate, it may not decide**. A number that drives a decision —
+remaining quota, a record's state, the result of `verify` — is read from the chain. If the two
+disagree, the chain is right and the UI must not quietly show the wrong one.
 
-### 5.2 `SterunClient` — read-only vs bertanda tangan
+### 5.2 `SterunClient` — read-only vs signing
 
-Halaman publik **tidak butuh wallet sama sekali**:
+Public pages **need no wallet at all**:
 
 ```ts
 // src/lib/sterun.ts
@@ -353,39 +346,41 @@ import { CONTRACTS } from "./env";
 export const readClient = new SterunClient({ ...TESTNET, contracts: CONTRACTS });
 ```
 
-Untuk menulis, pemeran ditentukan **per panggilan**, bukan per client. Ini penting di Sterun karena
-satu alur melibatkan empat penanda tangan berbeda dalam hitungan menit: panitia membuka event,
-peserta membayar, scanner memindai, panitia menerbitkan hasil.
+To write, the actor is decided **per call**, not per client. That matters in Sterun because one flow
+involves four different signers within minutes: the organiser opens the event, an entrant pays, a
+scanner scans, the organiser publishes the results.
 
 ```ts
 await sterun.enter(
-  { runner, eventId, categoryId, participantHash },
+  { runner, eventId, categoryId, addOnIds, participantHash },
   { publicKey: runner, signTransaction },
 );
 ```
 
-`publicKey` bukan hiasan di sebelah `signTransaction`: itu akun sumber yang dipakai membangun dan
-mensimulasikan transaksi, dan **simulasi itulah yang merekam auth entry**. Simulasi dengan address
-yang salah menghasilkan auth tree untuk address itu, sehingga tanda tangan yang benar pun tidak
-memenuhinya.
+`publicKey` is not decoration next to `signTransaction`: it is the source account used to build and
+simulate the transaction, and **the simulation is what records the auth entries**. Simulating with
+the wrong address produces an auth tree for that address, so even a correct signature will not
+satisfy it.
 
-Semua fungsi tulis mengembalikan `SentResult<T>`:
+Every write function returns a `SentResult<T>`:
 
 ```ts
 { value: T, txHash: string, ledger: number | null }
 ```
 
-`txHash` itu yang ditempel ke tautan explorer. **Selalu tampilkan** setelah aksi berhasil — itu
-bukti yang jadi jualan seluruh produk ini.
+`txHash` is what goes into an explorer link. **Always show it** after a successful action — it is
+the evidence this entire product sells.
 
-### 5.3 Alamat kontrak dari env, tidak pernah di-hardcode
+### 5.3 Contract addresses from env, never hardcoded
 
-`@sterunxyz/sdk` sengaja tidak membawa alamat kontrak (baca alasannya di `sdk/src/network.ts`):
-kontrak v1 non-upgradeable, jadi deploy ulang berarti **pasangan alamat baru**, dan konstanta di
-dalam paket akan diam-diam menunjuk ke pasangan lama.
+`@sterunxyz/sdk` deliberately does not carry contract addresses (the reasoning is in
+`sdk/src/network.ts`): a redeploy means a **new pair of addresses**, and a constant inside the
+package would quietly point at the old pair. That has already happened once — the v2 pair replaced
+the v1 pair on 2026-09-09.
 
-Sumber kebenaran alamat: [`docs/deployments.md`](../../docs/deployments.md). Di app, dia masuk lewat
-env dan divalidasi di `lib/env.ts` saat boot — bukan dicek satu per satu di tempat pemakaian.
+The source of truth for addresses: [`docs/deployments.md`](../../docs/deployments.md). In the app
+they arrive through env and are validated in `lib/env.ts` at boot — rather than being checked one by
+one at each point of use.
 
 ```
 NEXT_PUBLIC_EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
@@ -394,151 +389,147 @@ NEXT_PUBLIC_SUSD_SAC=CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU
 NEXT_PUBLIC_API_URL=…
 ```
 
-### 5.4 PII tidak pernah menyentuh chain, dan hash dihitung di browser
+### 5.4 PII never touches the chain, and the hash is computed in the browser
 
-Form peserta mengirim nama, NIK, dan kontak darurat **ke backend saja**. Yang masuk kontrak hanya
-`participant_hash`.
+The entrant form sends the name, national ID and emergency contact **to the backend only**. What
+reaches the contract is `participant_hash` alone.
 
-Di halaman profile, blok identity check menghitung hash **sepenuhnya di browser pengunjung** dan
-memanggil `verify(token_id, hash)`. PII tidak dikirim ke server mana pun, termasuk server kita.
-Kalau kamu tergoda mengirimnya ke backend "biar gampang", itu membatalkan klaim inti produk.
+On the profile page, the identity-check block computes the hash **entirely in the visitor's browser**
+and calls `verify(token_id, hash)`. The PII is not sent to any server, ours included. If you are
+tempted to send it to the backend "to make it easier", that voids the product's core claim.
 
 ---
 
-## 6. Aturan UI
+## 6. UI rules
 
-### 6.1 Bahasa: semua teks UI **Bahasa Inggris**
+### 6.1 Language: all UI text in **English**
 
-Setiap teks yang dilihat pengguna ditulis dalam Bahasa Inggris: label tombol, judul, pesan error,
-empty state, teks bantuan, satuan, placeholder.
+Every piece of text a user sees is written in English: button labels, headings, error messages,
+empty states, help text, units, placeholders.
 
 ```tsx
-// SALAH
+// WRONG
 <Button>Daftar sekarang</Button>
 <EmptyState>Belum ada event</EmptyState>
 
-// BENAR
+// RIGHT
 <Button>Register</Button>
 <EmptyState>No events yet</EmptyState>
 ```
 
-Yang **tetap** Bahasa Indonesia: dokumen `.md` seperti file ini, dan pesan ke Axel. Yang tetap
-Bahasa Inggris: komentar di dalam kode dan pesan commit. Aturan ini menambah satu hal saja — teks
-yang tampil di layar juga Inggris.
+Since 2026-09-10 the `.md` documents are English too, including this one, because the repository is
+reviewed from outside the team. Code comments always were. So this is now one rule rather than
+several.
 
-### 6.2 Jangan pernah memakai em dash di teks UI
+### 6.2 Never use an em dash in UI text
 
-Karakter `—` (em dash) dan `–` (en dash) **dilarang** di teks yang dilihat pengguna.
+The characters `—` (em dash) and `–` (en dash) are **forbidden** in text a user sees.
 
 ```tsx
-// SALAH
+// WRONG
 <p>Registration closes soon — don&apos;t wait</p>
 
-// BENAR
+// RIGHT
 <p>Registration closes soon. Do not wait.</p>
 <p>Registration closes soon, so do not wait.</p>
 ```
 
-Perbaikannya: pecah jadi dua kalimat, atau pakai koma, atau tanda kurung. Kalau benar-benar butuh
-pemisah, pakai tanda hubung biasa (`-`).
+The fix: split it into two sentences, or use a comma, or brackets. If a separator is genuinely
+needed, use an ordinary hyphen (`-`).
 
-Larangan ini **hanya untuk teks UI**. Komentar kode dan dokumen `.md` tidak terpengaruh.
+This ban is **for UI text only**. Code comments and `.md` documents are unaffected.
 
-### 6.3 Token desain: jangan pernah menulis nilai mentah
+### 6.3 Design tokens: never write a raw value
 
-Aturan dari Nabil, dan berlaku mutlak: **tidak ada hex, nama font, atau nilai piksel di dalam
-komponen.** Kalau nilai yang kamu butuhkan belum ada, tambahkan token baru di `tokens.css` — dan
-karena `tokens.css` ada dua salinan (`fe/` dan `landing-page/`), ubah **keduanya dalam satu
-commit**.
+Nabil's rule, and it is absolute: **no hex, no font name, and no pixel value inside a component.** If
+the value you need does not exist yet, add a new token to `tokens.css` — and because `tokens.css` has
+two copies (`fe/` and `landing-page/`), change **both in one commit**.
 
-Yang perlu kamu tahu dari `tokens.css`:
+What you need to know from `tokens.css`:
 
-| Hal | Aturan |
+| Thing | Rule |
 | --- | --- |
-| `--color-teal` | kalau teal, artinya bisa diklik. Jangan pakai untuk dekorasi. |
-| `--color-success` / `--color-danger` | versi gelap, untuk teks dan badge di permukaan terang |
-| `--color-success-strong` / `--color-danger-strong` | versi terang, **khusus panel GREEN/RED scanner**, wajib teks ≥32px |
-| `--font-hero` | Big Shoulders 700, **hanya** ≥48px (hero landing, verdict scanner) |
-| `--font-display` | Poppins italic 500-600, untuk heading. Pakai class `.heading` / `.heading-strong` |
-| `--font-sans` | Poppins roman 400-500, untuk body. Tidak pernah lewat 600. |
-| `.numeric` | **wajib** untuk bib, kode 6 digit, waktu, jumlah, dan address |
-| `--text-bib` | 72px, khusus nomor bib di QR pass |
+| `--color-teal` | if it is teal, it is clickable. Do not use it for decoration. |
+| `--color-success` / `--color-danger` | the dark versions, for text and badges on light surfaces |
+| `--color-success-strong` / `--color-danger-strong` | the light versions, **only for the scanner's GREEN/RED panels**, requiring text ≥32px |
+| `--font-hero` | Big Shoulders 700, **only** at ≥48px (the landing hero, the scanner verdict) |
+| `--font-display` | Poppins italic 500-600, for headings. Use the `.heading` / `.heading-strong` classes |
+| `--font-sans` | Poppins roman 400-500, for body text. Never above 600. |
+| `.numeric` | **required** for bibs, 6-digit codes, times, amounts and addresses |
+| `--text-bib` | 72px, only for the bib number on the QR pass |
 
-`.numeric` bukan kosmetik: tanpa tabular figures, kode TOTP yang berganti tiap 30 detik akan
-bergoyang lebarnya saat angkanya berubah.
+`.numeric` is not cosmetic: without tabular figures, a TOTP code changing every 30 seconds jitters in
+width as its digits change.
 
-Focus ring sudah didefinisikan global di `tokens.css`. Jangan menimpanya, dan jangan pernah menulis
-`outline: none` tanpa pengganti.
+The focus ring is already defined globally in `tokens.css`. Do not override it, and never write
+`outline: none` without a replacement.
 
-### 6.4 Error selalu dipetakan, tidak pernah mentah
+### 6.4 Errors are always mapped, never raw
 
-Kode error kontrak adalah `u32` tanpa identitas kontrak. `Error(Contract, #4)` bisa berarti dua hal
-tergantung kontrak mana yang melemparnya. `@sterunxyz/sdk` sudah menyediakan pemetaannya:
+A contract error code is a `u32` with no contract identity. `Error(Contract, #4)` can mean two
+different things depending on which contract threw it. `@sterunxyz/sdk` already provides the mapping:
 
 ```ts
 import { classifyContractError, SterunContractError } from "@sterunxyz/sdk";
 ```
 
-Band-nya: `1..=99` EventRegistry, `100..=199` RaceRecord, `200+` OpenZeppelin.
+The bands: `1..=99` EventRegistry, `100..=199` RaceRecord, `200+` OpenZeppelin.
 
-Error yang **wajib punya tampilan sendiri**, bukan toast generik: `QuotaFull(5)`,
-`EventNotOpen(4)`, `AlreadyClaimed(102)`, `InvalidState(103)`, saldo sUSD kurang, dan user menolak
-menandatangani. Masing-masing punya jalan keluar yang berbeda buat pengguna, jadi pesannya harus
-berbeda juga.
+Errors that **must have their own presentation**, not a generic toast: `QuotaFull(5)`,
+`EventNotOpen(4)`, `NotAllowlistedOrganiser(18)`, `AlreadyClaimed(102)`, `InvalidState(103)`,
+insufficient sUSD balance, and the user declining to sign. Each has a different way out for the user,
+so each needs a different message.
 
 ---
 
-## 7. Aturan offline
+## 7. Offline rules
 
-Berlaku untuk `(offline)` saja. Halaman lain **tidak boleh** di-cache: directory yang basi
-membatalkan klaim bahwa chain adalah sumber kebenaran.
+These apply to `(offline)` only. Other pages **must not** be cached: a stale directory voids the
+claim that the chain is the source of truth.
 
-- Service worker **hanya** meng-precache `/pass/*` dan `/scan/*`
-- Semua rute lain: network-only
-- `totp.ts` dan `hash.ts` **wajib diuji terhadap `docs/specs/vectors/`**, bukan terhadap
-  implementasi sendiri. Backend dan scanner harus menghasilkan angka yang identik; menguji terhadap
-  diri sendiri cuma membuktikan kamu konsisten dengan kesalahanmu sendiri.
-- Toleransi verifikasi TOTP: ±1 step. Perbandingan **constant-time**.
-- Antrean claim di-persist di IndexedDB dengan retry backoff, harus selamat dari app restart
-- Revert `AlreadyClaimed` masuk daftar flag, **tidak boleh hilang diam-diam**
-- Jam device yang melenceng memunculkan banner, karena itu penyebab RED palsu yang paling sering
+- The service worker precaches **only** `/pass/*` and `/scan/*`
+- Every other route: network-only
+- `totp.ts` and `hash.ts` **must be tested against `docs/specs/vectors/`**, not against your own
+  implementation. The backend and the scanner have to produce identical numbers; testing against
+  yourself only proves you are consistent with your own mistake.
+- TOTP verification tolerance: ±1 step. Comparison is **constant-time**.
+- The claim queue is persisted in IndexedDB with retry backoff, and must survive an app restart
+- An `AlreadyClaimed` revert goes onto the flagged list and **must not disappear quietly**
+- A drifted device clock raises a banner, because it is the most common cause of a false RED
 
 ---
 
 ## 8. Path alias
 
-`@/` menunjuk ke `src/`.
+`@/` points at `src/`.
 
 ```json
 { "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }
 ```
 
-Scaffold sekarang memetakan `@/*` ke root `fe/`. **Ubah ke `./src/*` saat STE-8**, sebelum ada
-import yang terlanjur menyebar.
-
-Jangan pernah memakai `../../` lintas folder. Di dalam satu modul, relatif tetap boleh.
+Never use `../../` across folders. Within a single module, relative imports are still fine.
 
 ---
 
-## 9. Konvensi penamaan
+## 9. Naming conventions
 
-| Item | Konvensi | Contoh |
+| Item | Convention | Example |
 | --- | --- | --- |
-| File komponen | PascalCase | `EventCard.tsx` |
-| File hook | camelCase, awalan `use` | `useRecordsOf.ts` |
-| File utility / lib | camelCase | `format.ts`, `totp.ts` |
-| Store Zustand | camelCase, akhiran `Store` | `useWalletStore.ts` |
-| Folder komponen lokal | huruf kecil | `component/` |
-| Folder modul | kebab-case | `event-detail/` |
-| Tipe TypeScript | PascalCase | `type ScanVerdict = …` |
-| Konstanta | SCREAMING_SNAKE_CASE | `CONTRACTS`, `TOTP_STEP_SECONDS` |
-| Nilai on-chain | apa adanya dari SDK | `EventStatus`, `RecordState` |
+| Component files | PascalCase | `EventCard.tsx` |
+| Hook files | camelCase, `use` prefix | `useRecordsOf.ts` |
+| Utility / lib files | camelCase | `format.ts`, `totp.ts` |
+| Zustand stores | camelCase, `Store` suffix | `useWalletStore.ts` |
+| Local component folders | lowercase | `component/` |
+| Module folders | kebab-case | `event-detail/` |
+| TypeScript types | PascalCase | `type ScanVerdict = …` |
+| Constants | SCREAMING_SNAKE_CASE | `CONTRACTS`, `TOTP_STEP_SECONDS` |
+| On-chain values | as they come from the SDK | `EventStatus`, `RecordState` |
 
 ---
 
 ## 10. Setup
 
-Dari **root repo**, bukan dari `fe/`:
+From the **repository root**, not from `fe/`:
 
 ```bash
 pnpm install
@@ -547,33 +538,27 @@ pnpm --filter fe typecheck
 pnpm --filter fe lint
 ```
 
-Yang perlu dikerjakan di STE-8 sebelum modul pertama ditulis:
-
-1. **Setup `next/font`** — `tokens.css` memanggil `var(--font-poppins)` dan
-   `var(--font-big-shoulders)`, tapi `layout.tsx` belum menyediakannya. Sekarang font-nya masih
-   jatuh ke fallback sistem.
-2. **Ganti metadata** — `layout.tsx` masih bertuliskan "Create Next App".
-3. **Buat `src/` dan ubah path alias** ke `./src/*`.
-4. **`lib/env.ts`** dengan validasi saat boot.
-5. **Kunci versi Wallets Kit** (npm atau JSR) dan catat hasilnya di §2.
+The five setup items STE-8 was to do before the first module — `next/font`, the metadata, creating
+`src/` and repointing the path alias, `lib/env.ts` with boot-time validation, and pinning the Wallets
+Kit version — are **all done**. The Wallets Kit outcome is recorded in §2.
 
 ---
 
-## 11. Checklist sebelum menulis modul
+## 11. Checklist before writing a module
 
-- [ ] `page.tsx` cuma merender komponen modul, tidak ada logic
-- [ ] Baca chain lewat hook di `hooks/`, bukan `fetch` langsung dari modul
-- [ ] Hook tulis mengekspos `isPending` dan `isConfirming`
-- [ ] `txHash` ditampilkan dan bisa diklik setelah setiap aksi berhasil
-- [ ] Alamat kontrak dari `lib/env.ts`, tidak ada yang di-hardcode
-- [ ] Error kontrak lewat `classifyContractError`, bukan pesan mentah
-- [ ] `QuotaFull`, `EventNotOpen`, `AlreadyClaimed`, `InvalidState` punya tampilan masing-masing
-- [ ] **Tidak ada em dash di teks UI**
-- [ ] **Semua teks UI Bahasa Inggris**
-- [ ] Tidak ada hex, nama font, atau px mentah di komponen
-- [ ] `.numeric` terpasang di bib, kode TOTP, waktu, jumlah, dan address
-- [ ] Komponen lokal ada di `component/` dalam modulnya
-- [ ] Import memakai `@/`, bukan `../../`
-- [ ] Modul `(offline)` tidak meng-import apa pun dari `(browse)` atau `(organiser)`
-- [ ] PII tidak pernah dikirim ke chain, dan hash identity check dihitung di browser
-- [ ] Loading, empty, dan error state ada semua — testnet lambat itu keadaan normal
+- [ ] `page.tsx` only renders the module's component, with no logic
+- [ ] Chain reads go through a hook in `hooks/`, not a `fetch` from the module
+- [ ] Write hooks expose `isPending` and `isConfirming`
+- [ ] `txHash` is shown and clickable after every successful action
+- [ ] Contract addresses come from `lib/env.ts`, with nothing hardcoded
+- [ ] Contract errors go through `classifyContractError`, not a raw message
+- [ ] `QuotaFull`, `EventNotOpen`, `AlreadyClaimed`, `InvalidState` each have their own presentation
+- [ ] **No em dash in UI text**
+- [ ] **All UI text in English**
+- [ ] No hex, font names or raw px in a component
+- [ ] `.numeric` is applied to bibs, TOTP codes, times, amounts and addresses
+- [ ] Local components live in their module's `component/`
+- [ ] Imports use `@/`, not `../../`
+- [ ] `(offline)` modules import nothing from `(browse)` or `(organiser)`
+- [ ] PII is never sent to the chain, and the identity-check hash is computed in the browser
+- [ ] Loading, empty and error states all exist — a slow testnet is a normal condition

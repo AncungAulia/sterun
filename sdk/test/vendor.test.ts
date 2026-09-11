@@ -42,6 +42,7 @@ describe("sdk/vendor mirrors sc/bindings", () => {
       "enter",
       "claim_racepack",
       "record_finish",
+      "record_finish_untimed",
       "record_dnf",
       "extend_record_ttl",
       "record_of",

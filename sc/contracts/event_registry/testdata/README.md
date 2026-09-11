@@ -6,7 +6,7 @@ One file, and it is not a build artifact of this repo:
 | --- | --- | --- |
 | `event_registry_live_pre_allowlist.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | EventRegistry v2.0.1, the executable running at `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` before STE-36 |
 
-Diambil apa adanya dari testnet:
+Fetched from testnet as-is:
 
 ```bash
 stellar contract fetch \
@@ -15,25 +15,24 @@ stellar contract fetch \
   --out-file sc/contracts/event_registry/testdata/event_registry_live_pre_allowlist.wasm
 ```
 
-## Kenapa di-commit, bukan di-fetch saat test jalan
+## Why it is committed rather than fetched when the test runs
 
-`mod upgrade` yang lama men-deploy kontrak dari wasm hasil build lalu meng-`upgrade`
-ke wasm yang **sama**. Itu membuktikan storage tidak hilang saat executable diganti,
-tapi tidak membuktikan hal yang sebenarnya dipertaruhkan STE-36: bahwa state yang
-ditulis kode **lama** tetap terbaca oleh kode **baru**. Untuk itu dibutuhkan dua wasm
-yang benar-benar berbeda, dan yang "lama" harus artefak yang memang menulis event-event
-yang sekarang hidup di chain — bukan salinan build hari ini.
+The old `mod upgrade` deployed the contract from freshly built wasm and then upgraded to the **same**
+wasm. That proves storage is not lost when the executable is replaced, but it does not prove the
+thing STE-36 actually put at risk: that state written by the **old** code is still readable by the
+**new** code. That needs two genuinely different wasm files, and the "old" one has to be the artefact
+that really wrote the events now living on the chain — not a copy of today's build.
 
-Test-nya tidak menyentuh network (CI `contracts.yml` tidak punya akses testnet, dan
-test yang butuh internet adalah test yang suatu hari merah karena RPC-nya down), jadi
-byte-nya ikut di repo. `state_written_by_the_live_wasm_survives_the_allowlist_upgrade`
-mem-verifikasi sendiri bahwa file ini asli: host meng-hash-nya saat upload dan hasilnya
-dibandingkan dengan hash di tabel atas — hash yang sama yang dilaporkan ledger untuk
-`CAPB6NQP…` dan yang dibekukan `docs/specs/INTERFACE.md` §0.
+The test touches no network (CI's `contracts.yml` has no testnet access, and a test that needs the
+internet is a test that goes red one day because an RPC is down), so the bytes live in the repo.
+`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` verifies for itself that this file is
+genuine: the host hashes it on upload and the result is compared against the hash in the table above
+— the same hash the ledger reports for `CAPB6NQP…` and the one frozen in `docs/specs/INTERFACE.md`
+§0.
 
-## Kapan file ini diganti
+## When to replace this file
 
-Hanya setelah upgrade in-place berikutnya benar-benar mendarat di testnet: fetch ulang,
-perbarui hash di tabel ini **dan** `LIVE_PRE_ALLOWLIST_HASH` di `src/test.rs`. Jangan
-menggantinya dengan hasil `stellar contract build` lokal — begitu file ini jadi salinan
-build sekarang, test-nya berhenti membuktikan apa pun.
+Only after the next in-place upgrade has genuinely landed on testnet: fetch it again, and update the
+hash in this table **and** `LIVE_PRE_ALLOWLIST_HASH` in `src/test.rs`. Do not replace it with the
+output of a local `stellar contract build` — the moment this file becomes a copy of the current
+build, the test stops proving anything.

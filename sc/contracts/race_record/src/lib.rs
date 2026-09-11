@@ -119,6 +119,9 @@ pub struct RecordData {
     pub state: RecordState,
     pub entered_at: u64,
     pub claimed_at: Option<u64>,
+    /// The official net time. On a [`RecordState::Finished`] record, `None` is
+    /// the marker for "finished, no official time" (`record_finish_untimed`,
+    /// v2.2) — never a zero-second race.
     pub finish_time_s: Option<u32>,
     pub result_at: Option<u64>,
 }
@@ -173,8 +176,9 @@ pub enum Error {
     /// `claim_racepack` when the state is not [`RecordState::Entered`] — the
     /// anti-double-racepack guard.
     AlreadyClaimed = 102,
-    /// `record_finish` when the state is not [`RecordState::RacepackClaimed`],
-    /// or any attempt to move out of a terminal state.
+    /// `record_finish` / `record_finish_untimed` when the state is not
+    /// [`RecordState::RacepackClaimed`], or any attempt to move out of a
+    /// terminal state.
     InvalidState = 103,
     /// The operator is neither the event organiser nor an allowlisted scanner.
     NotAuthorized = 104,
@@ -230,6 +234,21 @@ pub struct RecordFinished {
     #[topic]
     pub event_id: u32,
     pub finish_time_s: u32,
+}
+
+/// Emitted by [`RaceRecord::record_finish_untimed`] (v2.2, STE-41).
+///
+/// A NEW event rather than [`RecordFinished`] with a `0`: that event carries a
+/// plain `u32`, and every consumer already decoding it would read `0` as a
+/// zero-second race. An untimed finish has no time to carry, so this event has
+/// no data at all — the same all-topic shape as [`RecordDnf`].
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordFinishedUntimed {
+    #[topic]
+    pub token_id: u32,
+    #[topic]
+    pub event_id: u32,
 }
 
 #[contractevent]
@@ -481,6 +500,40 @@ impl RaceRecord {
             finish_time_s,
         }
         .publish(&env);
+        Ok(())
+    }
+
+    // STE-41 (option A). Fun runs, colour runs and charity runs often have no
+    // chip timing, and `record_finish` rightly refuses `0` — so without this a
+    // runner who crossed the line stays at `RacepackClaimed` forever, and `Dnf`
+    // would be a lie. Option B (`record_finish(id, 0)`) was rejected: the
+    // `RecordFinished` event carries a bare `u32`, and every consumer already
+    // decoding it would read `0` as a zero-second race.
+    //
+    // Deliberately a twin of `record_finish`: the same organiser gate, the same
+    // `RacepackClaimed` guard, the same terminal `Finished`. The only difference
+    // is `finish_time_s == None` on a `Finished` record, which is the on-chain
+    // marker for "finished, no official time". No storage changes:
+    // `RecordData.finish_time_s` has been an `Option<u32>` since v1.
+
+    /// Marks a finish with no official time, for untimed events. Organiser
+    /// only, from `RacepackClaimed`; leaves `finish_time_s` as `None`.
+    pub fn record_finish_untimed(env: Env, token_id: u32) -> Result<(), Error> {
+        bump_instance(&env);
+        let mut record = read_record(&env, token_id)?;
+        auth_organiser(&env, record.event_id)?;
+
+        if record.state != RecordState::RacepackClaimed {
+            return Err(Error::InvalidState);
+        }
+
+        record.state = RecordState::Finished;
+        record.finish_time_s = None;
+        record.result_at = Some(env.ledger().timestamp());
+        let event_id = record.event_id;
+        write_record(&env, token_id, &record);
+
+        RecordFinishedUntimed { token_id, event_id }.publish(&env);
         Ok(())
     }
 

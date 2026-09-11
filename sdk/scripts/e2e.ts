@@ -384,6 +384,8 @@ async function main(): Promise<void> {
     sterun.recordDnf(tokenId, asOrganiser),
   );
 
+  const untimed = await untimedLeg({ sterun, eventId, organiser, asOrganiser });
+
   step("verify — the whole point of the protocol");
   assert(await sterun.verify(tokenId, hash), "verify rejected the correct hash");
   assert(
@@ -423,6 +425,8 @@ async function main(): Promise<void> {
   log(`enter               ${entered.txHash}`);
   log(`claimRacepack       ${claimed.txHash}`);
   log(`recordFinish        ${finished.txHash}`);
+  log(`token_id (untimed)  ${untimed.tokenId}  Finished, finish_time_s null`);
+  log(`recordFinishUntimed ${untimed.txHash}`);
   if (paid) {
     log(`token_id (paid)     ${paid.tokenId}`);
     log(`enter (5 sUSD)      ${paid.txHash}`);
@@ -431,6 +435,68 @@ async function main(): Promise<void> {
   log("```");
 
   log(`\n✅ SDK e2e passed${paid ? "" : " — WITHOUT the paid-entry leg (see above)"}`);
+}
+
+/**
+ * The untimed finish (STE-41, INTERFACE.md v2.2.0) — a fun run with no chip.
+ *
+ * Its own free category and its own runner, because the free category above
+ * has one slot and it is spent. What this proves that the unit tests cannot:
+ * that the live contract really leaves `finish_time_s` EMPTY rather than 0,
+ * that the SDK decodes that as `null`, and that the new function inherits the
+ * guards of `recordFinish` on a real network.
+ */
+async function untimedLeg(ctx: {
+  sterun: SterunClient;
+  eventId: number;
+  organiser: Keypair;
+  asOrganiser: ReturnType<typeof SterunClient.as>;
+}): Promise<{ tokenId: number; txHash: string }> {
+  const { sterun, eventId, organiser, asOrganiser } = ctx;
+
+  step("Untimed finish (STE-41): a category with no chip timing");
+  const category = (
+    await sterun.addCategory(
+      { eventId, code: "COLOR5K", distanceM: 5_000, quota: 1, priceStroops: 0n },
+      asOrganiser,
+    )
+  ).value;
+  const runner = await newAccount("runner-u");
+  const entered = await sterun.enter(
+    {
+      runner: runner.publicKey(),
+      eventId,
+      categoryId: category,
+      participantHash: randomBytes(32).toString("hex"),
+    },
+    SterunClient.as(runner),
+  );
+  const tokenId = entered.value;
+  log(`  ✓ category ${category} COLOR5K, token_id ${tokenId} — tx ${entered.txHash}`);
+
+  await expectRevert("recordFinishUntimed before claim", "InvalidState", "race-record", () =>
+    sterun.recordFinishUntimed(tokenId, asOrganiser),
+  );
+
+  await sterun.claimRacepack(tokenId, organiser.publicKey(), asOrganiser);
+  const finished = await sterun.recordFinishUntimed(tokenId, asOrganiser);
+  const record = await sterun.recordOf(tokenId);
+  assert(record.state === "Finished", `expected Finished, got ${record.state}`);
+  assert(record.finishTimeS === null, `expected no time, got ${record.finishTimeS}`);
+  assert(record.resultAt !== null, "result_at missing on an untimed finish");
+  log(`  ✓ Finished with finishTimeS null — tx ${finished.txHash}`);
+
+  step("Negative: an untimed finish is terminal");
+  await expectRevert("recordFinish after untimed", "InvalidState", "race-record", () =>
+    sterun.recordFinish(tokenId, 3161, asOrganiser),
+  );
+  await expectRevert("recordFinishUntimed twice", "InvalidState", "race-record", () =>
+    sterun.recordFinishUntimed(tokenId, asOrganiser),
+  );
+  await expectRevert("recordDnf after untimed", "InvalidState", "race-record", () =>
+    sterun.recordDnf(tokenId, asOrganiser),
+  );
+  return { tokenId, txHash: finished.txHash };
 }
 
 /**

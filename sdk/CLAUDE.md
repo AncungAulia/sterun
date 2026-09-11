@@ -1,69 +1,65 @@
 # `sdk/` — `@sterunxyz/sdk` (CLAUDE.md)
 
-Client TypeScript untuk kedua kontrak. Komponen **C5** (STE-15) + **C6** (STE-19:
-RaceRecord JSON Schema v1.0, packaging, publish npm). Owner: **James**.
+The TypeScript client for both contracts. Components **C5** (STE-15) + **C6** (STE-19: RaceRecord
+JSON Schema v1.0, packaging, npm publish). Owner: **James**.
 
-Ini seam yang dilewati **semua** client D3 — organiser console, entry flow, scanner
-PWA, public profile — sesuai aturan design "clients never talk to contracts raw"
-(`docs/SYSTEM_DESIGN.md` §2). Kontrak yang diwakili **beku** di
-[`docs/specs/INTERFACE.md`](../docs/specs/INTERFACE.md) v1.0.0.
+This is the seam **every** D3 client goes through — organiser console, entry flow, scanner PWA,
+public profile — per the design rule that clients never talk to contracts raw
+(`docs/SYSTEM_DESIGN.md` §2). The contract surface it represents is frozen in
+[`docs/specs/INTERFACE.md`](../docs/specs/INTERFACE.md).
+
+Published on npm: **<https://www.npmjs.com/package/@sterunxyz/sdk>**.
 
 ```bash
 pnpm install
-pnpm --filter @sterunxyz/sdk test        # 134 test, nol network
+pnpm --filter @sterunxyz/sdk test        # no network at all
 pnpm --filter @sterunxyz/sdk typecheck
 pnpm --filter @sterunxyz/sdk lint
-pnpm --filter @sterunxyz/sdk vendor      # refresh salinan bindings setelah regenerate
-pnpm --filter @sterunxyz/sdk e2e         # flow penuh melawan testnet live
+pnpm --filter @sterunxyz/sdk vendor      # refresh the vendored bindings after regenerating
+pnpm --filter @sterunxyz/sdk e2e         # the full flow against live testnet
 ```
 
-## Bindings di-vendor, bukan di-`file:`
+## The bindings are vendored, not `file:`-linked
 
-`@sterunxyz/sdk` di-publish ke npm, dan **`file:` dependency tidak bisa di-publish**.
-Jadi kode bindings ikut masuk ke dalam paket: `vendor/` berisi salinan
-**byte-identical** dari `sc/bindings/*/src/index.ts`, di-compile
-`tsconfig.vendor.json` dengan setelan milik generator.
+`@sterunxyz/sdk` is published to npm, and **a `file:` dependency cannot be published**. So the
+bindings code ships inside the package: `vendor/` holds a **byte-identical** copy of
+`sc/bindings/*/src/index.ts`, compiled by `tsconfig.vendor.json` with the generator's own settings.
 
-Kenapa tsconfig sendiri: di bawah `tsconfig.json` paket ini, kedua file itu
-memunculkan 12 error yang semuanya soal gaya, bukan substansi — type-only import
-di bawah `verbatimModuleSyntax`, `override` yang hilang, dan `window` tanpa lib
-DOM. Melonggarkan aturan seluruh paket demi dua file hasil generate itu
-pertukaran yang salah.
+Why a separate tsconfig: under this package's `tsconfig.json` those two files raise 12 errors, all
+of them about style rather than substance — type-only imports under `verbatimModuleSyntax`, a
+missing `override`, and `window` without the DOM lib. Loosening the rules for the whole package to
+accommodate two generated files is the wrong trade.
 
-Kenapa salinannya wajib byte-identical: `sc/bindings/README.md` melarang edit
-tangan, dan salinan yang "disesuaikan" diam-diam berhenti menjadi apa yang
-dihasilkan wasm. `test/vendor.test.ts` membandingkan byte per byte, jadi
-"regenerate bindings lalu lupa SDK-nya" jadi test merah — bukan client
-ter-publish yang diam-diam bicara interface lama.
+Why the copy must be byte-identical: `sc/bindings/README.md` forbids hand-editing, and a copy that
+has been "adjusted" quietly stops being what the wasm produces. `test/vendor.test.ts` compares byte
+for byte, so "regenerate the bindings and forget the SDK" is a red test rather than a published
+client quietly speaking an older interface.
 
-Refresh: `node scripts/vendor-bindings.mjs` (atau `--check` untuk memverifikasi).
+Refresh with `node scripts/vendor-bindings.mjs` (or `--check` to verify).
 
-> **Jebakan `file:` dari STE-15 sudah HILANG.** Dulu urutan `pnpm bindings`
-> sebelum `pnpm install` itu wajib karena pnpm menyalin `file:` dependency ke
-> store-nya sebagai snapshot. Sekarang tidak ada `file:` dependency sama sekali,
-> jadi clone bersih langsung jalan dan langkah CI yang khusus mengakali itu sudah
-> dicabut. Build vendor jadi pre-hook di `build`/`typecheck`/`test`.
+> **The `file:` trap from STE-15 is GONE.** Running `pnpm bindings` before `pnpm install` used to be
+> mandatory, because pnpm copies a `file:` dependency into its store as a snapshot. There is no
+> `file:` dependency at all now, so a clean clone just works and the CI step that existed to work
+> around it has been removed. The vendor build is a pre-hook on `build`/`typecheck`/`test`.
 
-## Satu versi `@stellar/stellar-sdk` untuk seluruh workspace
+## One `@stellar/stellar-sdk` version for the whole workspace
 
-`stellar contract bindings typescript` (CLI 27.0.0) menulis
-`"@stellar/stellar-sdk": "^14.5.0"` di `package.json` yang dia generate,
-sedangkan `be/` dan `sdk/` jalan di `^17.0.1`. Tanpa penanganan, satu graph
-berisi **dua** copy SDK — persis bahaya yang ditulis di header
-`be/src/chain/reader.ts`: dua RPC client, dan objek signer dari satu mayor
-diserahkan ke `AssembledTransaction` dari mayor lain.
+`stellar contract bindings typescript` (CLI 27.0.0) writes
+`"@stellar/stellar-sdk": "^14.5.0"` into the `package.json` it generates, while `be/` and `sdk/` run
+`^17.0.1`. Left alone, one graph contains **two** copies of the SDK — exactly the hazard described in
+the header of `be/src/chain/reader.ts`: two RPC clients, and signer objects from one major handed to
+an `AssembledTransaction` from another.
 
-Jawabannya `pnpm.overrides` di `package.json` root, bukan mengedit
-`package.json` bindings — `sc/bindings/README.md` melarang edit tangan, dan
-regenerate berikutnya akan menghapusnya diam-diam. Override menyatakan hal yang
-sama di tempat yang bertahan.
+The answer is `pnpm.overrides` in the root `package.json`, not editing the bindings'
+`package.json` — `sc/bindings/README.md` forbids hand edits, and the next regeneration would silently
+undo it. The override states the same thing somewhere that survives.
 
-Sudah dibuktikan sebelum dipakai: kedua paket bindings compile dengan `tsc` exit
-0 melawan 17.0.1, dan membaca kontrak testnet live lewat versi itu.
+Proven before relying on it: both bindings packages compile with `tsc` exit 0 against 17.0.1, and
+read live testnet contracts through that version.
 
-## Kenapa error TIDAK diambil dari `Result` bawaan bindings
+## Why errors are NOT taken from the bindings' own `Result`
 
-Ini temuan yang membentuk seluruh `tx.ts`. Diprobe ke kontrak live:
+This is the finding that shaped all of `tx.ts`. Probed against live contracts:
 
 ```
 get_event(999)  -> result.unwrapErr()  === { message: "" }
@@ -71,136 +67,119 @@ owner_of(9999)  -> result === Err { error: { message:
                      "Indicates a non-existent `token_id`." } }
 ```
 
-Yang pertama **membuang kodenya**. Yang kedua mengembalikan `Err` dari method
-yang tipenya `string`, berisi **doc comment Rust** — bukan nama varian, dan
-tidak stabil pula (mengedit komentar di kontrak akan mengubahnya).
+The first **throws the code away**. The second returns an `Err` whose type is `string`, carrying a
+**Rust doc comment** — not a variant name, and not stable either, since editing a comment in the
+contract would change it.
 
-Yang bisa dipakai cuma `tx.simulation.error`: seragam untuk keduanya, selalu
-berbentuk `HostError: Error(Contract, #N)`. Itu input untuk `errors.ts`, dan
-band-nya (`INTERFACE.md` §3) yang menentukan kontrak asalnya. **Jangan pernah**
-mengganti ini dengan `result.unwrapErr()` karena "lebih rapi" — hasilnya error
-tanpa identitas.
+The only usable signal is `tx.simulation.error`: uniform across both, always shaped
+`HostError: Error(Contract, #N)`. That is the input to `errors.ts`, and its band
+(`INTERFACE.md` §3) decides which contract it came from. **Never** replace this with
+`result.unwrapErr()` because it looks tidier — the result is an error with no identity.
 
-## Tabel error sengaja diduplikasi dari `be/src/chain/errors.ts`
+## The error tables are duplicated from `be/src/chain/errors.ts` on purpose
 
-Bukan lupa di-DRY. `be/` sengaja tidak bergantung pada bindings (alasannya di
-header `be/src/chain/reader.ts`), dan membuat indexer bergantung pada paket ini
-cuma untuk tiga tabel lookup akan membatalkan itu.
+This is not a missed DRY. `be/` deliberately does not depend on the bindings (reasoning in the
+header of `be/src/chain/reader.ts`), and making the indexer depend on this package for three lookup
+tables would undo that.
 
-Gantinya kedua salinan dipatok ke dokumen beku yang sama oleh test masing-masing:
-`sdk/test/errors.test.ts` dan `be/test/chain-errors.test.ts` sama-sama mem-parse
-`docs/specs/INTERFACE.md`. Tidak ada satu pun yang jadi sumber kebenaran — **spec
-beku yang jadi sumbernya**, dan keduanya diperiksa terhadapnya. Ini pengaturan
-yang sama dengan `docs/specs/reference/{node,rust}`.
+Instead both copies are pinned to the same frozen document by their own tests:
+`sdk/test/errors.test.ts` and `be/test/chain-errors.test.ts` both parse `docs/specs/INTERFACE.md`.
+Neither is the source of truth — **the frozen spec is**, and both are checked against it. This is
+the same arrangement as `docs/specs/reference/{node,rust}`.
 
-Test di sini juga membandingkan tabel dengan peta error **hasil generate** di
-bindings, jadi segitiganya tertutup: dokumen ↔ artefak (oleh
-`sc/scripts/check-interface.mjs`) dan SDK ↔ keduanya.
+The tests here also compare the tables against the **generated** error maps in the bindings, closing
+the triangle: document ↔ artefact (via `sc/scripts/check-interface.mjs`) and SDK ↔ both.
 
-## Alamat kontrak selalu argumen
+## Contract addresses are always arguments
 
-Tidak ada contract id sebagai konstanta di paket ini, sama seperti aturan nomor 1
-di `be/CLAUDE.md`. Alasannya di sini bahkan lebih keras: paket yang sudah
-ter-publish ke npm tidak bisa membaca `docs/deployments.md`, dan kontrak v1
-**non-upgradeable** — redeploy berarti **pasangan alamat baru**, bukan upgrade.
-Konstanta di sini akan terus bicara ke pasangan lama sampai ada yang merilis
-versi baru.
+There is no contract id as a constant anywhere in this package, matching rule 1 in `be/CLAUDE.md`.
+The reason is even stronger here: a package already published to npm cannot read
+`docs/deployments.md`, and a redeploy of a non-upgradeable contract means a **new address pair**
+rather than an upgrade. A constant here would keep talking to the old pair until somebody shipped a
+new version.
 
-`network.ts` cuma menyimpan yang benar-benar properti *network*: `rpcUrl` dan
+`network.ts` only holds what is genuinely a property of the *network*: `rpcUrl` and
 `networkPassphrase`.
 
-## `publicKey` bukan pelengkap `signTransaction`
+## `publicKey` is not an optional extra alongside `signTransaction`
 
-`CallOptions` membawa keduanya dan keduanya wajib benar. `signTransaction`
-menentukan siapa yang menandatangani; `publicKey` menentukan source account yang
-transaksinya **di-build dan disimulasikan**, dan simulasi itulah yang merekam
-auth entry. Simulasi sebagai address yang salah menghasilkan auth tree untuk
-address itu, dan tanda tangan yang benar tidak akan memenuhinya.
+`CallOptions` carries both, and both have to be right. `signTransaction` decides who signs;
+`publicKey` decides the source account the transaction is **built and simulated** as, and it is the
+simulation that records the auth entries. Simulating as the wrong address produces an auth tree for
+that address, and a correct signature will not satisfy it.
 
-Karena itu `runWrite` tidak lagi menerima signer: signer masuk saat transaksi
-dirakit. Menyuntikkan signer lain saat `signAndSend` berarti menandatangani
-sesuatu yang berbeda dari yang disimulasikan.
+That is why `runWrite` no longer accepts a signer: the signer goes in when the transaction is
+assembled. Injecting a different signer at `signAndSend` time means signing something other than
+what was simulated.
 
-## Testing (WAJIB, no bug)
+## Testing (MANDATORY, no bugs)
 
-- **Unit + integration**: `test/`, nol network, lewat seam struktural
-  (`AssembledLike` di `tx.ts` dan opsi `bindings` di `SterunClient`) — pola yang
-  sama dengan `ContractCaller` di `be/`. Ini yang jalan di `typescript.yml`.
-- **E2E**: `scripts/e2e.ts` melawan testnet live, plus **8 negative case** yang
-  masing-masing memastikan varian **dan** band-nya benar. Buktinya di-commit ke
-  `docs/deployments.md`.
+- **Unit + integration**: in `test/`, no network, through structural seams (`AssembledLike` in
+  `tx.ts` and the `bindings` option on `SterunClient`) — the same pattern as `ContractCaller` in
+  `be/`. This is what runs in `typescript.yml`.
+- **E2E**: `scripts/e2e.ts` against live testnet, plus negative cases that each assert both the
+  variant **and** its band. The evidence is committed to `docs/deployments.md`.
 
-**`typescript.yml` tidak boleh menyentuh network.** Itu keputusan STE-6 dan tetap
-berlaku: CI tidak boleh merah gara-gara testnet lagi jelek. E2E dijalankan tangan,
-hasilnya jadi bukti tertulis — pola yang sama dengan faucet (STE-6) dan STE-16.
+**`typescript.yml` must never touch the network.** That was decided in STE-6 and still holds: CI
+must not go red because testnet is having a bad afternoon. E2E is run by hand and its output becomes
+written evidence — the same pattern as the faucet (STE-6) and STE-16.
 
-## JSON Schema: satu definisi, dua artefak
+## JSON Schema: one definition, two artefacts
 
-zod di `src/schema.ts` adalah **sumber kebenaran**.
-`schema/race-record-v1.0.json` di-*generate* darinya lewat `z.toJSONSchema`, dan
-`test/schema.test.ts` gagal kalau file yang ter-commit dan hasil generate
-berbeda. Jangan pernah mengedit JSON-nya tangan.
+The zod schema in `src/schema.ts` is the **source of truth**. `schema/race-record-v1.0.json` is
+*generated* from it through `z.toJSONSchema`, and `test/schema.test.ts` fails when the committed
+file and the generated one differ. Never hand-edit the JSON.
 
-**Semua object pakai `strictObject`, bukan `object`.** Default zod adalah
-**membuang** key asing lalu melaporkan sukses — yang membuat validator runtime
-dan JSON Schema yang di-publish (`additionalProperties: false`) diam-diam
-berbeda perilaku: validator luar akan menolak dokumen yang baru saja dinyatakan
-valid oleh SDK ini. Dan untuk properti yang paling penting, diam adalah jawaban
-yang salah: dokumen yang datang membawa `national_id` bukan dokumen valid dengan
-field nyasar — itu bukti ada yang membocorkan PII ke format yang memang dibuat
-untuk diserahkan ke orang asing.
+**Every object uses `strictObject`, not `object`.** zod's default is to **strip** unknown keys and
+report success — which makes the runtime validator and the published JSON Schema
+(`additionalProperties: false`) quietly disagree: an outside validator would reject a document this
+SDK just called valid. And for the property that matters most, silence is the wrong answer: a
+document arriving with `national_id` in it is not a valid document with a stray field, it is
+evidence that something is leaking PII into a format designed to be handed to strangers.
 
-**Angka besar selalu decimal string** (`price_stroops`, `starts_at`,
-`entered_at`, `claimed_at`, `result_at`). `JSON.parse` menghasilkan double
-IEEE-754; di atas 2^53 presisinya hilang diam-diam, dan `price_stroops` itu
-`i128`. Field `u32` tetap number.
+**Large numbers are always decimal strings** (`price_stroops`, `starts_at`, `entered_at`,
+`claimed_at`, `result_at`). `JSON.parse` produces IEEE-754 doubles; above 2^53 precision is lost
+silently, and `price_stroops` is an `i128`. `u32` fields stay numbers.
 
-## Add-on berbayar (STE-37)
+## Paid add-ons (STE-37)
 
-Empat method, sengaja **kembar** dengan pasangan category yang sudah ada, karena keduanya ide yang
-sama: per-event, dialamati id, berharga stroops, berkuota.
+Four methods, deliberately **twins** of the existing category pair, because they are the same idea:
+per-event, id-addressed, priced in stroops, stock-limited.
 
-| tulis | baca |
+| write | read |
 | --- | --- |
 | `addAddon({ eventId, code, priceStroops, quota }, actor)` | `getAddon(eventId, addonId)` |
 | | `listAddOns(eventId)` · `addonCount(eventId)` |
 
-Dua keputusan yang layak ditulis supaya tidak dibahas ulang:
+Two decisions worth writing down so they are not reopened:
 
-**Harga dalam stroops, bukan desimal.** Sama seperti `addCategory`, dan alasannya sama dengan aturan
-3 di `be/CLAUDE.md`: uang tidak pernah lewat float. Jersey 50 sUSD adalah `500_000_000n`. Round-trip
-lewat `double` yang diundang oleh `50.0` meleset satu stroop cukup sering untuk membuat `enter`
-revert tanpa penjelasan.
+**Prices in stroops, not decimals.** Same as `addCategory`, and for the same reason as rule 3 in
+`be/CLAUDE.md`: money never travels through a float. A 50 sUSD jersey is `500_000_000n`. The round
+trip through a `double` that `50.0` invites is off by a stroop often enough to make `enter` revert
+with no explanation.
 
-**`listAddOns` fan-out N+1, dan itu bukan kemalasan.** EventRegistry cuma mengekspos `addon_count`
-dan `get_addon`; tidak ada view yang mengembalikan semuanya sekaligus — dan itu disengaja di sisi
-kontrak, karena view yang mengembalikan vector tak terbatas makin mahal seiring event tumbuh. Jadi
-biayanya ditaruh di sini, tempat pemanggil bisa melihatnya, bukan disembunyikan di helper.
+**`listAddOns` fans out N+1, and that is not laziness.** EventRegistry exposes `addon_count` and
+`get_addon` and nothing that returns them together — itself a deliberate contract-side choice,
+because a view returning an unbounded vector gets more expensive as an event grows. So the cost sits
+here, where a caller can see it, instead of hidden in a helper.
 
-> **`reserve_addon` TIDAK di-wrap, dan jangan ditambahkan.** Dia memanggil
-> `race_record.require_auth()` (`sc/contracts/event_registry/src/lib.rs`), jadi itu langkah
-> antar-kontrak di dalam `enter` — bukan sesuatu yang boleh dipanggil client. Mem-wrap-nya cuma
-> memberi orang method yang **selalu** revert.
+> **`reserve_addon` is NOT wrapped, and must not be added.** It calls
+> `race_record.require_auth()` (`sc/contracts/event_registry/src/lib.rs`), so it is a
+> cross-contract step inside `enter` — not something a client may call. Wrapping it would only hand
+> people a method that **always** reverts.
 
-`SterunAddOn` memakai `unitsLeft`, bukan `slotsLeft` milik category. Bentuknya sengaja sama; satu
-kata itu beda karena category menjual tempat di lomba dan add-on menjual barang dari rak — menyebut
-kaos sebagai "slot" terbaca seperti hasil salin-tempel, bukan keputusan.
+`SterunAddOn` uses `unitsLeft` where the category uses `slotsLeft`. The shape is identical on
+purpose; that one word differs because a category sells a place in a race and an add-on sells a
+thing off a shelf, and calling a jersey a "slot" reads as a copy-paste rather than a decision.
 
-## Yang belum
+## Not done yet
 
-- **`npm publish`** — butuh kredensial npm milik James. Runbook-nya di
-  `README.md` bagian Development + `docs/deployments.md`. Semua langkah
-  sebelumnya sudah diverifikasi lewat `npm pack` + install tarball di project
-  TypeScript kosong di luar repo (typecheck bersih, quickstart jalan ke testnet,
-  dokumen valid terhadap schema).
-- **Leg `enter` berbayar di e2e** — butuh `SUSD_DISTRIBUTOR_SECRET` di `be/.env`.
-  Script-nya sudah menangani, dan kalau secret tidak ada dia **bilang** dia
-  melewatinya, bukan diam-diam lulus dengan test yang lebih lemah.
-- **`STERUN_ADMIN_SECRET` sekarang WAJIB untuk e2e** (STE-36). `create_event`
-  gated allowlist organiser milik admin, dan organiser tidak bisa memberi izin
-  ke dirinya sendiri — itu justru gunanya gerbang itu. Jadi script-nya
-  meng-`addOrganiser` dulu untuk wallet sekali-pakai yang dia buat, lalu
-  membuktikan gerbangnya dari sisi negatif: satu address yang tidak
-  di-allowlist ditolak `NotAllowlistedOrganiser(18)`. Tanpa secret-nya script
-  **gagal keras**, bukan melewati langkah — tidak ada event berarti tidak ada
-  apa pun setelahnya.
+- **The paid `enter` leg in e2e** — needs `SUSD_DISTRIBUTOR_SECRET` in `be/.env`. The script already
+  handles it, and when the secret is missing it **says** it is skipping that leg rather than quietly
+  passing a weaker test.
+- **`STERUN_ADMIN_SECRET` is now REQUIRED for e2e** (STE-36). `create_event` is gated by the admin's
+  organiser allowlist, and an organiser cannot grant themselves access — that is the point of the
+  gate. So the script calls `addOrganiser` for the throwaway wallet it creates, then proves the gate
+  from the negative side: an address that is not allowlisted is refused with
+  `NotAllowlistedOrganiser(18)`. Without the secret the script **fails hard** rather than skipping a
+  step — no event means nothing after it can run either.
