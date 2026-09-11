@@ -254,8 +254,8 @@ export function StepDetails({
           kind="image"
           value={details.posterUrl}
           onChange={(posterUrl) => set({ posterUrl })}
-          hint="PNG or JPEG, 1200 px wide or more, up to 5 MB."
-          help="It sits at the top of your event page, as wide as the page and up to about 400 px tall, so a wide picture fills that space and a tall one is shown smaller. Any shape works. Under 1200 px wide it starts to look soft on a good screen."
+          hint="16:9, 1920 × 1080 px recommended. PNG or JPEG, up to 5 MB."
+          help="The same picture is used on your event page and on its card in the race directory, both in a 16:9 frame. Other shapes still work: they are shown whole, with a blurred copy of the picture filling the space around them. Under 1280 px wide it starts to look soft on a good screen."
         />
         <FileField
           id="waiver"

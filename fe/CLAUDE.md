@@ -193,6 +193,39 @@ Form validation has two classes that appear at different times (`modules/organis
 other) appears immediately. An empty field is not necessarily wrong; contradictory dates certainly
 are.
 
+### `/` — the poster-first directory (2026-09-11)
+
+`modules/directory/`. Design: `docs/superpowers/specs/2026-09-11-directory-redesign-design.md`.
+What is settled:
+
+- **Posters come from each event's document**, read by `useEventDocuments` through
+  `metadataQuery`, the same cache entry `/events/[id]` uses. An unproven document contributes
+  nothing: no poster, no venue, no province.
+- **The poster frame is 16:9 and never crops** (`PosterFrame`). The poster is shown whole over a
+  blurred copy of itself, because posters carry their own date and venue as text. No poster, a
+  failed hash, or a broken image all say **"No image"** (Ancung chose that over a decorative
+  placeholder: a missing picture should read as missing).
+- **Featured** = `Open`, upcoming, has a poster, soonest first, at most three. Chosen once every
+  document has answered, so the row does not reshuffle.
+- **Area is by province**, picked by the visitor and stored in `localStorage` (`lib/area.ts`). The
+  form is `React.lazy`: the places dataset is 176 KB and the directory must not load it up front.
+- **Filters** live in a staged drawer. Price and distance are matched on the same category; price
+  buckets are fixed, not a slider. Labels use "to", never a dash (`ui-rules.test.ts`).
+- All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
+- **Documents are read once per distinct `(uri, metadata_hash)`** (`useEventDocuments`), not once
+  per event: several testnet events share one document, and one query per event produced duplicate
+  React Query keys.
+- **`metadataQuery` in `hooks/useEventMetadata.ts` is the shared query definition** for the event
+  page and the directory; `fetchEventMetadata` gives up after `METADATA_TIMEOUT_MS` (8 s) so one
+  dead host cannot hold the featured row back.
+- **Side cards in the featured row are compact** (title, date, entries left), matching the
+  wireframe.
+- **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
+  `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
+  its corners.
+- **A `SearchableSelect` inside a Dialog must be `modal`** (the area picker does this), or the
+  Dialog's scroll lock stops its list from scrolling by wheel or touch.
+
 ### `/org` — the events this wallet organises
 
 `modules/organiser/OrganiserHome.tsx`. Three things are settled:

@@ -136,7 +136,7 @@ address as it is, plus how many events they have created and how many reached `C
 
 | URL | Shows | Data source | Ticket |
 | --- | --- | --- | --- |
-| `/` | Event cards: name, date, status badge, category summary. Only `Open` events get an enter CTA. Loading + empty states (slow testnet / no events yet). | the chain (RPC) — the indexer as a fast path, with truth still from the chain | STE-13 |
+| `/` | Poster-first directory (redesigned 2026-09-11, spec `docs/superpowers/specs/2026-09-11-directory-redesign-design.md`): a featured row of `Open`, upcoming races that have a poster; a "Races in your area" row for the province the visitor chose (saved in their browser); every race as a card with its poster in a 16:9 frame (shown whole, never cropped; "No image" without one), venue, date, entries left and starting price. Search, plus a filter drawer: date order, location, price, distance, open only. Loading + empty + error states. | the chain (RPC) for the races, plus each event's verified metadata document for poster and location | STE-13 |
 | `/events/[id]` | see §3.1 | the chain + the metadata document | STE-13 |
 | `/runner/[address]` | Race history per row: event, category, bib, state, finish time, transaction link. An identity-check block. An empty state. Paginated at 20. | the chain (truth), the indexer (to enrich event metadata) | STE-24 |
 
