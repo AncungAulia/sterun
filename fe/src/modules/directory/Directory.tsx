@@ -2,8 +2,8 @@
 
 /**
  * STE-13 — the public race directory, read from the chain on every visit.
- * Redesigned poster-first on 2026-09-11
- * (docs/superpowers/specs/2026-09-11-directory-redesign-design.md).
+ * Redesigned poster-first on 2026-09-11, then made one list filtered by place
+ * (Revision 2 of docs/superpowers/specs/2026-09-11-directory-redesign-design.md).
  *
  * Four states, and the distinction between three of them is the whole point of
  * the page: loading, empty, failed, and a list. An empty registry and an
@@ -12,9 +12,15 @@
  *
  * Everything a card shows beyond the chain (poster, venue, province) comes from
  * each event's document through the same verified query the event page uses,
- * so an unproven document contributes nothing here either. The featured row and
- * the area row wait until every document has answered, so they are chosen once
- * instead of reshuffling as posters arrive.
+ * so an unproven document contributes nothing here either. The featured row
+ * waits until every document has answered, so it is chosen once instead of
+ * reshuffling as posters arrive.
+ *
+ * The place in the header filters the whole page, featured row included: a
+ * visitor who chose Yogyakarta should not open the page on a race in Jakarta.
+ * A race's place is only known from its document, so while a place is chosen
+ * and documents are still arriving the page keeps its loading state rather than
+ * drawing a list that grows, or a "no races here" that is only a guess.
  *
  * The refresh control stays for the acceptance scenario in the ticket: create
  * an event, press refresh, and it appears without this app being redeployed.
@@ -67,7 +73,10 @@ export function Directory() {
     summary,
     document: documents.byEvent.get(summary.event.eventId) ?? null,
   }));
-  const searched = entries.filter((item) => matchesSearch(item, query));
+  // Every choice below starts from the chosen place, so neither a search, the
+  // drawer's count nor the featured row can reach a race outside it.
+  const located = area ? entries.filter((item) => inArea(item, area)) : entries;
+  const searched = located.filter((item) => matchesSearch(item, query));
   const results = sortByDate(
     searched.filter((item) => matchesFilters(item, filters)),
     order,
@@ -75,15 +84,12 @@ export function Directory() {
   );
   const narrowing = query.trim().length > 0 || activeFilterCount(filters) > 0;
   const featured =
-    !narrowing && documents.settled && nowS !== undefined ? pickFeatured(entries, nowS) : [];
-  const nearby =
-    !narrowing && area && documents.settled
-      ? sortByDate(
-          entries.filter((item) => inArea(item, area)),
-          order,
-          nowS ?? 0n,
-        )
-      : null;
+    !narrowing && documents.settled && nowS !== undefined ? pickFeatured(located, nowS) : [];
+  const locating = area !== null && !documents.settled;
+
+  let heading = "All races";
+  if (narrowing) heading = `${results.length} ${results.length === 1 ? "race matches" : "races match"}`;
+  else if (area) heading = `Races in ${placeLabel(area)}`;
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: eventKeys.all });
@@ -158,39 +164,35 @@ export function Directory() {
         </EmptyState>
       ) : null}
 
-      {data && data.events.length > 0 ? (
+      {data && data.events.length > 0 && locating ? <DirectorySkeleton /> : null}
+
+      {data && data.events.length > 0 && !locating ? (
         <>
           <FeaturedEvents entries={featured} />
 
-          {nearby && area ? (
-            <section aria-labelledby="directory-nearby" className="flex flex-col gap-4">
-              <h2 id="directory-nearby" className="heading-strong text-2xl text-ink">
-                Races in your area
-              </h2>
-              {nearby.length > 0 ? (
-                <EventGrid entries={nearby} pending={documents.pending} />
-              ) : (
-                <p className="text-base text-n-500">No races in {placeLabel(area)} yet.</p>
-              )}
-            </section>
-          ) : null}
-
-          <section aria-labelledby="directory-all" className="flex flex-col gap-4">
-            <h2 id="directory-all" className="heading-strong text-2xl text-ink">
-              {narrowing
-                ? `${results.length} ${results.length === 1 ? "race matches" : "races match"}`
-                : "All races"}
+          <section aria-labelledby="directory-list" className="flex flex-col gap-4">
+            <h2 id="directory-list" className="heading-strong text-2xl text-ink">
+              {heading}
             </h2>
             {results.length > 0 ? (
               <EventGrid entries={results} pending={documents.pending} />
-            ) : (
+            ) : null}
+            {results.length === 0 && narrowing ? (
               <>
                 <EmptyState title="No races match">Try a different search or fewer filters.</EmptyState>
                 <Button variant="link" className="self-center" onClick={clearNarrowing}>
                   Clear search and filters
                 </Button>
               </>
-            )}
+            ) : null}
+            {results.length === 0 && !narrowing && area ? (
+              <>
+                <EmptyState title={`No races in ${placeLabel(area)} yet`} />
+                <Button variant="link" className="self-center" onClick={() => clearArea()}>
+                  See all locations
+                </Button>
+              </>
+            ) : null}
           </section>
         </>
       ) : null}
@@ -215,7 +217,7 @@ function EventGrid({
   pending: ReadonlySet<number>;
 }) {
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {entries.map((item) => (
         <li key={item.summary.event.eventId}>
           <EventCard entry={item} documentLoading={pending.has(item.summary.event.eventId)} />

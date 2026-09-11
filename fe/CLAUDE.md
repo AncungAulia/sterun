@@ -204,17 +204,29 @@ What is settled:
   blurred copy of itself, because posters carry their own date and venue as text. No poster, a
   failed hash, or a broken image all say **"No image"** (Ancung chose that over a decorative
   placeholder: a missing picture should read as missing).
-- **Featured** = `Open`, upcoming, has a poster, soonest first, at most three. Chosen once every
-  document has answered, so the row does not reshuffle.
-- **The location control is a place filter** (Revision 2): "All locations" by default, or a country
-  with an optional province, picked by the visitor and stored in `localStorage` under `sterun.area`
-  (`lib/area.ts`). `province` is optional; absent means the whole country, which the dialog offers as
-  the first province option, "All of {country}". `inArea` matches by province rather than city, and
-  compares country codes case-insensitively. The form is `React.lazy`: the places dataset is 176 KB
-  and the directory must not load it up front, so the button's label comes from `placeLabel` in
-  `lib/area.ts`, which imports nothing.
-- **Filters** live in a staged drawer. Price and distance are matched on the same category; price
-  buckets are fixed, not a slider. Labels use "to", never a dash (`ui-rules.test.ts`).
+- **Featured** = `Open`, upcoming, has a poster, soonest first, at most three, taken from the races
+  in the chosen place. Chosen once every document has answered, so the row does not reshuffle.
+- **The location control is a filter for the whole page** (Revision 2): "All locations" by default,
+  or a country with an optional province, picked by the visitor and stored in `localStorage` under
+  `sterun.area` (`lib/area.ts`). The featured row, the search, the drawer's live count and the list
+  all start from the races in that place. `province` is optional; absent means the whole country,
+  which the dialog offers as the first province option, "All of {country}". `inArea` matches by
+  province rather than city, and compares country codes case-insensitively. A country-only place
+  also matches a race whose document names that country but gives no province. The form is
+  `React.lazy`: the places dataset is 176 KB and the directory must not load it up front, so the
+  button's label comes from `placeLabel` in `lib/area.ts`, which imports nothing.
+- **One list, no separate area row.** Its heading is "All races" with no place, "Races in {place}"
+  with one, and "{n} races match" once a search or filter is applied. A place with no races shows
+  "No races in {place} yet" and a **See all locations** button that clears the place. A race's place
+  is only in its document, so while a place is chosen and documents are still arriving the page
+  shows the loading skeleton instead of a list that grows. Grid: 2 columns from `sm`, 3 from `lg`,
+  4 from `xl`, for the list and the skeleton alike.
+- **Filters** live in a staged drawer: Sort by ("Nearest date first" / "Furthest date first"),
+  Price, Distance, and Availability ("Hide full and closed races", which hides races that are not
+  `Open` or have no places left). There is no location group: the place is chosen in the header,
+  and a second location control could only disagree with it. Price and distance are matched on the
+  same category; price buckets are fixed, not a slider. Labels use "to", never a dash
+  (`ui-rules.test.ts`).
 - **Documents are read once per distinct `(uri, metadata_hash)`** (`useEventDocuments`), not once
   per event: several testnet events share one document, and one query per event produced duplicate
   React Query keys. That is worse than a warning: `useQueries` matches its observers by key, so one
