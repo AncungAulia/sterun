@@ -1,5 +1,8 @@
 # Directory redesign — poster-first `/`
 
+> **Revision 2 (2026-09-11, after Ancung reviewed the live page) overrides the sections below where
+> they disagree.** See "Revision 2" at the end of this file.
+
 Date: 2026-09-11 · Owner: Ancung · Scope: `fe/` only (no backend, no contract change)
 
 ## Why
@@ -198,3 +201,46 @@ No crop tool (deferred).
 ## Out of scope
 
 Crop tool · `/org` dashboard · any detail page change · backend or contract changes · seeding events.
+
+---
+
+## Revision 2 — after Ancung reviewed the live page (2026-09-11)
+
+These decisions override the sections above.
+
+1. **Featured cards are full-bleed posters.** The hero and the side cards have no white body: the
+   poster frame (whole poster over its blurred copy) fills the entire card, and the title and details
+   sit in light text over a dark gradient along the bottom, like a news hero. Grid cards keep their
+   white body.
+   - Hero: title in `heading-hero` (at least `text-4xl`), venue, date, entries left, price.
+   - Side cards: title, date, entries left.
+   - Status badge top-right on all of them.
+   - Layout: from `lg`, the hero spans two columns and two rows at 16:9 and each side card fills one
+     row. Below `lg` the featured cards stack; each is 4:3 on phones so the text has room, 16:9 from
+     `sm`.
+2. **One list, filtered by location.** "Races in your area" is gone. The location control at the top
+   left *is* the location filter, default **All locations**. Choosing a place filters both the
+   featured row and the list (a featured race must be in the chosen place).
+   - Place label: "{province}, {country}", or "{country}" when no province is chosen.
+   - List heading: "All races" (no place), "Races in {place}" (place chosen), "{n} races match"
+     (search or filters applied).
+   - A place with no races: an empty state "No races in {place} yet" with a **See all locations**
+     button that clears the place.
+   - A race's place is only known from its document, so while documents are still loading and a place
+     is chosen, the list shows the loading skeleton instead of a list that grows as documents arrive.
+3. **Location dialog.** Title "Location", no description text. Country (default Indonesia), then
+   Province, whose first option is **All of {country}** (province optional). Buttons: **All locations**
+   (only when a place is set; clears it) and **Apply**. Still stored in `localStorage` under
+   `sterun.area`; `province` becomes optional. Country codes are compared case-insensitively.
+4. **Filter drawer.** No Location group and no description text.
+   - **Sort by**: "Nearest date first" (default) · "Furthest date first".
+   - **Availability**: "Hide full and closed races", which hides races that are not `Open` or have no
+     places left.
+   - Price and Distance unchanged.
+5. **Grid:** 4 columns from 1280px (`xl`), 3 from `lg`, 2 from `sm`, 1 below.
+6. **No technical wording anywhere in the UI, on every page.** Sentences that explain how the system
+   works (chain, registry, ledger, Soroban, RPC, hashes, browser storage, and the like) are deleted, or
+   rewritten in plain language when the user genuinely needs the information (for example that an
+   event cannot be changed after it is published). Evidence the product relies on stays, with plain
+   labels: transaction links after an action, wallet addresses, the event page's proof tab. The
+   `ChainSource` footer is removed from pages.
