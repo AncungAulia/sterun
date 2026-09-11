@@ -63,7 +63,7 @@ Recorded so far, all **live on testnet**:
 | EventRegistry v1 | `CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64` | STE-33 |
 | RaceRecord v1 | `CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4` | STE-33 |
 | EventRegistry (current, v2) | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` | STE-35, upgraded in place by STE-36 |
-| RaceRecord (current, v2) | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | STE-35 |
+| RaceRecord (current, v2) | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` | STE-35, upgraded in place by STE-41 |
 
 **Two pairs, and both are alive.** v1 is non-upgradeable so it cannot be replaced in place; v2 has
 paid add-ons, the `Cancelled` status, the organiser allowlist and `upgrade`. `be/` and `fe/` both

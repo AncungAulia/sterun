@@ -16,7 +16,7 @@ writing code here.
 ```bash
 cd sc
 stellar contract build            # REQUIRED first — the tests read the wasm it produces
-cargo test                        # 66 (event_registry) + 60 (race_record)
+cargo test                        # 66 (event_registry) + 72 (race_record)
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 ./scripts/check-exports.sh        # non-transferable, proven from the wasm
@@ -113,15 +113,20 @@ that is no longer the only way to change a live contract — see below.
 
 ## v2: the contracts are upgradeable, and storage keys are append-only FOREVER
 
-**Already used twice** to change a live contract without changing its address: RaceRecord v2.0.1 (an
-internal optimisation) and EventRegistry v2.1.0 (the organiser allowlist, STE-36). The second added a
-`DataKey` variant to a contract already holding other people's events, so the rules below stop being
-theory there. The evidence is more than procedure: the wasm that was live before the upgrade is
-committed in `contracts/event_registry/testdata/`, and
-`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` deploys that code, writes state with
-it, then replaces it with the current build and reads it all back. If you add another `DataKey`
-variant, copy that pattern — and refresh its fixture **after** your upgrade lands, not from a local
-build.
+**Already used three times** to change a live contract without changing its address: RaceRecord
+v2.0.1 (an internal optimisation), EventRegistry v2.1.0 (the organiser allowlist, STE-36) and
+RaceRecord v2.2.0 (`record_finish_untimed`, STE-41). The second added a `DataKey` variant to a
+contract already holding other people's events, so the rules below stop being theory there. The
+evidence is more than procedure: the wasm that was live before each of the last two upgrades is
+committed in `contracts/<contract>/testdata/`, and
+`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` /
+`records_written_by_the_live_wasm_survive_the_untimed_upgrade` deploy that code, write state with
+it, then replace it with the current build and read it all back. For any upgrade, copy that pattern:
+fetch the live wasm with `stellar contract fetch` **before** you upgrade, and treat the fixture as
+the "before" of the **next** upgrade — never refresh it from a local build.
+
+The upgrade itself is `scripts/upgrade-testnet.sh`; a change that adds behaviour gets its own
+asserted on-chain sanity script next to it (`allowlist-testnet.sh`, `untimed-testnet.sh`).
 
 Both contracts export an admin-gated `upgrade(new_wasm_hash)` that calls
 `env.deployer().update_current_contract_wasm`. This is Soroban's **native** mechanism: the bytecode is
