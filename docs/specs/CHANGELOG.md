@@ -148,9 +148,11 @@ Vectors: no value changed. `HASH_AND_TOTP.md` was untouched.
 
 ### Procedure
 
-This spec change was **pre-authorised by Axel (PM)** through the STE-41 brief (`UNTIMED_BRIEF.md`:
-"Axel pre-authorize, TANPA gate ACC", merge to `main` after every e2e is green), and still landed
-through a PR rather than a direct push to `main` — the same arrangement as [2.1.0].
+This spec change was **pre-authorised by Axel (PM)** through the STE-41 build brief ("Axel
+pre-authorises, WITHOUT an ACC gate"; merge to `main` once every e2e is green). The brief itself was
+handed to the agent in Indonesian and is not committed, since this repository is English-only; the
+decision, the authorisation and the evidence are recorded as a comment on Linear STE-41 instead. It
+still landed through a PR rather than a direct push to `main` — the same arrangement as [2.1.0].
 
 ---
 
