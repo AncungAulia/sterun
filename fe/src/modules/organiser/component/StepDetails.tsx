@@ -255,7 +255,7 @@ export function StepDetails({
           value={details.posterUrl}
           onChange={(posterUrl) => set({ posterUrl })}
           hint="16:9, 1920 × 1080 px recommended. PNG or JPEG, up to 5 MB."
-          help="The same picture is used on your event page and on its card in the race directory, both in a 16:9 frame. Other shapes still work: they are shown whole, with a blurred copy of the picture filling the space around them. Under 1280 px wide it starts to look soft on a good screen."
+          help="The same picture is used on your event page and on its card in the race directory. The card is a 16:9 frame: other shapes are shown whole there, with a blurred copy of the picture filling the space around them. Under 1280 px wide it starts to look soft on a good screen."
         />
         <FileField
           id="waiver"
