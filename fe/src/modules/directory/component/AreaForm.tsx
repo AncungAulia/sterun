@@ -1,12 +1,16 @@
 "use client";
 
 /**
- * The country and province behind "Races in your area".
+ * The country, and optionally the province, that the directory is filtered to.
  *
  * Indonesia is preselected, unlike the organiser's place fields, which start
  * empty (PlaceFields). That form writes a frozen document, where a wrong
  * prefilled country would be permanent. This is a browsing preference for a
  * pilot run in Indonesia, and changing it takes one tap.
+ *
+ * The whole country is the province list's first option, "All of Indonesia",
+ * rather than a province left unpicked: an empty select reads as unfinished,
+ * and a country on its own is a complete answer.
  */
 import { useState } from "react";
 
@@ -20,6 +24,13 @@ import { countries, countryName, provincesOf } from "@/lib/places";
 
 const DEFAULT_COUNTRY = "ID";
 
+/**
+ * The province value that means the whole country. Empty works as an option
+ * value because SearchableSelect matches options by equality and has no
+ * "nothing selected" value of its own, and no province name is ever blank.
+ */
+const WHOLE_COUNTRY = "";
+
 interface AreaFormProps {
   area: Area | null;
   onSave: (area: Area) => void;
@@ -28,14 +39,19 @@ interface AreaFormProps {
 
 export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
   // The dialog unmounts its content when it closes, so this starts from the
-  // saved area every time it opens.
+  // saved place every time it opens.
   const [country, setCountry] = useState(area?.countryCode ?? DEFAULT_COUNTRY);
-  const [province, setProvince] = useState(area?.province ?? "");
+  const [province, setProvince] = useState(area?.province ?? WHOLE_COUNTRY);
+  const name = countryName(country) ?? country;
   // The dataset lists some provinces under two ids and one name (Indonesia's
-  // Maluku and Papua among them). An area is stored by name, so those rows are
+  // Maluku and Papua among them). A place is stored by name, so those rows are
   // one choice here, and listing both would show the same name twice.
   const provinces = [...new Set(provincesOf(country).map((item) => item.name))];
-  const ready = country.length > 0 && province.trim().length > 0;
+
+  function apply() {
+    const chosen = province.trim();
+    onSave(chosen ? { countryCode: country, country: name, province: chosen } : { countryCode: country, country: name });
+  }
 
   return (
     <>
@@ -52,7 +68,7 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
               // and that must not throw away the province picked under it.
               if (next === country) return;
               setCountry(next);
-              setProvince("");
+              setProvince(WHOLE_COUNTRY);
             }}
             placeholder="Select country"
             modal
@@ -64,19 +80,24 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
             <SearchableSelect
               id="area-province"
               ariaLabel="Province"
-              options={provinces.map((name) => ({ value: name, label: name }))}
+              options={[
+                { value: WHOLE_COUNTRY, label: `All of ${name}` },
+                ...provinces.map((item) => ({ value: item, label: item })),
+              ]}
               value={province}
               onChange={setProvince}
               placeholder="Search provinces"
               modal
             />
           ) : (
+            // A country the dataset has no provinces for. Left blank, it is the
+            // whole country, which the placeholder says in the list's own words.
             <Input
               id="area-province"
               aria-label="Province"
               value={province}
               onChange={(event) => setProvince(event.target.value)}
-              placeholder="Type the province or state"
+              placeholder={`All of ${name}`}
             />
           )}
         </div>
@@ -85,16 +106,11 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
       <DialogFooter>
         {area ? (
           <Button variant="ghost" onClick={onClear}>
-            Clear area
+            All locations
           </Button>
         ) : null}
-        <Button
-          disabled={!ready}
-          onClick={() =>
-            onSave({ countryCode: country, country: countryName(country) ?? country, province: province.trim() })
-          }
-        >
-          Save area
+        <Button disabled={country.length === 0} onClick={apply}>
+          Apply
         </Button>
       </DialogFooter>
     </>

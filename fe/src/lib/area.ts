@@ -1,20 +1,24 @@
 /**
- * The visitor's chosen area, kept in this browser only.
+ * The place the visitor filters races by, kept in this browser only: a whole
+ * country, or one province of it. No stored place means all locations.
  *
  * Not an account setting: there are no accounts, and a province is not worth a
  * server round trip. localStorage can refuse (a private window, storage turned
- * off), so every access is guarded and the page simply works without an area.
+ * off), so every access is guarded and the page simply works without a place.
  *
- * The country name is stored beside its code so the header can name the area
+ * The country name is stored beside its code so the header can name the place
  * without loading the places dataset, which is 176 KB and only needed once the
- * visitor opens the picker.
+ * visitor opens the picker. That is also why this file imports nothing.
  */
 export interface Area {
   /** ISO 3166-1 alpha-2, the same code event documents carry. */
   countryCode: string;
   country: string;
-  /** The province as the places dataset spells it, e.g. "DI Yogyakarta". */
-  province: string;
+  /**
+   * The province as the places dataset spells it, e.g. "DI Yogyakarta". Absent
+   * for the whole country, never blank.
+   */
+  province?: string;
 }
 
 export const AREA_STORAGE_KEY = "sterun.area";
@@ -31,8 +35,17 @@ export function parseArea(raw: string | null): Area | null {
   const { countryCode, country, province } = value as Record<string, unknown>;
   if (typeof countryCode !== "string" || !/^[A-Z]{2}$/.test(countryCode)) return null;
   if (typeof country !== "string" || country.trim().length === 0) return null;
-  if (typeof province !== "string" || province.trim().length === 0) return null;
-  return { countryCode, country: country.trim(), province: province.trim() };
+  const place: Area = { countryCode, country: country.trim() };
+  // Missing or blank is the whole country. A province that is not text at all
+  // was not written by this app, so the stored value is not trusted.
+  if (province === undefined || province === null) return place;
+  if (typeof province !== "string") return null;
+  return province.trim() ? { ...place, province: province.trim() } : place;
+}
+
+/** "DI Yogyakarta, Indonesia", or just "Indonesia" for a whole country. */
+export function placeLabel(area: Area): string {
+  return area.province ? `${area.province}, ${area.country}` : area.country;
 }
 
 const listeners = new Set<() => void>();

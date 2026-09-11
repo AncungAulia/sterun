@@ -58,34 +58,68 @@ describe("pickFeatured", () => {
 });
 
 describe("inArea", () => {
-  it("matches a race in the same country and province", () => {
-    expect(inArea(entry(summary(1), metadata()), YOGYA)).toBe(true);
+  const INDONESIA = { countryCode: "ID", country: "Indonesia" };
+
+  function raceIn(location: NonNullable<Parameters<typeof metadata>[0]>["location"]) {
+    return entry(summary(1), metadata({ location }));
+  }
+
+  describe("a province", () => {
+    it("matches a race in the same country and province", () => {
+      expect(inArea(entry(summary(1), metadata()), YOGYA)).toBe(true);
+    });
+
+    it("ignores case and surrounding spaces in the province", () => {
+      expect(inArea(raceIn({ province: " di yogyakarta ", countryCode: "ID" }), YOGYA)).toBe(true);
+    });
+
+    it("ignores case and surrounding spaces in the country code", () => {
+      expect(inArea(raceIn({ province: "DI Yogyakarta", countryCode: " id " }), YOGYA)).toBe(true);
+    });
+
+    it("does not match another province", () => {
+      expect(inArea(raceIn({ province: "DKI Jakarta", countryCode: "ID" }), YOGYA)).toBe(false);
+    });
+
+    it("does not match a province of the same name in another country", () => {
+      expect(inArea(raceIn({ province: "DI Yogyakarta", countryCode: "MY" }), YOGYA)).toBe(false);
+    });
+
+    it.each([
+      ["no document", entry(summary(1), null)],
+      ["no location", entry(summary(1), metadata({ location: undefined }))],
+      ["no province", raceIn({ countryCode: "ID", city: "Sleman" })],
+    ])("does not match a race with %s", (_label, race) => {
+      expect(inArea(race, YOGYA)).toBe(false);
+    });
   });
 
-  it("ignores case and surrounding spaces in the province", () => {
-    const race = entry(summary(1), metadata({ location: { province: " di yogyakarta ", countryCode: "ID" } }));
+  describe("a whole country", () => {
+    it.each([
+      ["DI Yogyakarta", { province: "DI Yogyakarta", countryCode: "ID" }],
+      ["DKI Jakarta", { province: "DKI Jakarta", countryCode: "ID" }],
+      ["no province named", { countryCode: "ID", city: "Sleman" }],
+    ])("matches a race in that country with %s", (_label, location) => {
+      expect(inArea(raceIn(location), INDONESIA)).toBe(true);
+    });
 
-    expect(inArea(race, YOGYA)).toBe(true);
-  });
+    it("ignores case in the country code", () => {
+      expect(inArea(raceIn({ province: "Bali", countryCode: "id" }), INDONESIA)).toBe(true);
+      expect(inArea(raceIn({ province: "Bali", countryCode: "ID" }), { ...INDONESIA, countryCode: "id" })).toBe(true);
+    });
 
-  it("does not match another province", () => {
-    const race = entry(summary(1), metadata({ location: { province: "DKI Jakarta", countryCode: "ID" } }));
+    it("does not match a race in another country", () => {
+      expect(inArea(raceIn({ province: "Selangor", countryCode: "MY" }), INDONESIA)).toBe(false);
+    });
 
-    expect(inArea(race, YOGYA)).toBe(false);
-  });
-
-  it("does not match a province of the same name in another country", () => {
-    const race = entry(summary(1), metadata({ location: { province: "DI Yogyakarta", countryCode: "MY" } }));
-
-    expect(inArea(race, YOGYA)).toBe(false);
-  });
-
-  it.each([
-    ["no document", entry(summary(1), null)],
-    ["no location", entry(summary(1), metadata({ location: undefined }))],
-    ["no province", entry(summary(1), metadata({ location: { countryCode: "ID", city: "Sleman" } }))],
-  ])("does not match a race with %s", (_label, race) => {
-    expect(inArea(race, YOGYA)).toBe(false);
+    it.each([
+      ["no document", entry(summary(1), null)],
+      ["no location", entry(summary(1), metadata({ location: undefined }))],
+      ["no country code", raceIn({ province: "DI Yogyakarta", city: "Sleman" })],
+      ["a blank country code", raceIn({ province: "DI Yogyakarta", countryCode: "  " })],
+    ])("does not match a race with %s", (_label, race) => {
+      expect(inArea(race, INDONESIA)).toBe(false);
+    });
   });
 });
 

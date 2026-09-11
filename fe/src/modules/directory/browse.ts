@@ -60,18 +60,20 @@ export function pickFeatured(
 }
 
 /**
- * Whether a race is in the visitor's chosen area.
+ * Whether a race is in the place the visitor chose: a whole country, or one
+ * province of it. A race whose document does not prove a country is in no place.
  *
  * By province rather than city: Sleman and the city of Yogyakarta are different
  * cities a short ride apart, and somebody who picked one wants the other.
+ * Country codes ignore case because organisers type them into their documents,
+ * and "id" is still Indonesia.
  */
 export function inArea(entry: DirectoryEntry, area: Area): boolean {
   const location = entry.document?.location;
-  if (!location?.countryCode || !location.province) return false;
-  return (
-    location.countryCode === area.countryCode &&
-    normalise(location.province) === normalise(area.province)
-  );
+  const countryCode = normalise(location?.countryCode);
+  if (!countryCode || countryCode !== normalise(area.countryCode)) return false;
+  const province = normalise(area.province);
+  return !province || normalise(location?.province) === province;
 }
 
 /** A case-insensitive match on the race name, venue, city and province. */

@@ -206,8 +206,13 @@ What is settled:
   placeholder: a missing picture should read as missing).
 - **Featured** = `Open`, upcoming, has a poster, soonest first, at most three. Chosen once every
   document has answered, so the row does not reshuffle.
-- **Area is by province**, picked by the visitor and stored in `localStorage` (`lib/area.ts`). The
-  form is `React.lazy`: the places dataset is 176 KB and the directory must not load it up front.
+- **The location control is a place filter** (Revision 2): "All locations" by default, or a country
+  with an optional province, picked by the visitor and stored in `localStorage` under `sterun.area`
+  (`lib/area.ts`). `province` is optional; absent means the whole country, which the dialog offers as
+  the first province option, "All of {country}". `inArea` matches by province rather than city, and
+  compares country codes case-insensitively. The form is `React.lazy`: the places dataset is 176 KB
+  and the directory must not load it up front, so the button's label comes from `placeLabel` in
+  `lib/area.ts`, which imports nothing.
 - **Filters** live in a staged drawer. Price and distance are matched on the same category; price
   buckets are fixed, not a slider. Labels use "to", never a dash (`ui-rules.test.ts`).
 - **Documents are read once per distinct `(uri, metadata_hash)`** (`useEventDocuments`), not once

@@ -2,9 +2,10 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useArea } from "@/hooks/useArea";
-import { AREA_STORAGE_KEY, parseArea } from "@/lib/area";
+import { AREA_STORAGE_KEY, parseArea, placeLabel } from "@/lib/area";
 
 const YOGYA = { countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" };
+const INDONESIA = { countryCode: "ID", country: "Indonesia" };
 
 beforeEach(() => window.localStorage.clear());
 
@@ -23,6 +24,14 @@ describe("useArea", () => {
 
       expect(result.current.area).toEqual(YOGYA);
       expect(JSON.parse(window.localStorage.getItem(AREA_STORAGE_KEY) ?? "null")).toEqual(YOGYA);
+    });
+
+    it("keeps a whole country, with no province", () => {
+      const { result } = renderHook(() => useArea());
+
+      act(() => result.current.setArea(INDONESIA));
+
+      expect(result.current.area).toStrictEqual(INDONESIA);
     });
 
     it("forgets the area when cleared", () => {
@@ -59,15 +68,24 @@ describe("useArea", () => {
     it("trims the province it reads", () => {
       expect(parseArea(JSON.stringify({ ...YOGYA, province: "  DI Yogyakarta " }))).toEqual(YOGYA);
     });
+
+    it.each([
+      ["missing", JSON.stringify(INDONESIA)],
+      ["blank", JSON.stringify({ ...INDONESIA, province: "   " })],
+      ["null", JSON.stringify({ ...INDONESIA, province: null })],
+    ])("reads a whole country when the province is %s", (_label, raw) => {
+      // Strict, so a blank province is dropped rather than kept as "" or undefined.
+      expect(parseArea(raw)).toStrictEqual(INDONESIA);
+    });
   });
 
   describe("negative", () => {
     it.each([
       ["not JSON", "{"],
-      ["missing the province", JSON.stringify({ countryCode: "ID", country: "Indonesia" })],
       ["a lowercase country code", JSON.stringify({ ...YOGYA, countryCode: "id" })],
-      ["a blank province", JSON.stringify({ ...YOGYA, province: "   " })],
+      ["missing the country code", JSON.stringify({ country: "Indonesia", province: "Bali" })],
       ["missing the country name", JSON.stringify({ countryCode: "ID", province: "Bali" })],
+      ["a province that is not text", JSON.stringify({ ...INDONESIA, province: 34 })],
       ["not an object", JSON.stringify("DI Yogyakarta")],
     ])("ignores a stored value that is %s", (_label, raw) => {
       expect(parseArea(raw)).toBeNull();
@@ -82,5 +100,15 @@ describe("useArea", () => {
 
       expect(result.current.area).toBeNull();
     });
+  });
+});
+
+describe("placeLabel", () => {
+  it("names the province and its country", () => {
+    expect(placeLabel(YOGYA)).toBe("DI Yogyakarta, Indonesia");
+  });
+
+  it("names only the country when no province is chosen", () => {
+    expect(placeLabel(INDONESIA)).toBe("Indonesia");
   });
 });

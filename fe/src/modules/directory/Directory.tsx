@@ -32,6 +32,7 @@ import { useArea } from "@/hooks/useArea";
 import { useEventDocuments } from "@/hooks/useEventDocuments";
 import { eventKeys, useEvents } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
+import { placeLabel } from "@/lib/area";
 import { cn } from "@/utils/cn";
 
 import {
@@ -169,7 +170,7 @@ export function Directory() {
               {nearby.length > 0 ? (
                 <EventGrid entries={nearby} pending={documents.pending} />
               ) : (
-                <p className="text-base text-n-500">No races in {area.province} yet.</p>
+                <p className="text-base text-n-500">No races in {placeLabel(area)} yet.</p>
               )}
             </section>
           ) : null}

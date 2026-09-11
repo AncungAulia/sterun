@@ -293,7 +293,7 @@ describe("Directory", () => {
 
       renderDirectory();
 
-      expect(await screen.findByText("No races in Bali yet.")).toBeInTheDocument();
+      expect(await screen.findByText("No races in Bali, Indonesia yet.")).toBeInTheDocument();
     });
 
     it("mentions events the registry counted but would not return", async () => {
