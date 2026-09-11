@@ -134,7 +134,12 @@ export interface SterunRecord {
   /** Unix seconds. */
   enteredAt: bigint;
   claimedAt: bigint | null;
-  /** Net finish time in seconds. `null` until `record_finish` lands. */
+  /**
+   * Net finish time in seconds. `null` until `record_finish` lands — and
+   * `null` for good on a `Finished` record that went through
+   * `record_finish_untimed`: `state === "Finished" && finishTimeS === null` is
+   * the marker for "finished, no official time". Never read it as `0`.
+   */
   finishTimeS: number | null;
   resultAt: bigint | null;
 }

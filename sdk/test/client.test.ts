@@ -465,6 +465,39 @@ describe("race flow maps onto RaceRecord", () => {
     expect(record.calls[0]?.args).toEqual({ token_id: 5, finish_time_s: 3161 });
   });
 
+  it("recordFinishUntimed calls record_finish_untimed with only the token, never a zero time", async () => {
+    const { client, record } = clientWith({}, { record_finish_untimed: good(ok(undefined)) });
+    const sent = await client.recordFinishUntimed(5);
+    expect(record.calls.map(({ method, args }) => ({ method, args }))).toEqual([
+      { method: "record_finish_untimed", args: { token_id: 5 } },
+    ]);
+    expect(sent).toMatchObject({ txHash: "txhash", ledger: 7 });
+  });
+
+  it("recordFinishUntimed surfaces InvalidState from a record that is not RacepackClaimed", async () => {
+    const { client } = clientWith({}, { record_finish_untimed: reverting(103) });
+    await expect(client.recordFinishUntimed(0)).rejects.toMatchObject({
+      variant: "InvalidState",
+      code: 103,
+      source: "race-record",
+    });
+  });
+
+  it("recordFinishUntimed surfaces RecordNotFound for an unknown token", async () => {
+    const { client } = clientWith({}, { record_finish_untimed: reverting(101) });
+    await expect(client.recordFinishUntimed(404)).rejects.toMatchObject({
+      variant: "RecordNotFound",
+      source: "race-record",
+    });
+  });
+
+  it("recordFinishUntimed builds the transaction as the organiser it is given", async () => {
+    const { client, record } = clientWith({}, { record_finish_untimed: good(ok(undefined)) });
+    const signer = { address: ORGANISER, signTransaction: async () => ({ signedTxXdr: "" }) };
+    await client.recordFinishUntimed(1, { publicKey: ORGANISER, signTransaction: signer });
+    expect(record.calls[0]?.options).toMatchObject({ publicKey: ORGANISER });
+  });
+
   it("recordDnf and extendRecordTtl address one token each", async () => {
     const { client, record } = clientWith(
       {},

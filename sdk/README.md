@@ -205,7 +205,7 @@ Three things about it are worth knowing before you write a consumer:
 | `addCategory`, `setEventStatus`, `addScanner`, `removeScanner` | EventRegistry | that event's organiser |
 | `enter` | RaceRecord | the runner (one auth tree, fee included) |
 | `claimRacepack` | RaceRecord | the organiser or an allowlisted scanner |
-| `recordFinish`, `recordDnf` | RaceRecord | that event's organiser |
+| `recordFinish`, `recordFinishUntimed`, `recordDnf` | RaceRecord | that event's organiser |
 | `extendRecordTtl` | RaceRecord | nobody — permissionless rent top-up |
 | `getEvent`, `getCategory`, `listCategories`, `getOrganiser`, `isScanner`, `eventCount`, `categoryCount` | EventRegistry | — (view) |
 | `recordOf`, `recordsOf`, `recordsOfDetailed`, `verify`, `ownerOf`, `balanceOf`, `totalSupply`, `tokenUri`, `feeToken`, `wiredRegistry` | RaceRecord | — (view) |

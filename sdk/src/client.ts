@@ -569,6 +569,26 @@ export class SterunClient {
     );
   }
 
+  /**
+   * Mark a finish with **no official time**, for untimed events (fun runs,
+   * colour runs — anything without chip timing). Organiser only, only from
+   * `RacepackClaimed` (`InvalidState(103)` otherwise), and terminal like
+   * `recordFinish`.
+   *
+   * The resulting record is `Finished` with `finishTimeS === null`, and that
+   * pair is the marker for "finished, no official time". It is deliberately
+   * not `recordFinish(tokenId, 0)`: the contract refuses `0`
+   * (`InvalidFinishTime(105)`), and the `record_finished` event carries a
+   * plain number every consumer would read as a zero-second race. This one
+   * emits `record_finished_untimed` instead (INTERFACE.md v2.2.0).
+   */
+  async recordFinishUntimed(tokenId: number, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "recordFinishUntimed",
+      () => this.record.record_finish_untimed({ token_id: tokenId }, this.callOptions(options)),
+    );
+  }
+
   /** Mark a no-show or a did-not-finish. Organiser only; terminal. */
   async recordDnf(tokenId: number, options?: CallOptions): Promise<SentResult<void>> {
     return runWrite(
