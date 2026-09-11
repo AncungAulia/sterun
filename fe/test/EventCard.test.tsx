@@ -60,6 +60,16 @@ describe("EventCard", () => {
       expect(screen.getByRole("link", { name: "Jakarta Marathon 7" })).toHaveAttribute("href", "/events/7");
     });
 
+    it("describes the link by its details, so Tab announces when the race is", () => {
+      const race = summary(7, {}, [category(0)]);
+
+      render(<EventCard entry={entry(race, metadata())} documentLoading={false} />);
+
+      const link = screen.getByRole("link", { name: "Jakarta Marathon 7" });
+      expect(link).toHaveAccessibleDescription(expect.stringContaining(formatEventDate(race.event.startsAt)));
+      expect(link).toHaveAccessibleDescription(expect.stringContaining("FT UGM, Sleman"));
+    });
+
     it("keeps a side card to title, date and entries left", () => {
       const race = summary(7, {}, [category(0)]);
 

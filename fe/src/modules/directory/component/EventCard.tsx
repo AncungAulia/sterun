@@ -48,15 +48,22 @@ export function EventCard({ entry, documentLoading, variant = "grid" }: EventCar
   // The same race can be on the page twice (featured row and grid), so the
   // title's id comes from useId, not from the event id.
   const titleId = useId();
+  const detailsId = useId();
 
   return (
     <Link
       href={`/events/${event.eventId}`}
       // Named by the race alone, not by everything inside the card ("No image, Open, ...").
       aria-labelledby={titleId}
+      // The name alone told a keyboard user nothing about where or when, so the details follow it.
+      aria-describedby={detailsId}
+      // The link is the card surface, so the global focus ring's small radius
+      // would square its corners on Tab. globals.css restores them for this slot.
+      data-slot="event-card"
       className={cn(
         "flex h-full flex-col overflow-hidden rounded-lg border border-n-200 bg-paper shadow-card",
-        "transition-[box-shadow,transform] duration-150 ease-out hover:shadow-lifted active:scale-[0.98]",
+        // Tailwind v4 compiles scale-* to the `scale` property, not `transform`.
+        "transition-[box-shadow,scale] duration-150 ease-out hover:shadow-lifted active:scale-[0.98]",
         "motion-reduce:transition-none motion-reduce:active:scale-100",
       )}
     >
@@ -81,7 +88,7 @@ export function EventCard({ entry, documentLoading, variant = "grid" }: EventCar
           {event.name}
         </h3>
 
-        <ul className="flex flex-col gap-1.5 text-sm text-n-600">
+        <ul id={detailsId} className="flex flex-col gap-1.5 text-sm text-n-600">
           {place ? (
             <li className="flex items-center gap-2">
               <MapPinIcon aria-hidden className="size-4 shrink-0 text-n-500" />

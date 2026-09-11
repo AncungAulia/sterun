@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PosterFrame } from "@/modules/directory/component/PosterFrame";
 
@@ -28,6 +28,8 @@ describe("PosterFrame", () => {
     });
 
     it("fades the poster in once it has loaded", async () => {
+      // jsdom has no layout or Tailwind CSS, so next/image's onLoad check warns about the frame's size.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const { container } = render(<PosterFrame posterUrl={POSTER} loading={false} sizes="100vw" />);
 
       const front = container.querySelectorAll("img")[1];
@@ -35,6 +37,8 @@ describe("PosterFrame", () => {
       fireEvent.load(front);
 
       await waitFor(() => expect(front).toHaveClass("opacity-100"));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('has "fill" and parent element with invalid "position"'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('has "fill" and a height value of 0'));
     });
   });
 
