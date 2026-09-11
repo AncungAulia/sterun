@@ -8,10 +8,10 @@ retypes a contract signature.
 | Package | Contract | From wasm | wasm sha256 |
 | --- | --- | --- | --- |
 | [`event-registry/`](event-registry/) | EventRegistry (C1, v2.1) | `event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` |
-| [`race-record/`](race-record/) | RaceRecord (C2, v2.0.1) | `race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` |
+| [`race-record/`](race-record/) | RaceRecord (C2, v2.2) | `race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` |
 
 The frozen contract they represent: **[`docs/specs/INTERFACE.md`](../../docs/specs/INTERFACE.md)
-v2.1.0**. These bindings talk to the **v2 pair of addresses**; the v1 addresses that are still live
+v2.2.0**. These bindings talk to the **v2 pair of addresses**; the v1 addresses that are still live
 run v1 wasm with a different `enter` signature, so do not cross the two.
 
 If this document and the files here disagree, **the document is right** — and the disagreement is
@@ -141,7 +141,7 @@ Demonstrated: a probe package with the two `file:` dependencies above passes `ts
    client concern.
 3. **`version` in `package.json` says `0.0.0`.** That is what the generator emits, and we
    deliberately do **not** change it, so the output stays byte-identical to a regeneration. The
-   meaningful version is the spec version they represent — **v2.1.0**, recorded in
+   meaningful version is the spec version they represent — **v2.2.0**, recorded in
    `docs/specs/CHANGELOG.md` — plus the wasm sha256 in the table at the top. Both of those are
    verifiable identities; the number in `package.json` is not.
 

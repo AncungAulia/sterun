@@ -17,8 +17,8 @@ use stellar_tokens::non_fungible::{Mint, NonFungibleTokenError};
 
 use crate::{
     DataKey, Error, RaceRecord, RaceRecordClient, RacepackClaimed, RecordData, RecordDnf,
-    RecordEntered, RecordFinished, RecordState, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
-    MAX_ADDONS_PER_ENTRY,
+    RecordEntered, RecordFinished, RecordFinishedUntimed, RecordState, BUMP_THRESHOLD, BUMP_TO,
+    DAY_IN_LEDGERS, MAX_ADDONS_PER_ENTRY,
 };
 
 // ---------------------------------------------------------------------------
@@ -1904,6 +1904,330 @@ fn an_entry_with_add_ons_emits_one_addon_reserved_per_unit_before_the_transfer()
 }
 
 // ---------------------------------------------------------------------------
+// Untimed finish (v2.2, STE-41)
+//
+// `record_finish_untimed` is a twin of `record_finish` with no time: same
+// organiser gate, same `RacepackClaimed` guard, same terminal `Finished`. What
+// these tests hold down is that the twin really is a twin — and that the timed
+// path it sits beside did not move at all.
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// A runner entered and checked in, ready for a result.
+    fn claimed(&self, event_id: u32, category_id: u32, seed: u8) -> u32 {
+        let token_id = self.enter(&self.runner(), event_id, category_id, seed);
+        self.env.mock_all_auths();
+        self.records().claim_racepack(&token_id, &self.organiser);
+        token_id
+    }
+
+    /// The organiser signing exactly one `record_finish_untimed`, in enforcing
+    /// auth mode.
+    fn mock_organiser_untimed(&self, signer: &Address, token_id: u32) {
+        self.env.mock_auths(&[MockAuth {
+            address: signer,
+            invoke: &MockAuthInvoke {
+                contract: &self.contract,
+                fn_name: "record_finish_untimed",
+                args: (token_id,).into_val(&self.env),
+                sub_invokes: &[],
+            },
+        }]);
+    }
+}
+
+/// `enter` -> `claim_racepack` -> `record_finish_untimed`, organiser signing in
+/// enforcing mode. The result is `Finished` with `finish_time_s == None` —
+/// which is the on-chain marker for "finished, no official time".
+#[test]
+fn record_finish_untimed_finishes_with_no_time() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let runner = w.runner();
+    let token_id = w.enter(&runner, event_id, category_id, 3);
+
+    w.env.ledger().set_timestamp(NOW + 60);
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+
+    w.env.ledger().set_timestamp(NOW + 7_200);
+    w.mock_organiser_untimed(&w.organiser, token_id);
+    w.records().record_finish_untimed(&token_id);
+
+    assert_eq!(
+        w.records().record_of(&token_id),
+        RecordData {
+            event_id,
+            category_id,
+            bib_no: 0,
+            addon_ids: vec![&w.env],
+            participant_hash: phash(&w.env, 3),
+            state: RecordState::Finished,
+            entered_at: NOW,
+            claimed_at: Some(NOW + 60),
+            finish_time_s: None,
+            result_at: Some(NOW + 7_200),
+        }
+    );
+    // Ownership never moved, and the record still verifies.
+    assert_eq!(w.records().owner_of(&token_id), runner);
+    assert!(w.records().verify(&token_id, &phash(&w.env, 3)));
+}
+
+#[test]
+fn emits_record_finished_untimed_and_not_record_finished() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 10);
+
+    w.env.mock_all_auths();
+    w.records().record_finish_untimed(&token_id);
+
+    // Exactly one event, and it is the new one: an indexer that only knows
+    // `record_finished` must never see a `0` it would read as a time.
+    let events = w.env.events().all().filter_by_contract(&w.contract);
+    assert_eq!(
+        events,
+        std::vec![RecordFinishedUntimed { token_id, event_id }.to_xdr(&w.env, &w.contract)]
+    );
+    assert_eq!(event_names(events.events()), ["record_finished_untimed"]);
+    // All fields are topics, so the data map is empty — the `RecordDnf` shape.
+    let ContractEventBody::V0(body) = &events.events()[0].body;
+    assert_eq!(body.topics.len(), 3);
+    assert_eq!(
+        body.data,
+        ScVal::Map(Some(soroban_sdk::xdr::ScMap::default()))
+    );
+}
+
+/// A runner who never collected a race pack cannot finish, timed or not.
+#[test]
+fn record_finish_untimed_before_claim_reverts_invalid_state() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Ok(Error::InvalidState))
+    );
+    let record = w.records().record_of(&token_id);
+    assert_eq!(record.state, RecordState::Entered);
+    assert_eq!(record.result_at, None);
+}
+
+#[test]
+fn record_finish_untimed_rejects_a_non_organiser() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+    let impostor = Address::generate(&w.env);
+
+    w.mock_organiser_untimed(&impostor, token_id);
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+
+    // The runner cannot declare their own finish either.
+    let runner = w.records().owner_of(&token_id);
+    w.mock_organiser_untimed(&runner, token_id);
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+
+    assert_eq!(
+        w.records().record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+}
+
+/// An allowlisted scanner may check a runner in, but a result is the
+/// organiser's call — the same split as `record_finish`.
+#[test]
+fn record_finish_untimed_rejects_an_allowlisted_scanner() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+    let scanner = Address::generate(&w.env);
+    w.env.mock_all_auths();
+    w.registry().add_scanner(&event_id, &scanner);
+
+    w.mock_organiser_untimed(&scanner, token_id);
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(
+        w.records().record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+}
+
+/// `Finished` (timed or not) and `Dnf` are terminal, and an untimed finish is
+/// no way out of either.
+#[test]
+fn record_finish_untimed_rejects_terminal_states() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let timed = w.claimed(event_id, category_id, 1);
+    let dnf = w.claimed(event_id, category_id, 2);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.record_finish(&timed, &3_600);
+    records.record_dnf(&dnf);
+
+    assert_eq!(
+        records.try_record_finish_untimed(&timed),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_record_finish_untimed(&dnf),
+        Err(Ok(Error::InvalidState))
+    );
+    // A published time is never erased into "no time".
+    assert_eq!(records.record_of(&timed).finish_time_s, Some(3_600));
+    assert_eq!(records.record_of(&dnf).state, RecordState::Dnf);
+}
+
+/// Once untimed-finished, every result path is closed: no time can be added
+/// later, no DNF can replace it, and it cannot be finished twice.
+#[test]
+fn an_untimed_finish_is_terminal() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.record_finish_untimed(&token_id);
+    let finished = records.record_of(&token_id);
+
+    w.env.ledger().set_timestamp(NOW + 60);
+    assert_eq!(
+        records.try_record_finish(&token_id, &3_600),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_record_dnf(&token_id),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_record_finish_untimed(&token_id),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_claim_racepack(&token_id, &w.organiser),
+        Err(Ok(Error::AlreadyClaimed))
+    );
+    // Not one field moved, `result_at` included.
+    assert_eq!(records.record_of(&token_id), finished);
+}
+
+#[test]
+fn record_finish_untimed_on_an_unknown_token_reverts_record_not_found() {
+    let w = World::new();
+    w.open_event(5, PRICE);
+
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_record_finish_untimed(&404),
+        Err(Ok(Error::RecordNotFound))
+    );
+}
+
+/// The two finish paths live side by side in one event without touching each
+/// other: the timed one still emits `RecordFinished` with its time and still
+/// refuses `0`, exactly as before v2.2.
+#[test]
+fn timed_and_untimed_finishes_coexist_and_the_timed_path_is_unchanged() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let timed = w.claimed(event_id, category_id, 1);
+    let untimed = w.claimed(event_id, category_id, 2);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    // Still refuses zero — `0` is not how "no time" is spelled.
+    assert_eq!(
+        records.try_record_finish(&timed, &0),
+        Err(Ok(Error::InvalidFinishTime))
+    );
+    assert_eq!(
+        records.record_of(&timed).state,
+        RecordState::RacepackClaimed
+    );
+
+    records.record_finish(&timed, &2_750);
+    assert_eq!(
+        w.env.events().all().filter_by_contract(&w.contract),
+        std::vec![RecordFinished {
+            token_id: timed,
+            event_id,
+            finish_time_s: 2_750,
+        }
+        .to_xdr(&w.env, &w.contract)]
+    );
+    records.record_finish_untimed(&untimed);
+
+    let timed_record = records.record_of(&timed);
+    let untimed_record = records.record_of(&untimed);
+    assert_eq!(timed_record.state, RecordState::Finished);
+    assert_eq!(timed_record.finish_time_s, Some(2_750));
+    assert_eq!(untimed_record.state, RecordState::Finished);
+    assert_eq!(untimed_record.finish_time_s, None);
+}
+
+/// Add-ons bought at entry survive an untimed finish, like any other.
+#[test]
+fn an_untimed_finish_keeps_the_add_ons_on_the_record() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+    let token_id = w.enter_with(
+        &w.runner(),
+        event_id,
+        category_id,
+        vec![&w.env, jersey, tumbler],
+        1,
+    );
+
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+    w.records().record_finish_untimed(&token_id);
+
+    let record = w.records().record_of(&token_id);
+    assert_eq!(record.addon_ids, vec![&w.env, jersey, tumbler]);
+    assert_eq!(record.state, RecordState::Finished);
+}
+
+/// The write re-extends the record's rent, like every other lifecycle write.
+#[test]
+fn record_finish_untimed_re_extends_a_decayed_ttl() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+
+    // Let the entry decay below the bump threshold, then finish.
+    let seq = w.env.ledger().sequence();
+    w.env
+        .ledger()
+        .set_sequence_number(seq + BUMP_TO - BUMP_THRESHOLD + DAY_IN_LEDGERS);
+    let decayed = persistent_ttl(&w.env, &w.contract, DataKey::Record(token_id));
+    assert!(decayed < BUMP_THRESHOLD, "fixture did not decay: {decayed}");
+
+    w.env.mock_all_auths();
+    w.records().record_finish_untimed(&token_id);
+    assert_eq!(
+        persistent_ttl(&w.env, &w.contract, DataKey::Record(token_id)),
+        BUMP_TO
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // Deployed from the BUILT WASM, because that is the only form
@@ -2052,6 +2376,139 @@ mod upgrade {
             }
             .to_xdr(&w.env, &w.contract)]
         );
+    }
+
+    // -- STE-41: the upgrade from the wasm genuinely live on testnet --------
+    //
+    // The tests above upgrade today's build to today's build. That proves
+    // storage survives an executable swap, not that state written by the code
+    // RUNNING ON THE CHAIN reads back under the new code. For that the "before"
+    // has to be the live artifact, so it is committed: fetched from
+    // CCVW7WVC… with `stellar contract fetch`, provenance in
+    // `testdata/README.md`.
+
+    /// RaceRecord v2.0.1, the executable at CCVW7WVC… before STE-41.
+    const LIVE_PRE_UNTIMED_WASM: &[u8] =
+        include_bytes!("../testdata/race_record_live_pre_untimed.wasm");
+    /// What the ledger reports for that contract, and INTERFACE.md §0 freezes.
+    const LIVE_PRE_UNTIMED_HASH: &str =
+        "27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b";
+
+    fn hex32(bytes: &BytesN<32>) -> std::string::String {
+        bytes
+            .to_array()
+            .iter()
+            .map(|b| std::format!("{b:02x}"))
+            .collect()
+    }
+
+    /// A World whose RaceRecord runs the LIVE pre-STE-41 executable.
+    fn live_world() -> World {
+        let w = World::new();
+        let registry = w.env.register(EventRegistry, (w.admin.clone(),));
+        let contract = w.env.register(
+            LIVE_PRE_UNTIMED_WASM,
+            (
+                w.admin.clone(),
+                registry.clone(),
+                w.token.clone(),
+                String::from_str(&w.env, NAME),
+                String::from_str(&w.env, SYMBOL),
+                String::from_str(&w.env, BASE_URI),
+            ),
+        );
+        w.env.mock_all_auths();
+        let registry_client = RegistryClient::new(&w.env, &registry);
+        registry_client.set_race_record(&contract);
+        registry_client.add_organiser(&w.organiser);
+        World {
+            contract,
+            registry,
+            ..w
+        }
+    }
+
+    /// Every lifecycle state the live code can write — Entered, RacepackClaimed,
+    /// a timed Finished, Dnf — reads back identically after the upgrade, and
+    /// the new function then works on records the OLD code minted.
+    #[test]
+    fn records_written_by_the_live_wasm_survive_the_untimed_upgrade() {
+        let w = live_world();
+        let live_hash = w
+            .env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&w.env, LIVE_PRE_UNTIMED_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_UNTIMED_HASH);
+
+        // -- written by the OLD code ---------------------------------------
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let (jersey, _) = w.jersey_and_tumbler(event_id);
+        let runner = w.runner();
+        let entered = w.enter(&runner, event_id, category_id, 1);
+        let claimed = w.enter_with(&w.runner(), event_id, category_id, vec![&w.env, jersey], 2);
+        let timed = w.enter(&w.runner(), event_id, category_id, 3);
+        let dnf = w.enter(&w.runner(), event_id, category_id, 4);
+        w.env.mock_all_auths();
+        let records = w.records();
+        records.claim_racepack(&claimed, &w.organiser);
+        records.claim_racepack(&timed, &w.organiser);
+        records.record_finish(&timed, &3_161);
+        records.record_dnf(&dnf);
+
+        // The old code does not export the new function at all.
+        assert!(records.try_record_finish_untimed(&claimed).is_err());
+
+        let before: std::vec::Vec<RecordData> = [entered, claimed, timed, dnf]
+            .iter()
+            .map(|t| records.record_of(t))
+            .collect();
+
+        // -- the upgrade ----------------------------------------------------
+        w.env.mock_all_auths();
+        records.upgrade(&upload(&w.env, "race_record.wasm"));
+
+        // -- everything the old code wrote still decodes, unchanged --------
+        for (token_id, record) in [entered, claimed, timed, dnf].iter().zip(&before) {
+            assert_eq!(&records.record_of(token_id), record);
+        }
+        assert_eq!(before[2].finish_time_s, Some(3_161));
+        assert_eq!(before[1].addon_ids, vec![&w.env, jersey]);
+        assert_eq!(records.owner_of(&entered), runner);
+        assert_eq!(records.total_supply(), 4);
+        assert!(records.verify(&timed, &phash(&w.env, 3)));
+
+        // -- the new path, on records minted by the old code ---------------
+        w.env.mock_all_auths();
+        records.record_finish_untimed(&claimed);
+        let untimed = records.record_of(&claimed);
+        assert_eq!(untimed.state, RecordState::Finished);
+        assert_eq!(untimed.finish_time_s, None);
+        assert_eq!(untimed.addon_ids, vec![&w.env, jersey]);
+
+        records.claim_racepack(&entered, &w.organiser);
+        records.record_finish_untimed(&entered);
+        assert_eq!(records.record_of(&entered).finish_time_s, None);
+
+        // Terminal states written by the old code stay terminal.
+        assert_eq!(
+            records.try_record_finish_untimed(&timed),
+            Err(Ok(Error::InvalidState))
+        );
+        assert_eq!(
+            records.try_record_finish_untimed(&dnf),
+            Err(Ok(Error::InvalidState))
+        );
+
+        // -- and the timed path is untouched by the upgrade ----------------
+        let fresh = w.claimed(event_id, category_id, 5);
+        assert_eq!(fresh, 4, "token ids continue across the upgrade");
+        w.env.mock_all_auths();
+        assert_eq!(
+            records.try_record_finish(&fresh, &0),
+            Err(Ok(Error::InvalidFinishTime))
+        );
+        records.record_finish(&fresh, &2_900);
+        assert_eq!(records.record_of(&fresh).finish_time_s, Some(2_900));
     }
 }
 

@@ -1,6 +1,6 @@
-# INTERFACE — the FROZEN Sterun contracts (v2.1.0)
+# INTERFACE — the FROZEN Sterun contracts (v2.2.0)
 
-> **Status: FROZEN 2026-09-10 (v2.1 — the organiser allowlist in EventRegistry).**
+> **Status: FROZEN 2026-09-11 (v2.2 — the untimed finish in RaceRecord).**
 > This document is handoff contract number 1 in `docs/SYSTEM_DESIGN.md` §9: the function
 > signatures and `#[contractevent]` layouts that **James** (backend/indexer) and **Ancung**
 > (web app, QR pass, scanner PWA) hold, so they can work in parallel without waiting for
@@ -9,6 +9,32 @@
 > Any change to a signature, an event layout, or an error code after this PR is merged requires:
 > **a new PR + approval from Axel (PM) + fable**, an entry in `docs/specs/CHANGELOG.md`, and
 > **regenerated TS bindings** (STE-14). Error codes are public ABI — **never renumber them**.
+
+## What changed from v2.1.0 (MINOR, additive)
+
+STE-41 (option A). Fun runs, colour runs and charity runs often have **no chip timing**.
+`record_finish` refuses `finish_time_s == 0` (`InvalidFinishTime(105)`), so a runner who crossed the
+line had nowhere to go but `RacepackClaimed` — and `Dnf` would be a lie. v2.2 adds a finish with no
+official time.
+
+| Change | Impact on clients |
+| --- | --- |
+| `record_finish_untimed(token_id)` new in C2 | additive |
+| New event: `RecordFinishedUntimed` | additive — an indexer that does not know it simply does not index untimed finishes |
+| **A `Finished` record may now have `finish_time_s == None`** | **read this** — see below |
+| No new error code, no changed signature, no changed event layout | — |
+| Installed by `upgrade` at the **same** address (`CCVW7WVC…`) | no new address; existing records intact |
+
+**`state == Finished && finish_time_s == None` is the marker for "finished, no official time"** —
+declared by the organiser, not measured by a chip. Before v2.2 that combination could not exist, so a
+client that assumed "`Finished` implies a time" must now handle the empty case. It must **never** be
+rendered as `0` or `00:00:00`.
+
+Why a new function and a new event rather than `record_finish(id, 0)` (option B, **rejected**):
+`RecordFinished` carries a plain `u32`, and every consumer already decoding it would read `0` as a
+zero-second race. `record_finish` and `RecordFinished` are **untouched** — including the refusal of
+`0`. The two finish paths never share an event, so a consumer can tell them apart from the event name
+alone.
 
 ## What changed from v2.0.1 (MINOR, additive)
 
@@ -85,9 +111,9 @@ The artefacts used for this freeze:
 | Contract | Wasm | Wasm hash (sha256) | Size |
 | --- | --- | --- | ---: |
 | EventRegistry (C1, v2.1) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
-| RaceRecord (C2, v2.0.1) | `sc/target/wasm32v1-none/release/race_record.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
+| RaceRecord (C2, v2.2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
 
-RaceRecord did **not** change in v2.1 — its hash is exactly the one frozen at v2.0.1, and its
+EventRegistry did **not** change in v2.2 — its hash is exactly the one frozen at v2.1, and its
 address was not `upgrade`d.
 
 Artefacts that have been **replaced at the same address** through `upgrade` (the full history and
@@ -97,11 +123,13 @@ its transactions are in `docs/deployments.md`):
 | --- | --- | ---: |
 | EventRegistry v2.0.0/v2.0.1 | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22,952 B |
 | RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21,795 B |
+| RaceRecord v2.0.1/v2.1.0 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
 
-The EventRegistry artefact `22bb432e…` is also **committed** in
-`sc/contracts/event_registry/testdata/`, because the upgrade test deploys that code, writes state
-with it, then replaces it with the current build — the only pair that can prove `DataKey::Organiser`
-was added safely.
+Two of those artefacts are also **committed**, each as the "before" of an upgrade test that deploys
+the genuinely live code, writes state with it, then replaces it with the current build:
+`22bb432e…` in `sc/contracts/event_registry/testdata/` (proves `DataKey::Organiser` was added
+safely) and `27749180…` in `sc/contracts/race_record/testdata/` (proves every record state the old
+code could write still decodes, and that `record_finish_untimed` works on records it minted).
 
 The previously frozen v1 artefacts (still live at the v1 addresses, see `docs/deployments.md`):
 `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` (C1, 14,964 B) and
@@ -349,6 +377,7 @@ One **non-transferable** record per entry, bound to the runner's address. Design
 | `enter` | `runner: Address, event_id: u32, category_id: u32, addon_ids: Vec<u32>, participant_hash: BytesN<32>` | `Result<u32, Error>` (token_id) | the **`runner`** — one auth tree that also covers the SEP-41 `transfer` sub-invocation | its own: `NotInitialized(100)`, `TooManyAddOns(106)`, `DuplicateAddOn(107)`; **propagated** from EventRegistry: `2,3,4,5,6,14,15`; from the SAC: the SAC's error codes; OZ: `MathOverflow(205)`, `TokenIDsAreDepleted(206)` |
 | `claim_racepack` | `token_id: u32, operator: Address` | `Result<(), Error>` | the **`operator`**, who must be that event's organiser **or** an allowlisted scanner | `NotInitialized(100)`, `RecordNotFound(101)`, `NotAuthorized(104)`, `AlreadyClaimed(102)`, propagated `EventNotFound(2)` |
 | `record_finish` | `token_id: u32, finish_time_s: u32` | `Result<(), Error>` | **that event's organiser** (read from the registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidFinishTime(105)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
+| `record_finish_untimed` | `token_id: u32` | `Result<(), Error>` | **that event's organiser** (read from the registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `record_dnf` | `token_id: u32` | `Result<(), Error>` | **that event's organiser** | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `extend_record_ttl` | `token_id: u32` | `Result<(), Error>` | **nobody — permissionless** | `RecordNotFound(101)` |
 | `record_of` | `token_id: u32` | `Result<RecordData, Error>` | — (view) | `RecordNotFound(101)` |
@@ -394,6 +423,14 @@ Important notes for D2/D3:
   `AlreadyClaimed(102)`. The scanner PWA's local roster check is a UX optimisation, not an enforcer.
 - **`token` is a constructor parameter, not a constant.** Testnet points at the sUSD SAC, mainnet
   will point at Circle's USDC, with no code change. See §4.
+- **`record_finish_untimed` is a twin of `record_finish` with no time** (v2.2). The same organiser
+  gate (a scanner may check a runner in, but never publish a result), the same `RacepackClaimed`
+  guard, the same terminal `Finished`. It leaves `finish_time_s` as `None` and writes `result_at`.
+  It has no `finish_time_s` argument, so it cannot revert `InvalidFinishTime(105)`.
+- **How to read a result:** `Finished` + `finish_time_s: Some(t)` is an official time of `t`
+  seconds; `Finished` + `finish_time_s: None` is **finished with no official time** (declared by the
+  organiser); `Dnf` is did-not-finish or no-show. A result is never rewritten — an untimed finish
+  cannot later be given a time, and a timed one cannot be erased into "no time".
 
 ### 2.2 Types
 
@@ -405,7 +442,7 @@ RecordData {
   claimed_at: Option<u64>,
   entered_at: u64,
   event_id: u32,
-  finish_time_s: Option<u32>,
+  finish_time_s: Option<u32>,    // None on a Finished record = finished, no official time (v2.2)
   participant_hash: BytesN<32>,
   result_at: Option<u64>,
   state: RecordState,
@@ -420,13 +457,14 @@ The lifecycle (anything outside it → `InvalidState(103)` / `AlreadyClaimed(102
 (mint)  -> Entered
 Entered -> RacepackClaimed   (claim_racepack, organiser/scanner)
 Entered -> Dnf               (record_dnf, organiser — no-show)
-RacepackClaimed -> Finished  (record_finish, organiser)
+RacepackClaimed -> Finished  (record_finish, organiser — finish_time_s = Some(t))
+RacepackClaimed -> Finished  (record_finish_untimed, organiser — finish_time_s = None, v2.2)
 RacepackClaimed -> Dnf       (record_dnf, organiser)
 Finished, Dnf                (terminal, no way out)
 ```
 
-`record_finish` **refuses** a record that is not yet `RacepackClaimed`: a runner who never collected
-their race pack cannot have a result.
+`record_finish` and `record_finish_untimed` both **refuse** a record that is not yet
+`RacepackClaimed`: a runner who never collected their race pack cannot have a result.
 
 ### 2.3 Events (`#[contractevent]`)
 
@@ -436,6 +474,7 @@ their race pack cannot have a result.
 | `RecordEntered` | `"record_entered"`, `runner: Address`, `event_id: u32` | `bib_no: u32`, `token_id: u32` |
 | `RacepackClaimed` | `"racepack_claimed"`, `token_id: u32`, `event_id: u32` | `operator: Address` |
 | `RecordFinished` | `"record_finished"`, `token_id: u32`, `event_id: u32` | `finish_time_s: u32` |
+| `RecordFinishedUntimed` | `"record_finished_untimed"`, `token_id: u32`, `event_id: u32` | *(none)* |
 | `RecordDnf` | `"record_dnf"`, `token_id: u32`, `event_id: u32` | *(none)* |
 | `ContractUpgraded` | `"contract_upgraded"`, `new_wasm_hash: BytesN<32>` | *(none)* |
 
@@ -455,6 +494,11 @@ One successful `enter` emits, in order and from three different emitters:
 An indexer must filter **per contract id**, not at a fixed offset: the number of events in one
 `enter` now depends on how many add-ons were bought and whether the total was zero.
 
+**A finish emits exactly one of `record_finished` or `record_finished_untimed`, never both** (v2.2).
+`record_finished_untimed` is a new name rather than `record_finished` with a `0`, so an indexer
+filtering on `"record_finished"` keeps seeing only real times. To index every finish, subscribe to
+both names; the untimed one carries no data (its `ScMap` is empty, the same shape as `record_dnf`).
+
 **`record_entered` does not carry `addon_ids`.** The add-ons bought are read from `record_of` (the
 `addon_ids` field) or reconstructed from the registry's `add_on_reserved`, which is in fact richer —
 it carries each unit's `seq` and the `price` actually charged.
@@ -466,7 +510,7 @@ it carries each unit's `seq` and the `price` actually charged.
 | 100 | `NotInitialized` | the instance wiring (`Admin`/`RegistryAddr`/`TokenAddr`) is absent |
 | 101 | `RecordNotFound` | unknown `token_id` |
 | 102 | `AlreadyClaimed` | `claim_racepack` while the state is ≠ `Entered` — the anti-double-race-pack guard |
-| 103 | `InvalidState` | `record_finish` while the state is ≠ `RacepackClaimed`, or leaving a terminal state |
+| 103 | `InvalidState` | `record_finish` / `record_finish_untimed` while the state is ≠ `RacepackClaimed`, or leaving a terminal state |
 | 104 | `NotAuthorized` | the operator is neither the organiser nor an allowlisted scanner |
 | 105 | `InvalidFinishTime` | `finish_time_s == 0` |
 | 106 | `TooManyAddOns` | `addon_ids` is longer than `addon_count(event_id)` or than 16 |
@@ -548,11 +592,12 @@ fallback dispatch and no `delegatecall`. OZ's non-fungible module separates the 
 that would export those forbidden functions. RaceRecord **does not implement those traits** and only
 calls the storage primitives.
 
-RaceRecord's legitimate export surface — **19 functions, no more**:
+RaceRecord's legitimate export surface — **20 functions, no more** (v2.2 added
+`record_finish_untimed`, which writes a record's state and never its owner):
 
 ```text
-__constructor  upgrade  enter  claim_racepack  record_finish  record_dnf  extend_record_ttl
-record_of  records_of  verify  owner_of  balance  token_uri  total_supply
+__constructor  upgrade  enter  claim_racepack  record_finish  record_finish_untimed  record_dnf
+extend_record_ttl  record_of  records_of  verify  owner_of  balance  token_uri  total_supply
 name  symbol  get_admin  get_registry  get_token
 ```
 
@@ -609,6 +654,7 @@ changes, no regenerated bindings.
 | STE-18 / 21 / 22 | QR pass + scanner PWA (Ancung) | `claim_racepack`, `is_scanner`, `record_of`, plus TOTP in `HASH_AND_TOTP.md` |
 | STE-33 | Testnet deploy | wasm hashes + constructor parameters (§0, §5) |
 | STE-35 | Paid add-ons (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
+| STE-41 | Untimed finish | `record_finish_untimed`, `RecordFinishedUntimed`, and `finish_time_s == None` on a `Finished` record — consumed by the `be/` indexer + CSV (James) and the `fe/` profile (Ancung) |
 
 ---
 

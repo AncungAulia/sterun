@@ -61,7 +61,7 @@ STELLAR_NETWORK=testnet
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 STELLAR_RPC_URL=https://soroban-testnet.stellar.org
 # v2 — add-ons + upgradeable + Cancelled (STE-35). This is what be/ and fe/ use.
-# Interface: docs/specs/INTERFACE.md v2.1.0
+# Interface: docs/specs/INTERFACE.md v2.2.0 (RaceRecord upgraded in place by STE-41)
 EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
 RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 # v1 — still on chain and still verifiable; nothing in this repository points at it.
@@ -1897,3 +1897,144 @@ day.
 The `be/` index did **not** need truncating this time: the address did not change, `event_id`s are not
 reused, and no existing entry changed meaning. That is the difference between an in-place upgrade and
 moving addresses (compare `be/OPERATIONS.md`, "Moving to the v2 contracts").
+
+---
+## STE-41 — the untimed finish, installed by an IN-PLACE `upgrade` (2026-09-11)
+
+**The address did not change.** `RaceRecord` at `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW`
+is the same address before and after; the 14 records already inside it read back byte-for-byte
+identical (below). `EventRegistry` was **not** upgraded: its wasm did not change by a single byte, and
+`upgrade-testnet.sh` skipped it so the ledger does not record a code change that did not happen.
+
+### Why
+
+Fun runs, colour runs and charity runs often have no chip timing. `record_finish` refuses
+`finish_time_s == 0`, so a runner who crossed the line was stuck at `RacepackClaimed` — and `Dnf` would
+be a lie. STE-41 option A: a **new** function `record_finish_untimed(token_id)` and a **new** event
+`RecordFinishedUntimed`. Option B (`record_finish(id, 0)`) was rejected because `RecordFinished`
+carries a plain `u32` that every existing consumer would read as a zero-second race. Zero storage
+change: `RecordData.finish_time_s` has been `Option<u32>` since v1. Interface: `docs/specs/INTERFACE.md`
+**v2.2.0**.
+
+### The wasm — old → new
+
+| | sha256 | Size |
+| --- | --- | ---: |
+| before (v2.0.1) | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
+| after (v2.2.0) | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
+
+Both hashes are read from the chain (`stellar contract info hash --contract-id …`), before and after.
+Toolchain: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`.
+
+The old wasm is **committed** in `sc/contracts/race_record/testdata/`, fetched with
+`stellar contract fetch` before the upgrade. The test
+`records_written_by_the_live_wasm_survive_the_untimed_upgrade` deploys those bytes, writes `Entered`,
+`RacepackClaimed`, a timed `Finished` and `Dnf` with them, upgrades to the v2.2 build, reads all four
+back, and runs `record_finish_untimed` on records the old code minted — with no network.
+
+### The upgrade transaction (testnet)
+
+| Step | Ledger | Time (UTC) | Hash |
+| --- | ---: | --- | --- |
+| `upgrade` RaceRecord → `0e29026d…` | 4620643 | 2026-09-11T11:40:02Z | [`1874e906…`](https://stellar.expert/explorer/testnet/tx/1874e9063dfb8317a4a8ed70b6293f5c0eb55ec6cfa47b7084c3f63b3d77f78a) |
+
+Signed by `GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` (sterun-admin, `STERUN_ADMIN` in
+the gitignored `.env`). `bash sc/scripts/upgrade-testnet.sh`:
+
+```
+=== EventRegistry (CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU) ===
+  live  cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0
+  built cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0
+  identical — skipped, so the ledger records no upgrade that did not happen
+
+=== RaceRecord (CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW) ===
+  live  27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b
+  built 0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+  uploaded 0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+  Event: ContractUpgraded (contract_upgraded), new_wasm_hash: "0e29026d…02ba"
+  now running 0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+
+=== the non-transferable claim, re-checked on the upgraded code ===
+  0 transfer-ish exports
+```
+
+### Storage survived — every record, not a sample
+
+Before the upgrade, `record_of` and `owner_of` were read for **all 14** tokens (`total_supply` 14);
+after it, the same 28 reads were repeated and diffed: **identical**, line for line. The states covered
+are every one the old code could have written that exists on this network — `Finished` with a time
+(tokens 0, 5, 6, 7, all 3161 s), `RacepackClaimed` (9, 10) and `Entered` (the rest). Record 0 as read
+after the upgrade:
+
+```
+{"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":1788925897,"entered_at":1788925832,
+ "event_id":0,"finish_time_s":3161,"participant_hash":"feb3cea9…fe29","result_at":1788925907,
+ "state":"Finished"}   owner GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR
+```
+
+### On-chain sanity check — `bash sc/scripts/untimed-testnet.sh`
+
+A fresh, **free** event (`event_id` 14, category 0 `FUN5K`) owned by `sterun-organiser`, so no sUSD
+moved and no existing event's slot was spent. Every line below is asserted by the script, not just
+printed.
+
+| # | What | token | Result | Tx |
+| --- | --- | ---: | --- | --- |
+| — | `create_event` / `add_category` / `set_event_status Open` | — | event 14 | [`a664c76e…`](https://stellar.expert/explorer/testnet/tx/a664c76e05978f338f35aff5c4a7ed38e76ab9fb819bd9b0c59a3e84e4ae1be9) · [`39255948…`](https://stellar.expert/explorer/testnet/tx/39255948a93111bb2679609c43d918306bbc74d9aba49735cc6b78fe6c4736ad) · [`627a65be…`](https://stellar.expert/explorer/testnet/tx/627a65be93811fe4ba631ca35923f81f2198913b0b84557e1d750ac338f55052) |
+| a1 | `enter` | 14 | `Entered` | [`b79a5912…`](https://stellar.expert/explorer/testnet/tx/b79a59128c3c8e56bb9862600a7446a92378e1b3a9f8225e354d7be8ce88ca0b) |
+| a2 | `record_finish_untimed` **before** the claim | 14 | ✅ refused `Error(Contract, #103)` | — (fails in simulation) |
+| a3 | `claim_racepack` (organiser) | 14 | `RacepackClaimed` | [`2ba0b394…`](https://stellar.expert/explorer/testnet/tx/2ba0b394bc0e544ad1c0f161d41fded43dd98bf38ffe2809b5c2c54bc9ec46d9) |
+| a4 | `record_finish_untimed` signed by the **runner** | 14 | ✅ refused, still `RacepackClaimed` | — |
+| a5 | **`record_finish_untimed`** (organiser) | 14 | **`Finished`, `finish_time_s: null`**, `result_at` set; emitted `record_finished_untimed` and **no** `record_finished` | [`67db561c…`](https://stellar.expert/explorer/testnet/tx/67db561cd112cf81b8c0d994d4e8e3d957d0cf1a473ce933e1c03428d6e00fd1) |
+| a6 | `record_finish` / `record_dnf` / `record_finish_untimed` after it | 14 | ✅ all refused `#103`; the record did not move | — |
+| b1 | `enter` → `claim_racepack` | 15 | `RacepackClaimed` | [`1ad30615…`](https://stellar.expert/explorer/testnet/tx/1ad306159fcdd8149c032b045c5b6c8cbbd51461fb07312bcf03dfcdf77a1c7a) · [`b13485a3…`](https://stellar.expert/explorer/testnet/tx/b13485a3fa5e25a141cb459e1508874bf98d8c0757b2afb3f6550d80a2ef6c3a) |
+| b2 | `record_finish` with `0` | 15 | ✅ still refused `#105` | — |
+| b3 | **`record_finish` 1847 s** (timed path) | 15 | **`Finished`, `finish_time_s: 1847`**, via `record_finished` | [`2513ba3c…`](https://stellar.expert/explorer/testnet/tx/2513ba3cbc394c278b59cd4c9a4e3b336e65b32440ef38886847dae8e05a9221) |
+| c | record 0 re-read, `total_supply` | 0 | unchanged; 14 → 16 | — |
+
+```
+record_of 14  {"addon_ids":[],"bib_no":0,"category_id":0,"claimed_at":1789126872,"entered_at":1789126862,
+               "event_id":14,"finish_time_s":null,"participant_hash":"8251b7bc…35f7","result_at":1789126882,
+               "state":"Finished"}
+record_of 15  {"addon_ids":[],"bib_no":1,"category_id":0,"claimed_at":1789126902,"entered_at":1789126892,
+               "event_id":14,"finish_time_s":1847,"participant_hash":"eb4fabf9…2065","result_at":1789126912,
+               "state":"Finished"}
+```
+
+The refused calls have **no tx hash**, and that is correct: a revert fails in simulation, so nothing
+reaches the ledger.
+
+### The SDK e2e after the upgrade — `pnpm --filter @sterunxyz/sdk e2e` ✅
+
+The whole third-party flow through `@sterunxyz/sdk` (source tree, with `recordFinishUntimed`), plus a
+new untimed leg on its own free category. Event 15, **every leg green, the paid one included**:
+
+```
+token_id (free)     16  bib 0  Finished 3161s
+recordFinish        f204be44dde481d2993e8982ee1481d1dc5c4ea7edd99230c5c3d07cd0a88c6c
+token_id (untimed)  17  Finished, finish_time_s null
+recordFinishUntimed 5630b1810ce0802fff9e131eb777ea3883abf126ccd53aa34ea5a6b07f2080fb
+token_id (paid)     18
+enter (5 sUSD)      e2cf60200baa3ea783664a53ef29d5e766771a3fa73af44517ee5eeb2aa66be4
+fee received        5 sUSD
+
+✓ recordFinishUntimed before claim  → InvalidState #103 (race-record)
+✓ recordFinish after untimed        → InvalidState #103 (race-record)
+✓ recordFinishUntimed twice         → InvalidState #103 (race-record)
+✓ recordDnf after untimed           → InvalidState #103 (race-record)
+```
+
+The SDK decodes the live empty `finish_time_s` as `finishTimeS: null`, never `0`.
+
+### What consumers still have to do (their own tickets — not part of this change)
+
+The contract can now produce a `Finished` record with no time, and **tokens 14 and 17 on testnet
+already are one**. Until these land, that state is on chain but not shown correctly:
+
+- **`be/` indexer (James)** — `be/migrations/002_indexer.sql` has a `finish_time_s > 0` CHECK and the
+  `finished_records_were_claimed` constraint, and there is no handler for `record_finished_untimed`.
+- **`be/` results CSV (James)** — `be/src/results/csv.ts` requires a time column.
+- **`fe/` profile (Ancung)** — show "Finished — no official time, declared by the organiser" rather
+  than a time.
+
+`be/` and `fe/` were deliberately not touched here.

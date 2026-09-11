@@ -33,10 +33,10 @@ How it is done: use only OpenZeppelin's *storage primitives* (`Base::mint`, `Bas
 `scripts/check-exports.sh` (grepping the built interface) and the `exports::…` test in `src/test.rs`
 (parsing the wasm's export section directly). Both run in CI.
 
-The legitimate export surface — **19 functions**: `__constructor`, `upgrade`, `enter`,
-`claim_racepack`, `record_finish`, `record_dnf`, `extend_record_ttl`, `record_of`, `records_of`,
-`verify`, `owner_of`, `balance`, `token_uri`, `total_supply`, `name`, `symbol`, `get_admin`,
-`get_registry`, `get_token`.
+The legitimate export surface — **20 functions**: `__constructor`, `upgrade`, `enter`,
+`claim_racepack`, `record_finish`, `record_finish_untimed` (v2.2), `record_dnf`,
+`extend_record_ttl`, `record_of`, `records_of`, `verify`, `owner_of`, `balance`, `token_uri`,
+`total_supply`, `name`, `symbol`, `get_admin`, `get_registry`, `get_token`.
 
 `upgrade` is deliberately **not** on the "leaked EventRegistry surface" list in
 `check-exports.sh`: both contracts have their own `upgrade`, so finding it here is correct rather
@@ -104,6 +104,29 @@ the **chain**, not volunteer discipline.
 `record_finish` refuses a record that is not yet `RacepackClaimed` (`InvalidState` 103): you cannot
 finish a race whose race pack was never collected.
 
+### Two ways to finish, one of them with no time (v2.2, STE-41)
+
+| Call | Record afterwards | Event |
+| --- | --- | --- |
+| `record_finish(id, t)`, `t > 0` | `Finished`, `finish_time_s: Some(t)` | `record_finished` (data `finish_time_s`) |
+| `record_finish_untimed(id)` | `Finished`, `finish_time_s: None` | `record_finished_untimed` (no data) |
+
+`record_finish_untimed` exists for events without chip timing, and it is a deliberate **twin** of
+`record_finish`: the same organiser gate (`auth_organiser`, so a scanner cannot publish a result),
+the same `RacepackClaimed` guard, the same terminal `Finished`. **`Finished` + `None` is the
+marker for "finished, no official time"** — it could not exist before v2.2.
+
+Rules that keep that marker trustworthy — do not "simplify" them away:
+
+- **Never make `record_finish` accept `0`**, and never reuse `RecordFinished` for untimed finishes.
+  `RecordFinished.finish_time_s` is a bare `u32`; every consumer already decoding it would read `0`
+  as a zero-second race. That was option B in STE-41, and it was rejected for exactly this reason.
+- **No storage change was needed or made**: `finish_time_s` has been `Option<u32>` since v1. Keep it
+  that way — see "`RecordData` must never gain another REQUIRED field" below.
+- A result is never rewritten: an untimed finish cannot later be given a time, and a timed one cannot
+  be erased into "no time" (`an_untimed_finish_is_terminal`,
+  `record_finish_untimed_rejects_terminal_states`).
+
 ## Error codes — band `100..=199`, never renumbered
 
 `NotInitialized=100`, `RecordNotFound=101`, `AlreadyClaimed=102`, `InvalidState=103`,
@@ -144,10 +167,16 @@ evidence merely for holding no XLM. The STE-12 keeper job calls it on a schedule
 
 ## Tests
 
-`src/test.rs`, 60 tests, `lib.rs` coverage 97% region / 99% line.
+`src/test.rs`, 72 tests, `lib.rs` coverage 97% region / 99% line.
 
 `mod upgrade` deploys RaceRecord **from wasm**, so `stellar contract build` has to run first — and
 its World builds its own registry, because `set_race_record` is one-shot.
+
+`records_written_by_the_live_wasm_survive_the_untimed_upgrade` starts from
+`testdata/race_record_live_pre_untimed.wasm` — the executable that was genuinely live at `CCVW7WVC…`
+before STE-41 — and checks its own fixture against the hash the ledger reported. It is the "before"
+of the **next** upgrade too: when you ship one, fetch the then-live wasm with
+`stellar contract fetch` first (provenance and rules in `testdata/README.md`).
 
 **`RecordData` must never gain another REQUIRED field.** A `#[contracttype]` struct is a map keyed by
 field name, so an already-stored record fails to decode into a struct that gained a required field.

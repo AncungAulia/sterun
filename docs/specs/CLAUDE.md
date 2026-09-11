@@ -2,7 +2,7 @@
 
 **Everything in this folder is frozen.** It is the C4 *handoff contract* (STE-10): what **James**
 (backend + indexer) and **Ancung** (web app + QR pass + scanner PWA) hold so they can work in
-parallel without reading anyone's `lib.rs`. Current folder version: **v2.1.0**.
+parallel without reading anyone's `lib.rs`. Current folder version: **v2.2.0**.
 
 | File | Contents |
 | --- | --- |
@@ -49,7 +49,7 @@ an implementation disagrees with one, the implementation is wrong until proven o
 ## Versions per file
 
 There is one version for the whole folder; each file's title carries the version at which **that
-file** last changed. So `INTERFACE.md (v2.1.0)` sitting next to `HASH_AND_TOTP.md (v1.0.1)` is
+file** last changed. So `INTERFACE.md (v2.2.0)` sitting next to `HASH_AND_TOTP.md (v1.0.1)` is
 deliberate: v2 changed the contract interface and did **not touch a single byte** of the hash/TOTP
 definitions. What is in force is always the topmost entry in `CHANGELOG.md`.
 
