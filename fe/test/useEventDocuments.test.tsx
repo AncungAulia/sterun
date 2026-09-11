@@ -90,6 +90,29 @@ describe("useEventDocuments", () => {
       expect(result.current.pending.size).toBe(0);
     });
 
+    it("asks once for a document two events share", async () => {
+      // useQueries matches its observers by key, so the same key twice is
+      // warned about and can hand one slot the other's result.
+      const warn = vi.spyOn(console, "warn");
+      try {
+        fetchEventMetadata.mockResolvedValue({ status: "verified", document: metadata() });
+        // Events 0 and 1 name one document; 2 and 3 name none, with the same hash.
+        const events = [served(0), summary(1, { uri: served(0).event.uri, metadataHash: HASH }), summary(2), summary(3)];
+
+        const { result } = renderHook(() => useEventDocuments(events), { wrapper: wrapper() });
+
+        await waitFor(() => expect(result.current.settled).toBe(true));
+        expect(result.current.byEvent.get(0)).toEqual(metadata());
+        expect(result.current.byEvent.get(1)).toEqual(metadata());
+        expect(result.current.byEvent.get(2)).toBeNull();
+        expect(result.current.byEvent.get(3)).toBeNull();
+        expect(fetchEventMetadata).toHaveBeenCalledTimes(1);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     it("answers for an empty list", () => {
       const { result } = renderHook(() => useEventDocuments([]), { wrapper: wrapper() });
 
