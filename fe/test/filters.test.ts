@@ -6,7 +6,6 @@ import {
   PRICE_BUCKETS,
   activeFilterCount,
   filterChips,
-  locationGroups,
   matchesFilters,
   type DistanceBucketId,
   type PriceBucketId,
@@ -25,9 +24,6 @@ function distanceBucket(id: DistanceBucketId) {
   if (!bucket) throw new Error(`no distance bucket ${id}`);
   return bucket;
 }
-
-const JAKARTA = { name: "GBK", city: "Jakarta Pusat", province: "DKI Jakarta", country: "Indonesia", countryCode: "ID" };
-const SELANGOR = { name: "Shah Alam", city: "Shah Alam", province: "Selangor", country: "Malaysia", countryCode: "MY" };
 
 describe("PRICE_BUCKETS", () => {
   it.each([
@@ -82,30 +78,47 @@ describe("DISTANCE_BUCKETS", () => {
 
 describe("matchesFilters", () => {
   const free = entry(summary(1, {}, [category(0, { priceStroops: 0n })]), metadata());
-  const pricey = entry(summary(2, {}, [category(0, { priceStroops: 120n * SUSD })]), metadata({ location: JAKARTA }));
+  const pricey = entry(summary(2, {}, [category(0, { priceStroops: 120n * SUSD })]), metadata());
   const closed = entry(summary(3, { status: "Closed" }, [category(0, { priceStroops: 0n })]), metadata());
+  const available = { ...NO_FILTERS, availableOnly: true };
 
   it("lets everything through with no filters", () => {
     expect([free, pricey, closed].every((race) => matchesFilters(race, NO_FILTERS))).toBe(true);
   });
 
-  it("keeps only races open for entry", () => {
-    expect(matchesFilters(closed, { ...NO_FILTERS, openOnly: true })).toBe(false);
-    expect(matchesFilters(free, { ...NO_FILTERS, openOnly: true })).toBe(true);
+  it("keeps an open race that still has places when full and closed races are hidden", () => {
+    expect(matchesFilters(free, available)).toBe(true);
   });
 
-  it("keeps only races in a selected province", () => {
-    const filters = { ...NO_FILTERS, locations: ["ID|DKI Jakarta"] };
+  it("keeps an open race whose other distances are full, as long as one has places", () => {
+    const lastPlaces = entry(
+      summary(4, {}, [category(0, { quota: 100, enteredCount: 100 }), category(1, { quota: 50, enteredCount: 49 })]),
+      metadata(),
+    );
 
-    expect(matchesFilters(pricey, filters)).toBe(true);
-    expect(matchesFilters(free, filters)).toBe(false);
+    expect(matchesFilters(lastPlaces, available)).toBe(true);
   });
 
-  it("leaves out a race without a location once a location is selected", () => {
-    const unplaced = entry(summary(4, {}, [category(0)]), null);
+  it("hides a race that is not open for entry", () => {
+    expect(matchesFilters(closed, available)).toBe(false);
+    expect(matchesFilters(entry(summary(7, { status: "Draft" }, [category(0)])), available)).toBe(false);
+  });
 
-    expect(matchesFilters(unplaced, { ...NO_FILTERS, locations: ["ID|DKI Jakarta"] })).toBe(false);
-    expect(matchesFilters(unplaced, NO_FILTERS)).toBe(true);
+  it("hides an open race whose every distance is full", () => {
+    const soldOut = entry(
+      summary(4, {}, [category(0, { quota: 100, enteredCount: 100 }), category(1, { quota: 50, enteredCount: 50 })]),
+      metadata(),
+    );
+
+    expect(matchesFilters(soldOut, available)).toBe(false);
+    expect(matchesFilters(soldOut, NO_FILTERS)).toBe(true);
+  });
+
+  it("hides an open race with no distances, since there is nothing to enter", () => {
+    const bare = entry(summary(8), metadata());
+
+    expect(matchesFilters(bare, available)).toBe(false);
+    expect(matchesFilters(bare, NO_FILTERS)).toBe(true);
   });
 
   it("treats options in one group as either-or", () => {
@@ -116,7 +129,8 @@ describe("matchesFilters", () => {
   });
 
   it("requires every group to hold", () => {
-    expect(matchesFilters(closed, { ...NO_FILTERS, prices: ["free"], openOnly: true })).toBe(false);
+    expect(matchesFilters(closed, { ...NO_FILTERS, prices: ["free"] })).toBe(true);
+    expect(matchesFilters(closed, { ...NO_FILTERS, prices: ["free"], availableOnly: true })).toBe(false);
   });
 
   it("judges price and distance on the same distance", () => {
@@ -140,72 +154,43 @@ describe("matchesFilters", () => {
   });
 });
 
-describe("activeFilterCount", () => {
-  it("counts every selected option and the open-only switch", () => {
-    expect(activeFilterCount(NO_FILTERS)).toBe(0);
-    expect(
-      activeFilterCount({ locations: ["ID|Bali"], prices: ["free", "under-25"], distances: ["5k"], openOnly: true }),
-    ).toBe(5);
+describe("NO_FILTERS", () => {
+  it("holds price, distance and availability, and nothing about location", () => {
+    // The place is chosen in the header now, so a second location control
+    // in the drawer could only disagree with it.
+    expect(NO_FILTERS).toEqual({ prices: [], distances: [], availableOnly: false });
   });
 });
 
-describe("locationGroups", () => {
-  const yogyaA = entry(summary(1), metadata());
-  const yogyaB = entry(summary(2), metadata());
-  const jakarta = entry(summary(3), metadata({ location: JAKARTA }));
-  const selangor = entry(summary(4), metadata({ location: SELANGOR }));
-  const unplaced = entry(summary(5), null);
-
-  it("lists provinces that have races, with how many, most first", () => {
-    const [indonesia] = locationGroups([jakarta, yogyaA, yogyaB, unplaced]);
-
-    expect(indonesia).toEqual({
-      countryCode: "ID",
-      country: "Indonesia",
-      options: [
-        { key: "ID|DI Yogyakarta", province: "DI Yogyakarta", count: 2 },
-        { key: "ID|DKI Jakarta", province: "DKI Jakarta", count: 1 },
-      ],
-    });
-  });
-
-  it("puts the country with the most races first", () => {
-    expect(locationGroups([selangor, yogyaA, yogyaB]).map((group) => group.countryCode)).toEqual(["ID", "MY"]);
-  });
-
-  it("puts the visitor's own country first", () => {
-    expect(locationGroups([selangor, yogyaA, yogyaB], "MY").map((group) => group.countryCode)).toEqual(["MY", "ID"]);
-  });
-
-  it("is empty when no race has a location", () => {
-    expect(locationGroups([unplaced])).toEqual([]);
+describe("activeFilterCount", () => {
+  it("counts every selected option and the availability switch", () => {
+    expect(activeFilterCount(NO_FILTERS)).toBe(0);
+    expect(activeFilterCount({ prices: ["free", "under-25"], distances: ["5k"], availableOnly: true })).toBe(4);
+    expect(activeFilterCount({ ...NO_FILTERS, availableOnly: true })).toBe(1);
   });
 });
 
 describe("filterChips", () => {
   const applied = {
-    locations: ["ID|DI Yogyakarta"],
     prices: ["free"] as PriceBucketId[],
     distances: ["over-21k"] as DistanceBucketId[],
-    openOnly: true,
+    availableOnly: true,
   };
 
   it("names every applied filter", () => {
     expect(filterChips(applied).map((chip) => chip.label)).toEqual([
-      "DI Yogyakarta",
       "Free",
       "Over 21K",
-      "Open for entry only",
+      "Hide full and closed races",
     ]);
   });
 
   it("removes only the filter it belongs to", () => {
-    const [location, price, distance, open] = filterChips(applied);
+    const [price, distance, available] = filterChips(applied);
 
-    expect(location?.remove(applied).locations).toEqual([]);
     expect(price?.remove(applied)).toEqual({ ...applied, prices: [] });
-    expect(distance?.remove(applied).distances).toEqual([]);
-    expect(open?.remove(applied).openOnly).toBe(false);
+    expect(distance?.remove(applied)).toEqual({ ...applied, distances: [] });
+    expect(available?.remove(applied)).toEqual({ ...applied, availableOnly: false });
   });
 
   it("has no chips when nothing is applied", () => {

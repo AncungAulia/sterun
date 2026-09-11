@@ -130,7 +130,6 @@ export function Directory() {
               entries={searched}
               filters={filters}
               order={order}
-              preferredCountry={area?.countryCode}
               onApply={(nextFilters, nextOrder) => {
                 setFilters(nextFilters);
                 setOrder(nextOrder);

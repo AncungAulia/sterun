@@ -1,10 +1,13 @@
 /**
- * The filter drawer's model: the buckets, what each matches, the location
- * options, and the chips that show what is applied.
+ * The filter drawer's model: the buckets, what each matches, and the chips
+ * that show what is applied.
  *
  * Price and distance are judged on the same distance, never on the race as a
  * whole. A race with a free 5K and a sUSD 60 marathon is not "a free marathon",
  * and checking the two filters separately would say it is.
+ *
+ * Location is not here. The place is chosen in the page header, and a second
+ * location control in the drawer could only disagree with it.
  */
 import { STROOPS_PER_UNIT } from "@sterunxyz/sdk";
 
@@ -48,110 +51,46 @@ export const DISTANCE_BUCKETS: readonly Bucket<DistanceBucketId, number>[] = [
   { id: "over-21k", label: "Over 21K", matches: (metres) => metres > HALF_MARATHON_M },
 ];
 
+/** One string for the checkbox and its chip, so the two always read the same. */
+export const AVAILABLE_ONLY_LABEL = "Hide full and closed races";
+
 export interface Filters {
-  /** Location keys, `${countryCode}|${province}`. */
-  locations: string[];
   prices: PriceBucketId[];
   distances: DistanceBucketId[];
-  openOnly: boolean;
+  /** Only races someone could enter right now: `Open`, with places left. */
+  availableOnly: boolean;
 }
 
-export const NO_FILTERS: Filters = { locations: [], prices: [], distances: [], openOnly: false };
+export const NO_FILTERS: Filters = { prices: [], distances: [], availableOnly: false };
 
 export function activeFilterCount(filters: Filters): number {
-  return (
-    filters.locations.length +
-    filters.prices.length +
-    filters.distances.length +
-    (filters.openOnly ? 1 : 0)
-  );
+  return filters.prices.length + filters.distances.length + (filters.availableOnly ? 1 : 0);
 }
 
-/** `"ID|DI Yogyakarta"`, or null for a race whose proven document names no province. */
-export function locationKey(entry: DirectoryEntry): string | null {
-  const location = entry.document?.location;
-  const province = location?.province?.trim();
-  if (!location?.countryCode || !province) return null;
-  return `${location.countryCode}|${province}`;
+/**
+ * Open and not sold out. "Open" alone would keep races whose card says "Sold
+ * out", which is exactly what someone hiding full races does not want to see.
+ * Places are summed the way the card sums them, so the two never disagree, and
+ * a race with no distances yet has nothing to enter, so it is hidden too.
+ */
+function canBeEntered({ summary }: DirectoryEntry): boolean {
+  if (summary.event.status !== "Open") return false;
+  return summary.categories.reduce((total, category) => total + category.slotsLeft, 0) > 0;
 }
 
 /** Options within a group are either-or; groups must all hold. */
 export function matchesFilters(entry: DirectoryEntry, filters: Filters): boolean {
-  const { summary } = entry;
-  if (filters.openOnly && summary.event.status !== "Open") return false;
-
-  if (filters.locations.length > 0) {
-    const key = locationKey(entry);
-    if (key === null || !filters.locations.includes(key)) return false;
-  }
+  if (filters.availableOnly && !canBeEntered(entry)) return false;
 
   if (filters.prices.length === 0 && filters.distances.length === 0) return true;
 
   const prices = PRICE_BUCKETS.filter((bucket) => filters.prices.includes(bucket.id));
   const distances = DISTANCE_BUCKETS.filter((bucket) => filters.distances.includes(bucket.id));
-  return summary.categories.some(
+  return entry.summary.categories.some(
     (category) =>
       (prices.length === 0 || prices.some((bucket) => bucket.matches(category.priceStroops))) &&
       (distances.length === 0 || distances.some((bucket) => bucket.matches(category.distanceM))),
   );
-}
-
-export interface LocationOption {
-  key: string;
-  province: string;
-  count: number;
-}
-
-export interface LocationGroup {
-  countryCode: string;
-  country: string;
-  options: LocationOption[];
-}
-
-function totalOf(group: LocationGroup): number {
-  return group.options.reduce((sum, option) => sum + option.count, 0);
-}
-
-/**
- * The provinces that have races, with how many, grouped by country.
- *
- * Built from the races themselves, so no option can lead to an empty list. The
- * visitor's own country comes first when they have chosen an area; otherwise
- * the country with the most races does. The country name is the document's
- * own, so the directory never loads the places dataset for it.
- */
-export function locationGroups(
-  entries: readonly DirectoryEntry[],
-  preferredCountry?: string,
-): LocationGroup[] {
-  const byCountry = new Map<string, { country: string; counts: Map<string, number> }>();
-
-  for (const item of entries) {
-    const key = locationKey(item);
-    const location = item.document?.location;
-    if (key === null || !location?.countryCode) continue;
-    const province = key.slice(location.countryCode.length + 1);
-    const group = byCountry.get(location.countryCode) ?? {
-      country: location.country?.trim() || location.countryCode,
-      counts: new Map<string, number>(),
-    };
-    group.counts.set(province, (group.counts.get(province) ?? 0) + 1);
-    byCountry.set(location.countryCode, group);
-  }
-
-  const groups: LocationGroup[] = [...byCountry.entries()].map(([countryCode, group]) => ({
-    countryCode,
-    country: group.country,
-    options: [...group.counts.entries()]
-      .map(([province, count]) => ({ key: `${countryCode}|${province}`, province, count }))
-      .sort((a, b) => b.count - a.count || a.province.localeCompare(b.province)),
-  }));
-
-  return groups.sort((a, b) => {
-    if (a.countryCode === preferredCountry) return -1;
-    if (b.countryCode === preferredCountry) return 1;
-    return totalOf(b) - totalOf(a) || a.country.localeCompare(b.country);
-  });
 }
 
 export interface FilterChip {
@@ -162,11 +101,6 @@ export interface FilterChip {
 
 export function filterChips(filters: Filters): FilterChip[] {
   return [
-    ...filters.locations.map((key) => ({
-      id: `location:${key}`,
-      label: key.slice(key.indexOf("|") + 1),
-      remove: (current: Filters) => ({ ...current, locations: current.locations.filter((item) => item !== key) }),
-    })),
     ...filters.prices.map((id) => ({
       id: `price:${id}`,
       label: PRICE_BUCKETS.find((bucket) => bucket.id === id)?.label ?? id,
@@ -177,8 +111,14 @@ export function filterChips(filters: Filters): FilterChip[] {
       label: DISTANCE_BUCKETS.find((bucket) => bucket.id === id)?.label ?? id,
       remove: (current: Filters) => ({ ...current, distances: current.distances.filter((item) => item !== id) }),
     })),
-    ...(filters.openOnly
-      ? [{ id: "open-only", label: "Open for entry only", remove: (current: Filters) => ({ ...current, openOnly: false }) }]
+    ...(filters.availableOnly
+      ? [
+          {
+            id: "available-only",
+            label: AVAILABLE_ONLY_LABEL,
+            remove: (current: Filters) => ({ ...current, availableOnly: false }),
+          },
+        ]
       : []),
   ];
 }
