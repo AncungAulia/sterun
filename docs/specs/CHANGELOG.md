@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.1.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.2.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,76 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.2.0] — 2026-09-11
+
+**MINOR — RaceRecord gains a finish with no official time (STE-41, option A).** One new function,
+one new event. No signature changed, no event layout changed, no error code was added or renumbered,
+and no storage changed. Running clients still compile and still run — with **one** new state
+combination they must read, below.
+
+### Why
+
+Fun runs, colour runs and charity runs often have no chip timing. `record_finish` refuses
+`finish_time_s == 0` (`InvalidFinishTime(105)`), which is right — so a runner who crossed the line
+was stuck at `RacepackClaimed`, and the only other exit, `Dnf`, would be a lie.
+
+Axel's decision (option A in STE-41): a **new** function and a **new** event, both append-only.
+Option B — `record_finish(id, 0)` — was **rejected**: `RecordFinished` carries a plain `u32`, and
+every consumer already decoding it (the STE-16 indexer, the SDK, any third party) would read `0` as
+a zero-second race.
+
+### What was added
+
+| | |
+| --- | --- |
+| `record_finish_untimed(token_id: u32) -> Result<(), Error>` | organiser-gated, from `RacepackClaimed` only; sets `Finished`, `finish_time_s = None`, `result_at = now` |
+| `RecordFinishedUntimed` | topics: `"record_finished_untimed"`, `token_id`, `event_id`; data: *(none)* — the `RecordDnf` shape |
+
+Errors: none new. It reuses `RecordNotFound(101)`, `InvalidState(103)` and the organiser auth gate
+of `record_finish`. Band `100..=107` is unchanged; the next free C2 code is still **108**.
+
+### The one thing a client must read
+
+**`state == Finished && finish_time_s == None` now exists, and it means "finished, no official
+time"** — declared by the organiser, not measured. It could not exist before v2.2. A client that
+assumed "`Finished` implies a time" must handle the empty case and must **never** render it as `0`.
+`record_finish` and `RecordFinished` are untouched — `0` is still refused there.
+
+### Impact on existing data
+
+Zero. `RecordData.finish_time_s` has been `Option<u32>` since v1.0.0, so no struct gained a field and
+no `DataKey` variant moved. Installed by `upgrade` at the **same address**
+(`CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW`); every record already on chain decodes
+unchanged. Proven before the deploy by
+`records_written_by_the_live_wasm_survive_the_untimed_upgrade`, which deploys the **genuinely live
+wasm** (`27749180…`, committed in `sc/contracts/race_record/testdata/`), writes `Entered`,
+`RacepackClaimed`, a timed `Finished` and `Dnf` with it, upgrades to the v2.2 build, reads all four
+back, and then runs `record_finish_untimed` on records the old code minted.
+
+Clients that need changes to **show** the new state (tracked as their own tickets, deliberately not
+part of this change): the `be/` indexer's `finish_time_s > 0` and `finished_records_were_claimed`
+constraints plus a `record_finished_untimed` handler, the `be/` results CSV, and the `fe/` profile.
+
+### Artefacts
+
+| | sha256 | Size |
+| --- | --- | ---: |
+| RaceRecord v2.0.1 (live before) | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
+| RaceRecord v2.2.0 | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
+
+EventRegistry **did not change** (`cf009033…` still) and its address was not upgraded. The
+race-record TS bindings were regenerated (one new method); event-registry's are byte-identical.
+
+Vectors: no value changed. `HASH_AND_TOTP.md` was untouched.
+
+### Procedure
+
+This spec change was **pre-authorised by Axel (PM)** through the STE-41 brief (`UNTIMED_BRIEF.md`:
+"Axel pre-authorize, TANPA gate ACC", merge to `main` after every e2e is green), and still landed
+through a PR rather than a direct push to `main` — the same arrangement as [2.1.0].
 
 ---
 
