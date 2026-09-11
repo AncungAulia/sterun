@@ -67,7 +67,11 @@ export function Directory() {
       {data && data.events.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {data.events.map((summary) => (
-            <EventCard key={summary.event.eventId} summary={summary} />
+            <EventCard
+              key={summary.event.eventId}
+              entry={{ summary, document: null }}
+              documentLoading={false}
+            />
           ))}
         </div>
       ) : null}

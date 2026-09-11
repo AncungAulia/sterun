@@ -106,7 +106,7 @@ describe("Directory", () => {
       expect(link).toHaveAttribute("href", "/events/4");
     });
 
-    it("summarises the categories on the card", async () => {
+    it("shows the starting price on the card", async () => {
       listEvents.mockResolvedValue({
         events: [summary(0, {}, [category(0), category(1, { code: "5K" })])],
         unreadable: [],
@@ -114,8 +114,7 @@ describe("Directory", () => {
 
       renderDirectory();
 
-      expect(await screen.findByText("10K")).toBeInTheDocument();
-      expect(screen.getByText("5K")).toBeInTheDocument();
+      expect(await screen.findByText("From sUSD 25")).toBeInTheDocument();
     });
 
     it("counts the places left across an event's categories", async () => {
@@ -126,7 +125,7 @@ describe("Directory", () => {
 
       renderDirectory();
 
-      expect(await screen.findByText("150 places left")).toBeInTheDocument();
+      expect(await screen.findByText("150 entries left")).toBeInTheDocument();
     });
 
     it("says one place, not one places", async () => {
@@ -139,7 +138,7 @@ describe("Directory", () => {
 
       renderDirectory();
 
-      expect(await screen.findByText("1 place left")).toBeInTheDocument();
+      expect(await screen.findByText("1 entry left")).toBeInTheDocument();
     });
 
     it("shows the status of every event", async () => {
@@ -206,7 +205,7 @@ describe("Directory", () => {
       renderDirectory();
 
       expect(await screen.findByText("Jakarta Marathon 0")).toBeInTheDocument();
-      expect(screen.getByText(/no categories/i)).toBeInTheDocument();
+      expect(screen.getByText("No distances yet")).toBeInTheDocument();
     });
 
     it("mentions events the registry counted but would not return", async () => {
