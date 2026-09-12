@@ -47,7 +47,6 @@ export function useNearbyPrompt(): void {
     const geolocation = globalThis.navigator?.geolocation;
     if (!geolocation) return;
 
-    let cancelled = false;
     // Before the answer: a dismissed prompt calls neither callback, so a flag
     // written on the way out would never be written at all.
     markAsked();
@@ -55,7 +54,7 @@ export function useNearbyPrompt(): void {
       ({ coords }) => {
         // A place picked by hand while the prompt was open wins: it is the more
         // deliberate of the two answers.
-        if (cancelled || readStoredPlace().place) return;
+        if (readStoredPlace().place) return;
         storePlace({ mode: "nearby", lat: coords.latitude, lng: coords.longitude });
       },
       () => {
@@ -64,8 +63,10 @@ export function useNearbyPrompt(): void {
       { timeout: TIMEOUT_MS, maximumAge: MAX_AGE_MS },
     );
 
-    return () => {
-      cancelled = true;
-    };
+    // No cleanup that discards a late answer. React mounts an effect twice in
+    // development, so a flag set by the first cleanup was still set when the
+    // browser answered the first request, and the coordinates were thrown away
+    // every time. Nothing here holds React state: the store lives outside it,
+    // so a write after unmount is a write to a store the next mount reads.
   }, []);
 }
