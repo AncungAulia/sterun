@@ -12,7 +12,9 @@
  *   gives up its own ratio to fill it.
  * - two races: two equal columns, each card 16:9. The lead keeps the lead's
  *   contents (venue, price, big title) but not a size the other cannot match,
- *   because one card towering over its only neighbour reads as a mistake.
+ *   because one card towering over its only neighbour reads as a mistake. It is
+ *   also told it is `compact`, because a half-width lead is where the hero title
+ *   at its largest outgrows the card.
  * - one race: the full width, flattened to 21:9, since 16:9 across a laptop
  *   screen is taller than the screen.
  */
@@ -40,6 +42,10 @@ export function FeaturedEvents({ entries }: { entries: readonly DirectoryEntry[]
       <FeaturedCard
         entry={lead}
         size="lead"
+        // Two equal columns is the only row where the lead is half its width.
+        // `className` cannot carry this: the size the title steps down to is a
+        // class on the heading, not on the card.
+        compact={rest.length === 1}
         className={cn(
           // Alone across the full width, 16:9 would be taller than most laptop screens.
           rest.length === 0 && "lg:aspect-[21/9]",

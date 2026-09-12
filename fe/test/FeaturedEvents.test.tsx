@@ -30,6 +30,8 @@ describe("FeaturedEvents", () => {
     expect(within(region).getByRole("heading", { name: "Jakarta Marathon 0" })).toHaveClass("heading-hero");
     expect(within(region).getByRole("heading", { name: "Jakarta Marathon 1" })).not.toHaveClass("heading-hero");
     expect(card(region, "Jakarta Marathon 0")).toHaveClass("lg:col-span-2", "lg:row-span-2");
+    // Two columns wide here, so the title keeps its largest size.
+    expect(within(region).getByRole("heading", { name: "Jakarta Marathon 0" })).not.toHaveClass("lg:text-4xl");
   });
 
   it("gives each of two side cards one row, filled to its height", () => {
@@ -64,7 +66,12 @@ describe("FeaturedEvents", () => {
     render(<FeaturedEvents entries={[race(0), race(1)]} />);
 
     const region = screen.getByRole("region", { name: "Featured races" });
-    expect(within(region).getByRole("heading", { name: "Jakarta Marathon 0" })).toHaveClass("heading-hero");
+    const lead = within(region).getByRole("heading", { name: "Jakarta Marathon 0" });
+    expect(lead).toHaveClass("heading-hero");
+    // Half the row's width from lg, so the hero title steps down there: at
+    // text-5xl its block is taller than the card, which then grows and the
+    // poster disappears under the fade.
+    expect(lead).toHaveClass("lg:text-4xl");
     expect(within(region).getByRole("heading", { name: "Jakarta Marathon 1" })).not.toHaveClass("heading-hero");
     // The venue and the price are the lead card's alone, whatever the count.
     expect(within(region).getAllByText("FT UGM, Sleman")).toHaveLength(1);
@@ -82,6 +89,8 @@ describe("FeaturedEvents", () => {
     expect(lead).not.toHaveClass("lg:col-span-2");
     // A full-width 16:9 card would be taller than most laptop screens.
     expect(lead).toHaveClass("lg:aspect-[21/9]");
+    // Nothing beside it, so nothing to match: the title stays at its largest.
+    expect(within(region).getByRole("heading", { name: "Jakarta Marathon 0" })).not.toHaveClass("lg:text-4xl");
   });
 
   it("puts no more than two races beside the large one", () => {

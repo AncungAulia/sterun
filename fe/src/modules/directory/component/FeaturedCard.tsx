@@ -49,13 +49,17 @@ const CARD_SHAPE = "aspect-[4/3] sm:aspect-video";
  * Past this many characters a name takes the title down one step instead of
  * filling both clamped lines and losing its tail.
  *
- * Measured against the names actually on testnet. Big Shoulders at `text-5xl`
- * fits roughly sixteen characters across the lead card, so two lines is about
- * thirty-two: "Elektro Dash 2026 (TESTING)" (27) still lands inside them and
- * keeps the big face, while "Sterun untimed finish sanity 2026-09-11" (39) does
- * not and steps down. Poppins at `text-xl` is smaller type in a third of the
- * width, which works out a little tighter, hence the lower number for a side
- * card. `line-clamp-2` stays as the backstop for a name longer than either.
+ * Measured against the names actually on testnet, and counted on the
+ * **narrowest** card of each size rather than the widest, so the step-down is
+ * never late: for the lead that is a phone, where the card is the width of the
+ * screen and the title is `text-4xl`, and about sixteen characters of Big
+ * Shoulders fit on a line, so two lines is about thirty-two. "Elektro Dash 2026
+ * (TESTING)" (27) still lands inside them and keeps the big face, while "Sterun
+ * untimed finish sanity 2026-09-11" (39) does not and steps down. A wider lead
+ * fits more than sixteen per line, so there the threshold is merely
+ * conservative. Poppins at `text-xl` is smaller type in a third of the width,
+ * which works out a little tighter, hence the lower number for a side card.
+ * `line-clamp-2` stays as the backstop for a name longer than either.
  */
 const LEAD_LONG_NAME = 32;
 const SIDE_LONG_NAME = 30;
@@ -64,12 +68,18 @@ const SIDE_LONG_NAME = 30;
  * The title's face and size for a name of this length.
  *
  * A lead title never goes below `text-4xl`: `heading-hero` is Big Shoulders,
- * and `tokens.css` only allows that face at 48px and above.
+ * and `tokens.css` only allows that face at 48px and above. `compact` is the
+ * half-width lead of the two-race row (see `FeaturedEvents`): from `lg` the
+ * lead is no wider than its neighbour, and `text-5xl` there makes the text
+ * block taller than the card, which then grows and leaves no bare poster at
+ * all. Below `lg` the lead is full width in every row, so it keeps the big
+ * face there.
  */
-export function featuredTitleClass(name: string, size: FeaturedCardSize): string {
+export function featuredTitleClass(name: string, size: FeaturedCardSize, compact = false): string {
   const length = name.trim().length;
   if (size === "lead") {
-    return length > LEAD_LONG_NAME ? "heading-hero text-4xl" : "heading-hero text-4xl sm:text-5xl";
+    if (length > LEAD_LONG_NAME) return "heading-hero text-4xl";
+    return compact ? "heading-hero text-4xl sm:text-5xl lg:text-4xl" : "heading-hero text-4xl sm:text-5xl";
   }
   return length > SIDE_LONG_NAME ? "heading-strong text-lg" : "heading-strong text-xl";
 }
@@ -77,11 +87,13 @@ export function featuredTitleClass(name: string, size: FeaturedCardSize): string
 interface FeaturedCardProps {
   entry: DirectoryEntry;
   size: FeaturedCardSize;
+  /** The lead is only half the row's width, so its title takes a smaller step. */
+  compact?: boolean;
   /** Placement in the featured grid, which only the row knows. */
   className?: string;
 }
 
-export function FeaturedCard({ entry, size, className }: FeaturedCardProps) {
+export function FeaturedCard({ entry, size, compact = false, className }: FeaturedCardProps) {
   const { event, categories } = entry.summary;
   const lead = size === "lead";
   // Side cards are compact: title, date and entries left, nothing else.
@@ -92,12 +104,15 @@ export function FeaturedCard({ entry, size, className }: FeaturedCardProps) {
   // come from useId, not from the event id.
   const titleId = useId();
   const detailsId = useId();
+  const priceId = useId();
 
   return (
     <Link
       href={`/events/${event.eventId}`}
       aria-labelledby={titleId}
-      aria-describedby={detailsId}
+      // The price is a sibling of the details list, so it needs naming too, or
+      // "From sUSD 25" is the one line a screen reader never reaches.
+      aria-describedby={price ? `${detailsId} ${priceId}` : detailsId}
       // globals.css restores the card's radius on this slot, or the global focus ring squares it.
       data-slot="event-card"
       className={cn(
@@ -122,21 +137,32 @@ export function FeaturedCard({ entry, size, className }: FeaturedCardProps) {
       />
 
       {/*
-        The fade is two layers so it covers the whole text block, not just its
-        lower half: the block itself is at least 70% ink, which keeps light type
-        readable over a white poster, and `before:` fades that out above it. A
-        single bottom-to-transparent gradient left the title's first line on a
-        nearly bare poster.
+        One layer, and it is the text block itself: the fade has to end inside
+        this box, or the poster it is meant to leave alone gets a second dark
+        sheet over it. The whole point of the card is that the picture is the
+        card, so the top of the picture must be untouched.
+
+        The stops earn their numbers. `to-transparent` at the top of the box
+        lands in the top padding band, which is empty space above the first
+        line, so no text ever sits on bare poster; the band is smaller on a side
+        card because that card is about half the height. `via-ink/85 via-65%`
+        puts the steep part of the ramp inside that band rather than behind the
+        title: the top
+        of the title's caps sits at roughly 60% ink and its first line at about
+        85%, which is 4.3:1 and 10:1 against `paper` even over a pure white
+        poster, and the bottom stays at 95% under the details and the price. A
+        default `via` (50%) would put the title's first line near 45% ink, which
+        is 2.8:1 and the reason this was reworked. The earlier version instead
+        floored the whole block at 70% ink with a separate `before:` layer above
+        it, which read as a grey sheet over most of a 368px lead card.
       */}
       <div
         className={cn(
-          "relative flex flex-col bg-linear-to-t from-ink/90 to-ink/70 text-paper",
-          "before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-16",
-          "before:bg-linear-to-t before:from-ink/70 before:to-transparent",
-          lead ? "gap-3 p-6" : "gap-2 p-4",
+          "relative flex flex-col bg-linear-to-t from-ink/95 via-ink/85 via-65% to-transparent text-paper",
+          lead ? "gap-3 p-6 pt-16" : "gap-2 p-4 pt-12",
         )}
       >
-        <h3 id={titleId} className={cn("line-clamp-2", featuredTitleClass(event.name, size))}>
+        <h3 id={titleId} className={cn("line-clamp-2", featuredTitleClass(event.name, size, compact))}>
           {event.name}
         </h3>
 
@@ -160,7 +186,11 @@ export function FeaturedCard({ entry, size, className }: FeaturedCardProps) {
           {categories.length === 0 ? <li>No distances yet</li> : null}
         </ul>
 
-        {price ? <p className="numeric text-base font-medium">{price}</p> : null}
+        {price ? (
+          <p id={priceId} className="numeric text-base font-medium">
+            {price}
+          </p>
+        ) : null}
       </div>
 
       {/* After the text in the markup so the fade above the text never dims it on a short card. */}

@@ -236,9 +236,13 @@ What is settled:
   not fetch or hash its document again. `fetchEventMetadata` gives up after `METADATA_TIMEOUT_MS`
   (8 s) so one dead host cannot hold the featured row back.
 - **Featured cards are full-bleed** (Revision 2, `FeaturedCard`): no white body, the poster frame
-  fills the whole card, and the text sits in `paper` over an `ink` fade along the bottom. The fade is
-  two layers (the text block at least 70% ink, then a `before:` fade above it), because one
-  bottom-to-transparent gradient left the title on a nearly bare light poster. `EventCard` is the
+  fills the whole card, and the text sits in `paper` over an `ink` fade along the bottom. **The fade
+  is one layer, the text block itself, and it runs out inside its own top padding**
+  (`from-ink/95 via-ink/85 via-65% to-transparent` over `pt-16`, `pt-12` on a side card), so the
+  upper part of every card is untouched poster while the text still never sits on bare poster: the
+  title's first line lands at about 85% ink (10:1 against `paper`) and its caps at about 60% (4.3:1),
+  even over a pure white poster. It used to be two layers with the whole block floored at 70% ink,
+  which read as a grey sheet over most of the card. `EventCard` is the
   list card only and keeps its white body; the two share the lines from `browse.ts`, not a variant.
   Lead: hero title, venue, date, entries left, price. **Side cards are compact**: title, date and
   entries left.
@@ -253,8 +257,13 @@ What is settled:
 - **A long race name shrinks the title one step** (`featuredTitleClass`, unit-tested) rather than
   scrolling or wrapping past the two lines it is clamped to: a marquee is hard to read and moves on
   every visit. Lead `text-5xl` down to `text-4xl`, side `text-xl` down to `text-lg`, with the
-  thresholds measured from the real names. **Never below `text-4xl` on the lead**: `heading-hero` is
-  Big Shoulders and `tokens.css` only allows it at 48px and above.
+  thresholds measured from the real names on the **narrowest** card of each size, so the step-down is
+  never late. **Never below `text-4xl` on the lead**: `heading-hero` is Big Shoulders and
+  `tokens.css` only allows it at 48px and above. The two-race row also passes the lead
+  `compact`, which takes the hero title to `text-4xl` **from `lg`**: half a row wide, `text-5xl`
+  makes the text block taller than the card, `min-h-min` grows the card to fit it, and the poster
+  vanishes under the fade. A layout fact the card cannot see has to be told to it, and `className`
+  cannot carry this one, because the size is a class on the heading rather than on the card.
 - **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
   `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
   its corners.

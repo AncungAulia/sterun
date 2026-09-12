@@ -1,7 +1,9 @@
 "use client";
 
 /**
- * A race poster in a fixed 16:9 frame, whatever shape the poster is.
+ * A race poster in a 16:9 frame by default, whatever shape the poster is. The
+ * ratio is the only part a caller may override: the featured card passes
+ * `aspect-auto h-full` so the poster fills a card whose height its row decides.
  *
  * Posters arrive in every shape (the ones on testnet today are 3:1, 4:3 and
  * about 10:7) and they carry their own title, date and venue as text. Cropping
