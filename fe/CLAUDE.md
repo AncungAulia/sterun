@@ -416,8 +416,11 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   comma, or use brackets. If a separator is genuinely needed, use an ordinary hyphen. This ban is
   specific to UI text; code comments and `.md` files are unaffected. `test/ui-rules.test.ts`
   enforces it on **every spelling**, not only the literal character: an escape and an HTML
-  entity render the same dash while reading as plain ASCII in the source, and three of those
-  survived a green suite in the size chart.
+  entity render the same dash while reading as plain ASCII in the source. That is not
+  hypothetical, and the history says where to look: `f824cbd` wrote three em dashes into the
+  size chart as escapes, `40edea3` took them out, and `cf907ce` taught the sweep to see that
+  spelling at all. Check the removal with
+  `git show 40edea3 -- fe/src/modules/event-detail/component/TabAddOns.tsx`.
 - **No hex values, font names or raw px in a component** — everything comes from the tokens in
   `app/tokens.css` (Nabil's, STE-7). Those tokens have two copies (`fe/` and `landing-page/`); if you
   change them, change both in one commit.

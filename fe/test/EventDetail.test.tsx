@@ -356,6 +356,43 @@ describe("EventDetail", () => {
       expect(screen.getByText(/part of the race pack/i)).toBeInTheDocument();
     });
 
+    it("says nothing about stock for a sized item the chain knows nothing about", async () => {
+      // The same case as above, but with sizes, which is the one the size
+      // chart can get wrong: with no rows on chain there is no stock to
+      // report, and marking every size "Not sold" had the one dialog say the
+      // jersey is part of the race pack and that none of it is for sale.
+      getEventSummary.mockResolvedValue(summary());
+      fetchEventMetadata.mockResolvedValue({
+        status: "verified",
+        document: {
+          addOns: [
+            {
+              name: "Event jersey",
+              includedIn: ["10K"],
+              sizes: [
+                { label: "M", chestCm: 52 },
+                { label: "L", chestCm: 55 },
+              ],
+            },
+          ],
+        },
+      } satisfies MetadataResult);
+
+      renderDetail();
+      await showTab(/race pack/i);
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: /view details/i }));
+
+      const dialog = within(await screen.findByRole("dialog"));
+      expect(dialog.getByText(/part of the race pack/i)).toBeInTheDocument();
+      // The measurements are still the point of the chart, so it stays.
+      expect(dialog.getByRole("row", { name: /M\s+52/ })).toBeInTheDocument();
+      // The stock column is gone entirely, header included.
+      expect(dialog.queryByText(/not sold/i)).not.toBeInTheDocument();
+      expect(dialog.queryByRole("columnheader", { name: "Left" })).not.toBeInTheDocument();
+    });
+
     it("shows nothing about a race pack when the document has no add-ons", async () => {
       getEventSummary.mockResolvedValue(summary());
       fetchEventMetadata.mockResolvedValue({
@@ -483,7 +520,7 @@ describe("EventDetail", () => {
       // An event with no uri never had a document to fetch, so "could not be
       // loaded" would send the reader back later for a file that was never
       // published.
-      getEventSummary.mockResolvedValue(summary({ uri: "" }));
+      getEventSummary.mockResolvedValue(summary({ uri: "", metadataHash: "" }));
       fetchEventMetadata.mockResolvedValue({
         status: "unavailable",
         reason: "This race has no published details.",
@@ -494,6 +531,11 @@ describe("EventDetail", () => {
 
       expect(await screen.findByText(/published no details/i)).toBeInTheDocument();
       expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+      // Nothing was published, so there is no fingerprint and no file either.
+      // A label with an empty value beside it reads as a value that failed to
+      // arrive, which is a different and wrong story.
+      expect(screen.queryByText("Fingerprint")).not.toBeInTheDocument();
+      expect(screen.queryByText("Details file")).not.toBeInTheDocument();
     });
 
     it("warns when the document disagrees with the chain about the start time", async () => {

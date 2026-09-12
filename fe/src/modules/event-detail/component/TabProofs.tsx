@@ -178,11 +178,14 @@ export function TabProofs({
                   <span className="numeric text-n-700">{result.actualHash}</span>
                 </Row>
               </>
-            ) : (
+            ) : metadataHash ? (
+              /* A race that published nothing has no fingerprint either, and a
+                 label with nothing after it reads as a value that failed to
+                 load. Skipped like the file row below it. */
               <Row label="Fingerprint">
                 <span className="numeric text-foreground">{metadataHash}</span>
               </Row>
-            )}
+            ) : null}
             {uri ? (
               <Row label="Details file">
                 <a

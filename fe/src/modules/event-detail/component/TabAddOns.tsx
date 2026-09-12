@@ -143,6 +143,16 @@ function AddOnDialog({ joined }: { joined: JoinedAddOn }) {
   const [open, setOpen] = useState(false);
   const sizes = joined.item.sizes ?? [];
   const byCode = new Map(joined.rows.map((row) => [row.code, row]));
+  /*
+    An item with no rows at all has no stock information, not stock of zero.
+    The card already says it is part of the race pack, and `AddOnCard` refuses
+    to call it sold out for the same reason; printing "Not sold" against every
+    size would have the one dialog say both things about the same jersey. So
+    the column goes away rather than being filled with a verdict nothing
+    supports, and "Not sold" is kept for a size missing from an item the chain
+    does hold.
+  */
+  const hasStock = joined.rows.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -201,7 +211,7 @@ function AddOnDialog({ joined }: { joined: JoinedAddOn }) {
                     <th className="py-1 pr-4 font-normal">Size</th>
                     <th className="py-1 pr-4 font-normal">Chest (cm)</th>
                     <th className="py-1 pr-4 font-normal">Length (cm)</th>
-                    <th className="py-1 font-normal">Left</th>
+                    {hasStock ? <th className="py-1 font-normal">Left</th> : null}
                   </tr>
                 </thead>
                 <tbody className="numeric text-foreground">
@@ -214,21 +224,24 @@ function AddOnDialog({ joined }: { joined: JoinedAddOn }) {
                             as a table that failed to load. */}
                         <td className="py-1.5 pr-4">{size.chestCm ?? "Not given"}</td>
                         <td className="py-1.5 pr-4">{size.lengthCm ?? "Not given"}</td>
-                        <td className="py-1.5">
-                          {/*
-                            No row on chain means this size was never put up for
-                            sale, so nobody can buy it. "Not known" read as
-                            "maybe available, ask the organiser", which sends a
-                            runner off after a size that does not exist.
-                          */}
-                          {row === undefined ? (
-                            <span className="text-n-500">Not sold</span>
-                          ) : row.unitsLeft > 0 ? (
-                            row.unitsLeft
-                          ) : (
-                            <span className="text-n-500">sold out</span>
-                          )}
-                        </td>
+                        {hasStock ? (
+                          <td className="py-1.5">
+                            {/*
+                              This item is on chain, so a size with no row of
+                              its own was never put up for sale and nobody can
+                              buy it. "Not known" read as "maybe available, ask
+                              the organiser", which sends a runner off after a
+                              size that does not exist.
+                            */}
+                            {row === undefined ? (
+                              <span className="text-n-500">Not sold</span>
+                            ) : row.unitsLeft > 0 ? (
+                              row.unitsLeft
+                            ) : (
+                              <span className="text-n-500">sold out</span>
+                            )}
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })}
