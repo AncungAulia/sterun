@@ -1,7 +1,7 @@
 # Directory redesign — poster-first `/`
 
-> **Revision 2 (2026-09-11, after Ancung reviewed the live page) overrides the sections below where
-> they disagree.** See "Revision 2" at the end of this file.
+> **Revisions 2 and 3, at the end of this file, override the sections below where they disagree**
+> (Revision 2: 2026-09-11, after Ancung reviewed the live page; Revision 3: 2026-09-12). Read them first.
 
 Date: 2026-09-11 · Owner: Ancung · Scope: `fe/` only (no backend, no contract change)
 
@@ -244,3 +244,26 @@ These decisions override the sections above.
    event cannot be changed after it is published). Evidence the product relies on stays, with plain
    labels: transaction links after an action, wallet addresses, the event page's proof tab. The
    `ChainSource` footer is removed from pages.
+
+---
+
+## Revision 3 — 2026-09-12
+
+1. **The featured row's shape follows its count.** From `lg`: three races give the lead two columns and
+   two rows with a side card in each row; two races sit side by side as equals; one race spans the
+   row. Below `lg` they stack. A long race name is set one step smaller rather than scrolled: a
+   marquee moves on every visit and is harder to read than a name that simply fits. `heading-hero`
+   never goes below `text-4xl`.
+2. **The location control sorts, it no longer filters** (this overrides Revision 2 point 2). Every
+   race stays on the page; the races in the chosen place come first, and the featured row prefers
+   them. The heading returns to "All races" and the "No races in {place} yet" state is dropped:
+   nothing is hidden, so there is nothing to explain. Searching a province name still narrows the
+   list to it.
+   - Later, optional: a "Use my location" button. Event documents already carry `lat`/`lng`, so real
+     distances can be shown ("12 km away"). It stays opt-in, never an automatic permission prompt.
+3. **The map pin is read from the place, not from the map view.** `parseCoordinates` took the numbers
+   after `@` in a Google Maps link. Those are the centre of the map view, which moves with panning and
+   zoom, so a pinned venue landed tens of metres away (Ancung measured about 40 m for Fakultas Teknik
+   UGM). The place's own coordinates are in the link's `data=` part as `!3d<lat>!4d<lng>`. Read those
+   first, then `?q=`/`ll=`/`daddr=`, and only then `@` as a last resort. Events already created keep
+   the coordinates they were published with: the document is frozen.
