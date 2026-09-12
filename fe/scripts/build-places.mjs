@@ -27,7 +27,8 @@
  *
  * ## What is kept, and what is dropped
  *
- * Everything except names and the ids needed to link them. The source carries
+ * Everything except names, the ids needed to link them, and one point per
+ * province, which is what turns a visitor's coordinates into a province name. The source carries
  * currencies, timezones, translations and emoji flags, none of which a race
  * organiser is choosing between, and all of which would be shipped to every
  * visitor.
@@ -76,9 +77,22 @@ const countries = rawCountries
   .map((country) => ({ iso2: country.iso2, name: country.name }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
+// Provinces keep a point as well as a name. The app turns the coordinates the
+// browser gives it into a province by taking the nearest of these, which is why
+// this is the one place coordinates are not dropped. Three decimals is about a
+// hundred metres, far finer than a province, and a third of the bytes of the
+// source's eight.
+const point = (value) => Math.round(Number(value) * 1000) / 1000;
+
 const states = {};
 for (const state of rawStates) {
-  (states[state.country_code] ??= []).push({ id: state.id, name: state.name });
+  const lat = point(state.latitude);
+  const lng = point(state.longitude);
+  const province = { id: state.id, name: state.name };
+  // A handful of rows carry no point. They stay pickable by hand; they just
+  // cannot be the answer to "which province is this".
+  if (Number.isFinite(lat) && Number.isFinite(lng)) Object.assign(province, { lat, lng });
+  (states[state.country_code] ??= []).push(province);
 }
 for (const list of Object.values(states)) list.sort((a, b) => a.name.localeCompare(b.name));
 

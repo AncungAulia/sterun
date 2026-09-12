@@ -11,8 +11,10 @@
  * and remembers the answer, so this must never fire twice.
  *
  * What happens with each answer:
- *   - allowed        the coordinates are stored and the list is ordered by how
- *                    far each race is from them.
+ *   - allowed        the coordinates are turned into the nearest province in
+ *                    the places data, which is what the rest of the app already
+ *                    orders by, so the header can name it. A point with no
+ *                    province near it is kept as the two numbers instead.
  *   - refused        nothing changes on screen. No banner, no error. The page
  *   - dismissed      is exactly what it is for somebody who was never asked,
  *   - unavailable    and the picker in the header still works.
@@ -52,10 +54,26 @@ export function useNearbyPrompt(): void {
     markAsked();
     geolocation.getCurrentPosition(
       ({ coords }) => {
-        // A place picked by hand while the prompt was open wins: it is the more
-        // deliberate of the two answers.
-        if (readStoredPlace().place) return;
-        storePlace({ mode: "nearby", lat: coords.latitude, lng: coords.longitude });
+        const { latitude: lat, longitude: lng } = coords;
+        // The province list is a third of a megabyte and the picker already
+        // loads it late for that reason. Imported here, after an answer, so a
+        // visitor who refuses never downloads it.
+        void import("@/lib/places").then(({ nearestProvince }) => {
+          // A place picked by hand while the prompt was open wins: it is the
+          // more deliberate of the two answers.
+          if (readStoredPlace().place) return;
+          const named = nearestProvince(lat, lng);
+          storePlace(
+            named === null
+              ? { mode: "nearby", lat, lng }
+              : {
+                  mode: "area",
+                  countryCode: named.countryCode,
+                  country: named.country,
+                  province: named.province,
+                },
+          );
+        });
       },
       () => {
         // Refused, unavailable or timed out. All three leave the page alone.

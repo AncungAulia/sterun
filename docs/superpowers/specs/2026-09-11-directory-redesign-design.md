@@ -110,11 +110,10 @@ page and the wizard are considered good and are not part of this change.
   name and province name) and read with `useSyncExternalStore` (server snapshot `undefined`), per the
   React Compiler lint rule recorded in `fe/CLAUDE.md`. A "Clear area" action removes it.
 - The country name is stored with it so the header label never needs the places dataset
-  (`src/data/places.json`, 176 KB, 50 KB gzipped). The dialog's form is `React.lazy`-loaded, so a
-  visitor who never opens it never downloads that file.
-- No geocoding API. (Geolocation was ruled out here too; **Revision 4 reversed that** on 2026-09-12:
-  the browser's own prompt is raised on the first render, and the coordinates order the list. There
-  is still no geocoding, which is why the button reads "Near you" rather than a province name.)
+  (`src/data/places.json`). The dialog's form is `React.lazy`-loaded, so a visitor who never opens it
+  never downloads that file.
+- No geocoding service. (Geolocation was ruled out here too; **Revision 4 reversed that** on
+  2026-09-12, and **Revision 5** names the point it returns.)
 
 ## Search, sort and the filter drawer
 
@@ -302,7 +301,26 @@ stands, and *no geocoding* is still true.
 4. **Refused, dismissed, unavailable or timed out: the page does not change.** All locations, date
    order, the manual picker exactly as it was. No banner, no error, no second ask. The request
    carries a timeout so a device that never answers does not leave it pending.
-5. **The control at the top left reads "Near you"** while the coordinates are in use. It cannot name
-   a province, because naming one needs a geocoding service and there still is none. Opening it
-   still offers the country and province lists, applying one replaces the coordinates, and "All
-   locations" clears them.
+5. **The control at the top left reads "Near you"** while bare coordinates are in use. Revision 5
+   makes that the exception rather than the rule: the point is named first. Opening it still offers
+   the country and province lists, applying one replaces the coordinates, and "All locations" clears
+   them.
+
+---
+
+## Revision 5 — 2026-09-12
+
+**The coordinates are named, without a geocoding service.** The places dataset we already ship for
+the wizard's dropdowns carries one point per province in its source; the build script dropped it
+because only the names were needed. It now keeps it (three decimals, about a hundred metres, which is
+far finer than a province), and the browser's coordinates are matched to the nearest of those points.
+
+So allowing the prompt now stores a province, the same shape a visitor picks by hand, and the header
+reads "DI Yogyakarta, Indonesia" rather than "Near you". Everything downstream, ordering included, is
+unchanged, because it was already built around a chosen place. "Near you" survives only for a point
+with no province near it at all.
+
+The list is loaded on demand, after an answer, so a visitor who refuses never downloads it. What this
+cannot do is find a street: matching one point per province answers "roughly where is this" and
+nothing finer. An address search, if it is ever wanted, needs a real geocoder such as a self-hosted
+Photon, and that is a service somebody has to run.

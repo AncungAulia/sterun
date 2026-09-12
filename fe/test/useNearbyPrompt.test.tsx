@@ -52,9 +52,21 @@ describe("useNearbyPrompt", () => {
       renderProbe();
       await act(async () => {
         answer?.({ coords: { latitude: -6.1754, longitude: 106.8272 } } as GeolocationPosition);
+        // The province list is imported only once an answer arrives.
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      expect(readStoredPlace().place).toEqual({ mode: "nearby", lat: -6.1754, lng: 106.8272 });
+      // The point lands in Jakarta, and the header can name it, so what is
+      // stored is the province rather than the two numbers. Waited for: the
+      // province list is imported after the answer, not before it.
+      await vi.waitFor(() =>
+        expect(readStoredPlace().place).toEqual({
+          mode: "area",
+          countryCode: "ID",
+          country: "Indonesia",
+          province: "DKI Jakarta",
+        }),
+      );
     });
   });
 
@@ -83,6 +95,8 @@ describe("useNearbyPrompt", () => {
       });
       await act(async () => {
         answer?.({ coords: { latitude: -6.1754, longitude: 106.8272 } } as GeolocationPosition);
+        // The province list is imported only once an answer arrives.
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       expect(readStoredPlace().place).toEqual({

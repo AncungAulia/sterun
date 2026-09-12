@@ -29,6 +29,9 @@ export interface Country {
 export interface Province {
   id: number;
   name: string;
+  /** One point inside the province. Absent for a handful the source leaves blank. */
+  lat?: number;
+  lng?: number;
 }
 
 /** Province id to the city names in it. The shape of one `public/places` file. */
@@ -80,6 +83,51 @@ export async function fetchCities(iso2: string): Promise<CitiesByProvince> {
   } catch {
     return {};
   }
+}
+
+/** A place the browser's coordinates landed in, near enough for ordering a list. */
+export interface NearestProvince {
+  countryCode: string;
+  country: string;
+  province: string;
+}
+
+/**
+ * The province whose point is closest to these coordinates.
+ *
+ * Not a geocoder: it compares a point against one point per province, so it
+ * answers "roughly where is this" and nothing finer. That is all the directory
+ * asks of it, and it costs no service, no key and no request. Anything that
+ * needs a street belongs to a real geocoder, not to this.
+ *
+ * Distances are compared on a flat plane with longitude squeezed by latitude,
+ * because only the ordering matters and a square root the caller never reads is
+ * still a square root over five thousand provinces.
+ */
+export function nearestProvince(lat: number, lng: number): NearestProvince | null {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const squeeze = Math.cos((lat * Math.PI) / 180);
+  let best: NearestProvince | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const [iso2, provinces] of Object.entries(data.states)) {
+    for (const province of provinces) {
+      if (province.lat === undefined || province.lng === undefined) continue;
+      const dLat = province.lat - lat;
+      // The short way round the globe, so a point beside the date line is not
+      // measured the long way across it.
+      const rawLng = Math.abs(province.lng - lng);
+      const dLng = (rawLng > 180 ? 360 - rawLng : rawLng) * squeeze;
+      const distance = dLat * dLat + dLng * dLng;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { countryCode: iso2, country: countryName(iso2) ?? iso2, province: province.name };
+      }
+    }
+  }
+
+  return best;
 }
 
 export function countryName(iso2: string): string | null {

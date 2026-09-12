@@ -644,21 +644,25 @@ describe("Directory, asking where the visitor is", () => {
       await waitFor(() => expect(listed(list)).toEqual(["Elektro Dash", "Monas Night Run"]));
     });
 
-    it("reads Near you in the header once the visitor allows it", async () => {
+    it("names the province the visitor is in once they allow it", async () => {
+      // The point is turned into the nearest province in the places data, so
+      // the header can say where the visitor is rather than only that it knows.
       allows(AT_TUGU);
       twoRaces();
 
       renderDirectory();
 
-      expect(await screen.findByRole("button", { name: "Near you" })).toBeInTheDocument();
+      expect(
+        await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" }),
+      ).toBeInTheDocument();
     });
 
-    it("lets the visitor go back to all locations from Near you", async () => {
+    it("lets the visitor go back to all locations from the place it found", async () => {
       allows(AT_TUGU);
       twoRaces();
       renderDirectory();
 
-      await userEvent.click(await screen.findByRole("button", { name: "Near you" }));
+      await userEvent.click(await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" }));
       const dialog = await screen.findByRole("dialog", { name: "Location" });
       await userEvent.click(await within(dialog).findByRole("button", { name: "All locations" }));
 

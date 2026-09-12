@@ -233,9 +233,12 @@ What is settled:
   picked a province does not lose it; coordinates out of range are not read back, since a swapped
   pair would order the list from Antarctica. Clearing the place keeps the flag, or the prompt would
   reappear for somebody who has just chosen "All locations".
-- **The control reads "Near you" while coordinates are in use.** It cannot name a province: that
-  needs a geocoding service, and this project uses none. Opening it still offers the country and
-  province lists, applying one replaces the coordinates, and "All locations" clears them.
+- **The coordinates are named, not shown as numbers** (`nearestProvince` in `lib/places.ts`). The
+  places data keeps one point per province, so the browser's answer is matched to the nearest and
+  stored as an ordinary chosen place: the header reads "DI Yogyakarta, Indonesia" and the ordering
+  code needs no special case. The list is imported inside the success callback, so a visitor who
+  refuses never downloads it. "Near you" is left for a point with no province near it. Matching one
+  point per province is not a geocoder: it answers a province, never a street.
 - **The location control sorts the page, it does not filter it** (Revision 3, which overrides
   Revision 2): "All locations" by default, or a country with an optional province, picked by the
   visitor and stored in `localStorage` under `sterun.area` (`lib/area.ts`). Every race stays on the
