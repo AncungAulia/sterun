@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * The place the directory is filtered to, named in the header and chosen in a
- * dialog. With nothing chosen it reads "All locations".
+ * The place whose races the directory puts first, named in the header and
+ * chosen in a dialog. With nothing chosen it reads "All locations" and the
+ * races are in date order alone. Choosing one takes nothing off the page.
  *
  * The form is loaded only when the dialog opens. Its province list comes from
  * the places dataset, 176 KB of JSON (50 KB gzipped), and a visitor who never

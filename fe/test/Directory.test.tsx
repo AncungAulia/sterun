@@ -218,6 +218,63 @@ describe("Directory", () => {
       expect(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
     });
 
+    it("says under the heading that the chosen place comes first, and only while it does", async () => {
+      // The order is the only sign a place was chosen, and an order is hard to
+      // see on a page of races nobody knows. Once a search narrows the list the
+      // line would be a claim about an order the visitor can no longer check.
+      saveArea(YOGYAKARTA_AREA);
+      listEvents.mockResolvedValue({ events: [withDocument(0)], unreadable: [] });
+      serve({ 0: metadata() });
+
+      renderDirectory();
+
+      const list = await screen.findByRole("region", { name: "All races" });
+      expect(within(list).getByText("Races in DI Yogyakarta, Indonesia first")).toBeInTheDocument();
+
+      await userEvent.type(searchbox(), "jakarta");
+
+      await screen.findByRole("region", { name: "1 race matches" });
+      expect(screen.queryByText(/Indonesia first/)).not.toBeInTheDocument();
+    });
+
+    it("says nothing about a place when the visitor has not chosen one", async () => {
+      listEvents.mockResolvedValue({ events: [withDocument(0)], unreadable: [] });
+      serve({ 0: metadata() });
+
+      renderDirectory();
+
+      await screen.findByRole("region", { name: "All races" });
+      expect(screen.queryByText(/ first$/)).not.toBeInTheDocument();
+    });
+
+    it("settles the order as documents arrive, without hiding a race meanwhile", async () => {
+      saveArea(YOGYAKARTA_AREA);
+      const inPlace = deferred();
+      listEvents.mockResolvedValue({
+        events: [
+          withDocument(0, { name: "Monas Night Run", startsAt: daysFromNow(10) }),
+          withDocument(1, { name: "Elektro Dash", startsAt: daysFromNow(30) }),
+        ],
+        unreadable: [],
+      });
+      fetchEventMetadata.mockImplementation((uri: string) =>
+        uri.endsWith("/1.json")
+          ? inPlace.promise
+          : Promise.resolve({ status: "verified", document: metadata({ location: JAKARTA }) }),
+      );
+
+      renderDirectory();
+
+      // Date order until the in-place document proves where its race is, with
+      // both races listed the whole time.
+      const list = await screen.findByRole("region", { name: "All races" });
+      await waitFor(() => expect(listed(list)).toEqual(["Monas Night Run", "Elektro Dash"]));
+
+      await inPlace.settle({ status: "verified", document: metadata() });
+
+      await waitFor(() => expect(listed(list)).toEqual(["Elektro Dash", "Monas Night Run"]));
+    });
+
     it("leads the featured row with a race in the chosen place, without dropping the others", async () => {
       saveArea(YOGYAKARTA_AREA);
       listEvents.mockResolvedValue({

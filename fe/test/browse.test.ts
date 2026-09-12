@@ -276,6 +276,20 @@ describe("sortByPlace", () => {
   it("still lists the races elsewhere when the place holds none", () => {
     expect(ids(sortByPlace([away(4, 5), away(3, 0)], YOGYA, "soonest", NOW))).toEqual([3, 4]);
   });
+
+  // The place decides the order inside "still to come" and inside "already run",
+  // never across the two. A race in the chosen place that happened last year is
+  // still a race nobody can enter, so it belongs below next week's race
+  // elsewhere.
+  const mixed = [here(1, -3), away(2, -10), here(3, 20), away(4, 2), here(5, 40)];
+
+  it("keeps a past race in the chosen place below every upcoming race", () => {
+    expect(ids(sortByPlace(mixed, YOGYA, "soonest", NOW))).toEqual([3, 5, 4, 1, 2]);
+  });
+
+  it("keeps a past race in the chosen place below every upcoming race, furthest date first", () => {
+    expect(ids(sortByPlace(mixed, YOGYA, "latest", NOW))).toEqual([5, 3, 4, 1, 2]);
+  });
 });
 
 describe("pickFeatured with a chosen place", () => {
@@ -294,11 +308,15 @@ describe("pickFeatured with a chosen place", () => {
   });
 
   it("still leaves out a race that is closed, already run, or has no poster", () => {
+    // Asserted against a row that does fill: an empty result is what any broken
+    // call returns, so it proves nothing about which races were rejected.
     const closed = entry(summary(1, { startsAt: NOW + DAY, status: "Closed" }), metadata());
     const past = entry(summary(2, { startsAt: NOW - DAY }), metadata());
     const posterless = entry(summary(3, { startsAt: NOW + DAY }), metadata({ posterUrl: undefined }));
 
-    expect(pickFeatured([closed, past, posterless], NOW, { place: YOGYA })).toEqual([]);
+    expect(ids(pickFeatured([closed, past, posterless, here(4, 2), away(5, 1)], NOW, { place: YOGYA }))).toEqual([
+      4, 5,
+    ]);
   });
 
   it("orders by date alone when no place is chosen", () => {

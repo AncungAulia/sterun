@@ -22,7 +22,9 @@
  * choice made once and kept in a browser, and left a visitor in a quiet
  * province with an empty page. Because nothing is hidden, nothing has to wait
  * for documents either: the order settles as they arrive, the list does not
- * grow.
+ * grow. Because an order is invisible on a page of races nobody knows, a line
+ * under the heading names the place; a search or a filter takes it away, since
+ * it would then claim an order the visitor can no longer check.
  *
  * The refresh control stays for the acceptance scenario in the ticket: create
  * an event, press refresh, and it appears without this app being redeployed.
@@ -40,6 +42,7 @@ import { useArea } from "@/hooks/useArea";
 import { useEventDocuments } from "@/hooks/useEventDocuments";
 import { eventKeys, useEvents } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
+import { placeLabel } from "@/lib/area";
 import { cn } from "@/utils/cn";
 
 import {
@@ -170,9 +173,14 @@ export function Directory() {
           <FeaturedEvents entries={featured} />
 
           <section aria-labelledby="directory-list" className="flex flex-col gap-4">
-            <h2 id="directory-list" className="heading-strong text-2xl text-ink">
-              {heading}
-            </h2>
+            <div className="flex flex-col gap-1">
+              <h2 id="directory-list" className="heading-strong text-2xl text-ink">
+                {heading}
+              </h2>
+              {area && !narrowing ? (
+                <p className="text-sm text-n-500">Races in {placeLabel(area)} first</p>
+              ) : null}
+            </div>
             {results.length > 0 ? (
               <EventGrid entries={results} pending={documents.pending} />
             ) : null}

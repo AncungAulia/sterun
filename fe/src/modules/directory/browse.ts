@@ -45,16 +45,15 @@ function compareBigint(a: bigint, b: bigint): number {
  */
 function placeFirst(entries: readonly DirectoryEntry[], place: Area | null): DirectoryEntry[] {
   if (!place) return [...entries];
-  return [
-    ...entries.filter((item) => inArea(item, place)),
-    ...entries.filter((item) => !inArea(item, place)),
-  ];
+  const here: DirectoryEntry[] = [];
+  const elsewhere: DirectoryEntry[] = [];
+  for (const item of entries) (inArea(item, place) ? here : elsewhere).push(item);
+  return [...here, ...elsewhere];
 }
 
 export interface FeaturedOptions {
   /** The chosen place. Races in it fill the row first; the rest follow. */
   place?: Area | null;
-  limit?: number;
 }
 
 /**
@@ -70,7 +69,7 @@ export interface FeaturedOptions {
 export function pickFeatured(
   entries: readonly DirectoryEntry[],
   nowS: bigint,
-  { place = null, limit = FEATURED_LIMIT }: FeaturedOptions = {},
+  { place = null }: FeaturedOptions = {},
 ): DirectoryEntry[] {
   const candidates = entries
     .filter(
@@ -84,7 +83,7 @@ export function pickFeatured(
         compareBigint(a.summary.event.startsAt, b.summary.event.startsAt) ||
         a.summary.event.eventId - b.summary.event.eventId,
     );
-  return placeFirst(candidates, place).slice(0, limit);
+  return placeFirst(candidates, place).slice(0, FEATURED_LIMIT);
 }
 
 /**
@@ -140,14 +139,20 @@ export function sortByDate(
 }
 
 /**
- * The whole list, led by the races in the chosen place.
+ * The whole list: still to come first, already run below, and inside each half
+ * the races in the chosen place leading.
  *
  * The place sorts rather than filters (Revision 3 of the directory spec): a
  * visitor who picked Yogyakarta wants those races first, but hiding the rest
  * makes the page lie about how many races exist, and there are not yet enough
- * of them for any place to fill a screen on its own. Within each group the date
- * order the drawer asked for still applies. No place chosen means date order
- * alone.
+ * of them for any place to fill a screen on its own.
+ *
+ * The place is the *inner* key, never the outer one. Applied to the whole list
+ * it would promote last year's Yogyakarta race above next week's Jakarta one,
+ * which puts a race nobody can enter at the top of the page. "Can I still enter
+ * this?" outranks "is it near me?", so the date split decides the halves and the
+ * place only decides the order within them. Within each half the date order the
+ * drawer asked for still applies. No place chosen means date order alone.
  */
 export function sortByPlace(
   entries: readonly DirectoryEntry[],
@@ -155,7 +160,18 @@ export function sortByPlace(
   order: DateOrder,
   nowS: bigint,
 ): DirectoryEntry[] {
-  return placeFirst(sortByDate(entries, order, nowS), place);
+  const sorted = sortByDate(entries, order, nowS);
+  if (!place) return sorted;
+  return [
+    ...placeFirst(
+      sorted.filter((item) => item.summary.event.startsAt >= nowS),
+      place,
+    ),
+    ...placeFirst(
+      sorted.filter((item) => item.summary.event.startsAt < nowS),
+      place,
+    ),
+  ];
 }
 
 /** "500 entries left", "1 entry left" or "Sold out". Only for a race open for entry. */

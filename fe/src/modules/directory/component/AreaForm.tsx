@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The country, and optionally the province, that the directory is filtered to.
+ * The country, and optionally the province, whose races the directory lists
+ * before the rest.
  *
  * Indonesia is preselected, unlike the organiser's place fields, which start
  * empty (PlaceFields). That form writes a frozen document, where a wrong

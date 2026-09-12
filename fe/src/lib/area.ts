@@ -1,6 +1,7 @@
 /**
- * The place the visitor filters races by, kept in this browser only: a whole
- * country, or one province of it. No stored place means all locations.
+ * The place the visitor browses from, kept in this browser only: a whole
+ * country, or one province of it. It decides which races the directory lists
+ * first and hides none of them. No stored place means all locations.
  *
  * Not an account setting: there are no accounts, and a province is not worth a
  * server round trip. localStorage can refuse (a private window, storage turned
