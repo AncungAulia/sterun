@@ -41,7 +41,6 @@ import { useArea } from "@/hooks/useArea";
 import { useEventDocuments } from "@/hooks/useEventDocuments";
 import { eventKeys, useEvents } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
-import { placeLabel } from "@/lib/area";
 import { cn } from "@/utils/cn";
 
 import {
@@ -179,20 +178,15 @@ export function Directory() {
           <FeaturedEvents entries={featured} />
 
           <section aria-labelledby="directory-list" className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <h2
-                id="directory-list"
-                ref={headingRef}
-                // Not in the tab order, but a target focus can be moved to.
-                tabIndex={-1}
-                className="heading-strong text-2xl text-ink"
-              >
-                {heading}
-              </h2>
-              {area && !narrowing ? (
-                <p className="text-sm text-n-500">Races in {placeLabel(area)} first</p>
-              ) : null}
-            </div>
+            <h2
+              id="directory-list"
+              ref={headingRef}
+              // Not in the tab order, but a target focus can be moved to.
+              tabIndex={-1}
+              className="heading-strong text-2xl text-ink"
+            >
+              {heading}
+            </h2>
             {results.length > 0 ? (
               <EventGrid entries={results} pending={documents.pending} />
             ) : null}

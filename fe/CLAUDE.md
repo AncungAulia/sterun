@@ -232,11 +232,7 @@ What is settled:
   search or filter narrows it. There is no "No races in {place} yet" state and no **See all
   locations** button: a place hides nothing, so a place with no races of its own simply lists
   everywhere else. For the same reason the list never waits on documents (it used to, so a filtered
-  list would not grow as they arrived): only the order changes as they land. Under the heading, while
-  a place is chosen and neither the search nor a filter narrows the list, one muted line reads "Races
-  in {place} first" (`placeLabel`): an order is invisible on a page of races nobody knows, so without
-  it the control reads as doing nothing. A search takes the line away, because it would then claim an
-  order the visitor can no longer check. Grid: 2 columns from `sm`, 3 from `lg`, 4 from `xl`, for the
+  list would not grow as they arrived): only the order changes as they land. Grid: 2 columns from `sm`, 3 from `lg`, 4 from `xl`, for the
   list and the skeleton alike.
 - **Filters** live in a staged drawer: Sort by ("Nearest date first" / "Furthest date first"),
   Price, Distance, and Availability ("Hide full and closed races", which hides races that are not
