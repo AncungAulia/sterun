@@ -516,7 +516,7 @@ describe("Directory", () => {
 
       renderDirectory();
 
-      expect(await screen.findByText(/some older races could not be loaded/i)).toBeInTheDocument();
+      expect(await screen.findByText(/some races could not be loaded/i)).toBeInTheDocument();
     });
 
     it("says nothing about unloadable races when there are none", async () => {

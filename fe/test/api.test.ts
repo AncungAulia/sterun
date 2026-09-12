@@ -54,6 +54,20 @@ describe("apiFetch", () => {
       });
     });
 
+    it("never puts the server's own sentence on screen", async () => {
+      // The backend writes `message` for whoever reads a log. Passing it
+      // through is how a page ends up telling a runner about a row that failed
+      // to insert, so the code is kept and the sentence is ours.
+      respond({ error: "not_indexed", message: "no such event in the index" }, {
+        ok: false,
+        status: 404,
+      });
+
+      await expect(apiFetch("/events/99/scanners")).rejects.toThrowError(
+        "Something went wrong on our side. Please try again.",
+      );
+    });
+
     it("is still an Error, so nothing has to special-case it", async () => {
       respond({ error: "boom", message: "went wrong" }, { ok: false, status: 500 });
 

@@ -392,7 +392,10 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   an XSS surface. If formatting is ever needed, the answer is markdown, not HTML.
 - **Never use an em dash (`—`) or en dash (`–`) in UI text.** Split it into two sentences, use a
   comma, or use brackets. If a separator is genuinely needed, use an ordinary hyphen. This ban is
-  specific to UI text; code comments and `.md` files are unaffected.
+  specific to UI text; code comments and `.md` files are unaffected. `test/ui-rules.test.ts`
+  enforces it on **every spelling**, not only the literal character: an escape and an HTML
+  entity render the same dash while reading as plain ASCII in the source, and three of those
+  survived a green suite in the size chart.
 - **No hex values, font names or raw px in a component** — everything comes from the tokens in
   `app/tokens.css` (Nabil's, STE-7). Those tokens have two copies (`fe/` and `landing-page/`); if you
   change them, change both in one commit.

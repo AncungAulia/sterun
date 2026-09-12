@@ -170,7 +170,7 @@ export function Directory() {
 
       {data && data.events.length === 0 ? (
         <EmptyState title="No races yet">
-          New races appear here as soon as they are published.
+          Refresh this page to check for races published since you opened it.
         </EmptyState>
       ) : null}
 
@@ -209,7 +209,7 @@ export function Directory() {
       ) : null}
 
       {data && data.unreadable.length > 0 ? (
-        <p className="text-sm text-n-500">Some older races could not be loaded right now.</p>
+        <p className="text-sm text-n-500">Some races could not be loaded right now.</p>
       ) : null}
     </div>
   );

@@ -215,8 +215,14 @@ function AddOnDialog({ joined }: { joined: JoinedAddOn }) {
                         <td className="py-1.5 pr-4">{size.chestCm ?? "Not given"}</td>
                         <td className="py-1.5 pr-4">{size.lengthCm ?? "Not given"}</td>
                         <td className="py-1.5">
+                          {/*
+                            No row on chain means this size was never put up for
+                            sale, so nobody can buy it. "Not known" read as
+                            "maybe available, ask the organiser", which sends a
+                            runner off after a size that does not exist.
+                          */}
                           {row === undefined ? (
-                            <span className="text-n-500">Not known</span>
+                            <span className="text-n-500">Not sold</span>
                           ) : row.unitsLeft > 0 ? (
                             row.unitsLeft
                           ) : (

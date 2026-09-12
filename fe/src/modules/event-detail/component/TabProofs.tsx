@@ -129,13 +129,28 @@ export function TabProofs({
 
         {result === undefined || result.status === "unavailable" ? (
           <div className="mt-3 rounded-lg border border-n-200 bg-n-50 px-5 py-4">
-            <p className="text-base text-n-600">
-              The race details could not be loaded, so this page shows only the basics. The race,
-              its distances and places left are not affected.
-            </p>
-            {result?.status === "unavailable" ? (
-              <p className="mt-1 text-sm text-n-500">{result.reason}</p>
-            ) : null}
+            {/*
+              Two different things, and saying the wrong one is a small lie. A
+              race with no `uri` published nothing, so nothing was ever tried;
+              telling that reader the details "could not be loaded" invites them
+              to come back later for a file that does not exist.
+            */}
+            {uri ? (
+              <>
+                <p className="text-base text-n-600">
+                  The race details could not be loaded, so this page shows only the basics. The
+                  race, its distances and places left are not affected.
+                </p>
+                {result?.status === "unavailable" ? (
+                  <p className="mt-1 text-sm text-n-500">{result.reason}</p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-base text-n-600">
+                This race published no details, so this page shows only the basics. The race, its
+                distances and places left are not affected.
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -147,6 +162,13 @@ export function TabProofs({
         <details className="mt-4 rounded-lg border border-n-200 px-5 py-3">
           <summary className="cursor-pointer text-sm text-n-600">Show technical details</summary>
           <dl className="mt-2">
+            {/*
+              One fingerprint per line and no line that repeats another. The
+              published fingerprint IS `metadataHash`, so drawing the generic
+              row as well put the same 64 characters on screen twice under two
+              different labels, in the one state where somebody is comparing
+              them by hand and has no way to tell what the third row was.
+            */}
             {result?.status === "modified" ? (
               <>
                 <Row label="Published fingerprint">
@@ -156,10 +178,11 @@ export function TabProofs({
                   <span className="numeric text-n-700">{result.actualHash}</span>
                 </Row>
               </>
-            ) : null}
-            <Row label="Fingerprint">
-              <span className="numeric text-foreground">{metadataHash}</span>
-            </Row>
+            ) : (
+              <Row label="Fingerprint">
+                <span className="numeric text-foreground">{metadataHash}</span>
+              </Row>
+            )}
             {uri ? (
               <Row label="Details file">
                 <a

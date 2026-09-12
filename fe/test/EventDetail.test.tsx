@@ -300,6 +300,7 @@ describe("EventDetail", () => {
               sizes: [
                 { label: "M", code: "EVENT_JERSEY_M" },
                 { label: "L", code: "EVENT_JERSEY_L" },
+                { label: "S", code: "EVENT_JERSEY_S" },
               ],
             },
           ],
@@ -334,6 +335,9 @@ describe("EventDetail", () => {
 
       expect(await screen.findByRole("row", { name: /L .* sold out/i })).toBeInTheDocument();
       expect(screen.getByRole("row", { name: /M .* 60/ })).toBeInTheDocument();
+      // S was never put up for sale, so nobody can buy it. Saying the stock is
+      // unknown reads as "ask the organiser" for a size that does not exist.
+      expect(screen.getByRole("row", { name: /S .* Not sold/i })).toBeInTheDocument();
     });
 
     it("still describes an item the chain knows nothing about", async () => {
@@ -475,6 +479,23 @@ describe("EventDetail", () => {
       expect(screen.getByText(/could not be loaded/i)).toBeInTheDocument();
     });
 
+    it("says a race published no details rather than that they failed to load", async () => {
+      // An event with no uri never had a document to fetch, so "could not be
+      // loaded" would send the reader back later for a file that was never
+      // published.
+      getEventSummary.mockResolvedValue(summary({ uri: "" }));
+      fetchEventMetadata.mockResolvedValue({
+        status: "unavailable",
+        reason: "This race has no published details.",
+      } satisfies MetadataResult);
+
+      renderDetail();
+      await showTab(/verification/i);
+
+      expect(await screen.findByText(/published no details/i)).toBeInTheDocument();
+      expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+    });
+
     it("warns when the document disagrees with the chain about the start time", async () => {
       getEventSummary.mockResolvedValue(summary());
       fetchEventMetadata.mockResolvedValue({
@@ -512,9 +533,15 @@ describe("EventDetail", () => {
       expect(await screen.findByText(/have been changed/i)).toBeInTheDocument();
       expect(screen.queryByText("Two laps of the temple.")).not.toBeInTheDocument();
       // The fingerprints somebody would compare by hand are still printed, but
-      // behind the disclosure rather than in front of a runner.
+      // behind the disclosure rather than in front of a runner. Exactly two
+      // rows, each once: the published fingerprint is the event's own
+      // metadata_hash, so a third generic row printed the same 64 characters
+      // again under a label that explained nothing.
       expect(screen.getByText("Show technical details")).toBeInTheDocument();
-      expect(screen.getAllByText("a".repeat(64)).length).toBeGreaterThan(0);
+      expect(screen.getByText("Published fingerprint")).toBeInTheDocument();
+      expect(screen.getByText("Current fingerprint")).toBeInTheDocument();
+      expect(screen.queryByText("Fingerprint")).not.toBeInTheDocument();
+      expect(screen.getByText("a".repeat(64))).toBeInTheDocument();
       expect(screen.getByText("b".repeat(64))).toBeInTheDocument();
     });
   });

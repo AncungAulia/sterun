@@ -29,8 +29,20 @@ function sourceFiles(): string[] {
   return [...walk(join(ROOT, "app")), ...walk(join(ROOT, "src"))];
 }
 
+/**
+ * Every spelling of the two banned characters, not just the literal one.
+ *
+ * A literal em dash is the obvious form and the easy one to grep for. It is
+ * also not the form that got through: a size chart cell written as an escape
+ * renders the same character on screen while reading as plain ASCII in the
+ * file, and three of those sat in the size chart for a week under a green
+ * test. An entity does the same thing in JSX. So the rule is enforced on what
+ * reaches the screen rather than on what is easy to see in the source.
+ */
+const BANNED_DASH = /[—–]|\\u201[34]|&mdash;|&ndash;|&#821[12];|&#x201[34];/i;
+
 describe("no em dash in UI text", () => {
-  it("finds none anywhere in app/ or src/", () => {
+  it("finds none anywhere in app/ or src/, written any way", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles()) {
@@ -38,13 +50,23 @@ describe("no em dash in UI text", () => {
       lines.forEach((line, index) => {
         // Comments are exempt: the ban is about what a user reads on screen.
         const withoutComment = line.replace(/\/\/.*$/, "").replace(/^\s*\*.*$/, "");
-        if (/[—–]/.test(withoutComment)) {
+        if (BANNED_DASH.test(withoutComment)) {
           offenders.push(`${file}:${index + 1} ${line.trim()}`);
         }
       });
     }
 
     expect(offenders).toEqual([]);
+  });
+
+  it("catches an escaped or entity-encoded dash, not only a literal one", () => {
+    // The regression this test exists for: the size chart's empty cells were
+    // em dashes written as escapes, and the old rule read straight past them.
+    expect(BANNED_DASH.test('{size.chestCm ?? "\\u2014"}')).toBe(true);
+    expect(BANNED_DASH.test("<p>10K &mdash; 21K</p>")).toBe(true);
+    expect(BANNED_DASH.test("<p>10K &#8211; 21K</p>")).toBe(true);
+    expect(BANNED_DASH.test("<p>10K to 21K</p>")).toBe(false);
+    expect(BANNED_DASH.test("const u = new Uint8Array(32);")).toBe(false);
   });
 });
 
