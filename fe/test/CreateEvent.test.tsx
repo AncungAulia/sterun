@@ -522,7 +522,7 @@ describe("CreateEvent", () => {
   });
 
   describe("what runners get", () => {
-    it("writes an item into the document against the distances that include it", async () => {
+    it("shows an item on the race pack tab against the distances that include it", async () => {
       // The whole model in one assertion: an add-on is not a product with a
       // price, it is what a ticket already buys. `enter` moves one amount once,
       // so there is nowhere for a second charge to live.

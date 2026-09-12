@@ -57,7 +57,7 @@ function Console() {
         <div className="max-w-2xl">
           <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Organiser console</h1>
           <p className="mt-3 text-lg text-n-600">
-            The races you have published with this wallet.
+            Every race you have created with this wallet, drafts included.
           </p>
         </div>
         {canCreate ? (

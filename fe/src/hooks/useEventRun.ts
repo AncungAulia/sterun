@@ -196,6 +196,15 @@ export function useEventRun({
           // Mapped here rather than in the dialog: this is the one place the
           // run learns what went wrong, and what reaches the screen must be a
           // sentence somebody wrote for a reader (`lib/errors.ts`).
+          //
+          // The original is logged first, and only in development. Mapping
+          // destroys it otherwise, and then an organiser who is stuck has
+          // nothing to report but the same sentence everybody else sees. It is
+          // kept out of production because the raw text is the wallet's and the
+          // SDK's, written for us rather than for whoever opens a console.
+          if (process.env.NODE_ENV === "development") {
+            console.error(`Event run step "${step.id}" failed`, error);
+          }
           setFailure({ stepId: step.id, message: friendlyError(error) });
           return;
         }

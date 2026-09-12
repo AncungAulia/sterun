@@ -31,29 +31,28 @@ describe("friendlyError", () => {
       expect(friendlyError(revert(18))).toMatch(/Sterun team/i);
     });
 
-    it("says a distance is full rather than naming a quota", () => {
-      expect(friendlyError(revert(5, "enter"))).toBe("This distance is full. There are no places left.");
-    });
-
-    it("says an item has sold out", () => {
-      expect(friendlyError(revert(15, "enter"))).toBe("That item has sold out.");
-    });
-
-    it("says a race is not open for entries", () => {
-      expect(friendlyError(revert(4, "enter"))).toBe("This race is not open for entries.");
-    });
-
     it("falls back for a revert there is nothing useful to say about", () => {
       // InvalidDistance (#10) is a bug in this app, not something an organiser
       // can act on. Naming the variant would only be technical wording.
       expect(friendlyError(revert(10))).toBe(SOMETHING_WENT_WRONG);
     });
 
-    it("reads the code out of a host error that never reached the SDK", () => {
-      // A revert can surface as an ordinary error still carrying the host
-      // string, and it is the same refusal however it arrived.
-      expect(friendlyError(new Error("HostError: Error(Contract, #18)"))).toMatch(
-        /cannot publish races yet/i,
+    it("says nothing confident about a revert from a call that is not only ours", () => {
+      // The whole point of the method check. `enter` hands control to the sUSD
+      // token contract, whose own errors are numbered in the same 1..=99 band,
+      // so #5 out of that call is as likely to be the token refusing to move
+      // money as it is EventRegistry's QuotaFull. A wrong sentence about a full
+      // distance would send the organiser looking in the wrong place.
+      expect(friendlyError(revert(5, "enter"))).toBe(SOMETHING_WENT_WRONG);
+      expect(friendlyError(revert(18, "enter"))).toBe(SOMETHING_WENT_WRONG);
+      expect(friendlyError(revert(10, "claimRacepack"))).toBe(SOMETHING_WENT_WRONG);
+    });
+
+    it("never reads a bare host string as one of our reverts", () => {
+      // Nothing decoded it, so nothing knows which contract it came from. Only
+      // an error the SDK produced for one of our own calls carries that.
+      expect(friendlyError(new Error("HostError: Error(Contract, #18)"))).toBe(
+        SOMETHING_WENT_WRONG,
       );
     });
 
@@ -92,10 +91,84 @@ describe("friendlyError", () => {
       );
     });
 
+    it("reads the nested shape Stellar Wallets Kit rejects with", () => {
+      // The kit passes the wallet's own object through, and its own parseError
+      // reads `e?.error?.message` before `e?.message`. Reading only the outer
+      // one left an empty string here, so a declined prompt came out as the
+      // generic failure sentence, which reads as something being broken.
+      expect(friendlyError({ error: { code: -4, message: "User declined access" } })).toBe(
+        "You declined this in your wallet. Nothing was sent.",
+      );
+    });
+
+    it("still says nothing it cannot back up for a nested error that is not a refusal", () => {
+      expect(friendlyError({ error: { code: -1, message: "Internal wallet error" } })).toBe(
+        SOMETHING_WENT_WRONG,
+      );
+    });
+
+    it("prefers the nested message over an outer one, as the kit does", () => {
+      expect(
+        friendlyError({
+          message: "Unhandled error from the wallet",
+          error: { code: -4, message: "User rejected the request" },
+        }),
+      ).toMatch(/you declined this/i);
+    });
+
     it("says when there is not enough to pay with", () => {
       expect(friendlyError(new SterunNetworkError("tx failed: insufficient balance", "enter"))).toBe(
         "Your wallet does not have enough funds for this.",
       );
+    });
+  });
+
+  describe("what it says when it does not know whether the step happened", () => {
+    it("warns that a step with no answer may already have gone through", () => {
+      // The button under this sentence repeats the step, and the first step
+      // publishes a race that can never be deleted.
+      const message = friendlyError(
+        new SterunNetworkError(
+          "createEvent was submitted but the RPC returned no transaction hash, so there is " +
+            "nothing to point at as evidence",
+          "createEvent",
+        ),
+      );
+
+      expect(message).toMatch(/may already have gone through/i);
+      expect(message).toMatch(/check your races/i);
+      expect(message).not.toMatch(/transaction|hash|RPC/i);
+    });
+
+    it("says the same when the wait for the result ran out", () => {
+      expect(
+        friendlyError(
+          new SterunNetworkError(
+            "createEvent could not be simulated: Waited 30 seconds for transaction to complete, " +
+              "but it did not. Returning anyway. Check the transaction status manually.",
+            "createEvent",
+          ),
+        ),
+      ).toMatch(/may already have gone through/i);
+    });
+
+    it("says the same when it was sent but never awaited", () => {
+      expect(
+        friendlyError(
+          new Error(
+            "Transaction was sent to the network, but not yet awaited. No result to show.",
+          ),
+        ),
+      ).toMatch(/may already have gone through/i);
+    });
+
+    it("never promises nothing was sent over a cancellation that came after submitting", () => {
+      // "Nothing was sent" rests on a word match, and a reader told that would
+      // stop looking for a race that exists.
+      const message = friendlyError(new Error("Submitted, then cancelled while pending"));
+
+      expect(message).not.toMatch(/nothing was sent/i);
+      expect(message).toMatch(/may already have gone through/i);
     });
   });
 

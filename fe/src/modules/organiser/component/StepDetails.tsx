@@ -165,10 +165,10 @@ export function StepDetails({
           hint={
             <PinHint
               link={details.locationLink}
-              missing="Search for the place, open it, then paste the long link from the address bar. A short link (maps.app.goo.gl) has no coordinates in it."
+              missing="Paste the full link from your browser's address bar. Short share links do not include the map pin."
             />
           }
-          help="Search for the start location and open it so its name is showing, then copy the link. When the link carries the place, we save the point its name sits on; when it does not, all we can save is roughly where the map was, which can be tens of metres out. Only those two numbers are kept, not the link itself, and they are what puts your start on a map and lets somebody find your race by looking near themselves."
+          help="Search for the start location and open it so its name is showing, then copy the link. We keep the map pin rather than the link, and we use it to show your start on a map and to help runners find races near them. A link that does not carry the place gives us only roughly where the map was, which can be tens of metres out."
         />
         <TextAreaField
           id="description"

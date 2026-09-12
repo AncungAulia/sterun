@@ -137,6 +137,13 @@ export function FileField({ id, label, kind, hint, help, value, onChange }: File
     } catch (error) {
       // A declined prompt and a refusal from the store arrive the same way, and
       // both leave the field exactly as it was.
+      //
+      // Logged before it is mapped, and only in development: the sentence that
+      // replaces it is deliberately the same for every cause, so without this
+      // there is nothing left anywhere to tell one apart from another.
+      if (process.env.NODE_ENV === "development") {
+        console.error(`Uploading the ${kind} failed`, error);
+      }
       setState({ kind: "failed", message: friendlyError(error) });
     }
   }

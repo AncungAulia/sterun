@@ -389,17 +389,38 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   that costs something: the name and the start cannot be changed, a distance cannot be removed, the
   terms cannot be edited, stock cannot be added later.
 - **No error reaches the screen as it was thrown** (`src/lib/errors.ts`). `friendlyError` is the one
-  mapping, pure and unit-tested: a contract revert is decoded with `classifyContractError` from
-  `@sterunxyz/sdk` and matched by band **and** variant (both contracts own a `NotInitialized`), a
-  declined prompt reads as a cancellation, and everything else becomes "Something went wrong. Please
-  try again." A variant with no sentence of its own falls to that fallback on purpose: naming
-  `InvalidDistance` at an organiser helps nobody. **Do not string-match an error in a component**,
-  and do not edit `sdk/` to fix wording, since it is published and owned elsewhere.
+  mapping, pure and unit-tested: a contract revert is matched by band **and** variant (both contracts
+  own a `NotInitialized`), a declined prompt reads as a cancellation, and everything else becomes
+  "Something went wrong. Please try again." A variant with no sentence of its own falls to that
+  fallback on purpose: naming `InvalidDistance` at an organiser helps nobody. **Do not string-match
+  an error in a component**, and do not edit `sdk/` to fix wording, since it is published and owned
+  elsewhere.
+  **A revert is only classified for an SDK method that reaches nothing but our two contracts**
+  (`OUR_OWN_METHODS`). An error code is a bare `u32` with no contract identity, so the band is the
+  only thing naming the source, and the band is only trustworthy while nothing else in the call can
+  revert. `enter` hands control to the sUSD token contract, whose own errors are numbered in the same
+  `1..=99` range, so a refusal to move money would otherwise print "This distance is full." The
+  entry-time sentences (`QuotaFull`, `EventNotOpen`, `AddOnQuotaFull`) were removed for the same
+  reason and come back in STE-21, together with a way of telling a token revert from ours.
+  **A step that stopped without an answer gets its own sentence**, never the generic one: the SDK
+  throws distinctly when a transaction went out with no result coming back, and the button under that
+  message repeats the step, which for the first step would publish a second race that can never be
+  deleted. It reads "This may already have gone through. Please check your races before trying
+  again, so you do not create the same one twice." The same guard softens the decline: "Nothing was
+  sent" is never printed over text saying something was already submitted.
+  **The original error is logged with `console.error` in development only**, at the two catch sites
+  that map one (`hooks/useEventRun.ts`, `components/elements/FileField.tsx`). Mapping destroys it
+  otherwise, and an organiser who is stuck then has nothing to report but the sentence everybody else
+  sees. The guard is `=== "development"` rather than `!== "production"` so test output stays clean.
   What this app writes for the reader itself is thrown as a **`PlainError`**
   (`src/lib/plain-error.ts`) and passes through untouched, as does an `ApiError`, whose message
   `lib/api.ts` already writes for the screen. `PlainError` lives in a file of its own, with no
   imports, because `lib/wallet.ts` throws one and pulling the whole Stellar SDK into that module
   graph put nearly two seconds on the wallet tests.
+  **A wallet error is not always an `Error`.** Stellar Wallets Kit rejects with the wallet's own
+  object, `{ error: { code, message } }`, which is why its `parseError` reads `e?.error?.message`
+  before `e?.message`. `messageOf` mirrors that order; reading only the outer message turned a
+  declined prompt into the generic failure sentence.
 - **Every path towards paying must pass a `NonRefundableNotice`** (STE-38, from Axel's decision in
   STE-34). `enter` transfers the fee straight from runner to organiser with no escrow, so the
   contract never holds the money and no refund can be forced by anyone. The text stands directly
