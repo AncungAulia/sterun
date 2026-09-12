@@ -88,6 +88,13 @@ function searchbox() {
   return screen.getByRole("searchbox", { name: "Search races" });
 }
 
+/** The race names a region shows, in the order it shows them. Every card titles itself with an h3. */
+function listed(region: HTMLElement) {
+  return within(region)
+    .getAllByRole("heading", { level: 3 })
+    .map((heading) => heading.textContent);
+}
+
 beforeEach(() => {
   listEvents.mockReset();
   fetchEventMetadata.mockReset();
@@ -191,88 +198,93 @@ describe("Directory", () => {
       expect(screen.queryByRole("region", { name: "Featured races" })).not.toBeInTheDocument();
     });
 
-    it("lists only the races in the chosen province, under that place's name", async () => {
-      saveArea(YOGYAKARTA_AREA);
-      listEvents.mockResolvedValue({
-        events: [withDocument(0, { name: "Elektro Dash" }), withDocument(1, { name: "Monas Night Run" })],
-        unreadable: [],
-      });
-      serve({ 0: metadata(), 1: metadata({ location: JAKARTA }) });
-
-      renderDirectory();
-
-      const list = await screen.findByRole("region", { name: "Races in DI Yogyakarta, Indonesia" });
-      expect(within(list).getByText("Elektro Dash")).toBeInTheDocument();
-      expect(screen.queryByText("Monas Night Run")).not.toBeInTheDocument();
-      expect(screen.queryByRole("region", { name: "All races" })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
-    });
-
-    it("features only a race in the chosen place, even when one elsewhere is sooner", async () => {
+    it("keeps every race listed under All races and puts the chosen place first", async () => {
       saveArea(YOGYAKARTA_AREA);
       listEvents.mockResolvedValue({
         events: [
-          withDocument(0, { name: "Elektro Dash", startsAt: daysFromNow(30) }),
-          withDocument(1, { name: "Monas Night Run", startsAt: daysFromNow(10) }),
+          withDocument(0, { name: "Monas Night Run", startsAt: daysFromNow(10) }),
+          withDocument(1, { name: "Elektro Dash", startsAt: daysFromNow(30) }),
         ],
         unreadable: [],
       });
-      serve({ 0: metadata(), 1: metadata({ location: JAKARTA }) });
+      serve({ 0: metadata({ location: JAKARTA }), 1: metadata() });
+
+      renderDirectory();
+
+      const list = await screen.findByRole("region", { name: "All races" });
+      await waitFor(() =>
+        expect(listed(list)).toEqual(["Elektro Dash", "Monas Night Run"]),
+      );
+      expect(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
+    });
+
+    it("leads the featured row with a race in the chosen place, without dropping the others", async () => {
+      saveArea(YOGYAKARTA_AREA);
+      listEvents.mockResolvedValue({
+        events: [
+          withDocument(0, { name: "Monas Night Run", startsAt: daysFromNow(10) }),
+          withDocument(1, { name: "Elektro Dash", startsAt: daysFromNow(30) }),
+        ],
+        unreadable: [],
+      });
+      serve({ 0: metadata({ location: JAKARTA }), 1: metadata() });
 
       renderDirectory();
 
       const featured = await screen.findByRole("region", { name: "Featured races" });
-      expect(within(featured).getByText("Elektro Dash")).toBeInTheDocument();
-      expect(within(featured).queryByText("Monas Night Run")).not.toBeInTheDocument();
+      expect(listed(featured)).toEqual(["Elektro Dash", "Monas Night Run"]);
     });
 
-    it("lists races in every province of a chosen country", async () => {
+    it("leads with every province of a chosen country, then the rest of the world", async () => {
       // A document that names only its country belongs to that country too, and
       // organisers type the code, so a lower-case "id" is still Indonesia.
       saveArea({ countryCode: "ID", country: "Indonesia" });
       listEvents.mockResolvedValue({
         events: [
-          withDocument(0, { name: "Elektro Dash" }),
-          withDocument(1, { name: "Monas Night Run" }),
-          withDocument(2, { name: "Penang Bridge Run" }),
-          withDocument(3, { name: "Kota Tua Fun Run" }),
+          withDocument(0, { name: "Penang Bridge Run", startsAt: daysFromNow(5) }),
+          withDocument(1, { name: "Elektro Dash", startsAt: daysFromNow(10) }),
+          withDocument(2, { name: "Monas Night Run", startsAt: daysFromNow(20) }),
+          withDocument(3, { name: "Kota Tua Fun Run", startsAt: daysFromNow(30) }),
         ],
         unreadable: [],
       });
       serve({
-        0: metadata(),
-        1: metadata({ location: JAKARTA }),
-        2: metadata({ location: PENANG }),
+        0: metadata({ location: PENANG }),
+        1: metadata(),
+        2: metadata({ location: JAKARTA }),
         3: metadata({ location: { name: "Kota Tua", country: "Indonesia", countryCode: "id" } }),
       });
 
       renderDirectory();
 
-      const list = await screen.findByRole("region", { name: "Races in Indonesia" });
-      expect(within(list).getByText("Elektro Dash")).toBeInTheDocument();
-      expect(within(list).getByText("Monas Night Run")).toBeInTheDocument();
-      expect(within(list).getByText("Kota Tua Fun Run")).toBeInTheDocument();
-      expect(screen.queryByText("Penang Bridge Run")).not.toBeInTheDocument();
+      const list = await screen.findByRole("region", { name: "All races" });
+      await waitFor(() =>
+        expect(listed(list)).toEqual([
+          "Elektro Dash",
+          "Monas Night Run",
+          "Kota Tua Fun Run",
+          "Penang Bridge Run",
+        ]),
+      );
     });
 
-    it("keeps search and the drawer's count inside the chosen place", async () => {
+    it("searches every race, in the chosen place or not", async () => {
       saveArea(YOGYAKARTA_AREA);
       listEvents.mockResolvedValue({
-        events: [withDocument(0, { name: "Sleman Night Run" }), withDocument(1, { name: "Monas Night Run" })],
+        events: [withDocument(0, { name: "Monas Night Run" }), withDocument(1, { name: "Sleman Night Run" })],
         unreadable: [],
       });
-      serve({ 0: metadata(), 1: metadata({ location: JAKARTA }) });
+      serve({ 0: metadata({ location: JAKARTA }), 1: metadata() });
       renderDirectory();
-      await screen.findByRole("region", { name: "Races in DI Yogyakarta, Indonesia" });
+      await screen.findByRole("region", { name: "All races" });
 
       await userEvent.type(searchbox(), "night run");
 
-      const results = await screen.findByRole("region", { name: "1 race matches" });
-      expect(within(results).getByText("Sleman Night Run")).toBeInTheDocument();
-      expect(screen.queryByText("Monas Night Run")).not.toBeInTheDocument();
+      const results = await screen.findByRole("region", { name: "2 races match" });
+      await waitFor(() => expect(listed(results)).toEqual(["Sleman Night Run", "Monas Night Run"]));
 
       await userEvent.click(screen.getByRole("button", { name: "Filters" }));
-      expect(await screen.findByRole("button", { name: "Show 1 race" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Show 2 races" })).toBeInTheDocument();
     });
 
     it("hides full and closed races with the drawer's availability filter", async () => {
@@ -381,45 +393,24 @@ describe("Directory", () => {
       expect(searchbox()).toHaveValue("");
     });
 
-    it("says there are no races in the chosen place yet, and offers every location instead", async () => {
+    it("still shows every other race when the chosen place has none of its own", async () => {
       saveArea({ countryCode: "ID", country: "Indonesia", province: "Bali" });
       listEvents.mockResolvedValue({ events: [withDocument(0)], unreadable: [] });
       serve({ 0: metadata() });
+
       renderDirectory();
-
-      expect(await screen.findByText("No races in Bali, Indonesia yet")).toBeInTheDocument();
-      expect(screen.queryByText("Jakarta Marathon 0")).not.toBeInTheDocument();
-
-      await userEvent.click(screen.getByRole("button", { name: "See all locations" }));
 
       const all = await screen.findByRole("region", { name: "All races" });
       expect(within(all).getByText("Jakarta Marathon 0")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "All locations" })).toBeInTheDocument();
-      expect(window.localStorage.getItem(AREA_STORAGE_KEY)).toBeNull();
-    });
-
-    it("shows the loading state, not a partial list, while a place is chosen and documents are on their way", async () => {
-      // A race's place is only in its document, so listing before every document
-      // has answered would show a list that grows as they arrive.
-      saveArea(YOGYAKARTA_AREA);
-      const document = deferred();
-      listEvents.mockResolvedValue({ events: [withDocument(0, { name: "Elektro Dash" })], unreadable: [] });
-      fetchEventMetadata.mockReturnValue(document.promise);
-      renderDirectory();
-      await waitFor(() => expect(fetchEventMetadata).toHaveBeenCalled());
-
-      expect(screen.getByRole("status")).toBeInTheDocument();
-      expect(screen.queryByText("Elektro Dash")).not.toBeInTheDocument();
       expect(screen.queryByText(/No races in/)).not.toBeInTheDocument();
-
-      await document.settle({ status: "verified", document: metadata() });
-
-      const list = await screen.findByRole("region", { name: "Races in DI Yogyakarta, Indonesia" });
-      expect(within(list).getByText("Elektro Dash")).toBeInTheDocument();
-      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "See all locations" })).not.toBeInTheDocument();
+      expect(window.localStorage.getItem(AREA_STORAGE_KEY)).not.toBeNull();
     });
 
-    it("lists races while their documents load when no place is chosen", async () => {
+    it("lists races while their documents load, place chosen or not", async () => {
+      // Nothing is hidden by a place any more, so there is nothing to wait for:
+      // the order settles as documents arrive, the list does not grow.
+      saveArea(YOGYAKARTA_AREA);
       const document = deferred();
       listEvents.mockResolvedValue({ events: [withDocument(0, { name: "Elektro Dash" })], unreadable: [] });
       fetchEventMetadata.mockReturnValue(document.promise);

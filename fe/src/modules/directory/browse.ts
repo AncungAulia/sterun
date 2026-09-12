@@ -35,16 +35,44 @@ function compareBigint(a: bigint, b: bigint): number {
 }
 
 /**
+ * The races in the chosen place, then the rest, each group keeping the order it
+ * arrived in. With no place the list is returned untouched.
+ *
+ * A preference, never a filter: the place a visitor picked says what they want
+ * to see first, not what they are allowed to see. It is applied after the
+ * ordering rather than inside it, so a group's own order is whatever the caller
+ * had already decided.
+ */
+function placeFirst(entries: readonly DirectoryEntry[], place: Area | null): DirectoryEntry[] {
+  if (!place) return [...entries];
+  return [
+    ...entries.filter((item) => inArea(item, place)),
+    ...entries.filter((item) => !inArea(item, place)),
+  ];
+}
+
+export interface FeaturedOptions {
+  /** The chosen place. Races in it fill the row first; the rest follow. */
+  place?: Area | null;
+  limit?: number;
+}
+
+/**
  * The races worth a large poster: open for entry, still ahead, and with a
  * poster to show. Soonest first, because a race next week needs the space more
  * than one next year.
+ *
+ * A chosen place moves its own races to the front of that queue, so the row
+ * leads with something the visitor can get to. It never empties the row: a
+ * place with no races of its own still gets the soonest races anywhere, because
+ * an empty row teaches nothing and a poster is the best thing on the page.
  */
 export function pickFeatured(
   entries: readonly DirectoryEntry[],
   nowS: bigint,
-  limit = FEATURED_LIMIT,
+  { place = null, limit = FEATURED_LIMIT }: FeaturedOptions = {},
 ): DirectoryEntry[] {
-  return entries
+  const candidates = entries
     .filter(
       ({ summary, document }) =>
         Boolean(document?.posterUrl) &&
@@ -55,8 +83,8 @@ export function pickFeatured(
       (a, b) =>
         compareBigint(a.summary.event.startsAt, b.summary.event.startsAt) ||
         a.summary.event.eventId - b.summary.event.eventId,
-    )
-    .slice(0, limit);
+    );
+  return placeFirst(candidates, place).slice(0, limit);
 }
 
 /**
@@ -109,6 +137,25 @@ export function sortByDate(
         ]
       : sorted;
   return ordered.flatMap((item) => bySummary.get(item) ?? []);
+}
+
+/**
+ * The whole list, led by the races in the chosen place.
+ *
+ * The place sorts rather than filters (Revision 3 of the directory spec): a
+ * visitor who picked Yogyakarta wants those races first, but hiding the rest
+ * makes the page lie about how many races exist, and there are not yet enough
+ * of them for any place to fill a screen on its own. Within each group the date
+ * order the drawer asked for still applies. No place chosen means date order
+ * alone.
+ */
+export function sortByPlace(
+  entries: readonly DirectoryEntry[],
+  place: Area | null,
+  order: DateOrder,
+  nowS: bigint,
+): DirectoryEntry[] {
+  return placeFirst(sortByDate(entries, order, nowS), place);
 }
 
 /** "500 entries left", "1 entry left" or "Sold out". Only for a race open for entry. */

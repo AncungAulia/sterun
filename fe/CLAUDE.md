@@ -204,23 +204,29 @@ What is settled:
   blurred copy of itself, because posters carry their own date and venue as text. No poster, a
   failed hash, or a broken image all say **"No image"** (Ancung chose that over a decorative
   placeholder: a missing picture should read as missing).
-- **Featured** = `Open`, upcoming, has a poster, soonest first, at most three, taken from the races
-  in the chosen place. Chosen once every document has answered, so the row does not reshuffle.
-- **The location control is a filter for the whole page** (Revision 2): "All locations" by default,
-  or a country with an optional province, picked by the visitor and stored in `localStorage` under
-  `sterun.area` (`lib/area.ts`). The featured row, the search, the drawer's live count and the list
-  all start from the races in that place. `province` is optional; absent means the whole country,
-  which the dialog offers as the first province option, "All of {country}". `inArea` matches by
-  province rather than city, and compares country codes case-insensitively. A country-only place
-  also matches a race whose document names that country but gives no province. The form is
-  `React.lazy`: the places dataset is 176 KB and the directory must not load it up front, so the
-  button's label comes from `placeLabel` in `lib/area.ts`, which imports nothing.
-- **One list, no separate area row.** Its heading is "All races" with no place, "Races in {place}"
-  with one, and "{n} races match" once a search or filter is applied. A place with no races shows
-  "No races in {place} yet" and a **See all locations** button that clears the place. A race's place
-  is only in its document, so while a place is chosen and documents are still arriving the page
-  shows the loading skeleton instead of a list that grows. Grid: 2 columns from `sm`, 3 from `lg`,
-  4 from `xl`, for the list and the skeleton alike.
+- **Featured** = `Open`, upcoming, has a poster, soonest first, at most three, with the races in the
+  chosen place taken first (`pickFeatured(entries, nowS, { place })`). Chosen once every document
+  has answered, so the row does not reshuffle.
+- **The location control sorts the page, it does not filter it** (Revision 3, which overrides
+  Revision 2): "All locations" by default, or a country with an optional province, picked by the
+  visitor and stored in `localStorage` under `sterun.area` (`lib/area.ts`). Every race stays on the
+  page; the ones in the chosen place come first (`sortByPlace(entries, place, order, nowS)`, which
+  is `sortByDate` with the in-place races moved to the front, each group keeping its date order),
+  and the featured row prefers them. Filtering was the Revision 2 rule and it was wrong on a
+  directory this small: it hid most of the registry behind a choice made once in a browser, and a
+  visitor in a quiet province got an empty page. Searching a province name still narrows the list.
+  `province` is optional; absent means the whole country, which the dialog offers as the first
+  province option, "All of {country}". `inArea` matches by province rather than city, and compares
+  country codes case-insensitively. A country-only place also matches a race whose document names
+  that country but gives no province. The form is `React.lazy`: the places dataset is 176 KB and the
+  directory must not load it up front, so the button's label comes from `placeLabel` in
+  `lib/area.ts`, which imports nothing.
+- **One list, no separate area row.** Its heading is "All races", and "{n} races match" once a
+  search or filter narrows it. There is no "No races in {place} yet" state and no **See all
+  locations** button: a place hides nothing, so a place with no races of its own simply lists
+  everywhere else. For the same reason the list never waits on documents (it used to, so a filtered
+  list would not grow as they arrived): only the order changes as they land. Grid: 2 columns from
+  `sm`, 3 from `lg`, 4 from `xl`, for the list and the skeleton alike.
 - **Filters** live in a staged drawer: Sort by ("Nearest date first" / "Furthest date first"),
   Price, Distance, and Availability ("Hide full and closed races", which hides races that are not
   `Open` or have no places left). There is no location group: the place is chosen in the header,

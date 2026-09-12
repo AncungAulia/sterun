@@ -2,8 +2,8 @@
 
 /**
  * STE-13 — the public race directory, read from the chain on every visit.
- * Redesigned poster-first on 2026-09-11, then made one list filtered by place
- * (Revision 2 of docs/superpowers/specs/2026-09-11-directory-redesign-design.md).
+ * Redesigned poster-first on 2026-09-11, then made one list led by the chosen
+ * place (Revision 3 of docs/superpowers/specs/2026-09-11-directory-redesign-design.md).
  *
  * Four states, and the distinction between three of them is the whole point of
  * the page: loading, empty, failed, and a list. An empty registry and an
@@ -16,11 +16,13 @@
  * waits until every document has answered, so it is chosen once instead of
  * reshuffling as posters arrive.
  *
- * The place in the header filters the whole page, featured row included: a
- * visitor who chose Yogyakarta should not open the page on a race in Jakarta.
- * A race's place is only known from its document, so while a place is chosen
- * and documents are still arriving the page keeps its loading state rather than
- * drawing a list that grows, or a "no races here" that is only a guess.
+ * The place in the header sorts the page, it does not filter it: races in the
+ * chosen place come first and the featured row prefers them, but every race
+ * stays listed. It used to filter, which hid most of the directory behind a
+ * choice made once and kept in a browser, and left a visitor in a quiet
+ * province with an empty page. Because nothing is hidden, nothing has to wait
+ * for documents either: the order settles as they arrive, the list does not
+ * grow.
  *
  * The refresh control stays for the acceptance scenario in the ticket: create
  * an event, press refresh, and it appears without this app being redeployed.
@@ -38,14 +40,12 @@ import { useArea } from "@/hooks/useArea";
 import { useEventDocuments } from "@/hooks/useEventDocuments";
 import { eventKeys, useEvents } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
-import { placeLabel } from "@/lib/area";
 import { cn } from "@/utils/cn";
 
 import {
-  inArea,
   matchesSearch,
   pickFeatured,
-  sortByDate,
+  sortByPlace,
   type DateOrder,
   type DirectoryEntry,
 } from "./browse";
@@ -73,23 +73,24 @@ export function Directory() {
     summary,
     document: documents.byEvent.get(summary.event.eventId) ?? null,
   }));
-  // Every choice below starts from the chosen place, so neither a search, the
-  // drawer's count nor the featured row can reach a race outside it.
-  const located = area ? entries.filter((item) => inArea(item, area)) : entries;
-  const searched = located.filter((item) => matchesSearch(item, query));
-  const results = sortByDate(
+  // The search and the drawer decide what is shown; the place only decides what
+  // comes first, so it is applied last and takes nothing away.
+  const searched = entries.filter((item) => matchesSearch(item, query));
+  const results = sortByPlace(
     searched.filter((item) => matchesFilters(item, filters)),
+    area,
     order,
     nowS ?? 0n,
   );
   const narrowing = query.trim().length > 0 || activeFilterCount(filters) > 0;
   const featured =
-    !narrowing && documents.settled && nowS !== undefined ? pickFeatured(located, nowS) : [];
-  const locating = area !== null && !documents.settled;
+    !narrowing && documents.settled && nowS !== undefined
+      ? pickFeatured(entries, nowS, { place: area })
+      : [];
 
-  let heading = "All races";
-  if (narrowing) heading = `${results.length} ${results.length === 1 ? "race matches" : "races match"}`;
-  else if (area) heading = `Races in ${placeLabel(area)}`;
+  const heading = narrowing
+    ? `${results.length} ${results.length === 1 ? "race matches" : "races match"}`
+    : "All races";
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: eventKeys.all });
@@ -164,9 +165,7 @@ export function Directory() {
         </EmptyState>
       ) : null}
 
-      {data && data.events.length > 0 && locating ? <DirectorySkeleton /> : null}
-
-      {data && data.events.length > 0 && !locating ? (
+      {data && data.events.length > 0 ? (
         <>
           <FeaturedEvents entries={featured} />
 
@@ -182,14 +181,6 @@ export function Directory() {
                 <EmptyState title="No races match">Try a different search or fewer filters.</EmptyState>
                 <Button variant="link" className="self-center" onClick={clearNarrowing}>
                   Clear search and filters
-                </Button>
-              </>
-            ) : null}
-            {results.length === 0 && !narrowing && area ? (
-              <>
-                <EmptyState title={`No races in ${placeLabel(area)} yet`} />
-                <Button variant="link" className="self-center" onClick={() => clearArea()}>
-                  See all locations
                 </Button>
               </>
             ) : null}

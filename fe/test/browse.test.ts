@@ -8,6 +8,7 @@ import {
   placeLine,
   priceLine,
   sortByDate,
+  sortByPlace,
 } from "@/modules/directory/browse";
 
 import { SUSD, category, entry, metadata, summary } from "./fixtures/directory";
@@ -226,5 +227,81 @@ describe("placeLine", () => {
   it("says nothing without a proven location", () => {
     expect(placeLine(null)).toBeNull();
     expect(placeLine(metadata({ location: undefined }))).toBeNull();
+  });
+});
+
+const JAKARTA = {
+  name: "Monas",
+  city: "Jakarta Pusat",
+  province: "DKI Jakarta",
+  country: "Indonesia",
+  countryCode: "ID",
+};
+
+/** A race in DI Yogyakarta, the province `YOGYA` names. */
+function here(eventId: number, days: number) {
+  return entry(summary(eventId, { startsAt: NOW + BigInt(days) * DAY }), metadata());
+}
+
+/** A race in Jakarta: the same country, another province. */
+function away(eventId: number, days: number) {
+  return entry(
+    summary(eventId, { startsAt: NOW + BigInt(days) * DAY }),
+    metadata({ location: JAKARTA }),
+  );
+}
+
+describe("sortByPlace", () => {
+  const all = [away(3, 0), here(2, 9), away(4, 5), here(1, 1)];
+
+  it("keeps every race and leads with the chosen place, each group in date order", () => {
+    expect(ids(sortByPlace(all, YOGYA, "soonest", NOW))).toEqual([1, 2, 3, 4]);
+  });
+
+  it("honours furthest date first inside both groups", () => {
+    expect(ids(sortByPlace(all, YOGYA, "latest", NOW))).toEqual([2, 1, 4, 3]);
+  });
+
+  it("is exactly the date order when no place is chosen", () => {
+    expect(ids(sortByPlace(all, null, "soonest", NOW))).toEqual(ids(sortByDate(all, "soonest", NOW)));
+    expect(ids(sortByPlace(all, null, "latest", NOW))).toEqual(ids(sortByDate(all, "latest", NOW)));
+  });
+
+  it("never counts a race without a proven location as being in the place", () => {
+    const unproven = entry(summary(5, { startsAt: NOW + 2n * DAY }), metadata({ location: undefined }));
+
+    expect(ids(sortByPlace([unproven, here(2, 9)], YOGYA, "soonest", NOW))).toEqual([2, 5]);
+  });
+
+  it("still lists the races elsewhere when the place holds none", () => {
+    expect(ids(sortByPlace([away(4, 5), away(3, 0)], YOGYA, "soonest", NOW))).toEqual([3, 4]);
+  });
+});
+
+describe("pickFeatured with a chosen place", () => {
+  it("leads with a race in the place even when one elsewhere is sooner", () => {
+    expect(ids(pickFeatured([away(1, 1), here(2, 30)], NOW, { place: YOGYA }))).toEqual([2, 1]);
+  });
+
+  it("fills the rest of the row from elsewhere, soonest first", () => {
+    expect(ids(pickFeatured([away(1, 9), away(2, 4), here(3, 30)], NOW, { place: YOGYA }))).toEqual([3, 2, 1]);
+  });
+
+  it("still holds at most three", () => {
+    expect(ids(pickFeatured([here(1, 5), here(2, 6), away(3, 1), away(4, 2)], NOW, { place: YOGYA }))).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  it("still leaves out a race that is closed, already run, or has no poster", () => {
+    const closed = entry(summary(1, { startsAt: NOW + DAY, status: "Closed" }), metadata());
+    const past = entry(summary(2, { startsAt: NOW - DAY }), metadata());
+    const posterless = entry(summary(3, { startsAt: NOW + DAY }), metadata({ posterUrl: undefined }));
+
+    expect(pickFeatured([closed, past, posterless], NOW, { place: YOGYA })).toEqual([]);
+  });
+
+  it("orders by date alone when no place is chosen", () => {
+    expect(ids(pickFeatured([away(1, 1), here(2, 30)], NOW, {}))).toEqual([1, 2]);
   });
 });
