@@ -1,3 +1,19 @@
+/**
+ * The picker, over the real places dataset.
+ *
+ * ## Why this file gets longer than the default timeout
+ *
+ * The picker's form is `React.lazy` and the first render in the file pulls in
+ * `src/data/places.json`, 176 KB of it, which Vite then has to transform and
+ * hand to the module graph. That is a one off cost, but it lands inside the
+ * first case that opens the dialog, and with the whole suite running in
+ * parallel it has gone past the 5 s default and failed a case that passes in
+ * about a second when the file runs alone. A timeout is the honest fix: the
+ * work is real, and the alternative would be stubbing the dataset away, which
+ * would leave nothing testing what this file exists to test (a country whose
+ * provinces the data does not have, a province listed twice, the whole country
+ * offered first).
+ */
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -5,6 +21,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Area } from "@/lib/area";
 import { AreaPicker } from "@/modules/directory/component/AreaPicker";
+
+vi.setConfig({ testTimeout: 20_000 });
 
 const YOGYA = { countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" };
 const INDONESIA = { countryCode: "ID", country: "Indonesia" };
