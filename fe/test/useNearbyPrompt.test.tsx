@@ -79,7 +79,7 @@ describe("useNearbyPrompt", () => {
 
       const { storePlace } = await import("@/lib/area");
       act(() => {
-        storePlace({ countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" });
+        storePlace({ mode: "area", countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" });
       });
       await act(async () => {
         answer?.({ coords: { latitude: -6.1754, longitude: 106.8272 } } as GeolocationPosition);
