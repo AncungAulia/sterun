@@ -37,20 +37,12 @@ describe("EventCard", () => {
       expect(container.querySelector("img")?.getAttribute("src")).toBe("https://files.test/poster.jpg");
     });
 
-    it("sets a featured title in the hero face", () => {
-      render(
-        <EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} variant="featured" />,
-      );
+    it("sets the title in the card face, two lines at most", () => {
+      render(<EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} />);
 
-      expect(screen.getByRole("heading", { name: "Jakarta Marathon 7" })).toHaveClass("heading-hero");
-    });
-
-    it("keeps a featured title to two lines", () => {
-      render(
-        <EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} variant="featured" />,
-      );
-
-      expect(screen.getByRole("heading", { name: "Jakarta Marathon 7" })).toHaveClass("line-clamp-2");
+      const heading = screen.getByRole("heading", { name: "Jakarta Marathon 7" });
+      expect(heading).toHaveClass("heading-strong", "line-clamp-2");
+      expect(heading).not.toHaveClass("heading-hero");
     });
 
     it("names the link by the race alone, even with No image in the card", () => {
@@ -70,19 +62,6 @@ describe("EventCard", () => {
       expect(link).toHaveAccessibleDescription(expect.stringContaining("FT UGM, Sleman"));
     });
 
-    it("gives a stretched featured card's spare height to the poster, not to a gap above the price", () => {
-      render(
-        <EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} variant="featured" />,
-      );
-
-      const heading = screen.getByRole("heading", { name: "Jakarta Marathon 7" });
-      const body = heading.parentElement;
-      const frame = body?.previousElementSibling;
-      expect(frame?.querySelector("img")).not.toBeNull();
-      expect(frame).toHaveClass("lg:grow", "shrink-0");
-      expect(body).not.toHaveClass("flex-1");
-    });
-
     it("keeps a grid card's body filling the card, so prices line up across a row", () => {
       render(<EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} />);
 
@@ -90,19 +69,9 @@ describe("EventCard", () => {
       const body = heading.parentElement;
       const frame = body?.previousElementSibling;
       expect(frame?.querySelector("img")).not.toBeNull();
+      expect(frame).toHaveClass("aspect-video");
       expect(frame).not.toHaveClass("lg:grow");
       expect(body).toHaveClass("flex-1");
-    });
-
-    it("keeps a side card to title, date and entries left", () => {
-      const race = summary(7, {}, [category(0)]);
-
-      render(<EventCard entry={entry(race, metadata())} documentLoading={false} variant="side" />);
-
-      expect(screen.getByText(formatEventDate(race.event.startsAt))).toBeInTheDocument();
-      expect(screen.getByText("120 entries left")).toBeInTheDocument();
-      expect(screen.queryByText("FT UGM, Sleman")).not.toBeInTheDocument();
-      expect(screen.queryByText("From sUSD 25")).not.toBeInTheDocument();
     });
   });
 

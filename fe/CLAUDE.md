@@ -235,8 +235,26 @@ What is settled:
   page and the directory, so both read the same cache entry and opening a race after browsing does
   not fetch or hash its document again. `fetchEventMetadata` gives up after `METADATA_TIMEOUT_MS`
   (8 s) so one dead host cannot hold the featured row back.
-- **Side cards in the featured row are compact**: they drop the venue and the price, matching the
-  wireframe.
+- **Featured cards are full-bleed** (Revision 2, `FeaturedCard`): no white body, the poster frame
+  fills the whole card, and the text sits in `paper` over an `ink` fade along the bottom. The fade is
+  two layers (the text block at least 70% ink, then a `before:` fade above it), because one
+  bottom-to-transparent gradient left the title on a nearly bare light poster. `EventCard` is the
+  list card only and keeps its white body; the two share the lines from `browse.ts`, not a variant.
+  Lead: hero title, venue, date, entries left, price. **Side cards are compact**: title, date and
+  entries left.
+- **The featured row's shape follows how many races it has.** Stacked below `lg`, 4:3 on phones and
+  16:9 from `sm`. From `lg`, three races make a 3 by 2 grid — the lead spans two columns and both
+  rows at 16:9, and each side card takes one row, dropping its own ratio to fill it. **Two races are
+  two equal columns**, both 16:9, the lead keeping the lead's contents but not a size the other
+  cannot match: one card towering over its only neighbour read as a mistake, not as emphasis. One
+  race alone takes the full width at `21/9`. Only `FeaturedEvents` knows the count, so every `lg`
+  class comes from it through `className`; the card itself only knows 4:3 and 16:9. The cards set
+  `min-h-min` because `overflow-hidden` switches off the aspect ratio's grow-to-fit-content rule.
+- **A long race name shrinks the title one step** (`featuredTitleClass`, unit-tested) rather than
+  scrolling or wrapping past the two lines it is clamped to: a marquee is hard to read and moves on
+  every visit. Lead `text-5xl` down to `text-4xl`, side `text-xl` down to `text-lg`, with the
+  thresholds measured from the real names. **Never below `text-4xl` on the lead**: `heading-hero` is
+  Big Shoulders and `tokens.css` only allows it at 48px and above.
 - **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
   `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
   its corners.

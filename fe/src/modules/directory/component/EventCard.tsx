@@ -1,14 +1,13 @@
 /**
- * One race in the directory, led by its poster.
+ * One race in the directory's list, led by its poster.
  *
  * The whole card is one link to the event page. Entry is per category and
  * always has been (WEB_APP_IA.md §3.1), so there is no enter button to put here:
  * the card owes a visitor enough to decide whether to open the race, which is
  * where it is, when it is, whether there is room, and what it costs.
  *
- * Three sizes share one card so the featured row and the grid cannot drift
- * apart. Only the featured card sets its title in the hero face, because Big
- * Shoulders is only used at 48px and above (tokens.css).
+ * The featured row does not use this card: its poster fills the card with the
+ * text over it (`FeaturedCard`). Both print the same lines from `browse.ts`.
  */
 import { CalendarDaysIcon, MapPinIcon, TicketIcon } from "lucide-react";
 import Link from "next/link";
@@ -21,30 +20,22 @@ import { formatEventDate } from "@/utils/format";
 import { entriesLine, placeLine, priceLine, type DirectoryEntry } from "../browse";
 import { PosterFrame } from "./PosterFrame";
 
-export type EventCardVariant = "grid" | "featured" | "side";
-
 /**
  * `sizes` does nothing while PosterFrame sets `unoptimized`: Next emits no
  * `srcset` then. It is kept so the frame is ready if posters are ever optimised.
  */
-const SIZES: Record<EventCardVariant, string> = {
-  grid: "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw",
-  featured: "(min-width: 1024px) 66vw, 100vw",
-  side: "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw",
-};
+const SIZES = "(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw";
 
 interface EventCardProps {
   entry: DirectoryEntry;
   documentLoading: boolean;
-  variant?: EventCardVariant;
 }
 
-export function EventCard({ entry, documentLoading, variant = "grid" }: EventCardProps) {
+export function EventCard({ entry, documentLoading }: EventCardProps) {
   const { event, categories } = entry.summary;
-  const place = variant === "side" ? null : placeLine(entry.document);
+  const place = placeLine(entry.document);
   const entries = entriesLine(entry.summary);
-  const price = variant === "side" ? null : priceLine(categories);
-  const featured = variant === "featured";
+  const price = priceLine(categories);
   // The same race can be on the page twice (featured row and grid), so the
   // title's id comes from useId, not from the event id.
   const titleId = useId();
@@ -67,31 +58,15 @@ export function EventCard({ entry, documentLoading, variant = "grid" }: EventCar
         "motion-reduce:transition-none motion-reduce:active:scale-100",
       )}
     >
-      <PosterFrame
-        posterUrl={entry.document?.posterUrl ?? null}
-        loading={documentLoading}
-        sizes={SIZES[variant]}
-        // At lg the two side cards stack taller than the featured card, and the
-        // grid stretches it to match. That height goes to the poster, not to a
-        // gap above the price: `grow` alone keeps 16:9 as the frame's base size
-        // (`flex-1` would reset it to zero), and `shrink-0` stops it going below.
-        // A taller frame only shows more blurred band, since the poster is never cropped.
-        className={featured ? "shrink-0 lg:grow" : undefined}
-      >
+      <PosterFrame posterUrl={entry.document?.posterUrl ?? null} loading={documentLoading} sizes={SIZES}>
         <div className="absolute top-3 right-3">
           <EventStatusBadge status={event.status} />
         </div>
       </PosterFrame>
 
-      {/* Grid and side bodies fill the card so their prices line up across a row. */}
-      <div className={cn("flex flex-col gap-3", featured ? "p-6" : "flex-1 p-4")}>
-        <h3
-          id={titleId}
-          className={cn(
-            "line-clamp-2 text-ink",
-            featured ? "heading-hero text-4xl" : "heading-strong text-xl",
-          )}
-        >
+      {/* The body fills the card so prices line up across a row. */}
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <h3 id={titleId} className="heading-strong line-clamp-2 text-xl text-ink">
           {event.name}
         </h3>
 
