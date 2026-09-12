@@ -178,12 +178,12 @@ export function addOnProblem(addOn: PlannedAddOn): string | null {
     // Every size is its own row on chain, and the contract refuses a quota of
     // zero, so a size with no number cannot be created at all.
     if (addOn.sizes.some((size) => size.label.trim() && badStock(size.stock))) {
-      return "Say how many of each size exist. The contract will not take zero.";
+      return "Say how many of each size exist. It must be at least 1.";
     }
     return null;
   }
   if (badStock(addOn.stock)) {
-    return "Say how many of these exist. The contract will not take zero.";
+    return "Say how many of these exist. It must be at least 1.";
   }
   return null;
 }

@@ -28,7 +28,10 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_URL) {
-    throw new ApiError(0, "no-api-url", "NEXT_PUBLIC_API_URL is not set, so the backend cannot be reached.");
+    // The reader of this sentence is a runner or an organiser, so it says what
+    // they can do about it. Which variable is missing is a developer's problem,
+    // and it is already in the code they are looking at.
+    throw new ApiError(0, "no-api-url", "Sterun is not available right now. Please try again later.");
   }
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -40,16 +43,18 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     // A proxy in front of the API can answer with HTML, so the documented
     // shape is attempted and not assumed. Losing the body is better than
     // turning a 502 into a JSON parse error nobody can act on.
+    //
+    // Only the code is taken from the body. The server's own `message` is
+    // written for whoever reads a log, and putting it on screen is how a page
+    // ends up telling a runner about a row that failed to insert.
     let code = "http-error";
-    let message = `The backend answered ${response.status}.`;
     try {
       const body = (await response.json()) as { error?: string; message?: string };
       if (body.error) code = body.error;
-      if (body.message) message = body.message;
     } catch {
-      // Keep the defaults above.
+      // Keep the default code above.
     }
-    throw new ApiError(response.status, code, message);
+    throw new ApiError(response.status, code, "Something went wrong on our side. Please try again.");
   }
 
   return (await response.json()) as T;

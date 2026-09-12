@@ -57,7 +57,7 @@ function Console() {
         <div className="max-w-2xl">
           <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Organiser console</h1>
           <p className="mt-3 text-lg text-n-600">
-            The races this wallet publishes, read live from the chain.
+            Every race you have created with this wallet, drafts included.
           </p>
         </div>
         {canCreate ? (
@@ -73,8 +73,8 @@ function Console() {
 
       {isError ? (
         <ErrorNotice
-          title="Your races could not be read"
-          detail="This is a network or node problem, not an empty console. Your races are still on chain."
+          title="We could not load your races"
+          detail="This is a connection problem, not an empty list. Your races are safe. Please try again."
           onRetry={() => void refetch()}
         />
       ) : null}
@@ -99,7 +99,7 @@ function Console() {
         <p className="text-sm text-n-500">
           {/* Whose they were is exactly what could not be read, so the page
               cannot promise none of them belonged to this wallet. */}
-          {`${data.unreadable.length} ${data.unreadable.length === 1 ? "event" : "events"} could not be read from the registry, so a race of yours may be missing from this list.`}
+          Some races could not be loaded, so one of yours may be missing from this list.
         </p>
       ) : null}
     </div>
@@ -111,7 +111,7 @@ function ConsoleSkeleton() {
   return (
     <div
       role="status"
-      aria-label="Reading your races from the chain"
+      aria-label="Loading your races"
       className="grid gap-4 sm:grid-cols-2"
     >
       {[0, 1].map((row) => (

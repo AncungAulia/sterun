@@ -35,8 +35,9 @@ import type { ReactNode } from "react";
 import { FieldMessage, LabelRow } from "@/components/elements/Field";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
+import { friendlyError } from "@/lib/errors";
 import { MAX_FILE_BYTES, uploadEventFile } from "@/lib/upload";
-import { signMessage, walletErrorMessage } from "@/lib/wallet";
+import { signMessage } from "@/lib/wallet";
 
 /**
  * What the field is for, which decides both what it accepts and how it shows
@@ -136,7 +137,14 @@ export function FileField({ id, label, kind, hint, help, value, onChange }: File
     } catch (error) {
       // A declined prompt and a refusal from the store arrive the same way, and
       // both leave the field exactly as it was.
-      setState({ kind: "failed", message: walletErrorMessage(error) });
+      //
+      // Logged before it is mapped, and only in development: the sentence that
+      // replaces it is deliberately the same for every cause, so without this
+      // there is nothing left anywhere to tell one apart from another.
+      if (process.env.NODE_ENV === "development") {
+        console.error(`Uploading the ${kind} failed`, error);
+      }
+      setState({ kind: "failed", message: friendlyError(error) });
     }
   }
 

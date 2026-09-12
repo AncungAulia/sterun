@@ -114,8 +114,8 @@ export function StepAddOns({
           <h2 className="heading-strong text-lg text-foreground">What runners get</h2>
           <Help label="what runners get">
             Two lists, because they are two different things to a runner: what the entry fee
-            already covers, and what costs more on top. Both are held on chain with their own
-            stock, so a size that is gone is gone, and neither can be quietly restocked later.
+            already covers, and what costs more on top. Each has its own stock. Once a size sells
+            out it stays sold out, and stock cannot be added later.
           </Help>
         </div>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -132,8 +132,7 @@ export function StepAddOns({
 
       {clash ? (
         <p role="alert" className="text-base text-danger">
-          Two of these would be stored under the same code, {clash}. Rename one, otherwise the
-          second reads as more stock of the first.
+          Two items share the name {clash}. Rename one so they are not mixed up.
         </p>
       ) : null}
 
@@ -142,13 +141,13 @@ export function StepAddOns({
           {
             kind: "included" as const,
             title: "Comes with the ticket",
-            note: "Already covered by the entry fee. It still needs a number, because the contract will not take a stock of zero.",
+            note: "Already covered by the entry fee. Say how many you have, at least one.",
             add: "Add something included",
           },
           {
             kind: "extra" as const,
             title: "Sold on top",
-            note: "Bought during registration, charged in the same transaction as the entry. A runner who does not want it does not pay for it.",
+            note: "Bought during registration and paid together with the entry fee. Runners who do not want it do not pay for it.",
             add: "Add something to sell",
           },
         ]
@@ -211,7 +210,7 @@ export function StepAddOns({
                   htmlFor={`addon-price-${index}`}
                   label="Price in sUSD"
                   required
-                  help="Charged in the same transaction as the entry fee, in one transfer, so a runner cannot end up having paid for the shirt but not the race."
+                  help="Paid together with the entry fee in one payment, so nobody ends up having paid for the shirt but not the race."
                 />
                 <Input
                   id={`addon-price-${index}`}
@@ -230,7 +229,7 @@ export function StepAddOns({
                   htmlFor={`addon-stock-${index}`}
                   label="How many exist"
                   required
-                  help="Held on chain. Once they are gone the contract refuses the next entry that asks for one, which is the only version of sold out nobody has to police by hand."
+                  help="Once they are all gone, nobody else can pick one. You do not have to keep track of it yourself."
                 />
                 <Input
                   id={`addon-stock-${index}`}
@@ -273,7 +272,7 @@ export function StepAddOns({
                 >
                   {addOn.kind === "included"
                     ? "The entry fee for a ticked distance already covers this, and the stock you set is how many you need to have made."
-                    : "Published as who this is offered to. The contract does not hold the link, so it cannot stop a runner on another distance from buying one; what it does hold is the stock."}
+                    : "Shown on your page as who this is for. Runners on other distances can still buy it. The only fixed number is how many exist."}
                 </Help>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -333,7 +332,7 @@ export function StepAddOns({
             */}
             {addOnUnits([addOn]).length > 0 ? (
               <p className="text-sm text-muted-foreground">
-                On chain as{" "}
+                Saved as{" "}
                 <span className="numeric">
                   {addOnUnits([addOn])
                     .map((unit) => unit.code)

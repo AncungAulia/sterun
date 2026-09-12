@@ -15,10 +15,9 @@
  * So the review now draws `EventView`, the component `/events/[id]` draws,
  * fed with what the run is about to write (`modules/organiser/preview.ts`).
  * Whatever the organiser checks here is what runners will see, down to the
- * tabs, because there is only one page. The raw file is still one click away,
- * inside Proofs, where a reader of the published page will look for it: the
- * fingerprint of those exact bytes is what ends up on chain, and somebody
- * checking that claim should be able to see them.
+ * tabs, because there is only one page. The Verification tab is the one part
+ * that cannot be shown yet, since there is nothing published to check against,
+ * so it says what it will be for and nothing else.
  *
  * ## Why the whole run happens in a dialog
  *
@@ -118,7 +117,7 @@ export function StepReview({
             categories={preview.categories}
             document={preview.document}
             addOns={preview.addOns}
-            proofs={<PreviewProofs documentText={documentText} hash={hash} />}
+            proofs={<PreviewProofs />}
             preview
           />
         </section>
@@ -143,39 +142,24 @@ export function StepReview({
 }
 
 /**
- * The Proofs tab, before there is anything on chain to prove.
+ * The Verification tab, before there is an event to verify.
  *
- * On the published page this tab compares the served file with the
- * fingerprint the event committed to. Neither exists yet, so instead it says
- * what will be checked and hands over the exact bytes it will be checked
- * against.
+ * On the published page this tab tells a runner whether the details being
+ * served are the ones the organiser published. Nothing is published yet, so all
+ * it can do is say what the tab will be for.
+ *
+ * It used to print the file itself, with the first half of its fingerprint
+ * under it. Neither meant anything to the person reading this screen: the
+ * organiser has just typed all of it into the form above, and a page of braces
+ * is not how anybody checks their own race. What an auditor compares lives on
+ * the published page, which is where somebody actually doubting the claim looks.
  */
-function PreviewProofs({ documentText, hash }: { documentText: string; hash: string }) {
-  const [showFile, setShowFile] = useState(false);
-
+function PreviewProofs() {
   return (
-    <div className="flex flex-col gap-4">
-      <p className="max-w-2xl text-base text-n-600">
-        Once the event is created, this tab shows runners that the page still matches the file
-        published with it. That file is below, and its fingerprint is recorded with your event.
-        Anybody can fetch it later and check the two still agree.
-      </p>
-      <div>
-        <Button variant="ghost" onClick={() => setShowFile((open) => !open)}>
-          {showFile ? "Hide the file" : "Show the file we will publish"}
-        </Button>
-        {showFile ? (
-          <div className="mt-3">
-            <pre className="numeric max-h-72 overflow-auto rounded-lg border border-border bg-muted p-4 text-sm text-foreground">
-              {documentText}
-            </pre>
-            <p className="numeric mt-2 text-sm text-muted-foreground">
-              Fingerprint {hash.slice(0, 16)}...
-            </p>
-          </div>
-        ) : null}
-      </div>
-    </div>
+    <p className="max-w-2xl text-base text-n-600">
+      Once the event is created, this tab lets runners check that your race details have not
+      changed since you published them.
+    </p>
   );
 }
 
@@ -232,12 +216,12 @@ function RunDialog({
           <DialogTitle>
             {started
               ? `Step ${Math.min(run.done.length + 1, run.steps.length)} of ${run.steps.length}`
-              : `This takes ${run.steps.length} signatures`}
+              : `Your wallet will ask you ${run.steps.length} times`}
           </DialogTitle>
           <DialogDescription>
             {started
               ? "Keep this open until it finishes. Your wallet will ask again for each line left."
-              : "Your wallet will ask you once for each line below, one after another. Nothing here can be edited or deleted afterwards."}
+              : "One prompt for each line below, one after another. Nothing here can be edited or deleted afterwards."}
           </DialogDescription>
         </DialogHeader>
 
@@ -305,7 +289,7 @@ function RunDialog({
             </Button>
           </DialogClose>
           <Button onClick={() => void run.start()} disabled={run.isRunning}>
-            {run.isRunning ? "Working" : started ? "Carry on" : "Start signing"}
+            {run.isRunning ? "Working" : started ? "Carry on" : "Start"}
           </Button>
         </DialogFooter>
       </DialogContent>

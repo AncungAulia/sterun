@@ -105,25 +105,39 @@ export type MetadataResult =
   /** Never got a document to check: no uri, network failure, or not JSON. */
   | { status: "unavailable"; reason: string };
 
+/**
+ * How long a document host gets to answer before the page stops waiting.
+ *
+ * Without a deadline, a host that accepts the connection and never replies
+ * leaves the read pending for as long as the browser cares to wait. On the
+ * directory that holds back every section that needs all documents in hand.
+ * Eight seconds is well past a slow mobile response and short of someone
+ * giving up on the page.
+ */
+export const METADATA_TIMEOUT_MS = 8_000;
+
 export async function fetchEventMetadata(
   uri: string,
   expectedHash: string,
 ): Promise<MetadataResult> {
-  if (!uri) return { status: "unavailable", reason: "This event has no metadata document." };
+  if (!uri) return { status: "unavailable", reason: "This race has no published details." };
 
   let body: string;
   try {
-    const response = await fetch(uri);
+    const response = await fetch(uri, { signal: AbortSignal.timeout(METADATA_TIMEOUT_MS) });
     if (!response.ok) {
-      return { status: "unavailable", reason: `The metadata document returned ${response.status}.` };
+      return { status: "unavailable", reason: "The race details could not be loaded." };
     }
     body = await response.text();
-  } catch {
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "name" in error && error.name === "TimeoutError") {
+      return { status: "unavailable", reason: "The race details took too long to load." };
+    }
     // The message is deliberately not the browser's. A failed cross-origin
     // fetch reports "Failed to fetch" whether the host is down, the domain
     // never resolved, or CORS blocked it, and repeating that tells nobody
     // anything.
-    return { status: "unavailable", reason: "The metadata document could not be reached." };
+    return { status: "unavailable", reason: "The race details could not be loaded." };
   }
 
   const actualHash = await sha256Hex(body);
@@ -133,10 +147,10 @@ export async function fetchEventMetadata(
 
   const document = readEventDocument(body);
   if (document === "not-json") {
-    return { status: "unavailable", reason: "The metadata document is not valid JSON." };
+    return { status: "unavailable", reason: "The race details file is damaged." };
   }
   if (document === "not-object") {
-    return { status: "unavailable", reason: "The metadata document is not an object." };
+    return { status: "unavailable", reason: "The race details file is damaged." };
   }
 
   return { status: "verified", document };

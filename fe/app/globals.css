@@ -95,6 +95,14 @@
   outline: none;
 }
 
+/* The same focus rule also sets `border-radius: var(--radius-sm)`. A directory
+   card's link is the card surface itself (border, background, clipped poster),
+   so on Tab its 16px corners snapped to 4px. It keeps the ring; only its own
+   radius comes back. */
+[data-slot="event-card"]:focus-visible {
+  border-radius: var(--radius-lg);
+}
+
 /* Tailwind v4 drops the browser's default `cursor: pointer` on buttons, so a
    button looks unclickable unless every component remembers to add it back.
    Restore it once here. Disabled controls keep whatever the component sets,

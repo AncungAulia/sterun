@@ -151,7 +151,7 @@ describe("uploadEventFile", () => {
           expectedSha256: SHA,
           sign,
         }),
-      ).rejects.toThrow(/different file/i);
+      ).rejects.toThrow(/did not upload correctly/i);
     });
   });
 

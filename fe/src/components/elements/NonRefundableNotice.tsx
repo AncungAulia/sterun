@@ -26,9 +26,8 @@ export function NonRefundableNotice({ className }: { className?: string } = {}) 
     >
       <p className="text-sm text-warning">
         <strong className="font-medium">Entry is non-refundable.</strong> If this race is postponed
-        or moved, the organiser announces it in a signed notice and the original document stays as
-        it was published. Any refund is the organiser&apos;s own policy, outside the contract, and
-        cannot be enforced by the protocol.
+        or moved, the organiser will announce it, and the details published here stay as they were.
+        Any refund is up to the organiser, and Sterun cannot require one.
       </p>
     </div>
   );

@@ -208,22 +208,25 @@ describe("OrganiserHome", () => {
       expect(screen.getByText("No distances yet.")).toBeInTheDocument();
     });
 
-    it("warns that a race of theirs may be missing when some events could not be read", async () => {
+    it("warns that a race of theirs may be missing when some could not be loaded", async () => {
       // Whose they were is exactly what could not be read, so the page cannot
       // say "none of these were yours".
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [3, 4] });
 
       renderHome();
 
-      expect(await screen.findByText(/2 events could not be read/i)).toBeInTheDocument();
+      expect(await screen.findByText(/may be missing from this list/i)).toBeInTheDocument();
     });
 
-    it("says one event, not one events", async () => {
-      listEvents.mockResolvedValue({ events: [], unreadable: [7] });
+    it("says nothing about missing races when every one of them was read", async () => {
+      // A warning that shows when it does not apply is how warnings stop being
+      // read at all.
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
 
       renderHome();
 
-      expect(await screen.findByText(/1 event could not be read/i)).toBeInTheDocument();
+      await screen.findByText("Jakarta Marathon 0");
+      expect(screen.queryByText(/may be missing from this list/i)).not.toBeInTheDocument();
     });
 
     it("does not offer Create event before the allowlist has answered", async () => {

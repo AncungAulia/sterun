@@ -136,7 +136,7 @@ address as it is, plus how many events they have created and how many reached `C
 
 | URL | Shows | Data source | Ticket |
 | --- | --- | --- | --- |
-| `/` | Event cards: name, date, status badge, category summary. Only `Open` events get an enter CTA. Loading + empty states (slow testnet / no events yet). | the chain (RPC) — the indexer as a fast path, with truth still from the chain | STE-13 |
+| `/` | Poster-first directory (redesigned 2026-09-11, spec `docs/superpowers/specs/2026-09-11-directory-redesign-design.md`, Revision 4): one list of every race, sorted by the place chosen at the top left ("All locations" by default, or a country with an optional province, saved in the visitor's browser). On the first render the browser's own location prompt is raised once, and once only: allowed, the list is ordered by real distance and the control reads "Near you"; refused or ignored, the page is exactly what it would be for somebody never asked. The place sorts, it does not filter: races in it come first, within "still to come" and within "already run" rather than across them, and the featured row of `Open`, upcoming races with a poster prefers them, but nothing is hidden. The list is headed "All races", or "{n} races match" once a search or filter narrows it. Every race is a card with its poster in a 16:9 frame (shown whole, never cropped; "No image" without one), venue, date, entries left and starting price, up to 4 columns wide. Search, plus a filter drawer: one sort, by date, and three filters, by price, by distance, and one that hides full and closed races. Loading + empty + error states. | the chain (RPC) for the races, plus each event's verified metadata document for poster and location | STE-13 |
 | `/events/[id]` | see §3.1 | the chain + the metadata document | STE-13 |
 | `/runner/[address]` | Race history per row: event, category, bib, state, finish time, transaction link. An identity-check block. An empty state. Paginated at 20. | the chain (truth), the indexer (to enrich event metadata) | STE-24 |
 
@@ -395,13 +395,18 @@ hosted at `uri`.
   A useful side effect: these links are hashed too, so **the account named when the event was created
   cannot quietly be swapped** for another after people have entered.
 - **Coordinates arrive through a pasted Google Maps link, not a country/province/city dropdown.**
-  The console extracts `lat`/`lng` from the URL (`@-6.2185,106.8026` or `?q=`) — no API, no key, no
-  rate limit. A cascade of three dropdowns answers nobody's question (what people want is **a pin
-  they can open**), and a geocoding API (Nominatim is free and keyless) adds a network dependency plus
-  an attribution obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates
-  until followed, and following one from a browser is blocked cross-origin — the console says so
-  plainly at paste time, rather than after the event is frozen. What is stored is **the two numbers**,
-  not the URL: links go stale, coordinates do not.
+  The console extracts `lat`/`lng` from the URL — no API, no key, no rate limit. It reads the
+  **pinned place** first (`!3d<lat>!4d<lng>` in the `data=` part, decoded first so a percent-encoded
+  link is not missed), then an explicit `?q=`/`ll=`/`daddr=`, then a bare pair, and only then
+  `@-6.2185,106.8026`: the numbers after `@` are the centre of the map *view*, which moves with
+  panning and zooming, so they sit tens of metres from what the organiser actually pinned. A cascade
+  of three dropdowns answers nobody's question (what people want is **a pin they can open**), and a
+  geocoding API (Nominatim is free and keyless) adds a network dependency plus an attribution
+  obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates until
+  followed, and following one from a browser is blocked cross-origin — the console says so plainly
+  at paste time, rather than after the event is frozen, and it says so a third way when a link
+  yielded only the map view. What is stored is **the two numbers**, not the URL: links go stale,
+  coordinates do not.
 - The `racepack` phase may carry `venue_lat` / `venue_lng` under the same rule. `venue` stays a string
   so STE-13's reader does not change meaning.
 - **`cut_off` is a time**, the last moment a finish still counts — and **the contract does not enforce

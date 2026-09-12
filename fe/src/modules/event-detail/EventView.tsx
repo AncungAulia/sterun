@@ -141,7 +141,7 @@ export function EventView({
             </TabsTrigger>
             <TabsTrigger value="proofs">
               <ShieldCheckIcon aria-hidden="true" />
-              Proofs
+              Verification
             </TabsTrigger>
           </TabsList>
         </div>

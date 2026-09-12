@@ -37,9 +37,11 @@ import {
   useSetEventStatus,
 } from "@/hooks/useOrganiser";
 import { useWallet } from "@/hooks/useWallet";
+import { friendlyError } from "@/lib/errors";
 import { fetchEventMetadata } from "@/lib/metadata";
+import { PlainError } from "@/lib/plain-error";
 import { uploadEventFile } from "@/lib/upload";
-import { signMessage, walletErrorMessage } from "@/lib/wallet";
+import { signMessage } from "@/lib/wallet";
 import type { PlannedCategory } from "@/modules/organiser/component/StepCategoryPlan";
 import type { PublishedDocument } from "@/modules/organiser/component/DocumentFallback";
 import { addOnUnits, type PlannedAddOn } from "@/modules/organiser/addons";
@@ -103,7 +105,7 @@ export function useEventRun({
   async function perform(step: RunStep, state: { eventId: number | null; document: PublishedDocument | null }) {
     switch (step.kind) {
       case "document": {
-        if (!address) throw new Error("Connect a wallet before publishing the details.");
+        if (!address) throw new PlainError("Connect your wallet first.");
         const stored = await uploadEventFile({
           bytes: new TextEncoder().encode(documentText),
           contentType: "application/json",
@@ -115,10 +117,10 @@ export function useEventRun({
         // the public event page uses is what makes this step mean anything.
         const served = await fetchEventMetadata(stored.url, hash);
         if (served.status !== "verified") {
-          throw new Error(
+          throw new PlainError(
             served.status === "modified"
-              ? "The file came back different from the one built here, so its fingerprint would not match."
-              : `The file was stored but could not be read back: ${served.reason}`,
+              ? "Your race details did not upload correctly. Nothing has been created. Please try again."
+              : "Your race details were uploaded but could not be checked. Please try again.",
           );
         }
         state.document = { uri: stored.url, hash };
@@ -126,10 +128,10 @@ export function useEventRun({
         return null;
       }
       case "event": {
-        if (startsAt === null) throw new Error("The race needs a date and a start time first.");
+        if (startsAt === null) throw new PlainError("The race needs a date and a start time first.");
         // The document is always present by the time this runs: it is the step
         // before, and the run stops on a step that fails.
-        if (!state.document) throw new Error("The event details have not been published yet.");
+        if (!state.document) throw new PlainError("The race details have not been published yet.");
         const sent = await createEvent.write({
           name: name.trim(),
           metadataHash: state.document.hash,
@@ -142,7 +144,9 @@ export function useEventRun({
       }
       case "category": {
         const category = plan.find((entry) => entry.code.trim() === step.code);
-        if (!category || state.eventId === null) throw new Error("That distance is no longer here.");
+        if (!category || state.eventId === null) {
+          throw new PlainError("That distance is no longer here.");
+        }
         const sent = await addCategory.write({
           eventId: state.eventId,
           code: category.code.trim(),
@@ -153,9 +157,9 @@ export function useEventRun({
         return sent.txHash;
       }
       case "addon": {
-        if (state.eventId === null) throw new Error("The event does not exist yet.");
+        if (state.eventId === null) throw new PlainError("The event does not exist yet.");
         const unit = addOnUnits(addOns).find((entry) => entry.code === step.code);
-        if (!unit) throw new Error("That item is no longer here.");
+        if (!unit) throw new PlainError("That item is no longer here.");
         const sent = await addAddon.write({
           eventId: state.eventId,
           code: unit.code,
@@ -165,7 +169,7 @@ export function useEventRun({
         return sent.txHash;
       }
       case "open": {
-        if (state.eventId === null) throw new Error("The event does not exist yet.");
+        if (state.eventId === null) throw new PlainError("The event does not exist yet.");
         const sent = await setStatus.write({ eventId: state.eventId, status: "Open" });
         return sent.txHash;
       }
@@ -189,7 +193,19 @@ export function useEventRun({
           const txHash = await perform(step, state);
           if (txHash) setReceipts((all) => ({ ...all, [step.id]: txHash }));
         } catch (error) {
-          setFailure({ stepId: step.id, message: walletErrorMessage(error) });
+          // Mapped here rather than in the dialog: this is the one place the
+          // run learns what went wrong, and what reaches the screen must be a
+          // sentence somebody wrote for a reader (`lib/errors.ts`).
+          //
+          // The original is logged first, and only in development. Mapping
+          // destroys it otherwise, and then an organiser who is stuck has
+          // nothing to report but the same sentence everybody else sees. It is
+          // kept out of production because the raw text is the wallet's and the
+          // SDK's, written for us rather than for whoever opens a console.
+          if (process.env.NODE_ENV === "development") {
+            console.error(`Event run step "${step.id}" failed`, error);
+          }
+          setFailure({ stepId: step.id, message: friendlyError(error) });
           return;
         }
         landed.push(step.id);

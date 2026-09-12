@@ -117,7 +117,7 @@ export function parseStroops(input: string): bigint {
 
   const [whole, fraction = ""] = text.split(".");
   if (fraction.length > 7) {
-    throw new Error(`sUSD has 7 decimal places; "${input}" has ${fraction.length}.`);
+    throw new Error("Use at most 7 digits after the dot.");
   }
 
   return BigInt(whole) * STROOPS_PER_UNIT + BigInt(fraction.padEnd(7, "0") || "0");

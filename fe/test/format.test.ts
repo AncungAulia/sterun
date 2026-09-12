@@ -164,7 +164,7 @@ describe("parseStroops", () => {
     it("refuses more precision than the asset has", () => {
       // Silently rounding would take a price the organiser typed and charge a
       // different one.
-      expect(() => parseStroops("1.12345678")).toThrow(/7 decimal/i);
+      expect(() => parseStroops("1.12345678")).toThrow(/7 digits/i);
     });
 
     it("refuses anything that is not a number", () => {

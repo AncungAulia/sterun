@@ -118,8 +118,7 @@ export async function uploadEventFile({
     throw new ApiError(
       200,
       "hash-mismatch",
-      "The file that arrived is a different file from the one built here, so its " +
-        "fingerprint would not match. Nothing has been recorded. Try publishing again.",
+      "Your race details did not upload correctly. Nothing has been created. Please try again.",
     );
   }
 

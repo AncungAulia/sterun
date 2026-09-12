@@ -21,7 +21,6 @@
 import Link from "next/link";
 
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
-import { ChainSource } from "@/components/layouts/ChainSource";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 
@@ -36,7 +35,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
   if (isPending) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-12">
-        <div role="status" aria-label="Reading this race from the chain">
+        <div role="status" aria-label="Loading this race">
           <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
             <div className="h-64 animate-pulse rounded-lg bg-n-100" />
             <div className="h-64 animate-pulse rounded-lg bg-n-100" />
@@ -51,8 +50,8 @@ export function EventDetail({ eventId }: { eventId: number }) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-12">
         <ErrorNotice
-          title="This race could not be read"
-          detail="The registry has no event with this id, or the node could not be reached. Check the link, or go back to the directory."
+          title="We could not load this race"
+          detail="This race does not exist, or we could not connect. Check the link, or go back to all races."
           onRetry={() => void refetch()}
         />
         <Link
@@ -69,7 +68,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
   /*
     Only a verified document is ever read from. `modified` and `unavailable`
     both mean there is nothing here that can be trusted, and the difference
-    between them belongs in Proofs, not scattered through every tab.
+    between them belongs in Verification, not scattered through every tab.
   */
   const document = metadata.data?.status === "verified" ? metadata.data.document : undefined;
 
@@ -93,8 +92,6 @@ export function EventDetail({ eventId }: { eventId: number }) {
           />
         }
       />
-
-      <ChainSource />
     </div>
   );
 }

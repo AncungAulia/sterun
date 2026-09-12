@@ -43,6 +43,12 @@ interface SearchableSelectProps {
   /** Shown when nothing matches what was typed. */
   emptyText?: string;
   disabled?: boolean;
+  /**
+   * Set it when the select sits inside a Dialog. The list is portaled out of
+   * the dialog, so the dialog's scroll lock cancels wheel and touch scrolling
+   * on it; a modal popover brings its own scroll lock, which takes over.
+   */
+  modal?: boolean;
 }
 
 export function SearchableSelect({
@@ -54,12 +60,13 @@ export function SearchableSelect({
   placeholder,
   emptyText = "Nothing found.",
   disabled = false,
+  modal = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={modal}>
       <PopoverTrigger asChild>
         <Button
           id={id}

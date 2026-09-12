@@ -26,16 +26,18 @@ describe("NonRefundableNotice", () => {
       // quietly is the fraud this product exists to catch.
       render(<NonRefundableNotice />);
 
-      expect(screen.getByText(/postponed or moved/i)).toBeInTheDocument();
-      expect(screen.getByText(/signed notice/i)).toBeInTheDocument();
+      const notice = screen.getByRole("note");
+      expect(notice).toHaveTextContent(/postponed or moved/i);
+      expect(notice).toHaveTextContent(/the organiser will announce it/i);
+      expect(notice).toHaveTextContent(/stay as they were/i);
     });
 
-    it("puts any refund on the organiser, outside the contract", () => {
+    it("puts any refund on the organiser, and says Sterun cannot force one", () => {
       render(<NonRefundableNotice />);
 
       const notice = screen.getByRole("note");
-      expect(notice).toHaveTextContent(/organiser's own policy/i);
-      expect(notice).toHaveTextContent(/outside the contract/i);
+      expect(notice).toHaveTextContent(/up to the organiser/i);
+      expect(notice).toHaveTextContent(/Sterun cannot require one/i);
     });
   });
 
@@ -45,7 +47,7 @@ describe("NonRefundableNotice", () => {
       render(<NonRefundableNotice />);
 
       const text = screen.getByRole("note").textContent ?? "";
-      expect(text).toMatch(/cannot be enforced/i);
+      expect(text).toMatch(/cannot require one/i);
       expect(text).not.toMatch(/\bwe (will|can) refund\b/i);
       expect(text).not.toMatch(/\bguarantee/i);
     });

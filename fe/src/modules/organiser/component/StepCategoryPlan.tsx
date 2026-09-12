@@ -53,7 +53,7 @@ export const EMPTY_CATEGORY: PlannedCategory = {
  */
 export function categoryProblem(category: PlannedCategory): string | null {
   if (!/^[A-Za-z0-9_]{1,32}$/.test(category.code)) {
-    return "A code can only use letters, digits and underscores, like 10K or FUN5K.";
+    return "Use letters, numbers and underscores for the short name, like 10K or FUN5K.";
   }
   const distanceM = Math.round(Number(category.km) * 1000);
   if (!Number.isFinite(distanceM) || distanceM <= 0) {
@@ -61,7 +61,7 @@ export function categoryProblem(category: PlannedCategory): string | null {
   }
   const quota = Number(category.quota);
   if (!Number.isInteger(quota) || quota <= 0) {
-    return "A quota is a whole number of places, and it cannot be zero.";
+    return "Maximum entries must be a whole number above zero.";
   }
   if (!/^\d{2}:\d{2}$/.test(category.startTime)) {
     return "Give the time this distance starts.";
@@ -97,8 +97,8 @@ export function StepCategoryPlan({
         <div className="flex items-center gap-2">
           <h2 className="heading-strong text-lg text-foreground">Distance categories</h2>
           <Help label="distance categories">
-            Nothing is signed on this screen. You are writing the race down, and the wallet comes
-            at the end, once for each distance.
+            Nothing is saved yet. You write the race down here, and confirm everything in your
+            wallet at the end.
           </Help>
         </div>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -139,12 +139,12 @@ export function StepCategoryPlan({
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
                 id={`code-${index}`}
-                label="Code"
+                label="Short name"
                 required
                 value={category.code}
                 onChange={(e) => set(index, { code: e.target.value })}
                 placeholder="5K, 10K, HALF"
-                hint="Letters, digits and underscores only."
+                hint="Use letters, numbers and underscores, like 10K or FUN5K."
                 help="This is what a runner picks between on your event page, so it should read the way people already talk about the distance."
               />
               <Field
@@ -172,7 +172,7 @@ export function StepCategoryPlan({
                 onChange={(e) => set(index, { price: e.target.value })}
                 placeholder="25"
                 hint="Enter 0 if this distance is free."
-                help="Paid in sUSD, the test currency for this stage. It goes straight from the runner to your wallet when they enter, and we never hold it."
+                help="Paid in sUSD, the practice money used while Sterun is being tested. It goes straight from the runner to your wallet when they enter, and Sterun never holds it."
               />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`start-${index}`}>

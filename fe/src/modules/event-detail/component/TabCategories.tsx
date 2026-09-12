@@ -41,8 +41,7 @@ export function TabCategories({
   if (categories.length === 0) {
     return (
       <EmptyState title="No distances yet">
-        The organiser has created this race but has not added a distance to it. They are added one
-        at a time, so this may be a race still being set up.
+        The organiser has not added any distances yet. The race may still be being set up.
       </EmptyState>
     );
   }

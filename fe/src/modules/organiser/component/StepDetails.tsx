@@ -21,19 +21,33 @@ import { Field, TextAreaField } from "@/components/elements/Field";
 import { Section } from "@/components/elements/Section";
 import { FileField } from "@/components/elements/FileField";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
-import { parseCoordinates } from "@/utils/geo";
+import { parsePin } from "@/utils/geo";
 
 /**
  * Says whether a pasted link actually yielded a pin, while it is being pasted.
  * The alternative is discovering it on the published event page, where the file
  * is already frozen.
+ *
+ * Three answers, because there are three outcomes and only two of them used to
+ * be told apart. A link that carries nothing but the map view still produces a
+ * point, so the old "Pin found." was most reassuring on exactly the paste that
+ * lands the start tens of metres away.
  */
 function PinHint({ link, missing }: { link: string; missing: string }) {
   // Nothing while the field is empty, and no coordinates when it works. Nobody
   // reads a latitude to check their own address, and a line that always says
   // something trains people to stop reading the one that matters.
   if (!link.trim()) return null;
-  if (!parseCoordinates(link)) return <span className="text-warning">{missing}</span>;
+  const pin = parsePin(link);
+  if (!pin) return <span className="text-warning">{missing}</span>;
+  if (pin.source === "view") {
+    return (
+      <span className="text-warning">
+        This spot is only approximate. Open the place first, so its name is showing, then copy that
+        link for the exact one.
+      </span>
+    );
+  }
   return <>Pin found.</>;
 }
 
@@ -147,14 +161,14 @@ export function StepDetails({
           error={errors.locationLink}
           value={details.locationLink}
           onChange={(e) => set({ locationLink: e.target.value })}
-          placeholder="https://www.google.com/maps/@-6.2185,106.8026,17z"
+          placeholder="https://www.google.com/maps/place/..."
           hint={
             <PinHint
               link={details.locationLink}
-              missing="Paste the long link from the address bar. A short link (maps.app.goo.gl) has no coordinates in it."
+              missing="Paste the full link from your browser's address bar. Short share links do not include the map pin."
             />
           }
-          help="We read the two coordinates out of the link and keep those, not the link itself. That is what puts the start on a map, and what lets somebody find your race by looking near themselves."
+          help="Search for the start location and open it so its name is showing, then copy the link. We keep the map pin rather than the link, and we use it to show your start on a map and to help runners find races near them. A link that does not carry the place gives us only roughly where the map was, which can be tens of metres out."
         />
         <TextAreaField
           id="description"
@@ -235,9 +249,12 @@ export function StepDetails({
             label="Collection venue on Google Maps"
             value={details.racepackVenueLink}
             onChange={(e) => set({ racepackVenueLink: e.target.value })}
-            placeholder="https://www.google.com/maps/@..."
+            placeholder="https://www.google.com/maps/place/..."
             hint={
-              <PinHint link={details.racepackVenueLink} missing="No pin found in that link yet." />
+              <PinHint
+                link={details.racepackVenueLink}
+                missing="Search for the venue, open it, then paste the long link. No pin found in this one yet."
+              />
             }
           />
         </div>
@@ -246,7 +263,7 @@ export function StepDetails({
       <Section
         title="Poster and links"
         note="Where runners go for updates. None of these can be swapped for something else once the event exists."
-        help="They are part of what gets frozen with your event, so the account you name here cannot quietly become a different account after people have entered."
+        help="These are saved with your event, so the account you name here cannot change after people have entered."
       >
         <FileField
           id="poster"
@@ -254,8 +271,8 @@ export function StepDetails({
           kind="image"
           value={details.posterUrl}
           onChange={(posterUrl) => set({ posterUrl })}
-          hint="PNG or JPEG, 1200 px wide or more, up to 5 MB."
-          help="It sits at the top of your event page, as wide as the page and up to about 400 px tall, so a wide picture fills that space and a tall one is shown smaller. Any shape works. Under 1200 px wide it starts to look soft on a good screen."
+          hint="16:9, 1920 × 1080 px recommended. PNG or JPEG, up to 5 MB."
+          help="The same picture is used on your event page and on its card in the race directory. The card is a 16:9 frame: other shapes are shown whole there, with a blurred copy of the picture filling the space around them. Under 1280 px wide it starts to look soft on a good screen."
         />
         <FileField
           id="waiver"
@@ -273,7 +290,7 @@ export function StepDetails({
           onChange={(e) => set({ instagram: e.target.value })}
           placeholder="@yourrace"
           hint="A handle, or paste the profile link."
-          help="The handle is stored rather than the address, because Instagram has changed the shape of its URLs before and this cannot be edited afterwards."
+          help="Only the handle is saved, and it cannot be changed later."
         />
         <Field
           id="website"
