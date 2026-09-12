@@ -395,8 +395,11 @@ hosted at `uri`.
   A useful side effect: these links are hashed too, so **the account named when the event was created
   cannot quietly be swapped** for another after people have entered.
 - **Coordinates arrive through a pasted Google Maps link, not a country/province/city dropdown.**
-  The console extracts `lat`/`lng` from the URL (`@-6.2185,106.8026` or `?q=`) — no API, no key, no
-  rate limit. A cascade of three dropdowns answers nobody's question (what people want is **a pin
+  The console extracts `lat`/`lng` from the URL — no API, no key, no rate limit. It reads the
+  **pinned place** first (`!3d<lat>!4d<lng>` in the `data=` part), then an explicit `?q=`/`ll=`/
+  `daddr=`, then a bare pair, and only then `@-6.2185,106.8026`: the numbers after `@` are the centre
+  of the map *view*, which moves with panning and zooming, so they sit tens of metres from what the
+  organiser actually pinned. A cascade of three dropdowns answers nobody's question (what people want is **a pin
   they can open**), and a geocoding API (Nominatim is free and keyless) adds a network dependency plus
   an attribution obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates
   until followed, and following one from a browser is blocked cross-origin — the console says so

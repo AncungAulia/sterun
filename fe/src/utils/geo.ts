@@ -26,13 +26,35 @@ function inRange({ lat, lng }: Coordinates): boolean {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
+/**
+ * Tried in this order, and the order is the whole point.
+ *
+ * A Google Maps place URL carries two different pairs of numbers, and they are
+ * not the same place. The pair after `@` is the centre of the map *view*: it
+ * moves with every pan and every zoom step, so it says where the organiser was
+ * looking, not what they pinned. The place's own coordinates sit in the `data=`
+ * part as `!3d<lat>!4d<lng>`, usually inside an `!8m2!3d...!4d...` group.
+ *
+ * Reading `@` first is what put "Fakultas Teknik UGM" about 40 m away on a spot
+ * with no name. So `@` is now the last thing tried, kept only because a link
+ * that carries nothing better still deserves a rough answer, and because an
+ * event document is frozen: a start that is 40 m out is permanent, but a start
+ * that is missing entirely blocks the wizard.
+ */
 const PATTERNS = [
-  // https://www.google.com/maps/place/Name/@-6.2185,106.8026,17z/...
-  /@(-?\d+\.\d+),(-?\d+\.\d+)/,
+  // The pinned place, inside the `!8m2` group that Google writes around it.
+  // https://www.google.com/maps/place/Name/@-7.7656,110.3718,17z/data=...!8m2!3d-7.76539!4d110.37254!16s...
+  /!8m2!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+  // The same pair without the group, for the URL shapes that omit it.
+  /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+  // An explicit coordinate somebody put in the link themselves.
   // https://maps.google.com/?q=-6.2185,106.8026  (also ?ll= and ?daddr=)
   /[?&](?:q|ll|daddr)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
   // Pasted on their own, which is what a phone's share sheet often gives.
   /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/,
+  // Last: the centre of the map view. See the note above.
+  // https://www.google.com/maps/place/Name/@-6.2185,106.8026,17z/...
+  /@(-?\d+\.\d+),(-?\d+\.\d+)/,
 ];
 
 /**

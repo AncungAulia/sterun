@@ -147,14 +147,14 @@ export function StepDetails({
           error={errors.locationLink}
           value={details.locationLink}
           onChange={(e) => set({ locationLink: e.target.value })}
-          placeholder="https://www.google.com/maps/@-6.2185,106.8026,17z"
+          placeholder="https://www.google.com/maps/place/..."
           hint={
             <PinHint
               link={details.locationLink}
-              missing="Paste the long link from the address bar. A short link (maps.app.goo.gl) has no coordinates in it."
+              missing="Search for the place, open it, then paste the long link from the address bar. A short link (maps.app.goo.gl) has no coordinates in it."
             />
           }
-          help="We read the two coordinates out of the link and keep those, not the link itself. That is what puts the start on a map, and what lets somebody find your race by looking near themselves."
+          help="Search for the start location and open it so its name is showing, then copy the link. We save the point that name sits on, not wherever the map happened to be when you copied. Only those two numbers are kept, not the link itself, and they are what puts your start on a map and lets somebody find your race by looking near themselves."
         />
         <TextAreaField
           id="description"
@@ -235,9 +235,12 @@ export function StepDetails({
             label="Collection venue on Google Maps"
             value={details.racepackVenueLink}
             onChange={(e) => set({ racepackVenueLink: e.target.value })}
-            placeholder="https://www.google.com/maps/@..."
+            placeholder="https://www.google.com/maps/place/..."
             hint={
-              <PinHint link={details.racepackVenueLink} missing="No pin found in that link yet." />
+              <PinHint
+                link={details.racepackVenueLink}
+                missing="Search for the venue, open it, then paste the long link. No pin found in this one yet."
+              />
             }
           />
         </div>
