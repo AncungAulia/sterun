@@ -212,13 +212,39 @@ What is settled:
 - **Featured** = `Open`, upcoming, has a poster, soonest first, at most three, with the races in the
   chosen place taken first (`pickFeatured(entries, nowS, { place })`). Chosen once every document
   has answered, so the row does not reshuffle.
+- **The browser asks where the visitor is, once, on the first client render** (Revision 4,
+  2026-09-12, which reverses the "no geolocation" line in Revisions 2 and 3). There is no button and
+  no prompt of our own: `hooks/useNearbyPrompt.ts` calls `navigator.geolocation.getCurrentPosition`
+  from an effect when, and only when, no place is saved **and** the stored `asked` flag is false.
+  The flag is written **before** the answer, because a dismissed prompt calls neither callback, and
+  a browser blocks an origin that keeps asking. Allowed, the coordinates are stored and the list is
+  ordered by real distance (`utils/geo.ts`, `haversineKm`, computed locally, nothing sent anywhere).
+  Refused, dismissed, unavailable or timed out, **nothing on screen changes**: no banner, no error,
+  no second ask, and the manual picker still works. `navigator.geolocation` is missing in a
+  non-secure context and in some embedded browsers, so it is guarded, and the request carries a
+  timeout so a device that never answers does not leave it pending. There is no per-card distance
+  yet. The effect writes only to the store, never `setState`, which is what keeps the React Compiler
+  lint quiet.
+- **`lib/area.ts` holds one key for two modes.** `sterun.area` stores `{ place, asked }`, where
+  `place` is a discriminated union: `{ mode: "area", countryCode, country, province? }` or
+  `{ mode: "nearby", lat, lng }`. A union rather than optional fields, because a record carrying
+  both a province and a pin has no single answer to "what does the button say". The shape stored
+  before the prompt existed, the bare area at the top level, is **still read**, so a visitor who
+  picked a province does not lose it; coordinates out of range are not read back, since a swapped
+  pair would order the list from Antarctica. Clearing the place keeps the flag, or the prompt would
+  reappear for somebody who has just chosen "All locations".
+- **The control reads "Near you" while coordinates are in use.** It cannot name a province: that
+  needs a geocoding service, and this project uses none. Opening it still offers the country and
+  province lists, applying one replaces the coordinates, and "All locations" clears them.
 - **The location control sorts the page, it does not filter it** (Revision 3, which overrides
   Revision 2): "All locations" by default, or a country with an optional province, picked by the
   visitor and stored in `localStorage` under `sterun.area` (`lib/area.ts`). Every race stays on the
   page; the ones in the chosen place come first (`sortByPlace(entries, place, order, nowS)`, which is
   `sortByDate` with the in-place races moved to the front **of each half**, upcoming and already run,
-  each group keeping its date order), and the featured row prefers them. The place is the inner sort
-  key, never the outer one: applied to the whole list it would put last year's Yogyakarta race above
+  each group keeping its date order), and the featured row prefers them. Coordinates take the same
+  shape one level down: inside each half the races are nearest first, and a race whose document
+  carries no `lat`/`lng` follows in the date order it already had, never with a guessed distance.
+  The place is the inner sort key, never the outer one: applied to the whole list it would put last year's Yogyakarta race above
   next week's Jakarta race, and "can I still enter this?" outranks "is it near me?". Filtering was
   the Revision 2 rule and it was wrong on a directory this small: it hid most of the registry behind
   a choice made once in a browser, and a visitor in a quiet province got an empty page. Searching a

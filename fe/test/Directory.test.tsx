@@ -28,11 +28,65 @@ const HASH = "ab".repeat(32);
 const UNAVAILABLE = { status: "unavailable", reason: "Not served in this test." };
 const JAKARTA = { name: "Monas", city: "Jakarta Pusat", province: "DKI Jakarta", country: "Indonesia", countryCode: "ID" };
 const PENANG = { name: "Penang Bridge", city: "George Town", province: "Penang", country: "Malaysia", countryCode: "MY" };
-const YOGYAKARTA_AREA: Area = { countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" };
+const YOGYAKARTA_AREA: Area = { mode: "area", countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" };
+/** The visitor stands at Tugu Yogyakarta, when the browser is allowed to say so. */
+const AT_TUGU = { lat: -7.7828, lng: 110.3671 };
+const YOGYAKARTA_PIN = { lat: -7.7828, lng: 110.3671 };
+const JAKARTA_PIN = { lat: -6.1754, lng: 106.8272 };
 
 /** The place a visitor chose on an earlier visit, as the picker stores it. */
 function saveArea(area: Area) {
-  window.localStorage.setItem(AREA_STORAGE_KEY, JSON.stringify(area));
+  window.localStorage.setItem(AREA_STORAGE_KEY, JSON.stringify({ place: area, asked: true }));
+}
+
+/**
+ * The browser's own location prompt, which jsdom does not have.
+ *
+ * Installed per test rather than in the shared setup, because "the browser
+ * cannot answer at all" is one of the cases being tested and it has to be the
+ * default: `navigator.geolocation` is missing in a non-secure context and in
+ * more embedded browsers than anyone expects.
+ */
+const getCurrentPosition = vi.fn();
+
+function installGeolocation() {
+  Object.defineProperty(window.navigator, "geolocation", {
+    value: { getCurrentPosition },
+    configurable: true,
+    writable: true,
+  });
+}
+
+function removeGeolocation() {
+  Object.defineProperty(window.navigator, "geolocation", {
+    value: undefined,
+    configurable: true,
+    writable: true,
+  });
+}
+
+/** The visitor presses Allow, and the device has a fix ready. */
+function allows({ lat, lng }: { lat: number; lng: number }) {
+  installGeolocation();
+  getCurrentPosition.mockImplementation((onSuccess: PositionCallback) => {
+    onSuccess({ coords: { latitude: lat, longitude: lng } } as GeolocationPosition);
+  });
+}
+
+/** The visitor presses Block, or the device has no fix, or the request expires. */
+function refuses(code = 1) {
+  installGeolocation();
+  getCurrentPosition.mockImplementation(
+    (_onSuccess: PositionCallback, onError?: PositionErrorCallback) => {
+      onError?.({ code, message: "denied" } as GeolocationPositionError);
+    },
+  );
+}
+
+/** The prompt is shown and never answered, which calls neither callback. */
+function isDismissed() {
+  installGeolocation();
+  getCurrentPosition.mockImplementation(() => {});
 }
 
 /** An event with a document at a uri the mock below can answer for. */
@@ -99,6 +153,8 @@ beforeEach(() => {
   listEvents.mockReset();
   fetchEventMetadata.mockReset();
   fetchEventMetadata.mockResolvedValue(UNAVAILABLE);
+  getCurrentPosition.mockReset();
+  removeGeolocation();
   window.localStorage.clear();
 });
 
@@ -266,7 +322,7 @@ describe("Directory", () => {
     it("leads with every province of a chosen country, then the rest of the world", async () => {
       // A document that names only its country belongs to that country too, and
       // organisers type the code, so a lower-case "id" is still Indonesia.
-      saveArea({ countryCode: "ID", country: "Indonesia" });
+      saveArea({ mode: "area", countryCode: "ID", country: "Indonesia" });
       listEvents.mockResolvedValue({
         events: [
           withDocument(0, { name: "Penang Bridge Run", startsAt: daysFromNow(5) }),
@@ -453,7 +509,7 @@ describe("Directory", () => {
     });
 
     it("still shows every other race when the chosen place has none of its own", async () => {
-      saveArea({ countryCode: "ID", country: "Indonesia", province: "Bali" });
+      saveArea({ mode: "area", countryCode: "ID", country: "Indonesia", province: "Bali" });
       listEvents.mockResolvedValue({ events: [withDocument(0)], unreadable: [] });
       serve({ 0: metadata() });
 
@@ -527,6 +583,194 @@ describe("Directory", () => {
 
       expect(await screen.findByText("No image")).toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "Featured races" })).not.toBeInTheDocument();
+    });
+  });
+});
+
+/**
+ * The browser's own prompt, asked once on the first client render.
+ *
+ * Four of the five outcomes have to leave the page untouched, so most of these
+ * assert that nothing happened, which is the point: a visitor who says no gets
+ * the directory somebody who was never asked would get, with no banner and no
+ * error anywhere on it.
+ */
+describe("Directory, asking where the visitor is", () => {
+  /** Two races: one at Tugu, one in Jakarta about 430 km away. */
+  function twoRaces() {
+    listEvents.mockResolvedValue({
+      events: [
+        withDocument(0, { name: "Monas Night Run", startsAt: daysFromNow(10) }),
+        withDocument(1, { name: "Elektro Dash", startsAt: daysFromNow(30) }),
+      ],
+      unreadable: [],
+    });
+    serve({
+      0: metadata({ location: { ...JAKARTA, ...JAKARTA_PIN } }),
+      1: metadata({ location: { ...metadata().location, ...YOGYAKARTA_PIN } }),
+    });
+  }
+
+  describe("positive", () => {
+    it("asks on the first visit, when no place has been chosen", async () => {
+      isDismissed();
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+
+      renderDirectory();
+
+      await screen.findByText("Jakarta Marathon 0");
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    });
+
+    it("gives the request a timeout, so a device that never answers is not waited on", async () => {
+      isDismissed();
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+
+      renderDirectory();
+
+      await screen.findByText("Jakarta Marathon 0");
+      const options = getCurrentPosition.mock.calls[0][2];
+      expect(options.timeout).toBeGreaterThan(0);
+    });
+
+    it("orders the races by how far away they are once the visitor allows it", async () => {
+      allows(AT_TUGU);
+      twoRaces();
+
+      renderDirectory();
+
+      const list = await screen.findByRole("region", { name: "All races" });
+      // Elektro Dash is the later of the two and still leads: it is the near one.
+      await waitFor(() => expect(listed(list)).toEqual(["Elektro Dash", "Monas Night Run"]));
+    });
+
+    it("reads Near you in the header once the visitor allows it", async () => {
+      allows(AT_TUGU);
+      twoRaces();
+
+      renderDirectory();
+
+      expect(await screen.findByRole("button", { name: "Near you" })).toBeInTheDocument();
+    });
+
+    it("lets the visitor go back to all locations from Near you", async () => {
+      allows(AT_TUGU);
+      twoRaces();
+      renderDirectory();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Near you" }));
+      const dialog = await screen.findByRole("dialog", { name: "Location" });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "All locations" }));
+
+      expect(await screen.findByRole("button", { name: "All locations" })).toBeInTheDocument();
+      const list = await screen.findByRole("region", { name: "All races" });
+      await waitFor(() => expect(listed(list)).toEqual(["Monas Night Run", "Elektro Dash"]));
+    });
+  });
+
+  describe("edge", () => {
+    it("never asks when a place is already saved", async () => {
+      isDismissed();
+      saveArea(YOGYAKARTA_AREA);
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+
+      renderDirectory();
+
+      await screen.findByText("Jakarta Marathon 0");
+      expect(getCurrentPosition).not.toHaveBeenCalled();
+    });
+
+    it("never asks a second time after a refusal", async () => {
+      // The browser spends its prompt on the first ask and remembers the
+      // answer. Asking again on every visit is how an origin gets its
+      // permission blocked for good.
+      refuses();
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+      const first = renderDirectory();
+      await screen.findByText("Jakarta Marathon 0");
+      first.unmount();
+
+      renderDirectory();
+
+      await screen.findByText("Jakarta Marathon 0");
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    });
+
+    it("never asks a second time after a prompt nobody answered", async () => {
+      // The case with no callback at all: the flag is written before the ask,
+      // or this one is asked on every single visit.
+      isDismissed();
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+      const first = renderDirectory();
+      await screen.findByText("Jakarta Marathon 0");
+      first.unmount();
+
+      renderDirectory();
+
+      await screen.findByText("Jakarta Marathon 0");
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not ask again after the visitor picks a place by hand", async () => {
+      isDismissed();
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+      renderDirectory();
+      await screen.findByText("Jakarta Marathon 0");
+
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "All locations" })).toBeInTheDocument();
+    });
+
+    it("carries on when the browser offers no location at all", async () => {
+      // No stub installed: this is an insecure origin, or an embedded browser.
+      twoRaces();
+
+      renderDirectory();
+
+      const list = await screen.findByRole("region", { name: "All races" });
+      await waitFor(() => expect(listed(list)).toEqual(["Monas Night Run", "Elektro Dash"]));
+      expect(screen.getByRole("button", { name: "All locations" })).toBeInTheDocument();
+    });
+  });
+
+  describe("negative", () => {
+    it.each([
+      ["the visitor refuses", 1],
+      ["the device has no position", 2],
+      ["the request times out", 3],
+    ])("changes nothing on the page when %s", async (_label, code) => {
+      refuses(code);
+      twoRaces();
+
+      renderDirectory();
+
+      const list = await screen.findByRole("region", { name: "All races" });
+      await waitFor(() => expect(listed(list)).toEqual(["Monas Night Run", "Elektro Dash"]));
+      expect(screen.getByRole("button", { name: "All locations" })).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      // Nothing tells the visitor off for the answer they gave, or asks again.
+      expect(screen.queryByText(/allow|denied|blocked|permission|near you/i)).not.toBeInTheDocument();
+    });
+
+    it("keeps a place chosen by hand while the prompt was still open", async () => {
+      // The deliberate answer wins over the automatic one, whichever lands last.
+      installGeolocation();
+      let answer: PositionCallback | undefined;
+      getCurrentPosition.mockImplementation((onSuccess: PositionCallback) => {
+        answer = onSuccess;
+      });
+      twoRaces();
+      renderDirectory();
+
+      await userEvent.click(await screen.findByRole("button", { name: "All locations" }));
+      const dialog = await screen.findByRole("dialog", { name: "Location" });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Apply" }));
+      await screen.findByRole("button", { name: "Indonesia" });
+
+      act(() => answer?.({ coords: { latitude: AT_TUGU.lat, longitude: AT_TUGU.lng } } as GeolocationPosition));
+
+      expect(screen.getByRole("button", { name: "Indonesia" })).toBeInTheDocument();
     });
   });
 });

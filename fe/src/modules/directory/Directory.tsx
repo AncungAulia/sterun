@@ -16,6 +16,13 @@
  * waits until every document has answered, so it is chosen once instead of
  * reshuffling as posters arrive.
  *
+ * On the first client render, a visitor with no place saved and no answer on
+ * record is asked by the browser itself where they are (Revision 4 of the same
+ * spec, 2026-09-12). Allowed, the list is ordered by how far each race really
+ * is from them and the header reads "Near you". Refused, dismissed or
+ * unanswered, the page is exactly what it was: all locations, in date order,
+ * with the picker still there. Nothing on screen says that anything was asked.
+ *
  * The place in the header sorts the page, it does not filter it: races in the
  * chosen place come first and the featured row prefers them, but every race
  * stays listed. It used to filter, which hid most of the directory behind a
@@ -40,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { useArea } from "@/hooks/useArea";
 import { useEventDocuments } from "@/hooks/useEventDocuments";
 import { eventKeys, useEvents } from "@/hooks/useEvents";
+import { useNearbyPrompt } from "@/hooks/useNearbyPrompt";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { cn } from "@/utils/cn";
 
@@ -63,8 +71,13 @@ export function Directory() {
   const { data, isPending, isError, isFetching, refetch } = useEvents();
   const summaries = data?.events ?? [];
   const documents = useEventDocuments(summaries);
-  const { area, setArea, clearArea } = useArea();
+  const { place, setPlace, clearPlace } = useArea();
   const nowS = useNowSeconds();
+
+  // Fires at most once per browser, and only with nothing saved and nothing
+  // answered. Everything it can do happens in the store, so the page itself has
+  // no state for it and no branch for a refusal.
+  useNearbyPrompt();
 
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [query, setQuery] = useState("");
@@ -80,14 +93,14 @@ export function Directory() {
   const searched = entries.filter((item) => matchesSearch(item, query));
   const results = sortByPlace(
     searched.filter((item) => matchesFilters(item, filters)),
-    area,
+    place,
     order,
     nowS ?? 0n,
   );
   const narrowing = query.trim().length > 0 || activeFilterCount(filters) > 0;
   const featured =
     !narrowing && documents.settled && nowS !== undefined
-      ? pickFeatured(entries, nowS, { place: area })
+      ? pickFeatured(entries, nowS, { place })
       : [];
 
   const heading = narrowing
@@ -114,7 +127,7 @@ export function Directory() {
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-8 sm:py-10">
       <header className="flex flex-col gap-6">
         <div className="flex items-center justify-between gap-4">
-          <AreaPicker area={area} onSave={setArea} onClear={clearArea} />
+          <AreaPicker place={place} onSave={setPlace} onClear={clearPlace} />
           <Button
             variant="ghost"
             size="icon-sm"

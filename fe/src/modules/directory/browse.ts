@@ -8,10 +8,11 @@
  */
 import type { SterunCategory } from "@sterunxyz/sdk";
 
-import type { Area } from "@/lib/area";
+import type { Area, Place } from "@/lib/area";
 import { sortEvents, type EventSummary } from "@/lib/events";
 import type { EventMetadata } from "@/lib/metadata";
 import { formatPrice } from "@/utils/format";
+import { haversineKm, type Coordinates } from "@/utils/geo";
 
 /** One race as the directory holds it: the chain's facts and, when proven, its document. */
 export interface DirectoryEntry {
@@ -43,17 +44,60 @@ function compareBigint(a: bigint, b: bigint): number {
  * ordering rather than inside it, so a group's own order is whatever the caller
  * had already decided.
  */
-function placeFirst(entries: readonly DirectoryEntry[], place: Area | null): DirectoryEntry[] {
-  if (!place) return [...entries];
+function areaFirst(entries: readonly DirectoryEntry[], area: Area): DirectoryEntry[] {
   const here: DirectoryEntry[] = [];
   const elsewhere: DirectoryEntry[] = [];
-  for (const item of entries) (inArea(item, place) ? here : elsewhere).push(item);
+  for (const item of entries) (inArea(item, area) ? here : elsewhere).push(item);
   return [...here, ...elsewhere];
 }
 
+/** The venue pin from a proven document, when it has one that is a real point. */
+function coordinatesOf(entry: DirectoryEntry): Coordinates | null {
+  const { lat, lng } = entry.document?.location ?? {};
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+/**
+ * Nearest first, then every race whose document gives no pin.
+ *
+ * A race we cannot measure goes after the ones we can, keeping the order it
+ * arrived in, which is the date order the caller had already settled. The
+ * alternative, guessing a distance for it, would rank a race by a number nobody
+ * put in the document. `sort` is stable, so two races the same distance away
+ * keep their date order too.
+ */
+function nearestFirst(entries: readonly DirectoryEntry[], at: Coordinates): DirectoryEntry[] {
+  const measured: { item: DirectoryEntry; km: number }[] = [];
+  const unmeasured: DirectoryEntry[] = [];
+  for (const item of entries) {
+    const pin = coordinatesOf(item);
+    if (pin) measured.push({ item, km: haversineKm(at, pin) });
+    else unmeasured.push(item);
+  }
+  measured.sort((a, b) => a.km - b.km);
+  return [...measured.map(({ item }) => item), ...unmeasured];
+}
+
+/**
+ * The races the visitor is closest to, then the rest, each group keeping the
+ * order it arrived in. With no place the list is returned untouched.
+ *
+ * "Closest" is whichever of the two answers there is: a province they named, or
+ * the coordinates the browser gave. Both are the same kind of preference, never
+ * a filter: the place a visitor has says what they want to see first, not what
+ * they are allowed to see. It is applied after the ordering rather than inside
+ * it, so a group's own order is whatever the caller had already decided.
+ */
+function leadWithPlace(entries: readonly DirectoryEntry[], place: Place | null): DirectoryEntry[] {
+  if (!place) return [...entries];
+  return place.mode === "nearby" ? nearestFirst(entries, place) : areaFirst(entries, place);
+}
+
 export interface FeaturedOptions {
-  /** The chosen place. Races in it fill the row first; the rest follow. */
-  place?: Area | null;
+  /** The chosen place. Races in it, or nearest to it, fill the row first. */
+  place?: Place | null;
 }
 
 /**
@@ -83,7 +127,7 @@ export function pickFeatured(
         compareBigint(a.summary.event.startsAt, b.summary.event.startsAt) ||
         a.summary.event.eventId - b.summary.event.eventId,
     );
-  return placeFirst(candidates, place).slice(0, FEATURED_LIMIT);
+  return leadWithPlace(candidates, place).slice(0, FEATURED_LIMIT);
 }
 
 /**
@@ -140,7 +184,7 @@ export function sortByDate(
 
 /**
  * The whole list: still to come first, already run below, and inside each half
- * the races in the chosen place leading.
+ * the races in the chosen place, or nearest to the visitor, leading.
  *
  * The place sorts rather than filters (Revision 3 of the directory spec): a
  * visitor who picked Yogyakarta wants those races first, but hiding the rest
@@ -153,21 +197,27 @@ export function sortByDate(
  * this?" outranks "is it near me?", so the date split decides the halves and the
  * place only decides the order within them. Within each half the date order the
  * drawer asked for still applies. No place chosen means date order alone.
+ *
+ * Coordinates take the same shape, one level down: inside each half the races
+ * are nearest first, and the ones whose document carries no pin follow in the
+ * date order they already had. A real distance is a finer key than "in this
+ * province or not", but it is not a stronger claim than "can I still enter
+ * this?", so it does not get to reorder the halves either.
  */
 export function sortByPlace(
   entries: readonly DirectoryEntry[],
-  place: Area | null,
+  place: Place | null,
   order: DateOrder,
   nowS: bigint,
 ): DirectoryEntry[] {
   const sorted = sortByDate(entries, order, nowS);
   if (!place) return sorted;
   return [
-    ...placeFirst(
+    ...leadWithPlace(
       sorted.filter((item) => item.summary.event.startsAt >= nowS),
       place,
     ),
-    ...placeFirst(
+    ...leadWithPlace(
       sorted.filter((item) => item.summary.event.startsAt < nowS),
       place,
     ),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mapsLink, parseCoordinates, parsePin } from "@/utils/geo";
+import { haversineKm, mapsLink, parseCoordinates, parsePin } from "@/utils/geo";
 
 describe("parseCoordinates", () => {
   describe("positive", () => {
@@ -157,5 +157,60 @@ describe("mapsLink", () => {
     expect(mapsLink({ lat: -6.2185, lng: 106.8026 })).toBe(
       "https://www.google.com/maps?q=-6.2185,106.8026",
     );
+  });
+});
+
+describe("haversineKm", () => {
+  // Jakarta (Monas) and Yogyakarta (Tugu), about 430 km apart in a straight
+  // line over the sphere. Held to a tenth of a kilometre, which is far tighter
+  // than the formula deserves against the real ellipsoid, but this is a guard
+  // against the formula changing rather than a survey.
+  const MONAS = { lat: -6.1754, lng: 106.8272 };
+  const TUGU = { lat: -7.7828, lng: 110.3671 };
+
+  describe("positive", () => {
+    it("measures a known distance", () => {
+      expect(haversineKm(MONAS, TUGU)).toBeCloseTo(429.6, 1);
+    });
+
+    it("gives the same answer whichever way round it is asked", () => {
+      expect(haversineKm(TUGU, MONAS)).toBeCloseTo(haversineKm(MONAS, TUGU), 9);
+    });
+
+    it("measures a degree of latitude as about 111 km, anywhere", () => {
+      expect(haversineKm({ lat: 0, lng: 0 }, { lat: 1, lng: 0 })).toBeCloseTo(111.19, 1);
+      expect(haversineKm({ lat: 59, lng: 17 }, { lat: 60, lng: 17 })).toBeCloseTo(111.19, 1);
+    });
+
+    it("orders two races by which is nearer", () => {
+      expect(haversineKm(MONAS, { lat: -6.2, lng: 106.8 })).toBeLessThan(haversineKm(MONAS, TUGU));
+    });
+  });
+
+  describe("edge", () => {
+    it("is zero for the same point, not a rounding artefact", () => {
+      // The square root of a chord that floating point pushed a hair above 1
+      // makes `asin` return NaN, and a NaN sorts nowhere at all.
+      expect(haversineKm(TUGU, TUGU)).toBe(0);
+      expect(haversineKm({ lat: 89.9999, lng: 0 }, { lat: 89.9999, lng: 0 })).toBe(0);
+    });
+
+    it("crosses the antimeridian the short way", () => {
+      // 0.2 degrees apart on the equator, not 359.8. The formula wraps on its
+      // own, so this is a guard against anyone replacing it with a subtraction.
+      expect(haversineKm({ lat: 0, lng: 179.9 }, { lat: 0, lng: -179.9 })).toBeCloseTo(22.24, 1);
+    });
+
+    it("crosses the antimeridian at a high latitude too", () => {
+      expect(haversineKm({ lat: 66, lng: 179 }, { lat: 66, lng: -179 })).toBeLessThan(100);
+    });
+
+    it("measures the poles as half the planet apart", () => {
+      expect(haversineKm({ lat: 90, lng: 0 }, { lat: -90, lng: 0 })).toBeCloseTo(20_015, 0);
+    });
+
+    it("ignores the longitude at a pole", () => {
+      expect(haversineKm({ lat: 90, lng: 0 }, { lat: 90, lng: 123 })).toBeCloseTo(0, 6);
+    });
   });
 });

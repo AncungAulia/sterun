@@ -120,3 +120,38 @@ export function parseCoordinates(input: string): Coordinates | null {
 export function mapsLink({ lat, lng }: Coordinates): string {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
+
+/** Mean Earth radius, the usual sphere the haversine formula assumes. */
+const EARTH_RADIUS_KM = 6371;
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+/**
+ * How far apart two points are, in kilometres, over a sphere.
+ *
+ * Used to order the directory once a visitor has let the browser hand over
+ * their position. A sphere is the right amount of precision here: the real
+ * Earth is an ellipsoid and Vincenty's formula would answer to the millimetre,
+ * but the question being asked is "which race is nearer", and the rounding
+ * error of a sphere is about 0.5%, far below the error in a venue pin typed
+ * into an event document.
+ *
+ * The formula wraps across the antimeridian on its own, with no special case:
+ * only the sine of half the longitude difference appears, and that is periodic,
+ * so 179.9E to 179.9W comes out as the 22 km it is rather than most of a lap.
+ * The `Math.min(1, ...)` guards the other end, where two points that are the
+ * same place can push the square root a hair above 1 through floating point and
+ * make `asin` return NaN.
+ */
+export function haversineKm(from: Coordinates, to: Coordinates): number {
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+  const deltaLat = toRadians(to.lat - from.lat);
+  const deltaLng = toRadians(to.lng - from.lng);
+  const chord =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(chord)));
+}

@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Area } from "@/lib/area";
+import type { Area, Place } from "@/lib/area";
 import { countries, countryName, provincesOf } from "@/lib/places";
 
 const DEFAULT_COUNTRY = "ID";
@@ -33,16 +33,19 @@ const DEFAULT_COUNTRY = "ID";
 const WHOLE_COUNTRY = "";
 
 interface AreaFormProps {
-  area: Area | null;
+  place: Place | null;
   onSave: (area: Area) => void;
   onClear: () => void;
 }
 
-export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
+export function AreaForm({ place, onSave, onClear }: AreaFormProps) {
+  // Coordinates name no country, so the form starts where it starts for
+  // somebody with no place at all. Applying a country replaces them.
+  const saved = place?.mode === "area" ? place : null;
   // The dialog unmounts its content when it closes, so this starts from the
   // saved place every time it opens.
-  const [country, setCountry] = useState(area?.countryCode ?? DEFAULT_COUNTRY);
-  const [province, setProvince] = useState(area?.province ?? WHOLE_COUNTRY);
+  const [country, setCountry] = useState(saved?.countryCode ?? DEFAULT_COUNTRY);
+  const [province, setProvince] = useState(saved?.province ?? WHOLE_COUNTRY);
   const name = countryName(country) ?? country;
   // The dataset lists some provinces under two ids and one name (Indonesia's
   // Maluku and Papua among them). A place is stored by name, so those rows are
@@ -51,7 +54,11 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
 
   function apply() {
     const chosen = province.trim();
-    onSave(chosen ? { countryCode: country, country: name, province: chosen } : { countryCode: country, country: name });
+    onSave(
+      chosen
+        ? { mode: "area", countryCode: country, country: name, province: chosen }
+        : { mode: "area", countryCode: country, country: name },
+    );
   }
 
   return (
@@ -105,7 +112,9 @@ export function AreaForm({ area, onSave, onClear }: AreaFormProps) {
       </div>
 
       <DialogFooter>
-        {area ? (
+        {/* The way back, from either mode: coordinates need it as much as a
+            province does, since nothing else on the page turns them off. */}
+        {place ? (
           <Button variant="ghost" onClick={onClear}>
             All locations
           </Button>

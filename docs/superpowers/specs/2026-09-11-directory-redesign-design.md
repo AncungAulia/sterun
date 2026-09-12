@@ -1,7 +1,8 @@
 # Directory redesign — poster-first `/`
 
-> **Revisions 2 and 3, at the end of this file, override the sections below where they disagree**
-> (Revision 2: 2026-09-11, after Ancung reviewed the live page; Revision 3: 2026-09-12). Read them first.
+> **Revisions 2, 3 and 4, at the end of this file, override the sections below where they disagree**
+> (Revision 2: 2026-09-11, after Ancung reviewed the live page; Revisions 3 and 4: 2026-09-12). Read
+> them first. Revision 4 in particular reverses the "No geolocation" line below.
 
 Date: 2026-09-11 · Owner: Ancung · Scope: `fe/` only (no backend, no contract change)
 
@@ -111,7 +112,9 @@ page and the wizard are considered good and are not part of this change.
 - The country name is stored with it so the header label never needs the places dataset
   (`src/data/places.json`, 176 KB, 50 KB gzipped). The dialog's form is `React.lazy`-loaded, so a
   visitor who never opens it never downloads that file.
-- No geolocation and no geocoding API.
+- No geocoding API. (Geolocation was ruled out here too; **Revision 4 reversed that** on 2026-09-12:
+  the browser's own prompt is raised on the first render, and the coordinates order the list. There
+  is still no geocoding, which is why the button reads "Near you" rather than a province name.)
 
 ## Search, sort and the filter drawer
 
@@ -261,9 +264,45 @@ These decisions override the sections above.
    list to it.
    - Later, optional: a "Use my location" button. Event documents already carry `lat`/`lng`, so real
      distances can be shown ("12 km away"). It stays opt-in, never an automatic permission prompt.
+     (**Revision 4 overrides this half**: the browser's own prompt is raised automatically on the
+     first render, and there is no button. The per-card distance is still not built.)
 3. **The map pin is read from the place, not from the map view.** `parseCoordinates` took the numbers
    after `@` in a Google Maps link. Those are the centre of the map view, which moves with panning and
    zoom, so a pinned venue landed tens of metres away (Ancung measured about 40 m for Fakultas Teknik
    UGM). The place's own coordinates are in the link's `data=` part as `!3d<lat>!4d<lng>`. Read those
    first, then `?q=`/`ll=`/`daddr=`, and only then `@` as a last resort. Events already created keep
    the coordinates they were published with: the document is frozen.
+
+---
+
+## Revision 4 — 2026-09-12
+
+**Ancung reversed the geolocation half.** The sections above say "No geolocation and no geocoding
+API" (Location picker), and Revision 3 point 2 left a location button as "later, optional, never an
+automatic permission prompt". Both are out of date from here; the rest of those sections still
+stands, and *no geocoding* is still true.
+
+1. **The browser asks on the directory's first client render.** No button, no prompt of our own. If
+   the visitor has no place saved and has never been asked, `navigator.geolocation.getCurrentPosition`
+   is called once and the browser draws its own prompt. The reason for dropping the button: a visitor
+   who has just landed on a page of races nobody near them organised has no reason to press
+   anything, and the first screen is the one that has to be useful.
+2. **Asked once, ever.** A flag is stored beside the place, and it is written *before* the answer:
+   a dismissed prompt calls neither callback, so a flag written on the way out would never be
+   written. Whatever the answer, the prompt is never raised automatically again. Browsers spend
+   their prompt once per origin and block an origin that keeps asking, so this is not politeness,
+   it is the difference between a feature that works and one that is switched off in the browser.
+3. **Allowed: the list is ordered by real distance.** The coordinates are stored in the same
+   `localStorage` key as the chosen place, in a discriminated union (`mode: "area" | "nearby"`), so
+   a province and a pair of coordinates can never both be in force. Ordering is nearest first,
+   *inside* the existing halves: races still to come stay above races already run, and a race whose
+   document carries no `lat`/`lng` keeps its date order below the ones that can be measured.
+   Distance is computed locally with a haversine helper (`fe/src/utils/geo.ts`). Nothing is sent
+   anywhere, and no per-card distance is shown yet.
+4. **Refused, dismissed, unavailable or timed out: the page does not change.** All locations, date
+   order, the manual picker exactly as it was. No banner, no error, no second ask. The request
+   carries a timeout so a device that never answers does not leave it pending.
+5. **The control at the top left reads "Near you"** while the coordinates are in use. It cannot name
+   a province, because naming one needs a geocoding service and there still is none. Opening it
+   still offers the country and province lists, applying one replaces the coordinates, and "All
+   locations" clears them.
