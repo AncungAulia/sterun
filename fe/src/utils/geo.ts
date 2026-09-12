@@ -18,12 +18,39 @@ export interface Coordinates {
 }
 
 /**
+ * Where the two numbers came from, which is not a detail: `view` is the only
+ * one that can be tens of metres out, and the wizard says so while the link is
+ * still being pasted (`StepDetails.tsx`, `PinHint`).
+ */
+export type CoordinateSource = "place" | "explicit" | "pair" | "view";
+
+export interface ParsedCoordinates {
+  coordinates: Coordinates;
+  source: CoordinateSource;
+}
+
+/**
  * `-90..90` and `-180..180`. Worth checking rather than trusting, because the
  * common mistake is a swapped pair, and a latitude of 106 is the only visible
  * symptom of it.
  */
 function inRange({ lat, lng }: Coordinates): boolean {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+/**
+ * Some share sheets and some chat apps hand over the `data=` part percent
+ * encoded, so the place pin arrives as `%213d...%214d...` and matches nothing.
+ * Decoding first is what stops such a link degrading silently to `@`. A stray
+ * `%` that is not an escape makes `decodeURIComponent` throw, and then the link
+ * is read exactly as it was pasted.
+ */
+function decoded(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
 }
 
 /**
@@ -40,43 +67,53 @@ function inRange({ lat, lng }: Coordinates): boolean {
  * that carries nothing better still deserves a rough answer, and because an
  * event document is frozen: a start that is 40 m out is permanent, but a start
  * that is missing entirely blocks the wizard.
+ *
+ * A pair that fails the range check does not end the search, it is skipped: a
+ * place pin whose numbers are reversed degrades to the next pattern, which for
+ * a full place URL is the `@` view, rather than refusing the link outright.
  */
-const PATTERNS = [
+const PATTERNS: { source: CoordinateSource; pattern: RegExp }[] = [
   // The pinned place, inside the `!8m2` group that Google writes around it.
   // https://www.google.com/maps/place/Name/@-7.7656,110.3718,17z/data=...!8m2!3d-7.76539!4d110.37254!16s...
-  /!8m2!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+  { source: "place", pattern: /!8m2!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/ },
   // The same pair without the group, for the URL shapes that omit it.
-  /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+  { source: "place", pattern: /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/ },
   // An explicit coordinate somebody put in the link themselves.
   // https://maps.google.com/?q=-6.2185,106.8026  (also ?ll= and ?daddr=)
-  /[?&](?:q|ll|daddr)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+  { source: "explicit", pattern: /[?&](?:q|ll|daddr)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/ },
   // Pasted on their own, which is what a phone's share sheet often gives.
-  /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/,
+  { source: "pair", pattern: /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/ },
   // Last: the centre of the map view. See the note above.
   // https://www.google.com/maps/place/Name/@-6.2185,106.8026,17z/...
-  /@(-?\d+\.\d+),(-?\d+\.\d+)/,
+  { source: "view", pattern: /@(-?\d+\.\d+),(-?\d+\.\d+)/ },
 ];
 
 /**
- * The pin in a pasted link, or null if there is not one.
+ * The pin in a pasted link plus where it was read from, or null if there is
+ * not one.
  *
  * A shortened link (`maps.app.goo.gl/...`) carries no coordinates until it is
  * followed, and following it from the browser is a cross origin request Google
  * refuses. Returning null is honest: the field asks for the long link.
  */
-export function parseCoordinates(input: string): Coordinates | null {
-  const text = input.trim();
-  if (!text) return null;
+export function parsePin(input: string): ParsedCoordinates | null {
+  const text = decoded(input.trim());
+  if (!text.trim()) return null;
 
-  for (const pattern of PATTERNS) {
+  for (const { source, pattern } of PATTERNS) {
     const match = pattern.exec(text);
     if (!match) continue;
     const coordinates = { lat: Number(match[1]), lng: Number(match[2]) };
     if (Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lng) && inRange(coordinates)) {
-      return coordinates;
+      return { coordinates, source };
     }
   }
   return null;
+}
+
+/** The two numbers on their own, for everything that does not care where they came from. */
+export function parseCoordinates(input: string): Coordinates | null {
+  return parsePin(input)?.coordinates ?? null;
 }
 
 /** A plain maps URL, buildable by anybody from the two numbers. */

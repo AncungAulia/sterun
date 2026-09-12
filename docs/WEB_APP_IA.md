@@ -396,15 +396,17 @@ hosted at `uri`.
   cannot quietly be swapped** for another after people have entered.
 - **Coordinates arrive through a pasted Google Maps link, not a country/province/city dropdown.**
   The console extracts `lat`/`lng` from the URL — no API, no key, no rate limit. It reads the
-  **pinned place** first (`!3d<lat>!4d<lng>` in the `data=` part), then an explicit `?q=`/`ll=`/
-  `daddr=`, then a bare pair, and only then `@-6.2185,106.8026`: the numbers after `@` are the centre
-  of the map *view*, which moves with panning and zooming, so they sit tens of metres from what the
-  organiser actually pinned. A cascade of three dropdowns answers nobody's question (what people want is **a pin
-  they can open**), and a geocoding API (Nominatim is free and keyless) adds a network dependency plus
-  an attribution obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates
-  until followed, and following one from a browser is blocked cross-origin — the console says so
-  plainly at paste time, rather than after the event is frozen. What is stored is **the two numbers**,
-  not the URL: links go stale, coordinates do not.
+  **pinned place** first (`!3d<lat>!4d<lng>` in the `data=` part, decoded first so a percent-encoded
+  link is not missed), then an explicit `?q=`/`ll=`/`daddr=`, then a bare pair, and only then
+  `@-6.2185,106.8026`: the numbers after `@` are the centre of the map *view*, which moves with
+  panning and zooming, so they sit tens of metres from what the organiser actually pinned. A cascade
+  of three dropdowns answers nobody's question (what people want is **a pin they can open**), and a
+  geocoding API (Nominatim is free and keyless) adds a network dependency plus an attribution
+  obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates until
+  followed, and following one from a browser is blocked cross-origin — the console says so plainly
+  at paste time, rather than after the event is frozen, and it says so a third way when a link
+  yielded only the map view. What is stored is **the two numbers**, not the URL: links go stale,
+  coordinates do not.
 - The `racepack` phase may carry `venue_lat` / `venue_lng` under the same rule. `venue` stays a string
   so STE-13's reader does not change meaning.
 - **`cut_off` is a time**, the last moment a finish still counts — and **the contract does not enforce

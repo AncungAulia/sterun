@@ -21,19 +21,33 @@ import { Field, TextAreaField } from "@/components/elements/Field";
 import { Section } from "@/components/elements/Section";
 import { FileField } from "@/components/elements/FileField";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/components/elements/PlaceFields";
-import { parseCoordinates } from "@/utils/geo";
+import { parsePin } from "@/utils/geo";
 
 /**
  * Says whether a pasted link actually yielded a pin, while it is being pasted.
  * The alternative is discovering it on the published event page, where the file
  * is already frozen.
+ *
+ * Three answers, because there are three outcomes and only two of them used to
+ * be told apart. A link that carries nothing but the map view still produces a
+ * point, so the old "Pin found." was most reassuring on exactly the paste that
+ * lands the start tens of metres away.
  */
 function PinHint({ link, missing }: { link: string; missing: string }) {
   // Nothing while the field is empty, and no coordinates when it works. Nobody
   // reads a latitude to check their own address, and a line that always says
   // something trains people to stop reading the one that matters.
   if (!link.trim()) return null;
-  if (!parseCoordinates(link)) return <span className="text-warning">{missing}</span>;
+  const pin = parsePin(link);
+  if (!pin) return <span className="text-warning">{missing}</span>;
+  if (pin.source === "view") {
+    return (
+      <span className="text-warning">
+        This spot is only approximate. Open the place first, so its name is showing, then copy that
+        link for the exact one.
+      </span>
+    );
+  }
   return <>Pin found.</>;
 }
 
@@ -154,7 +168,7 @@ export function StepDetails({
               missing="Search for the place, open it, then paste the long link from the address bar. A short link (maps.app.goo.gl) has no coordinates in it."
             />
           }
-          help="Search for the start location and open it so its name is showing, then copy the link. We save the point that name sits on, not wherever the map happened to be when you copied. Only those two numbers are kept, not the link itself, and they are what puts your start on a map and lets somebody find your race by looking near themselves."
+          help="Search for the start location and open it so its name is showing, then copy the link. When the link carries the place, we save the point its name sits on; when it does not, all we can save is roughly where the map was, which can be tens of metres out. Only those two numbers are kept, not the link itself, and they are what puts your start on a map and lets somebody find your race by looking near themselves."
         />
         <TextAreaField
           id="description"
