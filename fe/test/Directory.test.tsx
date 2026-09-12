@@ -408,16 +408,16 @@ describe("Directory", () => {
 
       renderDirectory();
 
-      expect(screen.queryByText(/no events/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/no races yet/i)).not.toBeInTheDocument();
       await pending.settle({ events: [], unreadable: [] });
     });
 
-    it("says the registry is empty when it really is", async () => {
+    it("says there are no races when there really are none", async () => {
       listEvents.mockResolvedValue({ events: [], unreadable: [] });
 
       renderDirectory();
 
-      expect(await screen.findByText("No events yet")).toBeInTheDocument();
+      expect(await screen.findByText("No races yet")).toBeInTheDocument();
     });
 
     it("shows an event that has no distances yet", async () => {
@@ -450,6 +450,37 @@ describe("Directory", () => {
       expect(searchbox()).toHaveValue("");
     });
 
+    it("says no race matches, not that the chosen place is empty", async () => {
+      // A place sorts the list, it never empties it, so the only thing that can
+      // leave a visitor with nothing is what they typed. Saying anything about
+      // the place here would send them to change the wrong control.
+      saveArea(YOGYAKARTA_AREA);
+      listEvents.mockResolvedValue({ events: [withDocument(0)], unreadable: [] });
+      serve({ 0: metadata() });
+      renderDirectory();
+      await screen.findByText("Jakarta Marathon 0");
+
+      await userEvent.type(searchbox(), "nowhere");
+
+      expect(await screen.findByText("No races match")).toBeInTheDocument();
+      expect(screen.queryByText(/No races in/)).not.toBeInTheDocument();
+    });
+
+    it("moves focus to the list heading after the search is cleared", async () => {
+      // The button that was pressed disappears with the empty state. Without
+      // this, focus falls back to <body> and a keyboard visitor is returned to
+      // the top of the document with no sign the races came back.
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+      renderDirectory();
+      await screen.findByText("Jakarta Marathon 0");
+      await userEvent.type(searchbox(), "nowhere");
+      await screen.findByText("No races match");
+
+      await userEvent.click(screen.getByRole("button", { name: "Clear search and filters" }));
+
+      expect(await screen.findByRole("heading", { level: 2, name: "All races" })).toHaveFocus();
+    });
+
     it("still shows every other race when the chosen place has none of its own", async () => {
       saveArea({ countryCode: "ID", country: "Indonesia", province: "Bali" });
       listEvents.mockResolvedValue({ events: [withDocument(0)], unreadable: [] });
@@ -480,21 +511,21 @@ describe("Directory", () => {
       await document.settle({ status: "verified", document: metadata() });
     });
 
-    it("mentions events the registry counted but would not return", async () => {
+    it("mentions races the directory counted but could not load", async () => {
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [3, 4] });
 
       renderDirectory();
 
-      expect(await screen.findByText(/2 events could not be read/i)).toBeInTheDocument();
+      expect(await screen.findByText(/some older races could not be loaded/i)).toBeInTheDocument();
     });
 
-    it("says nothing about unreadable events when there are none", async () => {
+    it("says nothing about unloadable races when there are none", async () => {
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
 
       renderDirectory();
 
       await screen.findByText("Jakarta Marathon 0");
-      expect(screen.queryByText(/could not be read/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
     });
   });
 
@@ -508,7 +539,7 @@ describe("Directory", () => {
       renderDirectory();
 
       expect(await screen.findByRole("alert")).toBeInTheDocument();
-      expect(screen.queryByText("No events yet")).not.toBeInTheDocument();
+      expect(screen.queryByText("No races yet")).not.toBeInTheDocument();
 
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
       await userEvent.click(screen.getByRole("button", { name: /try again/i }));

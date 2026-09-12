@@ -228,7 +228,7 @@ export async function signMessage(
       ).signedMessage;
   if (!signedMessage) {
     throw new Error(
-      "This wallet cannot sign messages. Freighter and xBull can; try one of those.",
+      "This wallet cannot approve uploads. Try Freighter or xBull instead.",
     );
   }
   return signedMessage;

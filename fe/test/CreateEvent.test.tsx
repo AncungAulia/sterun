@@ -238,11 +238,11 @@ async function startRun(user: ReturnType<typeof userEvent.setup>) {
 }
 
 /**
- * Open the raw file on the review. It lives in the preview's Proofs tab now,
+ * Open the raw file on the review. It lives in the preview's Verification tab
  * where a reader of the published page looks for it.
  */
 async function openPublishedFile(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("tab", { name: "Proofs" }));
+  await user.click(screen.getByRole("tab", { name: "Verification" }));
   await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
 }
 

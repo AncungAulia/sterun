@@ -11,10 +11,11 @@ Owner: **Ancung** (flow) + **Nabil** (design system). Components C9/C10/C11/C12.
 STE-24 (profile).
 
 `/events/[id]` has been **revamped** (part of STE-17): the poster and a decision card at the top,
-then six tabs — Details, Terms, Timeline, Distances, Race pack, Proofs. One rule governs the split:
-**what comes from the chain versus what comes from the document**. The decision card is entirely
-chain; the tabs are reading material. A document that fails its hash check is **withheld from every
-tab**, and the difference between `modified` and `unavailable` is explained only in **Proofs**.
+then six tabs — Details, Terms, Timeline, Distances, Race pack, Verification. One rule governs the
+split: **what comes from the chain versus what comes from the document**. The decision card is
+entirely chain; the tabs are reading material. A document that fails its hash check is **withheld
+from every tab**, and the difference between `modified` and `unavailable` is explained only in
+**Verification**.
 
 The installed stack: **Next.js 16.3.3**, React 19.2.8, Tailwind v4 (`@tailwindcss/postcss`),
 TypeScript 5 (`target: ES2022` — contract `i128` prices arrive as `bigint`, and `bigint` literals do
@@ -163,7 +164,7 @@ that were added are not that:
   **The preview draws no Enter button at all**, neither on the right-hand card, nor on a distance
   card, nor in the timeline (`EventView preview` → an empty `onEnter` + `offerEntry={false}`): the
   event does not exist yet, and a link out of the wizard throws away everything typed. The raw file
-  and its fingerprint move to the preview's **Proofs** tab. The **Create event** button sits at the
+  and its fingerprint move to the preview's **Verification** tab. The **Create event** button sits at the
   bottom right like every other step, and opens a **Dialog** holding the **whole run**: the list of
   signatures, their ticks, their failures, and the way out. Starting it is a second press. The dialog
   cannot be closed while it runs, and closes itself when it finishes.
@@ -366,9 +367,17 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   people have joined". What must **not** be softened: warnings that have a cost (a name cannot be
   changed, a category cannot be deleted, a detail file cannot be added later) — those stay stated
   plainly.
-  A deliberate exception: **the public event page** still says hash and chain, because the sentence
-  "this document matches the hash on chain" is the very claim this product exists for, and its reader
-  is someone who is checking.
+  **There is no exempt page** (Ancung, 2026-09-11). The public event page used to be one, on the
+  grounds that "this document matches the hash on chain" is the very claim this product exists for.
+  It was reversed because of who reads it: a runner deciding whether to pay, who cannot check a
+  sentence they cannot parse, so the words proved nothing to the person they were aimed at. That tab
+  is now **Verification**, and every verdict in it is a plain sentence ("These race details are
+  exactly what the organiser published when the race was created"). The material an auditor really
+  compares — the two fingerprints and the link to the details file — is still there in full, one
+  press away behind a native `<details>` labelled **Show technical details**. The `ChainSource`
+  footer, which printed the registry address, the network passphrase and the RPC url under `/` and
+  `/events/[id]`, is **deleted**: it was the same claim made to the same reader, with nothing on the
+  page to act on it.
 - **Every path towards paying must pass a `NonRefundableNotice`** (STE-38, from Axel's decision in
   STE-34). `enter` transfers the fee straight from runner to organiser with no escrow, so the
   contract never holds the money and no refund can be forced by anyone. The text stands directly

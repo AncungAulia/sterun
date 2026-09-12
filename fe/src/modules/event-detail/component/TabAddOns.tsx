@@ -210,11 +210,13 @@ function AddOnDialog({ joined }: { joined: JoinedAddOn }) {
                     return (
                       <tr key={size.label} className="border-t border-n-200">
                         <td className="py-1.5 pr-4">{size.label}</td>
-                        <td className="py-1.5 pr-4">{size.chestCm ?? "\u2014"}</td>
-                        <td className="py-1.5 pr-4">{size.lengthCm ?? "\u2014"}</td>
+                        {/* A dash is banned in UI text, and a blank cell reads
+                            as a table that failed to load. */}
+                        <td className="py-1.5 pr-4">{size.chestCm ?? "Not given"}</td>
+                        <td className="py-1.5 pr-4">{size.lengthCm ?? "Not given"}</td>
                         <td className="py-1.5">
                           {row === undefined ? (
-                            "\u2014"
+                            <span className="text-n-500">Not known</span>
                           ) : row.unitsLeft > 0 ? (
                             row.unitsLeft
                           ) : (

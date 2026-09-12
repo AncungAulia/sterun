@@ -1,6 +1,5 @@
 /**
- * What the directory shows while the chain is being read, and while a chosen
- * place waits for the documents that say where each race is.
+ * What the directory shows while the races are being read.
  *
  * A public testnet node takes a second or two to answer, and every id is a
  * separate simulation, so this is not a rare frame. Shaped like the cards it
@@ -17,7 +16,7 @@ export function DirectorySkeleton() {
   return (
     <div
       role="status"
-      aria-label="Reading events from the chain"
+      aria-label="Loading races"
       className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
     >
       {CARDS.map((card) => (

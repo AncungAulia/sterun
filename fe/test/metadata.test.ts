@@ -351,7 +351,7 @@ describe("fetchEventMetadata deadline", () => {
 
     expect(result).toEqual({
       status: "unavailable",
-      reason: "The metadata document took too long to answer.",
+      reason: "The race details took too long to load.",
     });
   });
 });

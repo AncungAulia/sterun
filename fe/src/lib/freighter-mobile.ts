@@ -114,7 +114,7 @@ export function freighterMobileSession(config: FreighterMobileConfig): Freighter
         });
         if (!session) throw new Error("Connection cancelled.");
         const address = accountOf(session);
-        if (!address) throw new Error("Freighter did not return an account.");
+        if (!address) throw new Error("Your wallet did not share an account. Please try again.");
         return address;
       } finally {
         modal.close();
@@ -129,7 +129,7 @@ export function freighterMobileSession(config: FreighterMobileConfig): Freighter
     async request<T>(method: string, params: Record<string, string>) {
       const { provider } = await open();
       if (!provider.session) {
-        throw new Error("No WalletConnect session found. Connect your wallet again.");
+        throw new Error("Your wallet is no longer connected. Please connect it again.");
       }
       return provider.request<T>({ method, params }, config.chain);
     },

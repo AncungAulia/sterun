@@ -62,7 +62,7 @@ export function useChainWrite<TArgs, TValue>(
         // Refused here rather than passed on. The SDK would happily build and
         // simulate a call for `undefined`, and fail later with something that
         // reads like a network problem.
-        throw new Error("Connect a wallet before signing this transaction.");
+        throw new Error("Connect your wallet first.");
       }
 
       setPhase("signing");

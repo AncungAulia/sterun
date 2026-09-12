@@ -376,8 +376,8 @@ describe("EventDetail", () => {
 
       expect(await screen.findByText("Two laps of the temple.")).toBeInTheDocument();
 
-      await showTab(/proofs/i);
-      expect(screen.getByText(/hashes to exactly/i)).toBeInTheDocument();
+      await showTab(/verification/i);
+      expect(screen.getByText(/exactly what the organiser published/i)).toBeInTheDocument();
     });
   });
 
@@ -471,8 +471,8 @@ describe("EventDetail", () => {
 
       expect(await screen.findByText("Borobudur Marathon")).toBeInTheDocument();
 
-      await showTab(/proofs/i);
-      expect(screen.getByText(/could not be read/i)).toBeInTheDocument();
+      await showTab(/verification/i);
+      expect(screen.getByText(/could not be loaded/i)).toBeInTheDocument();
     });
 
     it("warns when the document disagrees with the chain about the start time", async () => {
@@ -483,9 +483,9 @@ describe("EventDetail", () => {
       } satisfies MetadataResult);
 
       renderDetail();
-      await showTab(/proofs/i);
+      await showTab(/verification/i);
 
-      expect(await screen.findByText(/disagrees with the chain/i)).toBeInTheDocument();
+      expect(await screen.findByText("The schedule shows a different start time")).toBeInTheDocument();
     });
   });
 
@@ -507,10 +507,15 @@ describe("EventDetail", () => {
       } satisfies MetadataResult);
 
       renderDetail();
-      await showTab(/proofs/i);
+      await showTab(/verification/i);
 
-      expect(await screen.findByText(/has been changed/i)).toBeInTheDocument();
+      expect(await screen.findByText(/have been changed/i)).toBeInTheDocument();
       expect(screen.queryByText("Two laps of the temple.")).not.toBeInTheDocument();
+      // The fingerprints somebody would compare by hand are still printed, but
+      // behind the disclosure rather than in front of a runner.
+      expect(screen.getByText("Show technical details")).toBeInTheDocument();
+      expect(screen.getAllByText("a".repeat(64)).length).toBeGreaterThan(0);
+      expect(screen.getByText("b".repeat(64))).toBeInTheDocument();
     });
   });
 });

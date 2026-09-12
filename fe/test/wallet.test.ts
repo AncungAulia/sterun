@@ -258,7 +258,7 @@ describe("inside the Freighter mobile browser", () => {
       provider.connect.mockResolvedValue({ namespaces: { stellar: { accounts: [] } } });
       const wallet = await loadWallet();
 
-      await expect(wallet.connectWallet()).rejects.toThrow(/did not return an account/i);
+      await expect(wallet.connectWallet()).rejects.toThrow(/did not share an account/i);
     });
 
     it("closes the prompt when pairing throws, so it does not hang over the page", async () => {
@@ -306,7 +306,7 @@ describe("inside the Freighter mobile browser", () => {
       const wallet = await loadWallet();
 
       await expect(wallet.signTransaction("unsigned-xdr")).rejects.toThrow(
-        /no walletconnect session/i,
+        /no longer connected/i,
       );
       expect(provider.request).not.toHaveBeenCalled();
     });
@@ -330,7 +330,7 @@ describe("inside the Freighter mobile browser", () => {
       provider.request.mockResolvedValue({ signature: undefined });
       const wallet = await loadWallet();
 
-      await expect(wallet.signMessage("nonce-abc")).rejects.toThrow(/cannot sign messages/i);
+      await expect(wallet.signMessage("nonce-abc")).rejects.toThrow(/cannot approve uploads/i);
     });
   });
 
@@ -508,7 +508,7 @@ describe("signMessage", () => {
       kit.signMessage.mockResolvedValue({ signedMessage: undefined });
       const wallet = await loadWallet();
 
-      await expect(wallet.signMessage("nonce-abc")).rejects.toThrow(/cannot sign messages/i);
+      await expect(wallet.signMessage("nonce-abc")).rejects.toThrow(/cannot approve uploads/i);
     });
   });
 });

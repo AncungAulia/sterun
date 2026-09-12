@@ -12,10 +12,19 @@
  *   modified     they do not, and the document is withheld everywhere
  *   unavailable  there was nothing to check
  *
- * The hashes are printed in full for the modified case rather than summarised.
- * Somebody reading that is about to compare them by hand, and half a hash is
- * no use for that.
+ * The wording is a runner's, not a developer's (2026-09-11: no page shows
+ * technical wording). What a runner needs from this tab is the verdict, and
+ * every verdict here is a plain sentence. The raw material behind it, the
+ * fingerprints and the file itself, sits in a disclosure below: it is what
+ * somebody auditing the race compares by hand, and half of them would not
+ * recognise a hash, so it is one press away rather than in the way.
+ *
+ * The fingerprints are printed in full for the modified case rather than
+ * summarised. Somebody reading that is about to compare them by hand, and half
+ * a fingerprint is no use for that.
  */
+import type { ReactNode } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { CONTRACTS, EXPLORER_BASE } from "@/lib/env";
 import { gunStartConflict, type MetadataResult } from "@/lib/metadata";
@@ -37,6 +46,15 @@ function Contract({ label, id }: { label: string; id: string }) {
       ) : (
         <span className="numeric text-sm break-all text-foreground">{id}</span>
       )}
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-n-200 py-3 last:border-b-0">
+      <dt className="w-40 shrink-0 text-sm text-n-500">{label}</dt>
+      <dd className="text-sm break-all">{children}</dd>
     </div>
   );
 }
@@ -67,14 +85,14 @@ export function TabProofs({
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <h2 className="heading-strong text-lg text-foreground">The event document</h2>
+        <h2 className="heading-strong text-lg text-foreground">Race details</h2>
 
         {result?.status === "verified" ? (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Badge variant="success">Document verified</Badge>
+            <Badge variant="success">Details verified</Badge>
             <p className="text-base text-n-600">
-              The file served at this race{"'"}s address hashes to exactly what the organiser
-              committed to on chain.
+              These race details are exactly what the organiser published when the race was
+              created. Nothing has been changed.
             </p>
           </div>
         ) : null}
@@ -85,11 +103,11 @@ export function TabProofs({
             className="mt-3 rounded-lg border border-warning-border bg-warning-surface px-5 py-4"
           >
             <p className="heading-strong text-base text-warning">
-              The document disagrees with the chain about the start
+              The schedule shows a different start time
             </p>
             <p className="mt-1 text-base text-n-700">
-              Its schedule names a different gun start from the one the contract holds. The
-              contract is what this page shows, because it is the one nobody can rewrite.
+              The schedule lists a different start time from the one saved when the race was
+              created. This page shows the saved time, because it cannot be changed.
             </p>
           </div>
         ) : null}
@@ -99,25 +117,21 @@ export function TabProofs({
             role="alert"
             className="mt-3 rounded-lg border border-danger-border bg-danger-surface px-5 py-4"
           >
-            <p className="heading-strong text-base text-danger">This document has been changed</p>
-            <p className="mt-1 text-base text-n-700">
-              What was committed on chain and what is served today are not the same bytes, so
-              nothing from the document is shown anywhere on this page.
+            <p className="heading-strong text-base text-danger">
+              These race details have been changed
             </p>
-            <dl className="mt-3 grid gap-x-4 text-sm sm:grid-cols-[auto_1fr]">
-              <dt className="text-n-500">On chain</dt>
-              <dd className="numeric break-all text-n-700">{result.expectedHash}</dd>
-              <dt className="text-n-500">Served now</dt>
-              <dd className="numeric break-all text-n-700">{result.actualHash}</dd>
-            </dl>
+            <p className="mt-1 text-base text-n-700">
+              The details online today are not the ones the organiser published, so none of them
+              are shown on this page.
+            </p>
           </div>
         ) : null}
 
         {result === undefined || result.status === "unavailable" ? (
           <div className="mt-3 rounded-lg border border-n-200 bg-n-50 px-5 py-4">
             <p className="text-base text-n-600">
-              The document could not be read, so this page shows only what is on chain. The race,
-              its distances and their quotas are unaffected.
+              The race details could not be loaded, so this page shows only the basics. The race,
+              its distances and places left are not affected.
             </p>
             {result?.status === "unavailable" ? (
               <p className="mt-1 text-sm text-n-500">{result.reason}</p>
@@ -125,36 +139,51 @@ export function TabProofs({
           </div>
         ) : null}
 
-        <dl className="mt-4">
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-n-200 py-3">
-            <dt className="w-40 shrink-0 text-sm text-n-500">Committed hash</dt>
-            <dd className="numeric text-sm break-all text-foreground">{metadataHash}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3">
-            <dt className="w-40 shrink-0 text-sm text-n-500">Served at</dt>
-            <dd className="text-sm break-all">
-              <a
-                href={uri}
-                target="_blank"
-                rel="noreferrer"
-                className="text-teal-500 underline underline-offset-4"
-              >
-                {uri}
-              </a>
-            </dd>
-          </div>
-        </dl>
+        {/*
+          A native <details>: it opens with a keyboard, it is in the tab order
+          without anything being wired up, and a page that prints fingerprints
+          is the last place to reimplement a disclosure badly.
+        */}
+        <details className="mt-4 rounded-lg border border-n-200 px-5 py-3">
+          <summary className="cursor-pointer text-sm text-n-600">Show technical details</summary>
+          <dl className="mt-2">
+            {result?.status === "modified" ? (
+              <>
+                <Row label="Published fingerprint">
+                  <span className="numeric text-n-700">{result.expectedHash}</span>
+                </Row>
+                <Row label="Current fingerprint">
+                  <span className="numeric text-n-700">{result.actualHash}</span>
+                </Row>
+              </>
+            ) : null}
+            <Row label="Fingerprint">
+              <span className="numeric text-foreground">{metadataHash}</span>
+            </Row>
+            {uri ? (
+              <Row label="Details file">
+                <a
+                  href={uri}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-teal-500 underline underline-offset-4"
+                >
+                  {uri}
+                </a>
+              </Row>
+            ) : null}
+          </dl>
+        </details>
       </section>
 
       <section>
-        <h2 className="heading-strong text-lg text-foreground">The contracts</h2>
+        <h2 className="heading-strong text-lg text-foreground">Public records</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Everything above that is not the document was read from these. They are public, so none
-          of it has to be taken on this page{"'"}s word.
+          Anyone can check this race independently with the links below.
         </p>
         <div className="mt-2">
-          <Contract label="EventRegistry" id={CONTRACTS.eventRegistry} />
-          <Contract label="RaceRecord" id={CONTRACTS.raceRecord} />
+          <Contract label="Race listing" id={CONTRACTS.eventRegistry} />
+          <Contract label="Race records" id={CONTRACTS.raceRecord} />
         </div>
       </section>
     </div>

@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     template: "%s · Sterun",
   },
   description:
-    "Verified race records on Stellar. Entries, race pack collection and finish results are recorded on-chain and bound to the runner.",
+    "Find races, enter them, and keep a trusted record of every finish.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

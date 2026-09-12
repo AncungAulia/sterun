@@ -31,11 +31,10 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCwIcon, SearchIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
-import { ChainSource } from "@/components/layouts/ChainSource";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useArea } from "@/hooks/useArea";
@@ -68,6 +67,7 @@ export function Directory() {
   const { area, setArea, clearArea } = useArea();
   const nowS = useNowSeconds();
 
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [order, setOrder] = useState<DateOrder>("soonest");
@@ -102,6 +102,13 @@ export function Directory() {
   function clearNarrowing() {
     setQuery("");
     setFilters(NO_FILTERS);
+    // Focus follows the change the press made. The button that was focused is
+    // about to be removed with the empty state, and focus would otherwise fall
+    // back to <body>, leaving a keyboard visitor at the top of the document
+    // with no idea the list came back. Moved from the handler rather than an
+    // effect: the heading is already on screen, so there is nothing to wait
+    // for, and React Compiler does not allow the effect version.
+    headingRef.current?.focus();
   }
 
   return (
@@ -155,16 +162,15 @@ export function Directory() {
 
       {isError ? (
         <ErrorNotice
-          title="The event registry could not be read"
-          detail="This is a network or node problem, not an empty directory. The races are still on chain."
+          title="We could not load the races"
+          detail="This is a connection problem, not an empty list. Please try again."
           onRetry={() => void refetch()}
         />
       ) : null}
 
       {data && data.events.length === 0 ? (
-        <EmptyState title="No events yet">
-          The registry on this network holds no events. One created with the organiser console shows
-          up here on the next refresh.
+        <EmptyState title="No races yet">
+          New races appear here as soon as they are published.
         </EmptyState>
       ) : null}
 
@@ -174,7 +180,13 @@ export function Directory() {
 
           <section aria-labelledby="directory-list" className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <h2 id="directory-list" className="heading-strong text-2xl text-ink">
+              <h2
+                id="directory-list"
+                ref={headingRef}
+                // Not in the tab order, but a target focus can be moved to.
+                tabIndex={-1}
+                className="heading-strong text-2xl text-ink"
+              >
                 {heading}
               </h2>
               {area && !narrowing ? (
@@ -197,13 +209,8 @@ export function Directory() {
       ) : null}
 
       {data && data.unreadable.length > 0 ? (
-        <p className="text-sm text-n-500">
-          {data.unreadable.length} events could not be read from the registry. Ledger entries expire
-          on Soroban, so an old event may need its state restored before it can be shown again.
-        </p>
+        <p className="text-sm text-n-500">Some older races could not be loaded right now.</p>
       ) : null}
-
-      <ChainSource />
     </div>
   );
 }

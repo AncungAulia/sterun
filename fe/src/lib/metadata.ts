@@ -120,24 +120,24 @@ export async function fetchEventMetadata(
   uri: string,
   expectedHash: string,
 ): Promise<MetadataResult> {
-  if (!uri) return { status: "unavailable", reason: "This event has no metadata document." };
+  if (!uri) return { status: "unavailable", reason: "This race has no published details." };
 
   let body: string;
   try {
     const response = await fetch(uri, { signal: AbortSignal.timeout(METADATA_TIMEOUT_MS) });
     if (!response.ok) {
-      return { status: "unavailable", reason: `The metadata document returned ${response.status}.` };
+      return { status: "unavailable", reason: "The race details could not be loaded." };
     }
     body = await response.text();
   } catch (error) {
     if (typeof error === "object" && error !== null && "name" in error && error.name === "TimeoutError") {
-      return { status: "unavailable", reason: "The metadata document took too long to answer." };
+      return { status: "unavailable", reason: "The race details took too long to load." };
     }
     // The message is deliberately not the browser's. A failed cross-origin
     // fetch reports "Failed to fetch" whether the host is down, the domain
     // never resolved, or CORS blocked it, and repeating that tells nobody
     // anything.
-    return { status: "unavailable", reason: "The metadata document could not be reached." };
+    return { status: "unavailable", reason: "The race details could not be loaded." };
   }
 
   const actualHash = await sha256Hex(body);
@@ -147,10 +147,10 @@ export async function fetchEventMetadata(
 
   const document = readEventDocument(body);
   if (document === "not-json") {
-    return { status: "unavailable", reason: "The metadata document is not valid JSON." };
+    return { status: "unavailable", reason: "The race details file is damaged." };
   }
   if (document === "not-object") {
-    return { status: "unavailable", reason: "The metadata document is not an object." };
+    return { status: "unavailable", reason: "The race details file is damaged." };
   }
 
   return { status: "verified", document };
