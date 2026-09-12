@@ -163,16 +163,19 @@ that were added are not that:
   and it drifted silently (the description lost its line breaks while the public page kept them).
   **The preview draws no Enter button at all**, neither on the right-hand card, nor on a distance
   card, nor in the timeline (`EventView preview` → an empty `onEnter` + `offerEntry={false}`): the
-  event does not exist yet, and a link out of the wizard throws away everything typed. The raw file
-  and its fingerprint move to the preview's **Verification** tab. The **Create event** button sits at the
+  event does not exist yet, and a link out of the wizard throws away everything typed. The preview's
+  **Verification** tab holds one sentence saying what it will be for: it used to print the file
+  itself and the first half of its fingerprint, and neither meant anything to the person on that
+  screen, who typed all of it into the form a moment ago. The **Create event** button sits at the
   bottom right like every other step, and opens a **Dialog** holding the **whole run**: the list of
   signatures, their ticks, their failures, and the way out. Starting it is a second press. The dialog
-  cannot be closed while it runs, and closes itself when it finishes.
+  cannot be closed while it runs, and closes itself when it finishes. The dialog says **"Your wallet
+  will ask you {n} times"**, not a count of signatures, and the button that begins is **Start**.
 - **There is no "create the event without a document".** There used to be, and it was a trap: what it
   produced was not an emergency event but a permanently broken one (a page with no poster, location
   or schedule, forever — the hash is committed by `create_event` and there is no `update_event`),
-  offered exactly when someone was already frustrated. If publishing fails there is one way out:
-  **host the file yourself**, which still produces a whole event.
+  offered exactly when someone was already frustrated. If publishing fails there is one way out,
+  **Put the details online yourself** (`DocumentFallback`), which still produces a whole event.
 - `component/StepAddOns.tsx` — the race pack's contents, in **two lists**: what is included with the
   ticket, and what is sold on top. Both are written to the chain; the only difference is the price,
   because a free add-on is legitimate (`price_usdc == 0`) so a race can give something away **and**
@@ -183,7 +186,8 @@ that were added are not that:
   the wallet SDK into a module that only counts jerseys. **Stock is per size**: the contract holds one
   quota per add-on, so `EVENT_JERSEY_M` is its own row, and that is the only way "size M is sold out"
   can be true. Its `Symbol` code is **derived** from the name plus the size rather than typed, but it
-  is still **displayed** on the item's row: nobody types it and the result is permanent.
+  is still **displayed** on the item's row, under "Saved as": nobody types it and the result is
+  permanent.
 - `component/DocumentFallback.tsx` — rendered only after a publish fails.
 - `component/FileField.tsx` (in `components/elements/`) — the poster and waiver. Uploads when a file
   is chosen. Its `ACCEPTED` mirrors `be/src/files/content-type.ts`; **SVG is deliberately absent and
@@ -378,6 +382,24 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   footer, which printed the registry address, the network passphrase and the RPC url under `/` and
   `/events/[id]`, is **deleted**: it was the same claim made to the same reader, with nothing on the
   page to act on it.
+  The organiser console and the wizard followed (R5b): a distance's **Code** is a **Short name**,
+  stock is "at least 1" rather than "the contract will not take zero", an add-on's permanent code is
+  shown under **Saved as**, the way out of a failed publish is **Put the details online yourself**,
+  and the receipts on the Done step are headed **Receipts**. What stayed, verbatim, is every warning
+  that costs something: the name and the start cannot be changed, a distance cannot be removed, the
+  terms cannot be edited, stock cannot be added later.
+- **No error reaches the screen as it was thrown** (`src/lib/errors.ts`). `friendlyError` is the one
+  mapping, pure and unit-tested: a contract revert is decoded with `classifyContractError` from
+  `@sterunxyz/sdk` and matched by band **and** variant (both contracts own a `NotInitialized`), a
+  declined prompt reads as a cancellation, and everything else becomes "Something went wrong. Please
+  try again." A variant with no sentence of its own falls to that fallback on purpose: naming
+  `InvalidDistance` at an organiser helps nobody. **Do not string-match an error in a component**,
+  and do not edit `sdk/` to fix wording, since it is published and owned elsewhere.
+  What this app writes for the reader itself is thrown as a **`PlainError`**
+  (`src/lib/plain-error.ts`) and passes through untouched, as does an `ApiError`, whose message
+  `lib/api.ts` already writes for the screen. `PlainError` lives in a file of its own, with no
+  imports, because `lib/wallet.ts` throws one and pulling the whole Stellar SDK into that module
+  graph put nearly two seconds on the wallet tests.
 - **Every path towards paying must pass a `NonRefundableNotice`** (STE-38, from Axel's decision in
   STE-34). `enter` transfers the fee straight from runner to organiser with no escrow, so the
   contract never holds the money and no refund can be forced by anyone. The text stands directly

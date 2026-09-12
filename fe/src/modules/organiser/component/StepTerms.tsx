@@ -69,7 +69,7 @@ export function StepTerms({ terms, onChange }: StepTermsProps) {
     <div className="flex flex-col gap-8">
       <Section
         title="Terms and conditions"
-        note="Published with the event and covered by its fingerprint, so nobody can change the rules after people have entered."
+        note="Published with the event, so nobody can change the rules after people have entered."
       >
         <div className="rounded-lg border border-warning-border bg-warning-surface px-4 py-3">
           <p className="text-base text-warning">
@@ -89,8 +89,8 @@ export function StepTerms({ terms, onChange }: StepTermsProps) {
         />
 
         <p className="text-sm text-n-500">
-          Optional, and left out of the document entirely if you skip it. Most races publish one,
-          and a race that publishes nothing gives a runner nothing to hold you to either.
+          Optional. Most races publish terms, and without them a runner has nothing to hold you
+          to.
         </p>
       </Section>
     </div>

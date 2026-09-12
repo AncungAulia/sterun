@@ -100,8 +100,8 @@ describe("addOnProblem", () => {
     });
 
     it("refuses stock of zero on an item without sizes", () => {
-      expect(addOnProblem(tumbler({ stock: "0" }))).toMatch(/will not take zero/i);
-      expect(addOnProblem(tumbler({ stock: "12.5" }))).toMatch(/will not take zero/i);
+      expect(addOnProblem(tumbler({ stock: "0" }))).toMatch(/at least 1/i);
+      expect(addOnProblem(tumbler({ stock: "12.5" }))).toMatch(/at least 1/i);
     });
 
     it("refuses something sold on top with no price", () => {

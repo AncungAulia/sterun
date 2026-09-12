@@ -125,7 +125,7 @@ async function fillDistances(
     terms,
   }: { code?: string; price?: string; terms?: string } = {},
 ) {
-  await user.type(screen.getByLabelText(/^Code/), code);
+  await user.type(screen.getByLabelText(/^Short name/), code);
   await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
   await user.type(screen.getByLabelText(/Maximum entries/), "300");
   if (price) await user.type(screen.getByLabelText(/Entry fee in sUSD/), price);
@@ -234,16 +234,19 @@ async function fillAddOn(
  */
 async function startRun(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Create event" }));
-  await user.click(await screen.findByRole("button", { name: /start signing/i }));
+  await user.click(await screen.findByRole("button", { name: "Start" }));
 }
 
 /**
- * Open the raw file on the review. It lives in the preview's Verification tab
- * where a reader of the published page looks for it.
+ * Open one tab of the event page the review draws.
+ *
+ * The review used to offer the file itself, and these tests read the document
+ * out of it. It does not any more: an organiser checks their race by reading
+ * the page, not a page of braces, so what the document says is checked through
+ * the preview that is built from it.
  */
-async function openPublishedFile(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("tab", { name: "Verification" }));
-  await user.click(screen.getByRole("button", { name: /show the file we will publish/i }));
+async function openPreviewTab(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(screen.getByRole("tab", { name }));
 }
 
 beforeEach(() => {
@@ -277,11 +280,11 @@ describe("CreateEvent", () => {
 
       // Not on the page until it is asked for: it is the one thing here that
       // has to be read, and a block on a long page is read by nobody.
-      expect(screen.queryByText(/takes 4 signatures/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ask you 4 times/i)).not.toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Create event" }));
 
-      expect(await screen.findByText(/takes 4 signatures/i)).toBeInTheDocument();
+      expect(await screen.findByText(/ask you 4 times/i)).toBeInTheDocument();
       expect(screen.getByText("Publish the event details")).toBeInTheDocument();
       expect(screen.getByText('Create "Jakarta Sunrise 10K"')).toBeInTheDocument();
       expect(screen.getByText("Add the 10K")).toBeInTheDocument();
@@ -376,7 +379,7 @@ describe("CreateEvent", () => {
 
       await startRun(user);
 
-      expect(await screen.findByRole("alert")).toHaveTextContent(/could not be read back/i);
+      expect(await screen.findByRole("alert")).toHaveTextContent(/could not be checked/i);
       expect(createEvent).not.toHaveBeenCalled();
     });
 
@@ -455,12 +458,12 @@ describe("CreateEvent", () => {
       const { user } = await renderForm();
       await reachReview(user);
 
-      expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Link to your file")).not.toBeInTheDocument();
 
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
 
-      expect(await screen.findByLabelText("Published URL")).toBeInTheDocument();
+      expect(await screen.findByLabelText("Link to your file")).toBeInTheDocument();
     });
 
     it("never offers to create an event with no details at all", async () => {
@@ -483,14 +486,14 @@ describe("CreateEvent", () => {
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
-      await screen.findByLabelText("Published URL");
+      await screen.findByLabelText("Link to your file");
 
-      await user.type(screen.getByLabelText("Published URL"), "https://example.test/event.json");
+      await user.type(screen.getByLabelText("Link to your file"), "https://example.test/event.json");
       await user.click(screen.getByRole("button", { name: "Check the published file" }));
 
       // A checked url satisfies that step, so the way out folds away and the
       // list above shows the first line as done.
-      await waitFor(() => expect(screen.queryByLabelText("Published URL")).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByLabelText("Link to your file")).not.toBeInTheDocument());
       await user.click(screen.getByRole("button", { name: "Carry on" }));
 
       await screen.findByText(/your race is live/i);
@@ -507,10 +510,10 @@ describe("CreateEvent", () => {
       await reachReview(user);
       uploadEventFile.mockRejectedValueOnce(new Error("The store is unreachable"));
       await startRun(user);
-      await screen.findByLabelText("Published URL");
+      await screen.findByLabelText("Link to your file");
 
       fetchEventMetadata.mockResolvedValue({ status: "modified", actualHash: "f".repeat(64) });
-      await user.type(screen.getByLabelText("Published URL"), "https://example.test/event.json");
+      await user.type(screen.getByLabelText("Link to your file"), "https://example.test/event.json");
       await user.click(screen.getByRole("button", { name: "Check the published file" }));
 
       expect(await screen.findByText(/showing a different file/i)).toBeInTheDocument();
@@ -530,11 +533,17 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
-      await openPublishedFile(user);
+      await openPreviewTab(user, "Race pack");
 
-      const file = await screen.findByText(/"add_ons"/);
-      expect(file).toHaveTextContent(/"name": "Event jersey"/);
-      expect(file).toHaveTextContent(/"included_in": \[\s*"10K"/);
+      const preview = screen.getByRole("region", { name: /preview of your event page/i });
+      expect(within(preview).getByText("Event jersey")).toBeInTheDocument();
+
+      // Which distances it belongs to is the whole model: an add-on is not a
+      // product with a price, it is what a ticket already buys.
+      await user.click(within(preview).getByRole("button", { name: /view details/i }));
+      const details = await screen.findByRole("dialog");
+      expect(within(details).getByText("Available for")).toBeInTheDocument();
+      expect(within(details).getByText("10K")).toBeInTheDocument();
     });
 
     it("seeds a size chart when the item is one people wear", async () => {
@@ -561,9 +570,9 @@ describe("CreateEvent", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       fetchEventMetadata.mockResolvedValue({ status: "verified", document: {} });
 
-      await openPublishedFile(user);
+      await openPreviewTab(user, "Race pack");
 
-      expect(await screen.findByText(/"name": "Meal ticket"/)).toBeInTheDocument();
+      expect(await screen.findByText("Meal ticket")).toBeInTheDocument();
     });
 
     it("leaves a tumbler without one", async () => {
@@ -600,8 +609,8 @@ describe("CreateEvent", () => {
       // Twice: the terms sit between the add-ons and the distances now.
       await user.click(screen.getByRole("button", { name: "Back" }));
       await user.click(screen.getByRole("button", { name: "Back" }));
-      await user.clear(screen.getByLabelText(/^Code/));
-      await user.type(screen.getByLabelText(/^Code/), "10KM");
+      await user.clear(screen.getByLabelText(/^Short name/));
+      await user.type(screen.getByLabelText(/^Short name/), "10KM");
       await user.click(screen.getByRole("button", { name: "Continue" }));
       await passTerms(user);
 
@@ -707,16 +716,21 @@ describe("CreateEvent", () => {
       expect(within(preview).queryByRole("button", { name: /enter/i })).not.toBeInTheDocument();
     });
 
-    it("still hands over the exact bytes, for anybody who wants to check them", async () => {
-      // The fingerprint of these bytes is what goes on chain, so somebody
-      // checking our claim has to be able to see them.
+    it("says what the verification tab is for, and shows no file or fingerprint", async () => {
+      // It used to print the file and the first half of its fingerprint.
+      // Neither said anything to the person on this screen, who typed all of it
+      // into the form a moment ago; what an auditor compares belongs on the
+      // published page, where somebody doubting the claim actually looks.
       const { user } = await renderForm();
       await reachReview(user);
 
-      await openPublishedFile(user);
+      await openPreviewTab(user, "Verification");
 
-      expect(await screen.findByText(/"schedule"/)).toBeInTheDocument();
-      expect(screen.getByText(/^Fingerprint /)).toBeInTheDocument();
+      expect(
+        await screen.findByText(/have not changed since you published them/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /show the file/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/fingerprint/i)).not.toBeInTheDocument();
     });
 
     it("stops offering Back once something has been signed", async () => {
@@ -883,7 +897,7 @@ describe("CreateEvent", () => {
       const { user } = await renderForm();
       await fillDetails(user);
 
-      await user.type(screen.getByLabelText(/^Code/), "10 K");
+      await user.type(screen.getByLabelText(/^Short name/), "10 K");
       await user.type(screen.getByLabelText(/Distance in kilometres/), "10");
       await user.type(screen.getByLabelText(/Maximum entries/), "300");
       await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -891,7 +905,7 @@ describe("CreateEvent", () => {
       // The same words are in the field's hint, so the assertion is on the
       // one that is announced as a problem rather than on the text.
       expect(await screen.findByRole("alert")).toHaveTextContent(
-        /letters, digits and underscores/i,
+        /letters, numbers and underscores/i,
       );
       await waitFor(() => expect(createEvent).not.toHaveBeenCalled());
     });

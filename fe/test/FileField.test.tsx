@@ -167,6 +167,20 @@ describe("FileField", () => {
       expect(uploadEventFile).not.toHaveBeenCalled();
     });
 
+    it("never puts the store's own words on screen", async () => {
+      // Whatever the upload threw was written for a log. The field shows the
+      // one sentence `lib/errors.ts` has for a failure nobody can name.
+      const user = userEvent.setup();
+      uploadEventFile.mockRejectedValueOnce(new Error("POST /events/files returned 502"));
+      render(<Harness />);
+
+      await user.upload(screen.getByLabelText("Poster"), png());
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Something went wrong. Please try again.");
+      expect(alert).not.toHaveTextContent(/502|events\/files/);
+    });
+
     it("says a declined signature is not a failure to fix, and lets it be tried again", async () => {
       const user = userEvent.setup();
       uploadEventFile.mockRejectedValueOnce(new Error("User declined the request"));

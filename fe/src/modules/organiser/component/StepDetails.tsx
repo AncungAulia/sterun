@@ -263,7 +263,7 @@ export function StepDetails({
       <Section
         title="Poster and links"
         note="Where runners go for updates. None of these can be swapped for something else once the event exists."
-        help="They are part of what gets frozen with your event, so the account you name here cannot quietly become a different account after people have entered."
+        help="These are saved with your event, so the account you name here cannot change after people have entered."
       >
         <FileField
           id="poster"
@@ -290,7 +290,7 @@ export function StepDetails({
           onChange={(e) => set({ instagram: e.target.value })}
           placeholder="@yourrace"
           hint="A handle, or paste the profile link."
-          help="The handle is stored rather than the address, because Instagram has changed the shape of its URLs before and this cannot be edited afterwards."
+          help="Only the handle is saved, and it cannot be changed later."
         />
         <Field
           id="website"

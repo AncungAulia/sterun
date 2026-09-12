@@ -33,6 +33,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useWallet } from "@/hooks/useWallet";
+import { PlainError } from "@/lib/plain-error";
 import { signTransaction } from "@/lib/wallet";
 
 /** What a caller is waiting for right now. */
@@ -62,7 +63,7 @@ export function useChainWrite<TArgs, TValue>(
         // Refused here rather than passed on. The SDK would happily build and
         // simulate a call for `undefined`, and fail later with something that
         // reads like a network problem.
-        throw new Error("Connect your wallet first.");
+        throw new PlainError("Connect your wallet first.");
       }
 
       setPhase("signing");

@@ -30,6 +30,7 @@ import {
 } from "@creit.tech/stellar-wallets-kit/modules/wallet-connect";
 
 import { NETWORK, WALLET_CONNECT_PROJECT_ID } from "./env";
+import { PlainError } from "./plain-error";
 import {
   freighterMobileSession,
   isFreighterMobile,
@@ -227,9 +228,7 @@ export async function signMessage(
         })
       ).signedMessage;
   if (!signedMessage) {
-    throw new Error(
-      "This wallet cannot approve uploads. Try Freighter or xBull instead.",
-    );
+    throw new PlainError("This wallet cannot approve uploads. Try Freighter or xBull instead.");
   }
   return signedMessage;
 }

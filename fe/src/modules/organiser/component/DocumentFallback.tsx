@@ -51,7 +51,7 @@ type CheckState =
   | { kind: "idle" }
   | { kind: "checking" }
   | { kind: "checked" }
-  | { kind: "mismatch"; served: string }
+  | { kind: "mismatch" }
   | { kind: "unreachable"; reason: string };
 
 export function DocumentFallback({ text, hash, onChecked }: DocumentFallbackProps) {
@@ -77,7 +77,7 @@ export function DocumentFallback({ text, hash, onChecked }: DocumentFallbackProp
       setCheck({ kind: "checked" });
       onChecked({ uri: uri.trim(), hash });
     } else if (result.status === "modified") {
-      setCheck({ kind: "mismatch", served: result.actualHash });
+      setCheck({ kind: "mismatch" });
     } else {
       setCheck({ kind: "unreachable", reason: result.reason });
     }
@@ -86,27 +86,27 @@ export function DocumentFallback({ text, hash, onChecked }: DocumentFallbackProp
   return (
     <div className="flex flex-col gap-5 rounded-lg border border-border px-5 py-4">
       <div>
-        <p className="heading-strong text-base text-foreground">Host the file yourself instead</p>
+        <p className="heading-strong text-base text-foreground">Put the details online yourself</p>
         <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-          Your event can point at any public address. Save the file, put it online exactly as it
-          is, then paste the link and we will read it back to check.
+          Download your race details, upload the file unchanged to any public website, then paste
+          its link and we will check it.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" onClick={download}>
-          Download event.json
+          Download race details
         </Button>
       </div>
 
       <Field
         id="document-uri"
-        label="Published URL"
+        label="Link to your file"
         value={uri}
         onChange={(e) => setUri(e.target.value)}
-        placeholder="https://raw.githubusercontent.com/..."
+        placeholder="https://..."
         hint="It has to be public."
-        help="We fetch it from your browser and compare what comes back with what was built here, so a link we cannot read is caught now rather than by a runner three days before the race."
+        help="We check the link now, so a runner does not find a broken page three days before the race."
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -129,12 +129,6 @@ export function DocumentFallback({ text, hash, onChecked }: DocumentFallbackProp
             Publish the downloaded file exactly as it is. Even changing one space makes it a
             different file.
           </p>
-          <dl className="mt-3 grid gap-x-4 text-sm sm:grid-cols-[auto_1fr]">
-            <dt className="text-muted-foreground">Expected</dt>
-            <dd className="numeric break-all text-foreground">{hash}</dd>
-            <dt className="text-muted-foreground">Found</dt>
-            <dd className="numeric break-all text-foreground">{check.served}</dd>
-          </dl>
         </div>
       ) : null}
 

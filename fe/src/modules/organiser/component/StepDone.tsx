@@ -136,7 +136,7 @@ export function StepDone({ eventId, eventName, receipts = [] }: StepDoneProps) {
        */}
       {receipts.length === 0 ? null : (
         <div className="mx-auto grid w-full max-w-md gap-2 border-t border-n-200 pt-4 text-left">
-          <p className="text-sm text-n-500">Signed on chain</p>
+          <p className="text-sm text-n-500">Receipts</p>
           <ul className="grid gap-1.5">
             {receipts.map((receipt) => (
               <li key={receipt.id} className="flex items-center justify-between gap-4">
