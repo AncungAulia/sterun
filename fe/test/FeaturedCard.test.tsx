@@ -125,7 +125,7 @@ describe("FeaturedCard", () => {
       const { container } = render(<FeaturedCard entry={entry(race(), metadata())} size="lead" />);
 
       const link = screen.getByRole("link");
-      const badge = container.querySelector('[data-status="Open"]') as Element;
+      const badge = container.querySelector('[data-status="Open"]') as HTMLElement;
       const overlay = screen.getByRole("heading", { name: "Jakarta Marathon 7" }).parentElement;
       expect(link.lastElementChild).toContainElement(badge);
       // Node.DOCUMENT_POSITION_FOLLOWING: the badge comes later in the markup.
