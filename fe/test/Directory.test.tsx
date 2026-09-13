@@ -197,10 +197,11 @@ describe("Directory", () => {
         unreadable: [],
       });
 
-      renderDirectory();
+      const { container } = renderDirectory();
 
-      expect(await screen.findByText("Open")).toBeInTheDocument();
-      expect(screen.getByText("Completed")).toBeInTheDocument();
+      await screen.findByText("Jakarta Marathon 0");
+      expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
+      expect(container.querySelector('[data-status="Completed"]')).not.toBeNull();
     });
 
     it("re-reads the chain when asked to refresh", async () => {

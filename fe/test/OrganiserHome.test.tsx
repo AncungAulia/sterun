@@ -150,10 +150,11 @@ describe("OrganiserHome", () => {
         unreadable: [],
       });
 
-      renderHome();
+      const { container } = renderHome();
 
-      expect(await screen.findByText("Draft")).toBeInTheDocument();
-      expect(screen.getByText("Open")).toBeInTheDocument();
+      await screen.findByText("Jakarta Marathon 0");
+      expect(container.querySelector('[data-status="Draft"]')).not.toBeNull();
+      expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
     });
 
     it("offers to create a race when the wallet is allowed to publish", async () => {
