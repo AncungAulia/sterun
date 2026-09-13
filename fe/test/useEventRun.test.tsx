@@ -72,4 +72,20 @@ describe("useEventRun resumes a saved run", () => {
     expect(result.current.eventId).toBeNull();
     expect(result.current.done).toEqual([]);
   });
+
+  it("refuses to resume a run that stopped before the event existed", () => {
+    // `document` only ever produces an in-memory payload (`state.document`),
+    // never persisted. Restoring `done: ["document"]` with no `eventId` would
+    // resume at `event`, which throws immediately because `state.document` is
+    // empty, without ever calling `createEvent.write`. Since nothing landed,
+    // `clearRunProgress` never runs, so every future visit by this wallet
+    // would hit the same wall with no way to clear it from the screen. The
+    // only safe rule is: no `eventId`, nothing to restore.
+    saveRunProgress(WALLET, { eventId: null, done: ["document"] });
+
+    const { result } = renderHook(() => useEventRun(INPUT), { wrapper: wrapper() });
+
+    expect(result.current.eventId).toBeNull();
+    expect(result.current.done).toEqual([]);
+  });
 });

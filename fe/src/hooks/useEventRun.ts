@@ -77,24 +77,40 @@ export function useEventRun({
   const setStatus = useSetEventStatus();
 
   /*
-   * Picks a half-finished run back up instead of starting a second one. Read
-   * with a lazy initializer rather than in an effect: `Wizard` never mounts
-   * this hook until `CreateGate` has already confirmed a connected, allowlisted
-   * address (`CreateEvent.tsx`), so `address` is already the final value on
-   * this component instance's very first render — there is no later moment for
-   * an effect to catch. After mount, `start()` and its own writes to storage
-   * are the source of truth, not whatever is sitting in storage.
+   * Picks a half-finished run back up instead of starting a second one, but
+   * only when doing so is safe. `document` produces `state.document`, an
+   * in-memory payload this file never persists; every step from `event`
+   * onward acts on the chain against `eventId`, which is persisted. So a run
+   * that stopped after `document` landed but before `event` did has nothing
+   * safe to restore: replaying `done: ["document"]` with no `eventId` would
+   * resume straight at `event`, which throws on `state.document` being empty
+   * without ever calling `createEvent.write` — and since nothing landed,
+   * `clearRunProgress` never runs, so every future visit would hit the same
+   * wall. Once `eventId` is set, `event` must already have landed (it is the
+   * only step that produces it), which in this list means `document` did
+   * too, so the rest of `done` is sound to restore whole.
+   *
+   * Read with a lazy initializer, once into a plain object rather than once
+   * per state variable, so the two pieces of state agree on a single read of
+   * `localStorage` instead of two: `Wizard` never mounts this hook until
+   * `CreateGate` has already confirmed a connected, allowlisted address
+   * (`CreateEvent.tsx`), so `address` is already the final value on this
+   * component instance's very first render, and there is no later moment an
+   * effect would be needed to catch.
    */
-  const [done, setDone] = useState<string[]>(
-    () => (address ? loadRunProgress(address)?.done : undefined) ?? [],
-  );
+  const [restored] = useState(() => {
+    const saved = address ? loadRunProgress(address) : null;
+    return saved && saved.eventId !== null
+      ? { eventId: saved.eventId, done: saved.done }
+      : { eventId: null as number | null, done: [] as string[] };
+  });
+
+  const [done, setDone] = useState<string[]>(restored.done);
   const [receipts, setReceipts] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ stepId: string; message: string } | null>(null);
   const [isRunning, setRunning] = useState(false);
-  const [eventId, setEventId] = useState<number | null>(
-    () => (address ? loadRunProgress(address)?.eventId : undefined) ?? null,
-  );
+  const [eventId, setEventId] = useState<number | null>(restored.eventId);
   const [document, setDocument] = useState<PublishedDocument | null>(null);
 
   const steps = useMemo(
