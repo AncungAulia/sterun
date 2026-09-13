@@ -448,6 +448,24 @@ describe("Directory", () => {
       expect(await screen.findByText("No races yet")).toBeInTheDocument();
     });
 
+    it("says there are no races when every one of them is not open yet", async () => {
+      // The registry is not empty, but nothing in it can be entered, which
+      // from a visitor's chair is exactly the same thing: neither a bare
+      // heading nor "No races match" (that is for a search or filter, and
+      // narrowing is false here) is the honest answer.
+      listEvents.mockResolvedValue({
+        events: [summary(0, { status: "Draft" }), summary(1, { status: "Draft" })],
+        unreadable: [],
+      });
+
+      renderDirectory();
+
+      expect(await screen.findByText("No races yet")).toBeInTheDocument();
+      expect(screen.queryByText("Jakarta Marathon 0")).not.toBeInTheDocument();
+      expect(screen.queryByText("No races match")).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "All races" })).not.toBeInTheDocument();
+    });
+
     it("shows an event that has no distances yet", async () => {
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
 

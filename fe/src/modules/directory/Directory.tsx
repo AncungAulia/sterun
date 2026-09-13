@@ -181,13 +181,13 @@ export function Directory() {
         />
       ) : null}
 
-      {data && data.events.length === 0 ? (
+      {data && summaries.length === 0 ? (
         <EmptyState title="No races yet">
           Refresh this page to check for races published since you opened it.
         </EmptyState>
       ) : null}
 
-      {data && data.events.length > 0 ? (
+      {data && summaries.length > 0 ? (
         <>
           <FeaturedEvents entries={featured} />
 
