@@ -43,13 +43,15 @@ describe("TrendingEntries", () => {
   });
 
   describe("negative", () => {
-    it("says nothing moved rather than drawing an empty list", () => {
-      // "Nothing in the last week" is a real answer. An empty box reads as a
-      // panel that failed to load.
+    it("keeps its height with nothing in it, and says why", () => {
+      // Ancung, 2026-09-14: the height, and the answer in the middle of it.
+      // Not ruled rows, which are a hint about a list that is not there, and
+      // never invented names. No list for a screen reader to walk either.
       render(<TrendingEntries rows={[]} days={7} />);
 
-      expect(screen.getByText("No entries in the last 7 days.")).toBeInTheDocument();
+      expect(screen.getByText("No entries in the last 7 days")).toBeInTheDocument();
       expect(screen.queryByRole("list")).not.toBeInTheDocument();
+      expect(screen.queryByText("+")).not.toBeInTheDocument();
     });
   });
 

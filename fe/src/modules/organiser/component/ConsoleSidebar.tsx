@@ -3,9 +3,10 @@
 /**
  * The console's rail, built on shadcn's `sidebar`.
  *
- * Two items, and the second is an expander rather than a page: `Events` opens
+ * Two items, and the second is an expander rather than a page: `Races` opens
  * into this wallet's races so somebody can move between them without going back
- * through a list. There is deliberately no "all races" page behind it, because
+ * through a list. It is called Races and not Events because the contract's word
+ * is not the organiser's: they are running a race. There is deliberately no "all races" page behind it, because
  * the dashboard already holds that table and a second one would be the same
  * list twice.
  *
@@ -31,11 +32,13 @@
  * the teal current-page fill, closing the drawer on navigation, and the wallet
  * chip in the footer.
  */
-import { ChevronDownIcon, ChevronRightIcon, LayoutDashboardIcon } from "lucide-react";
+import { ChevronDownIcon, FlagIcon, LayoutDashboardIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sidebar,
   SidebarContent,
@@ -92,7 +95,19 @@ function marksRace(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function ConsoleSidebar({ address }: { address: string }) {
+/**
+ * `onDisconnect` is passed in rather than read from `useWallet()` here, and
+ * that is not ceremony: `useWallet` pulls in `lib/wallet.ts`, which pulls in
+ * the whole Stellar Wallets Kit, which does not load under vitest at all and
+ * costs seconds where it does. The frame above already holds the wallet.
+ */
+export function ConsoleSidebar({
+  address,
+  onDisconnect,
+}: {
+  address: string;
+  onDisconnect: () => void;
+}) {
   const pathname = usePathname();
   const { data } = useEvents();
   /*
@@ -123,7 +138,11 @@ export function ConsoleSidebar({ address }: { address: string }) {
   const mine = data?.events.filter(({ event }) => event.organiser === address) ?? [];
 
   return (
-    <Sidebar>
+    /* `icon` rather than the default `offcanvas`: collapsing to a strip of
+       icons keeps the way between pages, where sliding the whole rail away
+       would leave the console with no navigation at all until somebody
+       remembers where the toggle went. */
+    <Sidebar collapsible="icon">
       {/* The way back to the public site, and the only one the console has:
           there is no header over these pages. A wordmark is where everybody
           already looks for it, so it is the wordmark rather than a new row in
@@ -153,18 +172,26 @@ export function ConsoleSidebar({ address }: { address: string }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
 
+            {/* "Races", not "Events". The contract calls them events and so
+                does every variable here, but an organiser running one calls it
+                a race, and the rail is read rather than typed.
+
+                The chevron sits after the label rather than before it: it is
+                the state of this row, not its identity, and a leading chevron
+                pushed the two rows' labels out of line with each other. The
+                flag leads instead, so both rows start with an icon. */}
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => setOpen(!expanded)}
                 aria-expanded={expanded}
                 className={MARK}
               >
-                {expanded ? (
-                  <ChevronDownIcon aria-hidden />
-                ) : (
-                  <ChevronRightIcon aria-hidden />
-                )}
-                <span>Events</span>
+                <FlagIcon aria-hidden />
+                <span>Races</span>
+                <ChevronDownIcon
+                  aria-hidden
+                  className={`ml-auto transition-transform ${expanded ? "" : "-rotate-90"}`}
+                />
               </SidebarMenuButton>
 
               {expanded ? (
@@ -208,11 +235,28 @@ export function ConsoleSidebar({ address }: { address: string }) {
           shape on screen and a string of letters read aloud, and neither says
           what it is the address of. */}
       <SidebarFooter className="px-2 pb-4">
-        <p className="flex items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs">
-          <span aria-hidden className="size-5 shrink-0 rounded-full bg-teal-300" />
-          <span className="sr-only">Connected wallet</span>
-          <span className="numeric truncate">{shortAddress(address)}</span>
-        </p>
+        <Popover>
+          <PopoverTrigger className="flex w-full items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs hover:bg-paper/10">
+            <span aria-hidden className="size-5 shrink-0 rounded-full bg-teal-300" />
+            <span className="sr-only">Connected wallet, open account menu</span>
+            <span className="numeric truncate">{shortAddress(address)}</span>
+          </PopoverTrigger>
+
+          {/* The address in full, because the chip is a shortening and the
+              thing somebody checks before signing is the whole of it. */}
+          <PopoverContent align="start" side="top" className="w-72 p-3">
+            <p className="text-xs text-n-500">Connected account</p>
+            <p className="numeric mt-1 text-sm break-all text-n-800">{address}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={onDisconnect}
+            >
+              Disconnect
+            </Button>
+          </PopoverContent>
+        </Popover>
       </SidebarFooter>
     </Sidebar>
   );

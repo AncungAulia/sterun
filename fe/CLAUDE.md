@@ -424,7 +424,7 @@ knowing before adding a page there:
   different from the site header's "Sterun home": `console-chrome.test.tsx` proves no site header is
   drawn over the console by looking for that exact name. The mark appears twice in the DOM when a
   wallet is connected, once per breakpoint, and never twice on screen, so no test counts it.
-- **The rail has two items and the second is an expander**, not a page: `Events` opens into this
+- **The rail has two items and the second is an expander**, not a page: **Races** opens into this
   wallet's races (`useEvents()` filtered by organiser, so no extra read). There is deliberately no
   "all races" page behind it, because the dashboard is that list. Anything race-scoped, entries,
   scanners, results, belongs inside a race at `/org/events/[id]`, never in the rail. A failed chain
@@ -477,12 +477,18 @@ knowing before adding a page there:
   runners in. **If a second kind of thing can reach the banner the rule is already broken** - narrow
   the condition in `needs.ts`, do not change the colour. The count on the bell is drawn only when
   there is something to count, because a badge that is always lit is furniture.
-- **A chart with no data draws no shape.** A race nobody has entered gets a plain grey rule in its
-  table row, never a flat line along the bottom, and the comparison panel with no lines draws no
-  axes either: a line at zero and axes over an empty plot both read as a measurement, and this is an
-  absence. Every division that could be by zero is guarded in `modules/organiser/chart.ts`, where a
-  test can see it, rather than in a component: **an SVG path containing `NaN` does not throw**, the
-  browser silently drops it, and the panel renders empty with nothing in the console.
+- **A chart with no data draws its frame but no shape** (Ancung, 2026-09-14, reversing the
+  no-axes half of this rule). A race nobody has entered still gets a plain grey rule in its table
+  row rather than a flat line along the bottom, because a line at zero reads as a measurement. The
+  **panels** go the other way: `EntriesComparison` always draws its grid and both axes, and
+  `TrendingEntries` always draws its three ruled rows, with the answer laid over the top. The
+  earlier rule treated an empty panel and an empty plot as the same thing, and they are not: a
+  sentence alone does not say what the panel would have held, so the first entry a race takes
+  changes the shape of the page instead of filling in a chart somebody was already reading. What
+  must never appear is invented data, a zero line or a list of plausible names. Every division that
+  could be by zero is guarded in `modules/organiser/chart.ts`, where a test can see it, rather than
+  in a component: **an SVG path containing `NaN` does not throw**, the browser silently drops it,
+  and the panel renders empty with nothing in the console.
 - **The comparison chart is titled "Entries comparison", never "Pace".** In a running product *pace*
   means minutes per kilometre, so a runner glancing at an organiser's screen would read it as a
   chart about how fast people run. Its x-axis is **days to race day** and its y-axis is a

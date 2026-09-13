@@ -24,6 +24,10 @@ vi.mock("@/lib/events", async (importOriginal) => ({
 let pathname = "/org";
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 
+/* The rail takes the action rather than reaching for the wallet itself, so
+   this file never has to load the Stellar Wallets Kit. */
+const onDisconnect = vi.fn();
+
 const MINE = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
 const THEIRS = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 
@@ -68,7 +72,9 @@ function Wrapper({ children }: { children: ReactNode }) {
  * worse than no test, because it is counted.
  */
 async function renderRail(address = MINE) {
-  render(<ConsoleSidebar address={address} />, { wrapper: Wrapper });
+  render(<ConsoleSidebar address={address} onDisconnect={onDisconnect} />, {
+    wrapper: Wrapper,
+  });
   await waitFor(() => expect(listEvents).toHaveBeenCalled());
   /*
     And then wait for that read to have SETTLED, which is the half that was
@@ -94,20 +100,20 @@ beforeEach(() => {
 
 describe("ConsoleSidebar", () => {
   describe("positive", () => {
-    it("offers Dashboard and Events", async () => {
+    it("offers Dashboard and Races", async () => {
       listEvents.mockResolvedValue({ events: [], unreadable: [] });
 
       await renderRail();
 
       expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /events/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /races/i })).toBeInTheDocument();
     });
 
-    it("lists this wallet's races under Events once it is expanded", async () => {
+    it("lists this wallet's races under Races once it is expanded", async () => {
       listEvents.mockResolvedValue({ events: [summary(1), summary(2)], unreadable: [] });
 
       await renderRail();
-      await userEvent.click(screen.getByRole("button", { name: /events/i }));
+      await userEvent.click(screen.getByRole("button", { name: /races/i }));
 
       expect(screen.getByRole("link", { name: "Race 1" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Race 2" })).toBeInTheDocument();
@@ -115,19 +121,25 @@ describe("ConsoleSidebar", () => {
 
     it("offers the way back to the public site, as the brand mark", async () => {
       // There is no site header over the console, so if the rail does not
-      // carry this link there is no way out of /org but the address bar. Its
-      // name comes from the lockup's alt text, which is also the proof that
-      // what is drawn is the logo and not the word typed out.
+      // carry this link there is no way out of /org but the address bar.
+      //
+      // The link holds two images, the lockup and the mark on its own, and CSS
+      // shows whichever fits the rail's width. jsdom applies no CSS, so both
+      // are present here and neither can be asserted as "the visible one":
+      // what this checks is that both files are the white variants the ink
+      // rail needs, and that the link is named once, out of band, so its name
+      // cannot change with the rail's state.
       listEvents.mockResolvedValue({ events: [], unreadable: [] });
 
       await renderRail();
 
       const home = screen.getByRole("link", { name: "Sterun" });
       expect(home).toHaveAttribute("href", "/");
-      expect(within(home).getByRole("img", { name: "Sterun" })).toHaveAttribute(
-        "src",
-        expect.stringContaining("sterun-lockup-white.svg"),
-      );
+
+      const sources = [...home.querySelectorAll("img")].map((img) => img.getAttribute("src"));
+      expect(sources.some((src) => src?.includes("sterun-lockup-white.svg"))).toBe(true);
+      expect(sources.some((src) => src?.includes("sterun-logo-white.svg"))).toBe(true);
+      expect(sources.every((src) => src?.includes("white"))).toBe(true);
     });
 
     it("is already open inside a race, with nothing clicked", async () => {
@@ -179,7 +191,7 @@ describe("ConsoleSidebar", () => {
       });
 
       await renderRail();
-      await userEvent.click(screen.getByRole("button", { name: /events/i }));
+      await userEvent.click(screen.getByRole("button", { name: /races/i }));
 
       expect(screen.getByRole("link", { name: "Race 1" })).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: "Race 2" })).not.toBeInTheDocument();
@@ -212,7 +224,7 @@ describe("ConsoleSidebar", () => {
   });
 
   describe("edge", () => {
-    it("still offers Events when the chain cannot be read", async () => {
+    it("still offers Races when the chain cannot be read", async () => {
       // The rail is navigation. A node that will not answer must not remove the
       // way back to the dashboard.
       listEvents.mockRejectedValue(new Error("rpc down"));
@@ -220,7 +232,7 @@ describe("ConsoleSidebar", () => {
       await renderRail();
 
       expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /events/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /races/i })).toBeInTheDocument();
     });
 
     it("opens onto nothing when the chain cannot be read", async () => {
@@ -229,7 +241,7 @@ describe("ConsoleSidebar", () => {
       listEvents.mockRejectedValue(new Error("rpc down"));
 
       await renderRail();
-      await userEvent.click(screen.getByRole("button", { name: /events/i }));
+      await userEvent.click(screen.getByRole("button", { name: /races/i }));
 
       // Two lists: the rail's own menu, and the expander's, which is the one
       // that has to be present and empty. Asserting on both counts is what
@@ -248,7 +260,7 @@ describe("ConsoleSidebar", () => {
       pathname = "/org/events/1";
 
       await renderRail();
-      await userEvent.click(screen.getByRole("button", { name: /events/i }));
+      await userEvent.click(screen.getByRole("button", { name: /races/i }));
 
       expect(screen.queryByRole("link", { name: "Race 1" })).not.toBeInTheDocument();
     });

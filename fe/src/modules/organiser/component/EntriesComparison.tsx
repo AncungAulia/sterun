@@ -76,19 +76,28 @@ export function EntriesComparison({ series }: { series: readonly ComparisonSerie
         <p className="text-xs whitespace-nowrap text-n-500">Percent of quota</p>
       </div>
 
-      {coloured.length === 0 ? (
-        <p className="text-sm text-n-500">No entries to compare yet.</p>
-      ) : (
-        <>
-          <svg
-            viewBox="0 0 720 210"
-            role="img"
-            aria-label={`How full each race was against the days left before it ran. ${coloured
-              .map((race) => `${race.name} reached ${percent(race.points)} percent`)
-              .join(". ")}.`}
-            className="h-auto w-full"
-          >
-            {[0, 25, 50, 75, 100].map((mark) => (
+      {/* With nothing to draw, the panel keeps the height it will have once
+          there is something in it and says so, and that is all. The grid, the
+          scales and the key are hints about data, so with no data they are
+          furniture: Ancung's call on 2026-09-14, having seen both. What the
+          height buys is that the first entry a race takes fills the panel in
+          rather than pushing the page around. */}
+      <div className="relative">
+        <svg
+          viewBox="0 0 720 210"
+          role="img"
+          aria-label={
+            coloured.length === 0
+              ? "How full each race is against the days left before it runs. No entries yet."
+              : `How full each race was against the days left before it ran. ${coloured
+                  .map((race) => `${race.name} reached ${percent(race.points)} percent`)
+                  .join(". ")}.`
+          }
+          className="h-auto w-full"
+        >
+            {coloured.length === 0
+            ? null
+            : [0, 25, 50, 75, 100].map((mark) => (
               <g key={mark}>
                 <line
                   x1={X0}
@@ -142,39 +151,60 @@ export function EntriesComparison({ series }: { series: readonly ComparisonSerie
                 );
               })}
 
-            {[60, 45, 30, 15, 0].map((day) => (
-              <text
-                key={day}
-                x={x(day)}
-                y={Y_BASE + 18}
-                textAnchor="middle"
-                fontSize="9.5"
-                fill="var(--color-n-400)"
-              >
-                {day}
-              </text>
-            ))}
-            <text x={X0} y={Y_BASE + 34} textAnchor="start" fontSize="9.5" fill="var(--color-n-400)">
+          {coloured.length === 0
+            ? null
+            : [60, 45, 30, 15, 0].map((day) => (
+                <text
+                  key={day}
+                  x={x(day)}
+                  y={Y_BASE + 18}
+                  textAnchor="middle"
+                  fontSize="9.5"
+                  fill="var(--color-n-400)"
+                >
+                  {day}
+                </text>
+              ))}
+
+          {coloured.length === 0 ? null : (
+            <text
+              x={X0}
+              y={Y_BASE + 34}
+              textAnchor="start"
+              fontSize="9.5"
+              fill="var(--color-n-400)"
+            >
               days to race day
             </text>
-          </svg>
+          )}
+        </svg>
 
-          <ul className="mt-4 flex flex-row flex-wrap gap-x-6 gap-y-2 text-sm text-n-600">
-            {coloured.map((race) => (
-              <li key={race.name} className="flex items-center gap-2">
-                <span
-                  aria-hidden
-                  /* The one inline style: the colour is chosen per series at
-                     runtime, so there is no class it could come from. */
-                  className="size-2.5 shrink-0 rounded-sm"
-                  style={{ background: race.colour }}
-                />
-                {race.name} <b className="numeric font-medium text-ink">{percent(race.points)}%</b>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+        {/* Over the grid rather than under it, so the empty chart keeps the
+            height it will have once there is something in it and the page does
+            not jump the first time a race takes an entry. */}
+        {coloured.length === 0 ? (
+          <p className="absolute inset-0 grid place-items-center text-sm text-n-500">
+            No entries yet
+          </p>
+        ) : null}
+      </div>
+
+      {coloured.length > 0 ? (
+        <ul className="mt-4 flex flex-row flex-wrap gap-x-6 gap-y-2 text-sm text-n-600">
+          {coloured.map((race) => (
+            <li key={race.name} className="flex items-center gap-2">
+              <span
+                aria-hidden
+                /* The one inline style: the colour is chosen per series at
+                   runtime, so there is no class it could come from. */
+                className="size-2.5 shrink-0 rounded-sm"
+                style={{ background: race.colour }}
+              />
+              {race.name} <b className="numeric font-medium text-ink">{percent(race.points)}%</b>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

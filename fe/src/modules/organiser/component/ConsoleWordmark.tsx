@@ -40,12 +40,39 @@ export function ConsoleWordmark({
       onClick={onClick}
       className={cn("flex w-fit items-center rounded-md px-1", className)}
     >
+      {/* Two files, one link, and the rail's own state chooses between them.
+          Collapsed, the rail is a strip about as wide as an icon, and the
+          lockup inside it was cropped to a sliver of the runner: a brand mark
+          cut in half is worse than no brand mark. `Sidebar`'s own root carries
+          `group` and `data-state`, so the selector matches only inside a rail:
+          the connect screen and the phone-width bar draw this component too,
+          are outside that group, and keep the lockup whichever way the rail is
+          set.
+
+          The link's name is a `sr-only` span rather than either `alt`, and
+          that is not belt and braces. Both images are always in the DOM, and
+          which one is showing is decided by a CSS class; jsdom applies no CSS,
+          so in a test both count and a link named from the alts reads "Sterun
+          Sterun". Naming the link once, out of band, makes it the same name on
+          screen, in a screen reader and in a test, whichever way the rail is
+          set. */}
+      <span className="sr-only">Sterun</span>
       <Image
         src="/brand/logo/sterun-lockup-white.svg"
-        alt="Sterun"
+        alt=""
+        aria-hidden
         width={112}
         height={36}
         priority
+        className="group-data-[state=collapsed]:hidden"
+      />
+      <Image
+        src="/brand/logo/sterun-logo-white.svg"
+        alt=""
+        aria-hidden
+        width={24}
+        height={24}
+        className="hidden group-data-[state=collapsed]:block"
       />
     </Link>
   );

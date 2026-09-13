@@ -25,12 +25,12 @@ describe("NeedsBell", () => {
     it("counts what is waiting", () => {
       render(<NeedsBell needs={[need(), need({ eventId: 2, kind: "open", urgent: false })]} />);
 
-      expect(screen.getByRole("button", { name: "2 things need you" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Notifications, 2 pending" })).toBeInTheDocument();
     });
 
     it("lists them once it is opened", async () => {
       render(<NeedsBell needs={[need()]} />);
-      await userEvent.click(screen.getByRole("button", { name: "1 thing needs you" }));
+      await userEvent.click(screen.getByRole("button", { name: "Notifications, 1 pending" }));
 
       expect(screen.getByText("Add a scanner - Fun Run Sleman")).toBeInTheDocument();
       expect(screen.getByText("Runs in 3 days. Nobody can check runners in.")).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe("NeedsBell", () => {
 
     it("links each row to where the fix is", async () => {
       render(<NeedsBell needs={[need()]} />);
-      await userEvent.click(screen.getByRole("button", { name: "1 thing needs you" }));
+      await userEvent.click(screen.getByRole("button", { name: "Notifications, 1 pending" }));
 
       expect(screen.getByRole("link", { name: /Add a scanner/ })).toHaveAttribute(
         "href",
@@ -50,9 +50,10 @@ describe("NeedsBell", () => {
   describe("negative", () => {
     it("says so plainly when nothing is waiting", async () => {
       render(<NeedsBell needs={[]} />);
-      await userEvent.click(screen.getByRole("button", { name: "Nothing needs you" }));
+      await userEvent.click(screen.getByRole("button", { name: "Notifications" }));
 
-      expect(screen.getByText("Nothing is waiting on you.")).toBeInTheDocument();
+      expect(screen.getByText("No pending actions")).toBeInTheDocument();
+      expect(screen.getByText("Everything is up to date.")).toBeInTheDocument();
     });
 
     it("shows no count badge when nothing is waiting", () => {
@@ -65,15 +66,15 @@ describe("NeedsBell", () => {
   });
 
   describe("edge", () => {
-    it("uses the singular for one thing", () => {
+    it("counts one pending action in the singular", () => {
       render(<NeedsBell needs={[need()]} />);
 
-      expect(screen.getByRole("button", { name: "1 thing needs you" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Notifications, 1 pending" })).toBeInTheDocument();
     });
 
     it("marks the urgent row apart from the rest", async () => {
       render(<NeedsBell needs={[need(), need({ eventId: 2, kind: "results", urgent: false })]} />);
-      await userEvent.click(screen.getByRole("button", { name: "2 things need you" }));
+      await userEvent.click(screen.getByRole("button", { name: "Notifications, 2 pending" }));
 
       const rows = screen.getAllByRole("link");
       expect(rows[0]).toHaveAttribute("data-urgent", "true");

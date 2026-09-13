@@ -17,6 +17,8 @@
  */
 import type { ReactNode } from "react";
 
+import { SidebarTrigger } from "@/components/ui/sidebar";
+
 import { NeedsBell } from "./NeedsBell";
 import { useNeedsContext } from "./NeedsContext";
 
@@ -35,10 +37,16 @@ export function ConsoleHeader({
 
   return (
     <header className="flex items-center justify-between gap-4 border-b border-n-200 bg-paper px-6 py-4">
-      <h1 className="heading-strong text-xl text-ink">
-        {title}
-        {badge ? <span className="ml-2 align-middle">{badge}</span> : null}
-      </h1>
+      <div className="flex min-w-0 items-center gap-3">
+        {/* Desktop only. Below `md` the rail is a drawer and its trigger lives
+            in the dark bar above this one, so a second one here would be two
+            buttons for one thing. */}
+        <SidebarTrigger aria-label="Collapse the menu" className="hidden md:flex" />
+        <h1 className="heading-strong truncate text-xl text-ink">
+          {title}
+          {badge ? <span className="ml-2 align-middle">{badge}</span> : null}
+        </h1>
+      </div>
       <div className="flex items-center gap-2.5">
         {bell === undefined ? <NeedsBell needs={needs} /> : bell}
         {action}

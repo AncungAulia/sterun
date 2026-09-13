@@ -61,13 +61,19 @@ describe("EntriesComparison", () => {
   });
 
   describe("negative", () => {
-    it("draws no chart at all when no race has entries", () => {
-      // Axes over an empty plot are a chart claiming to have measured
-      // something. There is nothing to measure, so there is no chart.
+    it("keeps its height with no entries, and draws nothing in it", () => {
+      // Ancung, 2026-09-14, having seen both: the panel used to collapse to a
+      // sentence, so the first entry a race took pushed the page around. It
+      // now holds the height a chart will need. What it must NOT hold is the
+      // grid, the scales or a line: those are hints about data, and there is
+      // no data.
       const { container } = render(<EntriesComparison series={[]} />);
 
-      expect(screen.getByText("No entries to compare yet.")).toBeInTheDocument();
-      expect(container.querySelector("svg")).toBeNull();
+      expect(screen.getByText("No entries yet")).toBeInTheDocument();
+      // The box is still there, so the panel keeps its height.
+      expect(container.querySelector("svg")).not.toBeNull();
+      // And it is empty: no grid, no scales, no line, no dot.
+      expect(container.querySelector("svg *")).toBeNull();
     });
 
     it("leaves out a race whose series is empty rather than drawing a flat line", () => {

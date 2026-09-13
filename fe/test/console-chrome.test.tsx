@@ -296,7 +296,7 @@ describe("the console at phone width", () => {
 
       const nav = await screen.findByRole("navigation", { name: "Organiser console" });
       expect(within(nav).getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
-      expect(within(nav).getByRole("button", { name: /events/i })).toBeInTheDocument();
+      expect(within(nav).getByRole("button", { name: /races/i })).toBeInTheDocument();
     });
 
     it("still carries the way out of the console before the drawer is opened", async () => {

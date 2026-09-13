@@ -40,7 +40,7 @@ import { ConsoleWordmark } from "./ConsoleWordmark";
 import { NeedsProvider } from "./NeedsContext";
 
 export function ConsoleFrame({ children }: { children: ReactNode }) {
-  const { address } = useWallet();
+  const { address, disconnect } = useWallet();
   /*
     Worked out here rather than in the page, because the bell is on every
     console page and a second page working it out again would mean two lists
@@ -71,7 +71,7 @@ export function ConsoleFrame({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider className="min-h-0 flex-1">
-      <ConsoleSidebar address={address} />
+      <ConsoleSidebar address={address} onDisconnect={() => void disconnect()} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Phone width only, where there is no rail to carry either of these.

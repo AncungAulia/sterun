@@ -8,6 +8,7 @@ import { OrganiserHome } from "@/modules/organiser/OrganiserHome";
 import { NeedsProvider } from "@/modules/organiser/component/NeedsContext";
 import type { Need } from "@/modules/organiser/needs";
 import { WalletGate } from "@/components/layouts/WalletGate";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWallet } from "@/hooks/useWallet";
 import type { EventSummary } from "@/lib/events";
 import type { EventStatus, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
@@ -97,11 +98,19 @@ function renderHome(needs: Need[] = []) {
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
+  /*
+    `SidebarProvider` because `ConsoleHeader` carries the rail's collapse
+    button, and `useSidebar` throws outside the provider. The real route gets it
+    from `ConsoleFrame`; rendering the page without it would be testing a tree
+    the app never builds.
+  */
   return render(
     <WalletGate>
-      <NeedsProvider needs={needs}>
-        <OrganiserHome />
-      </NeedsProvider>
+      <SidebarProvider>
+        <NeedsProvider needs={needs}>
+          <OrganiserHome />
+        </NeedsProvider>
+      </SidebarProvider>
     </WalletGate>,
     { wrapper: Wrapper },
   );
@@ -177,8 +186,12 @@ describe("OrganiserHome", () => {
 
       renderHome();
 
-      const link = await screen.findByRole("link", { name: /Jakarta Marathon 4/ });
-      expect(link).toHaveAttribute("href", "/org/events/4");
+      // Two links per row since the action at the end became an icon: the name
+      // and the icon, both named after the race so a screen reader is told
+      // which race each one opens.
+      const links = await screen.findAllByRole("link", { name: /Jakarta Marathon 4/ });
+      expect(links).toHaveLength(2);
+      for (const link of links) expect(link).toHaveAttribute("href", "/org/events/4");
     });
 
     it("puts every race in one table rather than a card each", async () => {
@@ -254,7 +267,7 @@ describe("OrganiserHome", () => {
       expect(await screen.findByText("Trending entries")).toBeInTheDocument();
       // The index is refused in these tests, so there is nothing to rank, and
       // the panel says so rather than leaving an empty box on the page.
-      expect(screen.getByText("No entries in the last 7 days.")).toBeInTheDocument();
+      expect(screen.getByText("No entries in the last 7 days")).toBeInTheDocument();
     });
 
     it("shows the status of every race, including one not open yet", async () => {

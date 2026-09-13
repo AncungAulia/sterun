@@ -10,6 +10,7 @@
  * `statusLabel`, which is the only place in the app a lifecycle state becomes
  * words, and the reason "Draft" never reaches a screen.
  */
+import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
 
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
@@ -114,8 +115,18 @@ export function RacesTable({ rows, nowS }: { rows: readonly RaceRow[]; nowS: big
               {race.entered} / {race.quota}
             </td>
             <td className={`w-px text-right whitespace-nowrap ${CELL}`}>
-              <Link href={`/org/events/${race.eventId}`} className="text-teal">
-                Open
+              {/* An icon rather than the word, because the row already names
+                  the race and a column of "Open" four times over is four
+                  readings of the same instruction. The name it is given is the
+                  race's, not the icon's: a screen reader landing here needs to
+                  know which race this opens, and "Open" alone would be four
+                  identical links. */}
+              <Link
+                href={`/org/events/${race.eventId}`}
+                aria-label={`Open ${race.name}`}
+                className="inline-flex text-teal"
+              >
+                <ExternalLinkIcon aria-hidden className="size-4" />
               </Link>
             </td>
           </tr>

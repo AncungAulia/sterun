@@ -19,9 +19,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 import type { Need } from "../needs";
 
+/**
+ * What the button is called, and what the panel is headed.
+ *
+ * Plain and unaddressed. An earlier wording spoke to the reader — "3 things
+ * need you" — and an organiser opening a console at seven in the morning is
+ * not looking to be spoken to; they are looking for a list. The count belongs
+ * in the label because a screen reader gets no badge.
+ */
 function label(count: number): string {
-  if (count === 0) return "Nothing needs you";
-  return count === 1 ? "1 thing needs you" : `${count} things need you`;
+  if (count === 0) return "Notifications";
+  return count === 1 ? "Notifications, 1 pending" : `Notifications, ${count} pending`;
+}
+
+function heading(count: number): string {
+  return count === 0 ? "No pending actions" : "Pending actions";
 }
 
 export function NeedsBell({ needs }: { needs: readonly Need[] }) {
@@ -47,10 +59,10 @@ export function NeedsBell({ needs }: { needs: readonly Need[] }) {
         align="end"
         className="w-100 max-w-[calc(100vw-2rem)] rounded-lg border-n-200 p-4"
       >
-        <p className="heading-strong mb-3 text-sm text-ink">{label(needs.length)}</p>
+        <p className="heading-strong mb-3 text-sm text-ink">{heading(needs.length)}</p>
 
         {needs.length === 0 ? (
-          <p className="text-sm text-n-500">Nothing is waiting on you.</p>
+          <p className="text-sm text-n-500">Everything is up to date.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {needs.map((item) => (

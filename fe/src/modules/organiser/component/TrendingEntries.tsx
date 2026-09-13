@@ -27,7 +27,14 @@ export function TrendingEntries({
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-n-500">No entries in the last {days} days.</p>
+        /* The height three rows would take, and the answer in the middle of it.
+           Nothing else: rules with nothing between them are a hint about a list
+           that is not there (Ancung, 2026-09-14, having seen both). The height
+           is what matters, so the first entry fills the panel in rather than
+           pushing the page around. */
+        <p className="grid h-30 place-items-center text-sm text-n-500">
+          No entries in the last {days} days
+        </p>
       ) : (
         <ol className="flex flex-col">
           {rows.map((row, index) => (

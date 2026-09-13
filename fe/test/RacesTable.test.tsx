@@ -25,13 +25,17 @@ describe("RacesTable", () => {
       expect(screen.getByText("88 / 300")).toBeInTheDocument();
     });
 
-    it("gives every race a way into its own page", () => {
+    it("gives every race two ways into its own page, both named after it", () => {
+      // The name and the icon at the end of the row. The icon's accessible name
+      // is the race's rather than the word "Open": four rows would otherwise be
+      // four identical links, and a screen reader would announce the same thing
+      // four times without saying which race any of them opened.
       render(<RacesTable rows={[row()]} nowS={1_800_000_000n} />);
 
-      expect(screen.getByRole("link", { name: /Fun Run Sleman/ })).toHaveAttribute(
-        "href",
-        "/org/events/1",
-      );
+      const [byName, byIcon] = screen.getAllByRole("link", { name: /Fun Run Sleman/ });
+      expect(byName).toHaveAttribute("href", "/org/events/1");
+      expect(byIcon).toHaveAttribute("href", "/org/events/1");
+      expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument();
     });
 
     it("says how long there is until race day", () => {
@@ -43,8 +47,12 @@ describe("RacesTable", () => {
     it("draws a line for a race that has entries", () => {
       const { container } = render(<RacesTable rows={[row()]} nowS={1_800_000_000n} />);
 
-      expect(container.querySelector("svg path")).not.toBeNull();
-      expect(container.querySelector("svg line")).toBeNull();
+      // Scoped by role, because the row's action is an icon and an icon is an
+      // <svg> full of paths: a bare `svg path` query would be answered by the
+      // wrong element and pass whatever the sparkline did.
+      const spark = container.querySelector('svg[role="img"]');
+      expect(spark?.querySelector("path")).not.toBeNull();
+      expect(spark?.querySelector("line")).toBeNull();
     });
   });
 
@@ -71,8 +79,9 @@ describe("RacesTable", () => {
         />,
       );
 
-      expect(container.querySelector("svg line")).not.toBeNull();
-      expect(container.querySelector("svg path")).toBeNull();
+      const spark = container.querySelector('svg[role="img"]');
+      expect(spark?.querySelector("line")).not.toBeNull();
+      expect(spark?.querySelector("path")).toBeNull();
     });
   });
 
