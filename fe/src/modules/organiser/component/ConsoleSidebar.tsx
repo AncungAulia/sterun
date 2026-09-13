@@ -45,10 +45,27 @@ export function ConsoleSidebar({ address }: { address: string }) {
   const mine = data?.events.filter(({ event }) => event.organiser === address) ?? [];
 
   return (
-    <aside className="flex w-52 flex-col bg-ink px-2.5 py-4 text-n-300">
-      <span className="px-3 pb-5 text-sm font-semibold tracking-[0.14em] text-paper">STERUN</span>
+    /*
+      One screen tall and pinned there, rather than as tall as the page.
 
-      <nav aria-label="Organiser console" className="flex flex-1 flex-col gap-1">
+      The wallet chip sits at the bottom of the rail, and on a rail that grows
+      with the page the bottom is wherever the page ends: on a short laptop
+      screen the chip was already below the fold on the dashboard, and a wallet
+      you have to scroll to find is a wallet you cannot check before you sign.
+      `h-dvh` with `self-start` stops the rail stretching, `sticky` keeps it in
+      view, and the races scroll inside the nav instead of pushing the chip
+      down. `shrink-0` is what keeps a long race name from squeezing the rail
+      narrower than it was drawn.
+    */
+    <aside className="sticky top-0 flex h-dvh w-52 shrink-0 flex-col self-start bg-ink px-2.5 py-4 text-n-300">
+      <span className="shrink-0 px-3 pb-5 text-sm font-semibold tracking-[0.14em] text-paper">
+        STERUN
+      </span>
+
+      <nav
+        aria-label="Organiser console"
+        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
+      >
         <Link href="/org" aria-current={pathname === "/org" ? "page" : undefined} className={ITEM}>
           <LayoutDashboardIcon aria-hidden className="size-4" />
           Dashboard
@@ -88,10 +105,11 @@ export function ConsoleSidebar({ address }: { address: string }) {
         ) : null}
       </nav>
 
-      {/* Which wallet's races these are. The rail lists exactly what this
-          address organises, so the address belongs beside the list rather than
-          only in the site header two levels up. */}
-      <p className="mt-4 flex items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs">
+      {/* Which wallet's races these are, and the only place the console says
+          so: there is no site header over these pages, because the rail already
+          carries the wordmark and this chip. The rail lists exactly what this
+          address organises, so the address belongs beside the list. */}
+      <p className="mt-4 flex shrink-0 items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs">
         <span aria-hidden className="size-5 shrink-0 rounded-full bg-teal-300" />
         <span className="numeric truncate">{shortAddress(address)}</span>
       </p>

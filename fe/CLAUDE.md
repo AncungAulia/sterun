@@ -313,11 +313,42 @@ What is settled:
   Dialog's scroll lock stops its list from scrolling by wheel or touch.
 - All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
 
+### Who renders the site header (2026-09-13)
+
+**`app/layout.tsx` renders no `<Header />` and no `<main>`.** It holds `<html>`, `<body>` and
+`<Providers>` and nothing else. The chrome is chosen one level down, by the route group:
+
+| Group | Chrome | Routes |
+| --- | --- | --- |
+| `app/(browse)/layout.tsx` | `SiteFrame` (header + `<main>`) | `/`, `/events/[id]`, `/preview/done` |
+| `app/(organiser)/org/new/layout.tsx` | `SiteFrame` | `/org/new` |
+| `app/(organiser)/org/(console)/layout.tsx` | `WalletGate` + `ConsoleFrame` (the rail), **no header** | `/org`, and `/org/events/[id]` next |
+
+The reason is a bug you could only see in a browser: the console's rail carries the wordmark and the
+wallet chip, so with a global header above it a person on `/org` read "STERUN" twice inside about
+sixty pixels and their own address twice. A root layout can only say "every page", so the decision
+moved to where the pages can disagree.
+
+`components/layouts/SiteFrame.tsx` is the header plus the `<main className="flex flex-1 flex-col">`,
+shared rather than copied because the two go together: that `<main>` is what lets a page fill the
+space the header leaves, and the pair has to stay one thing. A third group wanting site chrome
+renders `SiteFrame` too.
+
+**The `(console)` group is what keeps the shell off the wizard.** `/org/new` is six steps that end
+in signing; permanent navigation beside it is a way out of a half-finished race at every moment, and
+a second one next to the step's own back link. A layout at `org/` would take it along, so the
+console's own routes moved into a parenthesised group instead. **No URL changed**, and none may: a
+parenthesised segment never appears in the path.
+
+`test/console-chrome.test.tsx` holds the rule. It renders each layout and counts what is on screen,
+never a class: one wordmark and one address under the console, a header over the browse pages and
+the wizard, no rail beside the wizard.
+
 ### The console shell (STE-17)
 
-Everything under `/org` sits in `app/(organiser)/org/layout.tsx`: `WalletGate`, then
-`modules/organiser/component/ConsoleFrame.tsx`, which draws the dark rail beside the page. Three
-consequences worth knowing before adding a page there:
+Everything under `/org` except the wizard sits in `app/(organiser)/org/(console)/layout.tsx`:
+`WalletGate`, then `modules/organiser/component/ConsoleFrame.tsx`, which draws the dark rail beside
+the page. Four consequences worth knowing before adding a page there:
 
 - **The gate is the layout's, not the page's.** `OrganiserHome` used to wrap itself in `WalletGate`
   and no longer does. A new page under `/org` must not add its own: gating twice means two
@@ -333,6 +364,10 @@ consequences worth knowing before adding a page there:
   scanners, results, belongs inside a race at `/org/events/[id]`, never in the rail. A failed chain
   read empties the expander and nothing else: the rail is navigation, and a node that will not
   answer must not take away the way back. It is collapsed on `/org` and open inside a race.
+- **The rail is one screen tall and pinned, not as tall as the page** (`sticky top-0 h-dvh
+  self-start`, with the nav scrolling inside it). The wallet chip sits at its bottom, and on a rail
+  that grows with the page the bottom is wherever the page ends: at 900px it was already below the
+  fold. A wallet you have to scroll to find is a wallet you cannot check before you sign.
 - **`ConsoleHeader` is every console page's top bar**: a title, an optional status badge, an
   optional bell, and **one** action. One, not a row: each tab inside a race has exactly one thing to
   do, and keeping it in the bar rather than under the content means it does not travel down the page
