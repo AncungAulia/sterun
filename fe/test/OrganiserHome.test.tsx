@@ -235,6 +235,17 @@ describe("OrganiserHome", () => {
       expect(screen.getByText("sUSD")).toBeInTheDocument();
     });
 
+    it("compares the races, under a title that is not Pace", async () => {
+      // In a running product "pace" means minutes per kilometre, so a runner
+      // glancing at this screen would read the chart as being about speed.
+      listEvents.mockResolvedValue({ events: [summary(0, {}, [category(0)])], unreadable: [] });
+
+      const { container } = renderHome();
+
+      expect(await screen.findByText("Entries comparison")).toBeInTheDocument();
+      expect(container.textContent).not.toMatch(/pace/i);
+    });
+
     it("shows the status of every race, including one not open yet", async () => {
       // The attribute is what a stylesheet and a test match on, and the
       // sentence is what a person reads. Both are asserted, because the

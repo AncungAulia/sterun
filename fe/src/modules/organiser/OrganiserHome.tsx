@@ -36,7 +36,9 @@ import type { EventSummary } from "@/lib/events";
 import { entriesPerDay } from "@/lib/records";
 import { formatAmount } from "@/utils/format";
 
+import { fillByDaysOut } from "./chart";
 import { ConsoleHeader } from "./component/ConsoleHeader";
+import { EntriesComparison, type ComparisonSeries } from "./component/EntriesComparison";
 import { useNeedsContext } from "./component/NeedsContext";
 import { NotAllowedNotice } from "./component/NotAllowedNotice";
 import { RacesTable, type RaceRow } from "./component/RacesTable";
@@ -45,6 +47,9 @@ import { UrgentBanner } from "./component/UrgentBanner";
 
 /** How far back the sparkline in each row looks. */
 const SPARK_DAYS = 14;
+
+/** How many live races the comparison chart carries beside the benchmark. */
+const LIVE_COMPARED = 2;
 
 interface Totals {
   published: number;
@@ -85,6 +90,45 @@ function totalsOf(events: readonly EventSummary[]): Totals {
   };
 }
 
+/**
+ * The races worth putting on one chart, and which of them is the benchmark.
+ *
+ * Three lines, not thirty. The comparison only means anything against a race
+ * that has already finished, so the most recent one that ran carries the
+ * benchmark, and the races still to run are taken soonest first, because those
+ * are the ones an organiser can still do something about.
+ *
+ * A race with no entries contributes no series at all. `fillByDaysOut` returns
+ * an empty list for it rather than a line along the bottom, which would read as
+ * a measurement of a race that has not been measured.
+ */
+function comparisonOf(
+  events: readonly EventSummary[],
+  records: ReadonlyMap<number, readonly { enteredAt: bigint }[]>,
+  nowS: bigint,
+): ComparisonSeries[] {
+  const build = (summary: EventSummary): ComparisonSeries => ({
+    name: summary.event.name,
+    finished: summary.event.startsAt <= nowS,
+    points: fillByDaysOut(
+      records.get(summary.event.eventId) ?? [],
+      summary.categories.reduce((sum, category) => sum + category.quota, 0),
+      summary.event.startsAt,
+      nowS,
+    ),
+  });
+
+  const run = events.filter(({ event }) => event.startsAt <= nowS);
+  const benchmark = run.sort((a, b) => (a.event.startsAt > b.event.startsAt ? -1 : 1)).at(0);
+
+  const live = events
+    .filter(({ event }) => event.startsAt > nowS)
+    .sort((a, b) => (a.event.startsAt < b.event.startsAt ? -1 : 1))
+    .slice(0, LIVE_COMPARED);
+
+  return [...(benchmark ? [benchmark] : []), ...live].map(build);
+}
+
 /** A share, or nothing to compare against. Never a division by zero. */
 function share(part: number, whole: number): number | undefined {
   return whole > 0 ? part / whole : undefined;
@@ -120,6 +164,7 @@ export function OrganiserHome() {
   const urgent = needs.find((need) => need.urgent);
 
   const totals = totalsOf(mine);
+  const comparison = nowS === undefined ? [] : comparisonOf(mine, records, nowS);
   const rows: RaceRow[] =
     nowS === undefined
       ? []
@@ -189,6 +234,10 @@ export function OrganiserHome() {
                 unit="sUSD"
                 filled={share(Number(totals.received), Number(totals.potential))}
               />
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+              <EntriesComparison series={comparison} />
             </div>
 
             <section className="overflow-hidden rounded-lg border border-n-200 bg-paper">
