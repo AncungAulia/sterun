@@ -105,3 +105,57 @@ export function entriesPerDay(
 export function finishedCount(records: readonly IndexedRecord[]): number {
   return records.filter((entry) => entry.state === "Finished" || entry.state === "Dnf").length;
 }
+
+export interface TrendingInput {
+  eventId: number;
+  eventName: string;
+  categories: readonly { categoryId: number; code: string }[];
+  records: readonly IndexedRecord[];
+}
+
+export interface TrendingRow {
+  eventId: number;
+  eventName: string;
+  code: string;
+  count: number;
+}
+
+/**
+ * Which distances are moving right now, across every race.
+ *
+ * Ranked by (race, distance) rather than by race, because the decision behind
+ * the question is whether to add a wave — and that is made about one distance,
+ * not about a whole event.
+ */
+export function trending(
+  input: readonly TrendingInput[],
+  nowS: bigint,
+  days: number,
+  limit: number,
+): TrendingRow[] {
+  const since = nowS - BigInt(days) * DAY;
+  const rows: TrendingRow[] = [];
+
+  for (const race of input) {
+    const codes = new Map(race.categories.map((c) => [c.categoryId, c.code]));
+    const counts = new Map<number, number>();
+
+    for (const entry of race.records) {
+      if (entry.enteredAt < since || entry.enteredAt > nowS) continue;
+      counts.set(entry.categoryId, (counts.get(entry.categoryId) ?? 0) + 1);
+    }
+
+    for (const [categoryId, count] of counts) {
+      rows.push({
+        eventId: race.eventId,
+        eventName: race.eventName,
+        code: codes.get(categoryId) ?? `Distance ${categoryId}`,
+        count,
+      });
+    }
+  }
+
+  return rows
+    .sort((a, b) => b.count - a.count || a.eventId - b.eventId || a.code.localeCompare(b.code))
+    .slice(0, limit);
+}
