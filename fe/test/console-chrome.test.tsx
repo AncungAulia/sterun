@@ -16,6 +16,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import BrowseLayout from "../app/(browse)/layout";
 import ConsoleLayout from "../app/(organiser)/org/(console)/layout";
 import NewEventLayout from "../app/(organiser)/org/new/layout";
+import BrowseNotFound from "../app/(browse)/not-found";
+import NotFound from "../app/not-found";
 import { shortAddress } from "@/utils/format";
 
 const ADDRESS = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
@@ -106,16 +108,51 @@ describe("the console owns its chrome", () => {
     });
   });
 
+  describe("without a wallet", () => {
+    it("still carries the wordmark and the landmark on the connect screen", () => {
+      // The first screen a new organiser ever sees. It used to be a card
+      // floating on an empty page: no way back to the site, no landmark, in
+      // the one state where nobody has any reason to trust the page yet.
+      wallet = { ...wallet, address: null };
+      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
+
+      expect(screen.getByRole("link", { name: "STERUN" })).toHaveAttribute("href", "/");
+      const main = screen.getByRole("main");
+      expect(within(main).getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+    });
+
+    it("draws no rail and no page for a wallet that is not there", () => {
+      wallet = { ...wallet, address: null };
+      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
+
+      expect(screen.queryByRole("navigation", { name: "Organiser console" })).not.toBeInTheDocument();
+      expect(screen.queryByText("dashboard")).not.toBeInTheDocument();
+    });
+
+    it("offers no second wordmark, because there is still no site header", () => {
+      wallet = { ...wallet, address: null };
+      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
+
+      expect(screen.getAllByText("STERUN")).toHaveLength(1);
+      expect(screen.queryByRole("link", { name: "Sterun home" })).not.toBeInTheDocument();
+    });
+  });
+
   describe("edge", () => {
-    it("draws neither chrome while the wallet is still restoring", async () => {
+    it("keeps the chrome while the wallet is still restoring", () => {
       // Not an empty console and not a connect prompt: a rail listing nobody's
-      // races would be a claim the app cannot make yet.
+      // races would be a claim the app cannot make yet, and neither would the
+      // ask, because this wallet may be about to come back. What does not
+      // depend on the answer, the way out and the landmark, stays put rather
+      // than appearing a moment later.
       wallet = { ...wallet, address: null, isRestoring: true };
       render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
 
+      expect(screen.getByRole("link", { name: "STERUN" })).toBeInTheDocument();
+      expect(screen.getByRole("main")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /connect wallet/i })).not.toBeInTheDocument();
       expect(screen.queryByText("dashboard")).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "Organiser console" })).not.toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "Sterun home" })).not.toBeInTheDocument();
     });
   });
 });
@@ -163,6 +200,40 @@ describe("the public pages and the wizard keep the site header", () => {
 
       expect(screen.queryByRole("navigation", { name: "Organiser console" })).not.toBeInTheDocument();
       expect(screen.queryByText("STERUN")).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe("the page nobody meant to open", () => {
+  describe("positive", () => {
+    it("keeps the header, the landmark and a way back", () => {
+      // An unmatched URL renders at the ROOT boundary, which is in none of the
+      // route groups and therefore has no chrome of its own since the header
+      // moved down into them. Without app/not-found.tsx the one page somebody
+      // reaches purely by accident was the one page with no way out.
+      render(<NotFound />, { wrapper: Wrapper });
+
+      expect(screen.getByRole("link", { name: "Sterun home" })).toBeInTheDocument();
+      expect(screen.getByRole("main")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Browse races" })).toHaveAttribute("href", "/");
+    });
+  });
+
+  describe("negative", () => {
+    it("draws no second header when it lands inside a group that has one", () => {
+      // Measured in a browser first: /events/banana rendered the root page
+      // inside (browse)'s layout and printed two lockups and two <main>
+      // elements, which is precisely the defect this task set out to remove.
+      render(
+        <BrowseLayout>
+          <BrowseNotFound />
+        </BrowseLayout>,
+        { wrapper: Wrapper },
+      );
+
+      expect(screen.getAllByRole("link", { name: "Sterun home" })).toHaveLength(1);
+      expect(screen.getAllByRole("main")).toHaveLength(1);
+      expect(screen.getByRole("link", { name: "Browse races" })).toBeInTheDocument();
     });
   });
 });

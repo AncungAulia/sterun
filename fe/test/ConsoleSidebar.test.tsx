@@ -67,8 +67,13 @@ async function renderRail(address = MINE) {
     render. Awaiting the mock's own promise inside `act` is deterministic where
     a DOM query cannot be.
   */
+  const read = listEvents.mock.results.at(-1)?.value;
+  // Loudly, not with an optional call. `?.catch()` on something that is not a
+  // promise does nothing and says nothing, which is precisely how the waiting
+  // below would be hollowed out again without a single test turning red.
+  expect(read).toBeInstanceOf(Promise);
   await act(async () => {
-    await listEvents.mock.results.at(-1)?.value?.catch(() => {});
+    await (read as Promise<unknown>).catch(() => {});
   });
 }
 

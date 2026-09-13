@@ -322,7 +322,22 @@ What is settled:
 | --- | --- | --- |
 | `app/(browse)/layout.tsx` | `SiteFrame` (header + `<main>`) | `/`, `/events/[id]`, `/preview/done` |
 | `app/(organiser)/org/new/layout.tsx` | `SiteFrame` + `WalletGate` | `/org/new` |
-| `app/(organiser)/org/(console)/layout.tsx` | `WalletGate` + `ConsoleFrame` (the rail), **no header** | `/org`, and `/org/events/[id]` next |
+| `app/(organiser)/org/(console)/layout.tsx` | `ConsoleFrame` (rail or connect screen), **no header** | `/org`, and `/org/events/[id]` next |
+| `app/not-found.tsx` | `SiteFrame` | a URL matching no route at all |
+| `app/(browse)/not-found.tsx` | none of its own, the group layout has it | `notFound()` from a public page |
+
+**A 404 needs one file per boundary, and they are not the same file.** Next renders the CLOSEST
+`not-found.tsx`, inside that segment's layouts. A URL matching no route lands at the ROOT boundary,
+which is in none of the groups, so once the header moved down into them a 404 had no chrome at all:
+no header, no `<main>`, no link back, on the one page somebody reaches entirely by accident. Hence
+`app/not-found.tsx` with `SiteFrame`. But `notFound()` from `/events/[id]` lands **inside**
+`(browse)/layout.tsx`, which has already drawn the header, and the root page there printed the
+lockup and the `<main>` twice. Measured in a browser at `/events/banana`, not guessed. So
+`(browse)` has its own, with no `SiteFrame`, and both render
+`components/layouts/NotFoundMessage.tsx` so the sentence is written once. The rule for anything
+added later, including `error.tsx`: **a boundary file supplies the chrome only if its own layouts
+do not.** A console route that ever calls `notFound()` will need one in the `(console)` group under
+the same rule.
 
 The reason is a bug you could only see in a browser: the console's rail carries the wordmark and the
 wallet chip, so with a global header above it a person on `/org` read "STERUN" twice inside about
@@ -346,10 +361,18 @@ the wizard, no rail beside the wizard.
 
 ### The console shell (STE-17)
 
-Everything under `/org` except the wizard sits in `app/(organiser)/org/(console)/layout.tsx`:
-`WalletGate`, then `modules/organiser/component/ConsoleFrame.tsx`, which draws the dark rail beside
-the page. Six consequences worth knowing before adding a page there:
+Everything under `/org` except the wizard sits in `app/(organiser)/org/(console)/layout.tsx`, which
+renders `modules/organiser/component/ConsoleFrame.tsx` and nothing else. Six consequences worth
+knowing before adding a page there:
 
+- **`ConsoleFrame` draws two frames, and the gate is inside it.** Connected, the rail beside the
+  page. Not connected, a bar carrying the wordmark over a `<main>` holding `WalletGate`'s ask. The
+  gate used to stand outside the frame in the layout, which put every piece of chrome the console
+  owns behind a connected wallet: `/org` with no wallet is the **first screen a new organiser ever
+  sees**, and it was a card floating on an empty page with no landmark and no way back to the site.
+  It cannot be fixed inside `WalletGate`, which also gates `/org/new`, where a second wordmark
+  would sit under the site header. The wordmark itself is `ConsoleWordmark`, one component drawn by
+  both frames, so the exit cannot exist in one state and be missing from the other.
 - **The gate is the layout's, not the page's, everywhere under `/org`.** `OrganiserHome` used to
   wrap itself in `WalletGate` and no longer does, and neither does `CreateEvent`: the wizard's gate
   moved up to `app/(organiser)/org/new/layout.tsx` when the console group took over the gating for
@@ -380,10 +403,10 @@ the page. Six consequences worth knowing before adding a page there:
   self-start`, with the nav scrolling inside it). The wallet chip sits at its bottom, and on a rail
   that grows with the page the bottom is wherever the page ends: at 900px it was already below the
   fold. A wallet you have to scroll to find is a wallet you cannot check before you sign.
-- **The rail carries the only way out of the console.** Its wordmark is a `Link` to `/`: with no
-  site header over these pages, without it there is no route back to the public app but the address
-  bar. `ConsoleFrame` puts the page in a `<main>` and leaves the rail outside it, so the
-  navigation is skippable, which is the one thing a landmark is for.
+- **The wordmark carries the only way out of the console**, in both frames: with no site header over
+  these pages, without it there is no route back to the public app but the address bar.
+  `ConsoleFrame` puts the page in a `<main>` and leaves the rail outside it, so the navigation is
+  skippable, which is the one thing a landmark is for.
 - **`ConsoleHeader` is every console page's top bar**: a title, an optional status badge, an
   optional bell, and **one** action. One, not a row: each tab inside a race has exactly one thing to
   do, and keeping it in the bar rather than under the content means it does not travel down the page

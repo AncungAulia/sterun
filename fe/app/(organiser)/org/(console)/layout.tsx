@@ -5,9 +5,11 @@
  * remount when somebody moves between races: its expander stays open and its
  * scroll position stays put, which is the whole reason for having it.
  *
- * `WalletGate` lives here too. Every page below needs to know which wallet is
- * asking before it can show anything at all, and asking once here is what stops
- * two pages disagreeing about whether a wallet is still restoring.
+ * The wallet gate is inside `ConsoleFrame` rather than around it. It used to
+ * stand here, and that put every piece of chrome the console draws, the
+ * wordmark link and the `<main>`, behind a connected wallet: the connect screen
+ * itself, which is the first thing a new organiser ever sees, had neither.
+ * One component reads the wallet and draws the right frame for it.
  *
  * The `(console)` group is why this covers `/org` and not `/org/new`. A layout
  * at `org/` would take the wizard with it, and the wizard wants the site header
@@ -15,18 +17,13 @@
  * `/org/events/[id]` next, and nothing else. It changes no URL: a parenthesised
  * segment never appears in the path.
  *
- * No site header above any of it. The rail carries the wordmark and the wallet
- * chip, so the global one would print both a second time.
+ * No site header above any of it. The console carries its own wordmark and its
+ * own wallet chip, so the global one would print both a second time.
  */
 import type { ReactNode } from "react";
 
-import { WalletGate } from "@/components/layouts/WalletGate";
 import { ConsoleFrame } from "@/modules/organiser/component/ConsoleFrame";
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
-  return (
-    <WalletGate>
-      <ConsoleFrame>{children}</ConsoleFrame>
-    </WalletGate>
-  );
+  return <ConsoleFrame>{children}</ConsoleFrame>;
 }

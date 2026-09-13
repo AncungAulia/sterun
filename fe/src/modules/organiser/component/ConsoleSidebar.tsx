@@ -26,7 +26,9 @@ import { useState } from "react";
 import { useEvents } from "@/hooks/useEvents";
 import { shortAddress } from "@/utils/format";
 
-/** Where a race's own pages live. One spelling for the links and for the test below. */
+import { ConsoleWordmark } from "./ConsoleWordmark";
+
+/** Where a race's own pages live. One spelling for the links and for the checks below. */
 const RACES = "/org/events";
 
 /**
@@ -98,13 +100,9 @@ export function ConsoleSidebar({ address }: { address: string }) {
           there is no header over these pages. A wordmark is where everybody
           already looks for it, so it is the wordmark rather than a new row in
           the nav, which would have to be named and would compete with the two
-          items that are actually the console. */}
-      <Link
-        href="/"
-        className="mb-5 shrink-0 self-start rounded-md px-3 text-sm font-semibold tracking-[0.14em] text-paper"
-      >
-        STERUN
-      </Link>
+          items that are actually the console. The connect screen draws the same
+          component, so the exit cannot exist in one state and not the other. */}
+      <ConsoleWordmark className="mb-5 shrink-0 self-start" />
 
       <nav
         aria-label="Organiser console"
