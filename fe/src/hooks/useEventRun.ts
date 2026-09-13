@@ -40,6 +40,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { friendlyError } from "@/lib/errors";
 import { fetchEventMetadata } from "@/lib/metadata";
 import { PlainError } from "@/lib/plain-error";
+import { clearRunProgress, loadRunProgress, saveRunProgress } from "@/lib/run-progress";
 import { uploadEventFile } from "@/lib/upload";
 import { signMessage } from "@/lib/wallet";
 import type { PlannedCategory } from "@/modules/organiser/component/StepCategoryPlan";
@@ -75,12 +76,25 @@ export function useEventRun({
   const addAddon = useAddAddon();
   const setStatus = useSetEventStatus();
 
-  const [done, setDone] = useState<string[]>([]);
+  /*
+   * Picks a half-finished run back up instead of starting a second one. Read
+   * with a lazy initializer rather than in an effect: `Wizard` never mounts
+   * this hook until `CreateGate` has already confirmed a connected, allowlisted
+   * address (`CreateEvent.tsx`), so `address` is already the final value on
+   * this component instance's very first render — there is no later moment for
+   * an effect to catch. After mount, `start()` and its own writes to storage
+   * are the source of truth, not whatever is sitting in storage.
+   */
+  const [done, setDone] = useState<string[]>(
+    () => (address ? loadRunProgress(address)?.done : undefined) ?? [],
+  );
   const [receipts, setReceipts] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ stepId: string; message: string } | null>(null);
   const [isRunning, setRunning] = useState(false);
-  const [eventId, setEventId] = useState<number | null>(null);
+  const [eventId, setEventId] = useState<number | null>(
+    () => (address ? loadRunProgress(address)?.eventId : undefined) ?? null,
+  );
   const [document, setDocument] = useState<PublishedDocument | null>(null);
 
   const steps = useMemo(
@@ -210,7 +224,9 @@ export function useEventRun({
         }
         landed.push(step.id);
         setDone([...landed]);
+        if (address) saveRunProgress(address, { eventId: state.eventId, done: [...landed] });
       }
+      if (address) clearRunProgress(address);
     } finally {
       setCurrent(null);
       setRunning(false);
