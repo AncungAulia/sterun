@@ -17,7 +17,7 @@ blocks the rest.
 ## Shape
 
 ```
-/org                     Dashboard    what needs me today
+/org                     Dashboard    how the races are doing
 /org/events/[id]         one race     Overview · Entries · Scanners · Results
 /org/new                 the wizard   unchanged
 ```
@@ -33,28 +33,46 @@ all silently mean "of which race?" — everything race-scoped stays inside the r
 
 ## Dashboard
 
-Four blocks, in this order, and the order is the design:
+Three blocks:
 
-1. **"N things need you"** — the list of what is waiting, each row with the button that fixes it.
-   Time-critical rows get an amber icon and an amber button; everything else is neutral. One
-   coloured row out of three is what makes it read as urgent — if all three shout, none does.
-   - a race that runs in days with no scanner registered → **Add a scanner**
-   - a race whose entries are not open → **Open entries**
-   - a race that finished with no results → **Upload results**
-2. **Your races** — name, date, days to go, status, a 14-day sparkline, a fill bar and the count.
-3. **Pace** — the cross-race comparison, described below.
-4. A slim strip of three totals at the bottom: races published, entries, received.
+1. **Three totals** — races published, entries across all races, received across all races. Each
+   carries a thin bar under the number rather than a sentence.
+2. **Entries comparison** beside **Trending entries**.
+3. **All races** — one table, full width: name, date, days to go, status, a 14-day sparkline, a fill
+   bar, the count, and an **Open ›** action in the last column.
 
-The totals sit last on purpose. They are the only numbers on the page nobody can act on.
-
-**Pace** is the one chart here that earns its place. Its x-axis counts **days to race day**, not
-calendar dates, so races that ran months apart lie on top of each other; its y-axis is **percent of
-quota**, because 240 places and 500 places are not the same race. A finished race is drawn as a
-dashed grey line and is the organiser's only honest benchmark — their own last race. The live races
-stop where they are now.
+**Entries comparison** is the chart that earns its place. Its x-axis counts **days to race day**,
+not calendar dates, so races that ran months apart lie on top of each other; its y-axis is **percent
+of quota**, because 240 places and 500 places are not the same race. A finished race is drawn as a
+dashed grey line and is the organiser's only honest benchmark — their own last race. Live races stop
+where they are now.
 
 That is what no table on the page can say: *88 of 300 with three days to go, where your last race
 was at 94% at the same point.*
+
+It is called "Entries comparison" and not "Pace" for a reason worth writing down: **in a running
+product, pace means minutes per kilometre.** A runner or an organiser reading "Pace" on a chart would
+reasonably expect it to be about how fast people run.
+
+**Trending entries** ranks (race, distance) pairs by entries in the last seven days — `#1 5K, Fun
+Run Sleman, +42`. It answers where demand is right now, which is the question behind adding a wave.
+Derived from the indexer's `entered_at` and `category_id`.
+
+### What needs the organiser
+
+This does **not** live in a panel on the Dashboard. It lives in a **bell in the page header, on every
+page**, with a count badge, opening a popover of rows that each link to the fix. That is the thing a
+Dashboard panel could never do: an organiser three tabs deep inside a race still sees it.
+
+The cost of a bell is that it only speaks when somebody clicks it, and one case cannot wait for a
+click: **a race days away with no scanner registered.** Nobody can check runners in, and it is not
+discovered until people are queuing at the gate. So that case, and nothing else, also renders as an
+amber banner above the Dashboard's content.
+
+The rule is scarcity, and it is measurable: **if that banner appears more than about once a week, it
+has stopped working** and its condition should be narrowed. Everything routine — entries not open,
+results not uploaded — stays in the bell, and the least urgent item does not even get a button
+there, only a plain line.
 
 ## One race: four tabs
 
@@ -138,7 +156,7 @@ every panel goes full width. The half rings keep their key underneath rather tha
 ## Copy rules
 
 Panel titles are plain nouns: **Distances**, **Activity**, **Entries per day**, **Add-ons**,
-**Pace**, **Scanners**, **Results**. The explanatory line that used to sit under each one is gone;
+**Entries comparison**, **Trending entries**, **All races**, **Scanners**, **Results**. The explanatory line that used to sit under each one is gone;
 it described how the thing worked, which is what `fe/CLAUDE.md` already forbids.
 
 Table headers are sentence case on a tinted band, not uppercase. The column is **Status**, not
@@ -180,7 +198,7 @@ Available today, no backend change:
 | Add-on code, quota, reserved count | `get_addon` / `listAddOns` |
 | Payments received | `Σ entered × price` + `Σ reserved × add-on price` |
 | Scanner list | `get_scanners` / `/events/:id/scanners` |
-| Entries per day, Pace, sparklines | indexer `entered_at` on `/events/:id/records` |
+| Entries per day, Entries comparison, sparklines, Trending entries | indexer `entered_at` and `category_id` on `/events/:id/records` |
 | Activity feed | indexer `record_transitions` (`to_state`, `occurred_at`) |
 | Results table | indexer `state`, `finish_time_s`, `result_at` |
 
@@ -224,6 +242,10 @@ salt)`. Adding vault columns does not touch the frozen spec.
 ## Decisions taken, not to be reopened
 
 - Sidebar with Dashboard + an Events expander; no separate race-list page.
+- Dashboard is totals, then Entries comparison + Trending entries, then one All races table.
+- What needs the organiser lives in a header bell on every page; only a race days away with no
+  scanner also interrupts, as a banner.
+- The comparison chart is "Entries comparison", never "Pace" — pace means minutes per kilometre.
 - Four tabs per race, in this order: Overview, Entries, Scanners, Results.
 - Half rings for Distances (bars available, and documented above as the trade-off).
 - Add-ons panel is generic, never jersey-specific.

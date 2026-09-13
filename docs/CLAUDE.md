@@ -8,6 +8,18 @@
 | `social/` | drafts of public content before it goes out, plus its URL afterwards | yes |
 | `WEB_APP_IA.md` | information architecture for `fe/`: the page map, the data limits per page, the shape of the event metadata document, the build order | yes, same rules as `SYSTEM_DESIGN.md` |
 | `specs/` | the **FROZEN** handoff contract (C4) | has its own rules → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
+| `superpowers/` | design specs and implementation plans written before the code, one file per piece of work, dated | append a new file; leave the old ones as they were |
+
+## `superpowers/` — the reasoning behind a piece of work
+
+`specs/` here is the design of one change: what is being built, what was decided, and **why the
+rejected options were rejected**. `plans/` is the step list that came out of it. Both are written
+before the code and committed with it, so a reviewer can see the argument rather than infer it from
+a diff.
+
+They are dated and they are not maintained. A spec describes what was decided **on that date**; when
+a later piece of work changes the answer, it gets its own file rather than an edit to the old one.
+Anything that has to stay true forever belongs in a `CLAUDE.md` or in `SYSTEM_DESIGN.md` instead.
 
 ## `SYSTEM_DESIGN.md`
 

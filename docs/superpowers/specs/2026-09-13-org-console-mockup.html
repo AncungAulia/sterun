@@ -294,6 +294,51 @@ th.rowact{text-align:right}
 .legend-row .sw{width:10px;height:10px;border-radius:3px;flex:0 0 10px}
 .legend-row b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
 
+/* header bell */
+.bell{position:relative;width:36px;height:36px;border-radius:var(--r-md);border:1px solid var(--n300);
+  background:#fff;display:grid;place-items:center;font-size:15px;cursor:pointer;flex:0 0 36px}
+.bell .pip{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:999px;
+  background:var(--danger-strong,#e23b22);color:#fff;font-size:10.5px;font-weight:600;
+  display:grid;place-items:center;padding:0 5px;border:2px solid #fff}
+.hdr-right{display:flex;align-items:center;gap:10px}
+
+/* bell popover */
+.pop{position:absolute;top:58px;right:24px;width:400px;background:#fff;border:1px solid var(--n200);
+  border-radius:var(--r-lg);box-shadow:0 18px 44px rgba(30,35,43,.22);padding:14px 16px 12px;z-index:5}
+.pop h6{margin:0 0 12px;font-style:italic;font-weight:600;font-size:14.5px}
+.pop .row{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--n200);
+  border-radius:var(--r-md);margin-bottom:8px;cursor:pointer}
+.pop .row.now{border-color:var(--warning-border);background:var(--warning-surface)}
+.pop .row .t{display:block;font-size:13px;font-weight:500;line-height:1.35}
+.pop .row .d{display:block;font-size:12px;color:var(--n500);line-height:1.45;margin-top:3px}
+.pop .row.now .d{color:var(--warning)}
+.pop .row .ch{margin-left:auto;color:var(--n400);font-size:14px}
+.pop .all{display:block;text-align:center;font-size:12.5px;color:var(--teal);text-decoration:none;
+  padding:8px 0 2px}
+
+/* the one banner that still interrupts */
+.banner{display:flex;align-items:center;gap:13px;border:1px solid var(--warning-border);
+  background:var(--warning-surface);border-radius:var(--r-lg);padding:13px 16px;margin-bottom:12px}
+.banner .tx{font-size:13.5px;line-height:1.45;color:var(--warning)}
+.banner .tx b{font-weight:600}
+.banner .go{margin-left:auto}
+.banner .go button{background:#fff;border:1px solid var(--warning-border);color:var(--warning);
+  border-radius:var(--r-md);padding:8px 14px;font-family:var(--sans);font-size:13px;font-weight:500;
+  cursor:pointer;white-space:nowrap}
+
+/* trending */
+.rank{display:flex;flex-direction:column}
+.rank .it{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--n200)}
+.rank .it:first-child{border-top:0;padding-top:0}
+.rank .n{font-size:12px;color:var(--n400);font-variant-numeric:tabular-nums;flex:0 0 20px}
+.rank .t{font-size:13px;line-height:1.35;min-width:0}
+.rank .t b{font-weight:500}
+.rank .t span{color:var(--n500);display:block;font-size:12px}
+.rank .v{margin-left:auto;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;
+  padding-left:12px;white-space:nowrap}
+.races td.go{text-align:right;white-space:nowrap;width:1%}
+.races td.go a{color:var(--teal);text-decoration:none;font-size:13px}
+
 .later .panel{border-style:dashed}
 </style>
 </head>
@@ -314,63 +359,87 @@ th.rowact{text-align:right}
 <!-- ============ 0. DASHBOARD ============ -->
 <section class="opt">
   <div class="opt-head"><span class="opt-tag">0</span><h2>Dashboard</h2></div>
-  <p class="opt-note">Not a smaller copy of the event page. This one answers a different
-  question: <b>which race needs me today.</b> So the list of what is waiting sits at the top, where
-  the eye lands, and the three totals are a slim strip at the bottom, because a total is the one
-  thing here nobody can act on.</p>
-  <p class="opt-note">Each race also carries <b>fourteen days of entries</b> next to its bar. A bar
-  says 312 of 500; the line says whether it is still moving. Jogja Night Run's line falls to the
-  floor because its race already happened, and Borobudur Trial's is flat on zero because entries have
-  never been opened.</p>
-  <p class="opt-note"><b>Pace</b> is the comparison you asked for, and the trick is the axis: it
-  counts <b>days to race day</b>, not calendar dates, so races that ran months apart lie on top of
-  each other. The vertical is percent of quota, because 240 places and 500 places are not the same
-  race. Your finished race is the dashed grey line, and it is the only honest benchmark you have.
-  Read it and Fun Run Sleman tells you something no table on this page can: <b>three days out it is
-  29% full, where your last race was at 94%.</b> That is why it is at the top of Needs you.</p>
+  <p class="opt-note">Your layout, with one addition I want you to judge rather than accept. The
+  chart is renamed <b>Entries comparison</b>, which is your word and a better one than mine: in a
+  running product "pace" means minutes per kilometre, and a runner reading it would think this
+  chart was about how fast people run.</p>
+  <p class="opt-note">The bell carries everything waiting, on every page, which is the thing the
+  dashboard list could never do. But a bell only speaks when someone clicks it, and the one item
+  that cannot wait for a click is a race days away with nobody able to check runners in. So exactly
+  that case, and nothing else, also lands as a banner. Two routine items stay in the bell. If the
+  banner ever shows up twice in a week it has stopped working and should be narrowed further.</p>
 
   <div class="screen">
     <aside class="side">
       <div class="brand">STERUN</div>
       <div class="nav">
         <a href="#" class="on teal">Dashboard</a>
-        <a href="#">Events <span class="caret">▾</span></a>
+        <a href="#">Events <span class="caret">&#9662;</span></a>
       </div>
-      <div class="who"><span class="dot"></span>GA5V…HZS7</div>
+      <div class="who"><span class="dot"></span>GA5V&hellip;HZS7</div>
     </aside>
-
     <div class="main">
       <div class="top">
         <h3>Dashboard</h3>
-        <button class="btn">Create event</button>
+        <span class="hdr-right">
+          <button class="bell" aria-label="3 things need you">&#128276;<span class="pip">3</span></button>
+          <button class="btn">Create event</button>
+        </span>
       </div>
       <div class="body" style="padding-top:24px">
-        <div class="row2" style="grid-template-columns:1fr;margin-top:0">
-          <div class="panel needs">
-            <div class="ph"><h5>3 things need you</h5></div>
-            <div class="att">
-              <div class="it now"><span class="ic">&#9201;</span>
-                <span class="tx"><b>Fun Run Sleman</b> <span>runs in 3 days and has no scanner
-                  registered, so nobody can check runners in</span></span>
-                <span class="go"><button>Add a scanner</button></span></div>
-              <div class="it"><span class="ic">&#9998;</span>
-                <span class="tx"><b>Borobudur Trial 2026</b> <span>is not open yet, so nobody can
-                  find it or enter</span></span>
-                <span class="go"><button>Open entries</button></span></div>
-              <div class="it"><span class="ic">&#9201;</span>
-                <span class="tx"><b>Jogja Night Run</b> <span>finished 12 days ago and has no
-                  results</span></span>
-                <span class="go"><button>Upload results</button></span></div>
+        <div class="banner">
+          <span class="tx"><b>Fun Run Sleman runs in 3 days and has no scanner registered.</b>
+            Nobody can check runners in.</span>
+          <span class="go"><button>Add a scanner</button></span>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="lbl">Races published</div><div class="big">3 <small>of 4</small></div>
+            <div class="ctx"><i style="width:75%"></i></div></div>
+          <div class="stat"><div class="lbl">Entries, all races</div><div class="big">640</div>
+            <div class="ctx"><i style="width:58%"></i></div></div>
+          <div class="stat"><div class="lbl">Received, all races</div><div class="big">9,120 <small>sUSD</small></div>
+            <div class="ctx"><i style="width:58%"></i></div></div>
+        </div>
+
+        <div class="row2">
+          <div class="panel">
+            <div class="ph"><h5>Entries comparison</h5><a href="#">Percent of quota</a></div>
+            <svg width="100%" height="210" viewBox="0 0 720 210" role="img"
+                 aria-label="Fill against days to race day. Fun Run Sleman is at 29 percent with 3 days to go, where Jogja Night Run was at 94 percent.">
+              <line x1="46" y1="168.0" x2="706" y2="168.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="171.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">0%</text><line x1="46" y1="130.0" x2="706" y2="130.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="133.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">25%</text><line x1="46" y1="92.0" x2="706" y2="92.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="95.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">50%</text><line x1="46" y1="54.0" x2="706" y2="54.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="57.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">75%</text><line x1="46" y1="16.0" x2="706" y2="16.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="19.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">100%</text>
+              <path d="M 46.0,155.8 C 64.3,154.3 119.3,150.3 156.0,146.7 C 192.7,143.2 229.3,139.4 266.0,134.6 C 302.7,129.7 339.3,124.4 376.0,117.8 C 412.7,111.3 456.7,101.9 486.0,95.0 C 515.3,88.2 533.7,82.9 552.0,76.8 C 570.3,70.7 583.2,64.1 596.0,58.6 C 608.8,53.0 619.8,47.4 629.0,43.4 C 638.2,39.3 643.7,37.3 651.0,34.2 C 658.3,31.2 665.7,27.9 673.0,25.1 C 680.3,22.3 689.5,19.0 695.0,17.5 C 700.5,16.0 704.2,16.3 706.0,16.0" fill="none" stroke="#9ba3ad" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 5"/><path d="M 46.0,152.8 C 64.3,150.8 126.7,144.4 156.0,140.6 C 185.3,136.8 200.0,134.6 222.0,130.0 C 244.0,125.4 269.7,118.6 288.0,113.3 C 306.3,108.0 319.2,103.1 332.0,98.1 C 344.8,93.0 355.8,86.9 365.0,82.9 C 374.2,78.8 383.3,75.3 387.0,73.8" fill="none" stroke="#016985" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 46.0,163.4 C 64.3,162.7 119.3,160.4 156.0,158.9 C 192.7,157.4 229.3,156.1 266.0,154.3 C 302.7,152.5 339.3,150.5 376.0,148.2 C 412.7,146.0 456.7,142.7 486.0,140.6 C 515.3,138.6 533.7,137.6 552.0,136.1 C 570.3,134.6 583.2,132.8 596.0,131.5 C 608.8,130.3 619.8,129.5 629.0,128.5 C 638.2,127.5 643.7,126.2 651.0,125.4 C 658.3,124.7 669.3,124.2 673.0,123.9" fill="none" stroke="#d18700" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="387.0" cy="73.8" r="4.5" fill="#fff" stroke="#016985" stroke-width="2.5"/><circle cx="673.0" cy="123.9" r="4.5" fill="#fff" stroke="#d18700" stroke-width="2.5"/>
+              <text x="46.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">60</text><text x="211.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">45</text><text x="376.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">30</text><text x="541.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">15</text><text x="706.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">0</text>
+              <text x="46" y="202" text-anchor="start" font-size="9.5" fill="#9ba3ad">days to race day</text>
+            </svg>
+            <div class="legend legend-row"><div><span class="sw" style="background:#9ba3ad"></span>Jogja Night Run <b>100%</b></div><div><span class="sw" style="background:#016985"></span>TechSprint UGM 2026 <b>62%</b></div><div><span class="sw" style="background:#d18700"></span>Fun Run Sleman <b>29%</b></div></div>
+          </div>
+          <div class="panel">
+            <div class="ph"><h5>Trending entries</h5><a href="#">Last 7 days</a></div>
+            <div class="rank">
+              <div class="it"><span class="n">#1</span>
+                <span class="t"><b>5K</b><span>Fun Run Sleman</span></span>
+                <span class="v">+42</span></div>
+              <div class="it"><span class="n">#2</span>
+                <span class="t"><b>10K</b><span>TechSprint UGM 2026</span></span>
+                <span class="v">+31</span></div>
+              <div class="it"><span class="n">#3</span>
+                <span class="t"><b>5K</b><span>TechSprint UGM 2026</span></span>
+                <span class="v">+18</span></div>
+              <div class="it"><span class="n">#4</span>
+                <span class="t"><b>21K</b><span>TechSprint UGM 2026</span></span>
+                <span class="v">+6</span></div>
             </div>
-            <p class="quiet">Nothing else is waiting on you.</p>
           </div>
         </div>
 
         <div class="row2" style="grid-template-columns:1fr">
           <div class="panel">
-            <div class="ph"><h5>Your races</h5></div>
+            <div class="ph"><h5>All races</h5></div>
             <table class="races">
-              <thead><tr><th>Race</th><th>Status</th><th>Last 14 days</th><th></th><th></th></tr></thead>
+              <thead><tr><th>Race</th><th>Status</th><th>Last 14 days</th><th></th><th></th>
+                <th class="rowact"></th></tr></thead>
               <tbody>
                 <tr>
                   <td class="race"><div class="rn">Fun Run Sleman</div><div class="rd">16 Sep 2026 &middot; in 3 days</div></td>
@@ -378,6 +447,7 @@ th.rowact{text-align:right}
                   <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><polyline points="1.0,20.8 7.5,19.2 13.9,19.2 20.4,15.9 26.8,17.5 33.3,14.3 39.8,15.9 46.2,12.7 52.7,14.3 59.2,9.5 65.6,11.1 72.1,6.2 78.5,7.8 85.0,3.0" fill="none" stroke="#016985" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></td>
                   <td><div class="track"><i style="width:29%"></i></div></td>
                   <td class="qt">88 / 300</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
                 </tr>
                 <tr>
                   <td class="race"><div class="rn">TechSprint UGM 2026</div><div class="rd">12 Oct 2026 &middot; in 29 days</div></td>
@@ -385,6 +455,7 @@ th.rowact{text-align:right}
                   <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><polyline points="1.0,20.2 7.5,18.3 13.9,19.2 20.4,16.4 26.8,17.3 33.3,13.5 39.8,15.4 46.2,11.6 52.7,13.5 59.2,7.8 65.6,10.6 72.1,6.8 78.5,8.7 85.0,3.0" fill="none" stroke="#016985" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></td>
                   <td><div class="track"><i style="width:62%"></i></div></td>
                   <td class="qt">312 / 500</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
                 </tr>
                 <tr>
                   <td class="race"><div class="rn">Borobudur Trial 2026</div><div class="rd">8 Nov 2026 &middot; in 56 days</div></td>
@@ -392,6 +463,7 @@ th.rowact{text-align:right}
                   <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><line x1="1" y1="24" x2="85" y2="24" stroke="#dfe2e6" stroke-width="2" stroke-linecap="round"/></svg></td>
                   <td><div class="track"><i style="width:0%"></i></div></td>
                   <td class="qt">0 / 150</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
                 </tr>
                 <tr>
                   <td class="race"><div class="rn">Jogja Night Run</div><div class="rd">1 Sep 2026 &middot; 12 days ago</div></td>
@@ -399,31 +471,135 @@ th.rowact{text-align:right}
                   <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><polyline points="1.0,16.7 7.5,14.3 13.9,12.7 20.4,8.7 26.8,6.2 33.3,3.0 39.8,4.6 46.2,7.8 52.7,11.9 59.2,16.7 65.6,20.8 72.1,23.2 78.5,24.0 85.0,24.0" fill="none" stroke="#d18700" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></td>
                   <td><div class="track"><i class="full" style="width:100%"></i></div></td>
                   <td class="qt">240 / 240</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="row2" style="grid-template-columns:1fr">
+  <p class="opt-note" style="margin-top:20px">The bell open, and the same three items. Note the
+  third one has no button of its own: opening entries for a race is not urgent, so it sits at the
+  bottom as a plain line rather than pretending to be an alert.</p>
+
+  <div class="screen">
+    <aside class="side">
+      <div class="brand">STERUN</div>
+      <div class="nav">
+        <a href="#" class="on teal">Dashboard</a>
+        <a href="#">Events <span class="caret">&#9662;</span></a>
+      </div>
+      <div class="who"><span class="dot"></span>GA5V&hellip;HZS7</div>
+    </aside>
+    <div class="main">
+      <div class="top">
+        <h3>Dashboard</h3>
+        <span class="hdr-right">
+          <button class="bell" aria-label="3 things need you">&#128276;<span class="pip">3</span></button>
+          <button class="btn">Create event</button>
+        </span>
+      </div>
+      <div class="pop">
+        <h6>3 things need you</h6>
+        <div class="row now">
+          <span><span class="t">Add a scanner &mdash; Fun Run Sleman</span>
+            <span class="d">Runs in 3 days. Nobody can check runners in.</span></span>
+          <span class="ch">&rsaquo;</span>
+        </div>
+        <div class="row">
+          <span><span class="t">Upload results &mdash; Jogja Night Run</span>
+            <span class="d">Finished 12 days ago with no results.</span></span>
+          <span class="ch">&rsaquo;</span>
+        </div>
+        <a class="all" href="#">Open entries for Borobudur Trial 2026</a>
+      </div>
+      <div class="body" style="padding-top:24px">
+        <div class="stats">
+          <div class="stat"><div class="lbl">Races published</div><div class="big">3 <small>of 4</small></div>
+            <div class="ctx"><i style="width:75%"></i></div></div>
+          <div class="stat"><div class="lbl">Entries, all races</div><div class="big">640</div>
+            <div class="ctx"><i style="width:58%"></i></div></div>
+          <div class="stat"><div class="lbl">Received, all races</div><div class="big">9,120 <small>sUSD</small></div>
+            <div class="ctx"><i style="width:58%"></i></div></div>
+        </div>
+
+        <div class="row2">
           <div class="panel">
-            <div class="ph"><h5>Pace</h5><a href="#">Percent of quota</a></div>
+            <div class="ph"><h5>Entries comparison</h5><a href="#">Percent of quota</a></div>
             <svg width="100%" height="210" viewBox="0 0 720 210" role="img"
                  aria-label="Fill against days to race day. Fun Run Sleman is at 29 percent with 3 days to go, where Jogja Night Run was at 94 percent.">
               <line x1="46" y1="168.0" x2="706" y2="168.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="171.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">0%</text><line x1="46" y1="130.0" x2="706" y2="130.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="133.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">25%</text><line x1="46" y1="92.0" x2="706" y2="92.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="95.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">50%</text><line x1="46" y1="54.0" x2="706" y2="54.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="57.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">75%</text><line x1="46" y1="16.0" x2="706" y2="16.0" stroke="#eef0f2" stroke-width="1"/><text x="37" y="19.5" text-anchor="end" font-size="9.5" fill="#9ba3ad">100%</text>
               <path d="M 46.0,155.8 C 64.3,154.3 119.3,150.3 156.0,146.7 C 192.7,143.2 229.3,139.4 266.0,134.6 C 302.7,129.7 339.3,124.4 376.0,117.8 C 412.7,111.3 456.7,101.9 486.0,95.0 C 515.3,88.2 533.7,82.9 552.0,76.8 C 570.3,70.7 583.2,64.1 596.0,58.6 C 608.8,53.0 619.8,47.4 629.0,43.4 C 638.2,39.3 643.7,37.3 651.0,34.2 C 658.3,31.2 665.7,27.9 673.0,25.1 C 680.3,22.3 689.5,19.0 695.0,17.5 C 700.5,16.0 704.2,16.3 706.0,16.0" fill="none" stroke="#9ba3ad" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 5"/><path d="M 46.0,152.8 C 64.3,150.8 126.7,144.4 156.0,140.6 C 185.3,136.8 200.0,134.6 222.0,130.0 C 244.0,125.4 269.7,118.6 288.0,113.3 C 306.3,108.0 319.2,103.1 332.0,98.1 C 344.8,93.0 355.8,86.9 365.0,82.9 C 374.2,78.8 383.3,75.3 387.0,73.8" fill="none" stroke="#016985" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 46.0,163.4 C 64.3,162.7 119.3,160.4 156.0,158.9 C 192.7,157.4 229.3,156.1 266.0,154.3 C 302.7,152.5 339.3,150.5 376.0,148.2 C 412.7,146.0 456.7,142.7 486.0,140.6 C 515.3,138.6 533.7,137.6 552.0,136.1 C 570.3,134.6 583.2,132.8 596.0,131.5 C 608.8,130.3 619.8,129.5 629.0,128.5 C 638.2,127.5 643.7,126.2 651.0,125.4 C 658.3,124.7 669.3,124.2 673.0,123.9" fill="none" stroke="#d18700" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
               <circle cx="387.0" cy="73.8" r="4.5" fill="#fff" stroke="#016985" stroke-width="2.5"/><circle cx="673.0" cy="123.9" r="4.5" fill="#fff" stroke="#d18700" stroke-width="2.5"/>
-              <text x="46.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">60</text><text x="211.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">45</text><text x="376.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">30</text><text x="541.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">15</text><text x="706.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">race day</text>
+              <text x="46.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">60</text><text x="211.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">45</text><text x="376.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">30</text><text x="541.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">15</text><text x="706.0" y="186" text-anchor="middle" font-size="9.5" fill="#9ba3ad">0</text>
               <text x="46" y="202" text-anchor="start" font-size="9.5" fill="#9ba3ad">days to race day</text>
             </svg>
             <div class="legend legend-row"><div><span class="sw" style="background:#9ba3ad"></span>Jogja Night Run <b>100%</b></div><div><span class="sw" style="background:#016985"></span>TechSprint UGM 2026 <b>62%</b></div><div><span class="sw" style="background:#d18700"></span>Fun Run Sleman <b>29%</b></div></div>
           </div>
+          <div class="panel">
+            <div class="ph"><h5>Trending entries</h5><a href="#">Last 7 days</a></div>
+            <div class="rank">
+              <div class="it"><span class="n">#1</span>
+                <span class="t"><b>5K</b><span>Fun Run Sleman</span></span>
+                <span class="v">+42</span></div>
+              <div class="it"><span class="n">#2</span>
+                <span class="t"><b>10K</b><span>TechSprint UGM 2026</span></span>
+                <span class="v">+31</span></div>
+              <div class="it"><span class="n">#3</span>
+                <span class="t"><b>5K</b><span>TechSprint UGM 2026</span></span>
+                <span class="v">+18</span></div>
+              <div class="it"><span class="n">#4</span>
+                <span class="t"><b>21K</b><span>TechSprint UGM 2026</span></span>
+                <span class="v">+6</span></div>
+            </div>
+          </div>
         </div>
 
-        <div class="slim">
-          <div class="stat"><div class="lbl">Races published</div><div class="big">3 <small>of 4</small></div></div>
-          <div class="stat"><div class="lbl">Entries, all races</div><div class="big">640</div></div>
-          <div class="stat"><div class="lbl">Received, all races</div><div class="big">9,120 <small>sUSD</small></div></div>
+        <div class="row2" style="grid-template-columns:1fr">
+          <div class="panel">
+            <div class="ph"><h5>All races</h5></div>
+            <table class="races">
+              <thead><tr><th>Race</th><th>Status</th><th>Last 14 days</th><th></th><th></th>
+                <th class="rowact"></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="race"><div class="rn">Fun Run Sleman</div><div class="rd">16 Sep 2026 &middot; in 3 days</div></td>
+                  <td><span class="st open">Open for entry</span></td>
+                  <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><polyline points="1.0,20.8 7.5,19.2 13.9,19.2 20.4,15.9 26.8,17.5 33.3,14.3 39.8,15.9 46.2,12.7 52.7,14.3 59.2,9.5 65.6,11.1 72.1,6.2 78.5,7.8 85.0,3.0" fill="none" stroke="#016985" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></td>
+                  <td><div class="track"><i style="width:29%"></i></div></td>
+                  <td class="qt">88 / 300</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
+                </tr>
+                <tr>
+                  <td class="race"><div class="rn">TechSprint UGM 2026</div><div class="rd">12 Oct 2026 &middot; in 29 days</div></td>
+                  <td><span class="st open">Open for entry</span></td>
+                  <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><polyline points="1.0,20.2 7.5,18.3 13.9,19.2 20.4,16.4 26.8,17.3 33.3,13.5 39.8,15.4 46.2,11.6 52.7,13.5 59.2,7.8 65.6,10.6 72.1,6.8 78.5,8.7 85.0,3.0" fill="none" stroke="#016985" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></td>
+                  <td><div class="track"><i style="width:62%"></i></div></td>
+                  <td class="qt">312 / 500</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
+                </tr>
+                <tr>
+                  <td class="race"><div class="rn">Borobudur Trial 2026</div><div class="rd">8 Nov 2026 &middot; in 56 days</div></td>
+                  <td><span class="st draft">Not open yet</span></td>
+                  <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><line x1="1" y1="24" x2="85" y2="24" stroke="#dfe2e6" stroke-width="2" stroke-linecap="round"/></svg></td>
+                  <td><div class="track"><i style="width:0%"></i></div></td>
+                  <td class="qt">0 / 150</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
+                </tr>
+                <tr>
+                  <td class="race"><div class="rn">Jogja Night Run</div><div class="rd">1 Sep 2026 &middot; 12 days ago</div></td>
+                  <td><span class="st done">Finished</span></td>
+                  <td><svg class="spark" width="86" height="26" viewBox="0 0 86 26" aria-hidden="true"><polyline points="1.0,16.7 7.5,14.3 13.9,12.7 20.4,8.7 26.8,6.2 33.3,3.0 39.8,4.6 46.2,7.8 52.7,11.9 59.2,16.7 65.6,20.8 72.1,23.2 78.5,24.0 85.0,24.0" fill="none" stroke="#d18700" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></td>
+                  <td><div class="track"><i class="full" style="width:100%"></i></div></td>
+                  <td class="qt">240 / 240</td>
+                  <td class="go"><a href="#">Open &rsaquo;</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
