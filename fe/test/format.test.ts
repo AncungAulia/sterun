@@ -5,6 +5,7 @@ import {
   formatEventDateTime,
   formatEventDateTimeLong,
   formatPrice,
+  formatAmount,
   parseStroops,
   shortAddress,
 } from "@/utils/format";
@@ -46,6 +47,31 @@ describe("shortAddress", () => {
       // addresses rendered with tabular figures.
       expect(shortAddress(ADDRESS)).toContain("…");
       expect(shortAddress(ADDRESS)).not.toContain("...");
+    });
+  });
+});
+
+describe("formatAmount", () => {
+  describe("positive", () => {
+    it("groups a running total so it stays readable", () => {
+      expect(formatAmount(70_000_000_000n)).toBe("7,000");
+    });
+
+    it("keeps the fractional part when there is one", () => {
+      expect(formatAmount(155_000_000n)).toBe("15.5");
+    });
+  });
+
+  describe("edge", () => {
+    it("says 0 rather than Free, because a total is not an offer", () => {
+      // `formatPrice` answers "what does entry cost", and for zero the honest
+      // word there is Free. "Received, all races: Free" is a different claim
+      // and a wrong one, which is why these are two functions over one rule.
+      expect(formatAmount(0n)).toBe("0");
+    });
+
+    it("carries no currency word of its own", () => {
+      expect(formatAmount(10_000_000n)).toBe("1");
     });
   });
 });

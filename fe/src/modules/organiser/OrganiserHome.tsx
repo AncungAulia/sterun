@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * STE-17 — `/org`, the races this wallet organises.
+ * STE-17 - `/org`, the dashboard for the races this wallet organises.
  *
  * Built on the directory's own read rather than a second one. EventRegistry has
  * no "events by organiser" view, for the same reason it has no "list events"
@@ -12,6 +12,15 @@
  * The allowlist decides one button, not the page. It gates `create_event` and
  * nothing else (STE-36): a wallet taken off it still runs the races it already
  * has, so those stay listed and only the way to publish a new one goes away.
+ *
+ * The cards used to be a grid, one per race. They are a table now, because the
+ * question an organiser opens this page with is comparative: which of my races
+ * is behind. A grid of cards answers "tell me about this one" and makes the
+ * comparison a scroll.
+ *
+ * Every panel below is drawn only once there is a race to draw it about. Stat
+ * cards reading zero over an empty state are three ways of saying the same
+ * thing, and the empty state says it better.
  */
 import Link from "next/link";
 
@@ -19,22 +28,81 @@ import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { useEvents } from "@/hooks/useEvents";
+import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { useCanCreateEvents } from "@/hooks/useOrganiser";
+import { useRaceRecords } from "@/hooks/useRaceRecords";
 import { useWallet } from "@/hooks/useWallet";
+import type { EventSummary } from "@/lib/events";
+import { entriesPerDay } from "@/lib/records";
+import { formatAmount } from "@/utils/format";
 
 import { ConsoleHeader } from "./component/ConsoleHeader";
+import { useNeedsContext } from "./component/NeedsContext";
 import { NotAllowedNotice } from "./component/NotAllowedNotice";
-import { OrganiserEventCard } from "./component/OrganiserEventCard";
+import { RacesTable, type RaceRow } from "./component/RacesTable";
+import { StatCard } from "./component/StatCard";
+import { UrgentBanner } from "./component/UrgentBanner";
+
+/** How far back the sparkline in each row looks. */
+const SPARK_DAYS = 14;
+
+interface Totals {
+  published: number;
+  entries: number;
+  quota: number;
+  received: bigint;
+  potential: bigint;
+}
+
+/**
+ * The three figures at the top, in one pass over the categories.
+ *
+ * `potential` is what a sell-out at today's prices would pay, and it is the
+ * only honest denominator for `received`: money has no quota of its own, so
+ * without it the figure is a number with nothing to compare it to.
+ */
+function totalsOf(events: readonly EventSummary[]): Totals {
+  let entries = 0;
+  let quota = 0;
+  let received = 0n;
+  let potential = 0n;
+
+  for (const { categories } of events) {
+    for (const category of categories) {
+      entries += category.enteredCount;
+      quota += category.quota;
+      received += BigInt(category.enteredCount) * category.priceStroops;
+      potential += BigInt(category.quota) * category.priceStroops;
+    }
+  }
+
+  return {
+    published: events.filter(({ event }) => event.status !== "Draft").length,
+    entries,
+    quota,
+    received,
+    potential,
+  };
+}
+
+/** A share, or nothing to compare against. Never a division by zero. */
+function share(part: number, whole: number): number | undefined {
+  return whole > 0 ? part / whole : undefined;
+}
 
 export function OrganiserHome() {
   const { address } = useWallet();
   const { allowed, isChecking } = useCanCreateEvents(address);
   const { data, isPending, isError, refetch } = useEvents();
+  const nowS = useNowSeconds();
+  const needs = useNeedsContext();
+
+  const mine = data?.events.filter(({ event }) => event.organiser === address) ?? [];
+  const records = useRaceRecords(mine.map(({ event }) => event.eventId));
 
   // WalletGate has already established there is one; this is for the types.
   if (!address) return null;
 
-  const mine = data?.events.filter(({ event }) => event.organiser === address) ?? [];
   /*
     Hidden while the allowlist is being asked, so the button is never drawn and
     then taken away. Shown when the answer is anything but an explicit `false`:
@@ -42,6 +110,28 @@ export function OrganiserHome() {
     wallet through on the same terms.
   */
   const canCreate = !isChecking && allowed !== false;
+
+  /*
+    Exactly one thing may interrupt, and `needs.ts` decides which. Everything
+    else waits in the bell. If a second kind of need ever reaches this line the
+    rule is already broken, so the banner takes the first urgent one rather than
+    listing them: two banners is a policy, and a policy is not an interruption.
+  */
+  const urgent = needs.find((need) => need.urgent);
+
+  const totals = totalsOf(mine);
+  const rows: RaceRow[] =
+    nowS === undefined
+      ? []
+      : mine.map(({ event, categories }) => ({
+          eventId: event.eventId,
+          name: event.name,
+          startsAt: event.startsAt,
+          status: event.status,
+          entered: categories.reduce((sum, category) => sum + category.enteredCount, 0),
+          quota: categories.reduce((sum, category) => sum + category.quota, 0),
+          entriesPerDay: entriesPerDay(records.get(event.eventId) ?? [], nowS, SPARK_DAYS),
+        }));
 
   return (
     <>
@@ -56,7 +146,9 @@ export function OrganiserHome() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-6 px-6 py-6">
+      <div className="flex flex-1 flex-col gap-3 px-6 py-6">
+        {urgent ? <UrgentBanner need={urgent} /> : null}
+
         {allowed === false ? <NotAllowedNotice address={address} /> : null}
 
         {isPending ? <ConsoleSkeleton /> : null}
@@ -78,11 +170,36 @@ export function OrganiserHome() {
         ) : null}
 
         {mine.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {mine.map((summary) => (
-              <OrganiserEventCard key={summary.event.eventId} summary={summary} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatCard
+                label="Races published"
+                value={String(totals.published)}
+                unit={`of ${mine.length}`}
+                filled={share(totals.published, mine.length)}
+              />
+              <StatCard
+                label="Entries, all races"
+                value={totals.entries.toLocaleString("en-US")}
+                filled={share(totals.entries, totals.quota)}
+              />
+              <StatCard
+                label="Received, all races"
+                value={formatAmount(totals.received)}
+                unit="sUSD"
+                filled={share(Number(totals.received), Number(totals.potential))}
+              />
+            </div>
+
+            <section className="overflow-hidden rounded-lg border border-n-200 bg-paper">
+              <h2 className="heading-strong px-4 pt-4 pb-3 text-sm text-ink">All races</h2>
+              {/* The table is the one thing on this page allowed to scroll
+                  sideways, and only inside its own card. */}
+              <div className="overflow-x-auto">
+                <RacesTable rows={rows} nowS={nowS ?? 0n} />
+              </div>
+            </section>
+          </>
         ) : null}
 
         {data && data.unreadable.length > 0 ? (
@@ -100,19 +217,21 @@ export function OrganiserHome() {
 /** A public testnet node takes a second or two, and every event is its own read. */
 function ConsoleSkeleton() {
   return (
-    <div
-      role="status"
-      aria-label="Loading your races"
-      className="grid gap-4 sm:grid-cols-2"
-    >
-      {[0, 1].map((row) => (
-        <div key={row} className="rounded-lg border border-n-200 bg-paper p-6 shadow-card">
-          <div className="h-6 w-2/3 animate-pulse rounded-sm bg-n-100" />
-          <div className="mt-3 h-4 w-1/3 animate-pulse rounded-sm bg-n-100" />
-          <div className="mt-6 h-4 w-full animate-pulse rounded-sm bg-n-100" />
-          <div className="mt-2 h-4 w-full animate-pulse rounded-sm bg-n-100" />
-        </div>
-      ))}
+    <div role="status" aria-label="Loading your races" className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((card) => (
+          <div key={card} className="rounded-lg border border-n-200 bg-paper p-4">
+            <div className="h-3 w-1/2 animate-pulse rounded-sm bg-n-100" />
+            <div className="mt-3 h-7 w-2/3 animate-pulse rounded-sm bg-n-100" />
+            <div className="mt-3 h-1.5 w-full animate-pulse rounded-full bg-n-100" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-lg border border-n-200 bg-paper p-4">
+        {[0, 1, 2].map((line) => (
+          <div key={line} className="mt-3 h-5 w-full animate-pulse rounded-sm bg-n-100 first:mt-0" />
+        ))}
+      </div>
     </div>
   );
 }

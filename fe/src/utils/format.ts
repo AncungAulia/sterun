@@ -25,12 +25,26 @@ export function shortAddress(address: string, lead = 4, tail = 4): string {
  */
 export function formatPrice(stroops: bigint): string {
   if (stroops === 0n) return "Free";
+  return `sUSD ${formatAmount(stroops)}`;
+}
+
+/**
+ * The same number, with no currency word in front of it and no "Free".
+ *
+ * Split out of `formatPrice` rather than written beside it, so the 7-decimal
+ * rule still lives in one place. Both of `formatPrice`'s extras are about a
+ * *price*: a card that says "Free" is telling a runner what entry costs, and a
+ * running total of what a race has taken in is a different sentence. Zero
+ * received is "0", and the currency sits in the unit slot of the card beside
+ * the figure rather than inside it.
+ */
+export function formatAmount(stroops: bigint): string {
   const [whole, fraction] = formatStroops(stroops).split(".");
   // "en-US" rather than the visitor's locale: every string in this UI is
   // English (fe/CLAUDE.md), and a locale-dependent separator would make the
   // same event render "1.500" for one visitor and "1,500" for another.
   const grouped = GROUPED.format(BigInt(whole));
-  return `sUSD ${grouped}${fraction ? `.${fraction}` : ""}`;
+  return `${grouped}${fraction ? `.${fraction}` : ""}`;
 }
 
 /**

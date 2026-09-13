@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OrganiserHome } from "@/modules/organiser/OrganiserHome";
+import { NeedsProvider } from "@/modules/organiser/component/NeedsContext";
+import type { Need } from "@/modules/organiser/needs";
 import { WalletGate } from "@/components/layouts/WalletGate";
 import { useWallet } from "@/hooks/useWallet";
 import type { EventSummary } from "@/lib/events";
@@ -19,6 +21,18 @@ vi.mock("@/lib/events", async (importOriginal) => ({
   listEvents,
 }));
 vi.mock("@/lib/sterun", () => ({ readClient: { isOrganiser } }));
+/*
+  The dashboard reads the index for each race's entries-per-day line, and
+  `vitest.config.ts` points NEXT_PUBLIC_API_URL at the live API. A refusal
+  rather than an empty answer, for two reasons: it is what a test must never
+  do (reach the network), and it is also the state the page has to survive.
+  A request that was never answered is silence, not a finding, so no need is
+  invented from it and every row still draws.
+*/
+vi.mock("@/lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api")>()),
+  apiFetch: vi.fn(() => Promise.reject(new Error("the index is unreachable"))),
+}));
 vi.mock("@/lib/wallet", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
@@ -78,17 +92,39 @@ function category(categoryId: number, overrides: Partial<SterunCategory> = {}): 
  * meets before this page, so the test keeps asking for the page through it:
  * what changed is where the wrapper is written, not what is being tested.
  */
-function renderHome() {
+function renderHome(needs: Need[] = []) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
   return render(
     <WalletGate>
-      <OrganiserHome />
+      <NeedsProvider needs={needs}>
+        <OrganiserHome />
+      </NeedsProvider>
     </WalletGate>,
     { wrapper: Wrapper },
   );
+}
+
+/**
+ * A need as `ConsoleFrame` would have handed it down. The page never builds
+ * these itself, which is why the tests hand them in rather than arranging a
+ * race that would produce one: `buildNeeds` has its own suite, and a dashboard
+ * test that depended on the wall clock would go red on its own one morning.
+ */
+function need(overrides: Partial<Need> = {}): Need {
+  return {
+    kind: "scanner",
+    eventId: 0,
+    eventName: "Jakarta Marathon 0",
+    urgent: true,
+    title: "Add a scanner - Jakarta Marathon 0",
+    detail: "Runs in 3 days. Nobody can check runners in.",
+    action: "Add a scanner",
+    href: "/org/events/0?tab=scanners",
+    ...overrides,
+  };
 }
 
 /** A read the test settles on purpose, so React Query is not left mid-flight. */
@@ -132,16 +168,38 @@ describe("OrganiserHome", () => {
       expect(screen.queryByText("Not Mine 10K")).not.toBeInTheDocument();
     });
 
-    it("links each race to its event page", async () => {
+    it("links each race to the page where it is managed", async () => {
+      // It used to link to the public event page, because the console had no
+      // page of its own. The row is the way in to the race now, so pointing it
+      // outwards would send an organiser to the one version of the race they
+      // cannot change anything on.
       listEvents.mockResolvedValue({ events: [summary(4)], unreadable: [] });
 
       renderHome();
 
       const link = await screen.findByRole("link", { name: /Jakarta Marathon 4/ });
-      expect(link).toHaveAttribute("href", "/events/4");
+      expect(link).toHaveAttribute("href", "/org/events/4");
     });
 
-    it("shows how full each distance is", async () => {
+    it("puts every race in one table rather than a card each", async () => {
+      // The question this page is opened with is comparative: which of my races
+      // is behind. A grid of cards makes that a scroll.
+      listEvents.mockResolvedValue({
+        events: [summary(0), summary(1, { name: "Borobudur Trial" })],
+        unreadable: [],
+      });
+
+      renderHome();
+
+      const table = await screen.findByRole("table");
+      expect(within(table).getByText("Jakarta Marathon 0")).toBeInTheDocument();
+      expect(within(table).getByText("Borobudur Trial")).toBeInTheDocument();
+    });
+
+    it("shows how full each race is, every distance added together", async () => {
+      // The per-distance breakdown moved into the race's own page. A dashboard
+      // row answers "is this one behind", and a race with four distances would
+      // otherwise be four lines tall in a table meant for comparing races.
       listEvents.mockResolvedValue({
         events: [
           summary(0, {}, [
@@ -154,12 +212,34 @@ describe("OrganiserHome", () => {
 
       renderHome();
 
-      const card = await screen.findByRole("link", { name: /Jakarta Marathon 0/ });
-      expect(within(card).getByText("180 of 300 entered")).toBeInTheDocument();
-      expect(within(card).getByText("100 of 100 entered")).toBeInTheDocument();
+      expect(await screen.findByText("280 / 400")).toBeInTheDocument();
+    });
+
+    it("totals the entries and the money across every race", async () => {
+      // 180 at 25 sUSD plus 100 at 25 sUSD. The figure an organiser checks
+      // first is what has actually come in.
+      listEvents.mockResolvedValue({
+        events: [
+          summary(0, {}, [
+            category(0),
+            category(1, { code: "5K", quota: 100, enteredCount: 100 }),
+          ]),
+        ],
+        unreadable: [],
+      });
+
+      renderHome();
+
+      expect(await screen.findByText("280")).toBeInTheDocument();
+      expect(screen.getByText("7,000")).toBeInTheDocument();
+      expect(screen.getByText("sUSD")).toBeInTheDocument();
     });
 
     it("shows the status of every race, including one not open yet", async () => {
+      // The attribute is what a stylesheet and a test match on, and the
+      // sentence is what a person reads. Both are asserted, because the
+      // attribute alone passed happily while the word "Draft" was on screen,
+      // and "Draft" is the one status word this app never prints.
       listEvents.mockResolvedValue({
         events: [summary(0, { status: "Draft" }), summary(1, { status: "Open" })],
         unreadable: [],
@@ -170,6 +250,9 @@ describe("OrganiserHome", () => {
       await screen.findByText("Jakarta Marathon 0");
       expect(container.querySelector('[data-status="Draft"]')).not.toBeNull();
       expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
+      expect(screen.getByText("Not open yet")).toBeInTheDocument();
+      expect(screen.getByText("Open for entry")).toBeInTheDocument();
+      expect(container.textContent).not.toMatch(/draft/i);
     });
 
     it("offers to create a race when the wallet is allowed to publish", async () => {
@@ -221,7 +304,9 @@ describe("OrganiserHome", () => {
       renderHome();
 
       expect(await screen.findByText("Jakarta Marathon 0")).toBeInTheDocument();
-      expect(screen.getByText("No distances yet.")).toBeInTheDocument();
+      // No categories means no places and none taken, and the row says exactly
+      // that rather than dividing one by the other.
+      expect(screen.getByText("0 / 0")).toBeInTheDocument();
     });
 
     it("warns that a race of theirs may be missing when some could not be loaded", async () => {
@@ -273,7 +358,50 @@ describe("OrganiserHome", () => {
     });
   });
 
+  describe("the one thing that interrupts", () => {
+    it("draws a banner for a race days away with nobody able to check runners in", async () => {
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+
+      renderHome([need()]);
+
+      const banner = await screen.findByRole("note");
+      expect(within(banner).getByText("Jakarta Marathon 0")).toBeInTheDocument();
+      expect(within(banner).getByText(/Nobody can check runners in/)).toBeInTheDocument();
+      expect(within(banner).getByRole("link", { name: "Add a scanner" })).toHaveAttribute(
+        "href",
+        "/org/events/0?tab=scanners",
+      );
+    });
+
+    it("leaves everything else to the bell", async () => {
+      // The banner fires for one case. A second kind of thing reaching it is
+      // how an interruption turns into furniture nobody reads.
+      listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
+
+      renderHome([need({ kind: "results", urgent: false, action: "Upload results" })]);
+
+      await screen.findByText("Jakarta Marathon 0");
+      expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    });
+  });
+
   describe("negative", () => {
+    it("still draws every race when the index cannot be reached at all", async () => {
+      // The chain says which races exist and how full they are; the index only
+      // says when each entry arrived. Losing the second costs the line in each
+      // row and nothing else, and the row must not go with it.
+      listEvents.mockResolvedValue({ events: [summary(0, {}, [category(0)])], unreadable: [] });
+
+      renderHome();
+
+      expect(await screen.findByText("Jakarta Marathon 0")).toBeInTheDocument();
+      expect(screen.getByText("180 / 300")).toBeInTheDocument();
+      // A rule, not a line: no entries known is an absence, not a measurement.
+      const spark = screen.getByRole("img", { name: /Entries over the last 14 days/ });
+      expect(spark.querySelector("line")).not.toBeNull();
+      expect(spark.querySelector("path")).toBeNull();
+    });
+
     it("asks for a wallet before showing anything", async () => {
       useWallet.setState({ address: null, isRestoring: false });
 
