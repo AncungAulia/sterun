@@ -23,13 +23,22 @@
 import type { ReactNode } from "react";
 
 import { WalletGate } from "@/components/layouts/WalletGate";
+import { useNeeds } from "@/hooks/useNeeds";
 import { useWallet } from "@/hooks/useWallet";
 
 import { ConsoleSidebar } from "./ConsoleSidebar";
 import { ConsoleWordmark } from "./ConsoleWordmark";
+import { NeedsProvider } from "./NeedsContext";
 
 export function ConsoleFrame({ children }: { children: ReactNode }) {
   const { address } = useWallet();
+  /*
+    Worked out here rather than in the page, because the bell is on every
+    console page and a second page working it out again would mean two lists
+    that can disagree. It costs nothing extra: the races come from the same
+    `useEvents()` query the rail already reads.
+  */
+  const needs = useNeeds(address);
 
   /*
     No wallet yet, or still restoring one. `WalletGate` says which of those it
@@ -60,7 +69,9 @@ export function ConsoleFrame({ children }: { children: ReactNode }) {
           exactly the thing worth skipping. It wraps the page rather than the
           whole frame, because a landmark that contains the navigation is not a
           landmark. */}
-      <main className="flex min-w-0 flex-1 flex-col bg-n-50">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col bg-n-50">
+        <NeedsProvider needs={needs}>{children}</NeedsProvider>
+      </main>
     </div>
   );
 }

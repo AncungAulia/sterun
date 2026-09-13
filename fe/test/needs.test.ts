@@ -107,7 +107,7 @@ describe("buildNeeds", () => {
 
       expect(need.kind).toBe("scanner");
       expect(need.urgent).toBe(true);
-      expect(need.title).toBe("Add a scanner — Fun Run Sleman");
+      expect(need.title).toBe("Add a scanner - Fun Run Sleman");
       expect(need.detail).toBe("Runs in 3 days. Nobody can check runners in.");
       expect(need.href).toBe("/org/events/1?tab=scanners");
     });
