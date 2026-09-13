@@ -17,24 +17,16 @@ import Link from "next/link";
 
 import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
-import { WalletGate } from "@/components/layouts/WalletGate";
 import { Button } from "@/components/ui/button";
 import { useEvents } from "@/hooks/useEvents";
 import { useCanCreateEvents } from "@/hooks/useOrganiser";
 import { useWallet } from "@/hooks/useWallet";
 
+import { ConsoleHeader } from "./component/ConsoleHeader";
 import { NotAllowedNotice } from "./component/NotAllowedNotice";
 import { OrganiserEventCard } from "./component/OrganiserEventCard";
 
 export function OrganiserHome() {
-  return (
-    <WalletGate>
-      <Console />
-    </WalletGate>
-  );
-}
-
-function Console() {
   const { address } = useWallet();
   const { allowed, isChecking } = useCanCreateEvents(address);
   const { data, isPending, isError, refetch } = useEvents();
@@ -52,57 +44,56 @@ function Console() {
   const canCreate = !isChecking && allowed !== false;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl">
-          <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Organiser console</h1>
-          <p className="mt-3 text-lg text-n-600">
-            Every race you have created with this wallet, drafts included.
-          </p>
-        </div>
-        {canCreate ? (
-          <Button asChild>
-            <Link href="/org/new">Create event</Link>
-          </Button>
+    <>
+      <ConsoleHeader
+        title="Dashboard"
+        action={
+          canCreate ? (
+            <Button asChild>
+              <Link href="/org/new">Create event</Link>
+            </Button>
+          ) : null
+        }
+      />
+
+      <div className="flex flex-1 flex-col gap-6 px-6 py-6">
+        {allowed === false ? <NotAllowedNotice address={address} /> : null}
+
+        {isPending ? <ConsoleSkeleton /> : null}
+
+        {isError ? (
+          <ErrorNotice
+            title="We could not load your races"
+            detail="This is a connection problem, not an empty list. Your races are safe. Please try again."
+            onRetry={() => void refetch()}
+          />
         ) : null}
-      </header>
 
-      {allowed === false ? <NotAllowedNotice address={address} /> : null}
+        {data && mine.length === 0 ? (
+          <EmptyState title="You have not created a race yet">
+            {allowed === false
+              ? "Races show up here once this wallet is allowed to publish them."
+              : "Races you publish with this wallet show up here."}
+          </EmptyState>
+        ) : null}
 
-      {isPending ? <ConsoleSkeleton /> : null}
+        {mine.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {mine.map((summary) => (
+              <OrganiserEventCard key={summary.event.eventId} summary={summary} />
+            ))}
+          </div>
+        ) : null}
 
-      {isError ? (
-        <ErrorNotice
-          title="We could not load your races"
-          detail="This is a connection problem, not an empty list. Your races are safe. Please try again."
-          onRetry={() => void refetch()}
-        />
-      ) : null}
-
-      {data && mine.length === 0 ? (
-        <EmptyState title="You have not created a race yet">
-          {allowed === false
-            ? "Races show up here once this wallet is allowed to publish them."
-            : "Races you publish with this wallet show up here."}
-        </EmptyState>
-      ) : null}
-
-      {mine.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {mine.map((summary) => (
-            <OrganiserEventCard key={summary.event.eventId} summary={summary} />
-          ))}
-        </div>
-      ) : null}
-
-      {data && data.unreadable.length > 0 ? (
-        <p className="text-sm text-n-500">
-          {/* Whose they were is exactly what could not be read, so the page
+        {data && data.unreadable.length > 0 ? (
+          <p className="text-sm text-n-500">
+            {/* Whose they were is exactly what could not be read, so the page
               cannot promise none of them belonged to this wallet. */}
-          Some races could not be loaded, so one of yours may be missing from this list.
-        </p>
-      ) : null}
-    </div>
+            Some races could not be loaded, so one of yours may be missing from this list.
+          </p>
+        ) : null}
+      </div>
+    </>
   );
 }
 

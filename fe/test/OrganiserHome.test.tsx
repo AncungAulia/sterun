@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OrganiserHome } from "@/modules/organiser/OrganiserHome";
+import { WalletGate } from "@/components/layouts/WalletGate";
 import { useWallet } from "@/hooks/useWallet";
 import type { EventSummary } from "@/lib/events";
 import type { EventStatus, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
@@ -68,12 +69,26 @@ function category(categoryId: number, overrides: Partial<SterunCategory> = {}): 
   };
 }
 
+/**
+ * The page inside its gate, which is how the app draws it.
+ *
+ * `OrganiserHome` used to carry `WalletGate` itself. The console shell moved it
+ * up to `app/(organiser)/org/layout.tsx`, so that every page under `/org` is
+ * gated once rather than each remembering to. The gate is still what a wallet
+ * meets before this page, so the test keeps asking for the page through it:
+ * what changed is where the wrapper is written, not what is being tested.
+ */
 function renderHome() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
-  return render(<OrganiserHome />, { wrapper: Wrapper });
+  return render(
+    <WalletGate>
+      <OrganiserHome />
+    </WalletGate>,
+    { wrapper: Wrapper },
+  );
 }
 
 /** A read the test settles on purpose, so React Query is not left mid-flight. */

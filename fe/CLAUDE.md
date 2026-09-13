@@ -313,6 +313,31 @@ What is settled:
   Dialog's scroll lock stops its list from scrolling by wheel or touch.
 - All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
 
+### The console shell (STE-17)
+
+Everything under `/org` sits in `app/(organiser)/org/layout.tsx`: `WalletGate`, then
+`modules/organiser/component/ConsoleFrame.tsx`, which draws the dark rail beside the page. Three
+consequences worth knowing before adding a page there:
+
+- **The gate is the layout's, not the page's.** `OrganiserHome` used to wrap itself in `WalletGate`
+  and no longer does. A new page under `/org` must not add its own: gating twice means two
+  components deciding separately whether the wallet is still restoring.
+- **A layout rather than a wrapper each page imports**, so the rail survives navigation between
+  races: its expander stays open and its scroll position stays put, which is the only reason to have
+  a rail rather than a breadcrumb. `ConsoleFrame` exists because the file under `app/` stays a
+  server component while the rail needs `useWallet()`, which is the same three-line split every
+  route file in this app already uses.
+- **The rail has two items and the second is an expander**, not a page: `Events` opens into this
+  wallet's races (`useEvents()` filtered by organiser, so no extra read). There is deliberately no
+  "all races" page behind it, because the dashboard is that list. Anything race-scoped, entries,
+  scanners, results, belongs inside a race at `/org/events/[id]`, never in the rail. A failed chain
+  read empties the expander and nothing else: the rail is navigation, and a node that will not
+  answer must not take away the way back. It is collapsed on `/org` and open inside a race.
+- **`ConsoleHeader` is every console page's top bar**: a title, an optional status badge, an
+  optional bell, and **one** action. One, not a row: each tab inside a race has exactly one thing to
+  do, and keeping it in the bar rather than under the content means it does not travel down the page
+  as a table grows. The page owns the header, the layout owns the rail.
+
 ### `/org` — the events this wallet organises
 
 `modules/organiser/OrganiserHome.tsx`. Three things are settled:
