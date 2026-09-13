@@ -423,9 +423,41 @@ knowing before adding a page there:
   allowlist still sees its existing events, because the contract still lets it manage them (STE-36).
   A refused wallet gets `NotAllowedNotice` (a note, not the full-screen `NotAllowlisted`). The button
   is hidden **while** the allowlist is being asked, and still appears when the node fails to answer.
-- **The card is not the directory's `EventCard`.** An organiser needs "how many entered out of the
-  quota" per distance, sold-out ones included, not price and places left. For now it links to
-  `/events/[id]`, because `/org/events/[id]` (scanner, results) is not built yet.
+- **It is a dashboard, not a card grid** (2026-09-13, mockup block 0 in
+  `docs/superpowers/specs/2026-09-13-org-console-mockup.html`). Three stat cards, a two-column row
+  holding **Entries comparison** and **Trending entries**, then one **All races** table, one row a
+  race, linking into `/org/events/[id]`. `OrganiserEventCard` is deleted with the grid it was drawn
+  for. The reason is the question the page is opened with: *which of my races is behind* is
+  comparative, and a grid of cards makes a comparison into a scroll.
+- **What is waiting on the organiser lives in the bell, and one case also interrupts.**
+  `ConsoleFrame` builds the list once (`hooks/useNeeds.ts`) and puts it on `NeedsContext`;
+  `ConsoleHeader` fills its own `bell` slot from that context, so a console page cannot forget the
+  bell. Exactly one need may also reach `UrgentBanner`: a race days away with nobody able to check
+  runners in. **If a second kind of thing can reach the banner the rule is already broken** - narrow
+  the condition in `needs.ts`, do not change the colour. The count on the bell is drawn only when
+  there is something to count, because a badge that is always lit is furniture.
+- **A chart with no data draws no shape.** A race nobody has entered gets a plain grey rule in its
+  table row, never a flat line along the bottom, and the comparison panel with no lines draws no
+  axes either: a line at zero and axes over an empty plot both read as a measurement, and this is an
+  absence. Every division that could be by zero is guarded in `modules/organiser/chart.ts`, where a
+  test can see it, rather than in a component: **an SVG path containing `NaN` does not throw**, the
+  browser silently drops it, and the panel renders empty with nothing in the console.
+- **The comparison chart is titled "Entries comparison", never "Pace".** In a running product *pace*
+  means minutes per kilometre, so a runner glancing at an organiser's screen would read it as a
+  chart about how fast people run. Its x-axis is **days to race day** and its y-axis is a
+  **percentage of quota**, both labelled on the chart, because two races months apart cannot be
+  compared on calendar dates and 240 places is not 500 places. A finished race is the benchmark,
+  dashed and grey; live races stop where they are today with a dot rather than running to the
+  right-hand edge.
+- **Panel titles are plain nouns** and the explanatory sentence that used to sit under one is gone.
+  The caption on the right of a panel header (`Percent of quota`, `Last 7 days`) is `text-n-500`,
+  not teal: nothing is behind it, and in this app teal means actionable.
+- **`useNowSeconds()` is `bigint | undefined`.** Its server snapshot is `undefined`, so the first
+  render has no clock at all. Anything that would call a race overdue, or ask the index about a race
+  because of how close it is, has to guard that.
+- The per-distance breakdown moved into the race's own page. A dashboard row answers "is this one
+  behind", and a race with four distances would be four lines tall in a table meant for comparing
+  races.
 
 ## Tests
 

@@ -246,6 +246,17 @@ describe("OrganiserHome", () => {
       expect(container.textContent).not.toMatch(/pace/i);
     });
 
+    it("ranks what is moving beside the comparison", async () => {
+      listEvents.mockResolvedValue({ events: [summary(0, {}, [category(0)])], unreadable: [] });
+
+      renderHome();
+
+      expect(await screen.findByText("Trending entries")).toBeInTheDocument();
+      // The index is refused in these tests, so there is nothing to rank, and
+      // the panel says so rather than leaving an empty box on the page.
+      expect(screen.getByText("No entries in the last 7 days.")).toBeInTheDocument();
+    });
+
     it("shows the status of every race, including one not open yet", async () => {
       // The attribute is what a stylesheet and a test match on, and the
       // sentence is what a person reads. Both are asserted, because the

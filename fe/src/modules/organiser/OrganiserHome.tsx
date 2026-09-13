@@ -33,7 +33,7 @@ import { useCanCreateEvents } from "@/hooks/useOrganiser";
 import { useRaceRecords } from "@/hooks/useRaceRecords";
 import { useWallet } from "@/hooks/useWallet";
 import type { EventSummary } from "@/lib/events";
-import { entriesPerDay } from "@/lib/records";
+import { entriesPerDay, trending } from "@/lib/records";
 import { formatAmount } from "@/utils/format";
 
 import { fillByDaysOut } from "./chart";
@@ -43,6 +43,7 @@ import { useNeedsContext } from "./component/NeedsContext";
 import { NotAllowedNotice } from "./component/NotAllowedNotice";
 import { RacesTable, type RaceRow } from "./component/RacesTable";
 import { StatCard } from "./component/StatCard";
+import { TrendingEntries } from "./component/TrendingEntries";
 import { UrgentBanner } from "./component/UrgentBanner";
 
 /** How far back the sparkline in each row looks. */
@@ -50,6 +51,10 @@ const SPARK_DAYS = 14;
 
 /** How many live races the comparison chart carries beside the benchmark. */
 const LIVE_COMPARED = 2;
+
+/** The window the ranking reports on, and how many rows it keeps. */
+const TRENDING_DAYS = 7;
+const TRENDING_ROWS = 4;
 
 interface Totals {
   published: number;
@@ -165,6 +170,20 @@ export function OrganiserHome() {
 
   const totals = totalsOf(mine);
   const comparison = nowS === undefined ? [] : comparisonOf(mine, records, nowS);
+  const moving =
+    nowS === undefined
+      ? []
+      : trending(
+          mine.map(({ event, categories }) => ({
+            eventId: event.eventId,
+            eventName: event.name,
+            categories,
+            records: records.get(event.eventId) ?? [],
+          })),
+          nowS,
+          TRENDING_DAYS,
+          TRENDING_ROWS,
+        );
   const rows: RaceRow[] =
     nowS === undefined
       ? []
@@ -238,6 +257,7 @@ export function OrganiserHome() {
 
             <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
               <EntriesComparison series={comparison} />
+              <TrendingEntries rows={moving} days={TRENDING_DAYS} />
             </div>
 
             <section className="overflow-hidden rounded-lg border border-n-200 bg-paper">
