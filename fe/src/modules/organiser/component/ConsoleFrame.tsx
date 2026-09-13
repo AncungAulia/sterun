@@ -15,14 +15,23 @@
  * to the site, because the gate stood outside this component and everything the
  * console draws stood inside it.
  *
- * No height of its own, and none needed: there is no site header over the
- * console, so this is a direct child of the `min-h-full flex-col` body and
- * `flex-1` is the whole viewport. That is also what lets the rail be exactly
- * one screen tall and stay there while the page scrolls.
+ * The connected frame is a `SidebarProvider`, which is what makes the rail a
+ * drawer at phone width. Two things about its shape are deliberate:
+ *
+ * - `SidebarInset` is NOT used, even though it would save a div. It renders the
+ *   `<main>` itself, and the menu button has to sit outside that landmark: a
+ *   landmark you cannot skip the navigation of is not a landmark, and the one
+ *   control that opens the navigation counts as navigation. So the page keeps
+ *   the same `<main>` it had before and the phone bar sits above it.
+ * - The phone bar is `md:hidden`, the same breakpoint `Sidebar` itself uses to
+ *   stop being a rail. Above it the rail carries the wordmark, so a second copy
+ *   there would be the "STERUN twice in sixty pixels" bug that moved the header
+ *   out of the root layout in the first place.
  */
 import type { ReactNode } from "react";
 
 import { WalletGate } from "@/components/layouts/WalletGate";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useNeeds } from "@/hooks/useNeeds";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -61,17 +70,28 @@ export function ConsoleFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex w-full flex-1">
+    <SidebarProvider className="min-h-0 flex-1">
       <ConsoleSidebar address={address} />
-      {/* The page, and the landmark. `SiteFrame` gives every other route a
-          <main>; without one here the console was the only part of the app a
-          screen reader could not skip the navigation of, and the rail is
-          exactly the thing worth skipping. It wraps the page rather than the
-          whole frame, because a landmark that contains the navigation is not a
-          landmark. */}
-      <main className="flex min-w-0 flex-1 flex-col bg-n-50">
-        <NeedsProvider needs={needs}>{children}</NeedsProvider>
-      </main>
-    </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Phone width only, where there is no rail to carry either of these.
+            The button is named for what it opens rather than for the component
+            that opens: nobody reading this bar is thinking about a sidebar. */}
+        <div className="flex shrink-0 items-center gap-2 bg-ink px-2 py-2 md:hidden">
+          <SidebarTrigger aria-label="Menu" className="text-paper hover:bg-n-800 hover:text-paper" />
+          <ConsoleWordmark />
+        </div>
+
+        {/* The page, and the landmark. `SiteFrame` gives every other route a
+            <main>; without one here the console was the only part of the app a
+            screen reader could not skip the navigation of, and the rail is
+            exactly the thing worth skipping. It wraps the page rather than the
+            whole frame, because a landmark that contains the navigation is not
+            a landmark. */}
+        <main className="flex min-w-0 flex-1 flex-col bg-n-50">
+          <NeedsProvider needs={needs}>{children}</NeedsProvider>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

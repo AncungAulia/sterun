@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConsoleSidebar } from "@/modules/organiser/component/ConsoleSidebar";
 import type { EventSummary } from "@/lib/events";
 import type { EventStatus, SterunEvent } from "@sterunxyz/sdk";
@@ -42,9 +43,19 @@ function summary(eventId: number, overrides: Partial<SterunEvent> = {}): EventSu
   };
 }
 
+/*
+  `SidebarProvider` is not decoration here: `ConsoleSidebar` is a shadcn
+  `Sidebar` now, and `useSidebar()` throws without it. Wrapping it in the test
+  is wrapping it the way the route does, since `ConsoleFrame` is the only thing
+  that renders this component.
+*/
 function Wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <SidebarProvider>{children}</SidebarProvider>
+    </QueryClientProvider>
+  );
 }
 
 /**
@@ -102,14 +113,21 @@ describe("ConsoleSidebar", () => {
       expect(screen.getByRole("link", { name: "Race 2" })).toBeInTheDocument();
     });
 
-    it("offers the way back to the public site", async () => {
+    it("offers the way back to the public site, as the brand mark", async () => {
       // There is no site header over the console, so if the rail does not
-      // carry this link there is no way out of /org but the address bar.
+      // carry this link there is no way out of /org but the address bar. Its
+      // name comes from the lockup's alt text, which is also the proof that
+      // what is drawn is the logo and not the word typed out.
       listEvents.mockResolvedValue({ events: [], unreadable: [] });
 
       await renderRail();
 
-      expect(screen.getByRole("link", { name: "STERUN" })).toHaveAttribute("href", "/");
+      const home = screen.getByRole("link", { name: "Sterun" });
+      expect(home).toHaveAttribute("href", "/");
+      expect(within(home).getByRole("img", { name: "Sterun" })).toHaveAttribute(
+        "src",
+        expect.stringContaining("sterun-lockup-white.svg"),
+      );
     });
 
     it("is already open inside a race, with nothing clicked", async () => {
@@ -213,8 +231,14 @@ describe("ConsoleSidebar", () => {
       await renderRail();
       await userEvent.click(screen.getByRole("button", { name: /events/i }));
 
+      // Two lists: the rail's own menu, and the expander's, which is the one
+      // that has to be present and empty. Asserting on both counts is what
+      // keeps this honest, since an expander that had been removed entirely
+      // would leave exactly one list and nothing to look empty.
       const nav = screen.getByRole("navigation", { name: "Organiser console" });
-      expect(within(nav).getByRole("list")).toBeEmptyDOMElement();
+      const lists = within(nav).getAllByRole("list");
+      expect(lists).toHaveLength(2);
+      expect(lists[1]).toBeEmptyDOMElement();
     });
 
     it("lets a hand on the expander beat the path", async () => {

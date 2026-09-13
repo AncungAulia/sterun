@@ -75,7 +75,16 @@ Three things that confuse people who do not know:
   as two copies of `@stellar/stellar-sdk` (the root `CLAUDE.md`).
 - **The `dark:` classes in generated components are dead**, because v1 is light-only (an STE-7
   decision). They are left as they are so the files stay easy to diff against upstream at update
-  time.
+  time. What makes them *actually* dead is one line the `sidebar` generator added to `globals.css`:
+  `@custom-variant dark (&:is(.dark *))`. Without it Tailwind v4 resolves a bare `dark:` against
+  `prefers-color-scheme`, so every one of those "dead" classes fires on a laptop whose OS is set to
+  dark. Nothing in this app ever writes a `.dark` class, which is the point.
+- **Some generated files do not pass this repo's lint**, and the fix goes in the file rather than in
+  the config. `sidebar.tsx` calls `Math.random()` inside a `useMemo` (`react-hooks/purity`), which
+  is deliberate in a skeleton and carries a one-line disable. `hooks/use-mobile.ts` set state from
+  an effect (`react-hooks/set-state-in-effect`) and was rewritten onto `useSyncExternalStore`; that
+  one is not only a lint fix, since the generated version answers "not a phone" on the first client
+  render and then swaps.
 
 ### The variants we added ourselves
 
@@ -89,6 +98,17 @@ from a test: `Draft` and `Closed` looked identical on screen while meaning oppos
 time. See the header of `elements/EventStatusBadge.tsx`.
 
 `ui/tabs.tsx` is also ours (the event page is built on it).
+
+`ui/sidebar.tsx` (plus `separator`, `skeleton` and `hooks/use-mobile.ts`, which come with it) is the
+console rail, added 2026-09-14. Its eight colour names are resolved in `globals.css` like every
+other shadcn name: `--sidebar` is `--color-ink`, `--sidebar-foreground` is `--color-n-300`,
+`--sidebar-accent` is `--color-n-800`, `--sidebar-ring` is `--color-teal-400`. They are declared in
+a `:root` block rather than only as `@theme inline` aliases because `sidebar.tsx` also reads
+`var(--sidebar-border)` directly in its `outline` variant, which an alias would leave pointing at
+nothing. **`--sidebar-accent` is hover, not the current page**: shadcn spends that one name on both,
+so the row under the pointer would be indistinguishable from the row you are on. The teal current
+page is an override carried by `ConsoleSidebar` itself. The generator's `.dark` block was deleted
+rather than remapped.
 
 ## Required reading before building a flow
 
@@ -385,6 +405,25 @@ knowing before adding a page there:
   a rail rather than a breadcrumb. `ConsoleFrame` exists because the file under `app/` stays a
   server component while the rail needs `useWallet()`, which is the same three-line split every
   route file in this app already uses.
+- **The rail is shadcn's `sidebar`** (2026-09-14), not a hand-rolled `<aside>`. The reason is a
+  measurement, not tidiness: the old rail was `w-52` at every size, so at 390 by 844 it took 208px
+  of a 375px viewport, left the dashboard 167px and pushed the page's `scrollWidth` to 543 so the
+  whole thing scrolled sideways. `Sidebar` is `hidden md:block` and becomes a `Sheet` behind
+  `SidebarTrigger` below `md`, which is the behaviour that was missing. What the component does NOT
+  supply, and what therefore stays hand-written in `ConsoleSidebar`, is all of the behaviour below:
+  the expander's open-state rule, the prefix match, the teal marker, and closing the drawer on
+  navigation. **Every link in the rail calls `setOpenMobile(false)`**: a navigation drawer left open
+  over the page you just asked for reads as "the link did nothing".
+- **`ConsoleFrame` deliberately does not use `SidebarInset`.** That component renders the `<main>`
+  itself, and the menu button has to sit outside the landmark, for the same reason the rail does: a
+  landmark whose navigation you cannot skip is not a landmark. So the page keeps its own `<main>`
+  and the phone-width bar (wordmark plus trigger, `md:hidden`) sits above it.
+- **The wordmark is the brand lockup**, `public/brand/logo/sterun-lockup-white.svg` through
+  `next/image`, not the letters STERUN set in a typeface. White because the rail is `ink`. Its link
+  carries no `aria-label`, so its accessible name is the image's `alt`, "Sterun". That must stay
+  different from the site header's "Sterun home": `console-chrome.test.tsx` proves no site header is
+  drawn over the console by looking for that exact name. The mark appears twice in the DOM when a
+  wallet is connected, once per breakpoint, and never twice on screen, so no test counts it.
 - **The rail has two items and the second is an expander**, not a page: `Events` opens into this
   wallet's races (`useEvents()` filtered by organiser, so no extra read). There is deliberately no
   "all races" page behind it, because the dashboard is that list. Anything race-scoped, entries,
@@ -399,10 +438,12 @@ knowing before adding a page there:
   `pathname.startsWith(href + "/")` (`marksRace`), because entries, scanners and results are tabs
   under the race and an exact match would silently mark nothing on any of them. **Dashboard stays
   an exact match**: a prefix there lights it up on the wizard and inside every race.
-- **The rail is one screen tall and pinned, not as tall as the page** (`sticky top-0 h-dvh
-  self-start`, with the nav scrolling inside it). The wallet chip sits at its bottom, and on a rail
-  that grows with the page the bottom is wherever the page ends: at 900px it was already below the
-  fold. A wallet you have to scroll to find is a wallet you cannot check before you sign.
+- **The rail is one screen tall and pinned, not as tall as the page.** `Sidebar` does this itself
+  now (`fixed inset-y-0 h-svh`), where the hand-rolled version said `sticky top-0 h-dvh self-start`.
+  The wallet chip is in `SidebarFooter`, which does not scroll, while the races scroll in
+  `SidebarContent`: on a rail that grows with the page the bottom is wherever the page ends, and at
+  900px the chip was already below the fold. A wallet you have to scroll to find is a wallet you
+  cannot check before you sign.
 - **The wordmark carries the only way out of the console**, in both frames: with no site header over
   these pages, without it there is no route back to the public app but the address bar.
   `ConsoleFrame` puts the page in a `<main>` and leaves the rail outside it, so the navigation is

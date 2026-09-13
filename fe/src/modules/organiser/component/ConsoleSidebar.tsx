@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The console's rail.
+ * The console's rail, built on shadcn's `sidebar`.
  *
  * Two items, and the second is an expander rather than a page: `Events` opens
  * into this wallet's races so somebody can move between them without going back
@@ -17,12 +17,38 @@
  * `/org` share, so the rail costs no extra read) filtered to this wallet. A
  * failed read empties the expander and nothing else: the rail is navigation,
  * and a node that will not answer must not take away the way back.
+ *
+ * WHY shadcn's component rather than the `<aside className="w-52">` this used
+ * to be: the hand-rolled rail was a fixed width at every size. Measured in a
+ * browser at 390 by 844 it took 208px of a 375px viewport, 55% of the screen,
+ * and pushed the dashboard's own content out to a `scrollWidth` of 543 so the
+ * whole page scrolled sideways. `Sidebar` is `hidden md:block` on a phone and
+ * becomes a `Sheet` behind `SidebarTrigger` instead, which is the behaviour
+ * that was missing rather than a tidier way of writing the same thing.
+ *
+ * Kept by hand, because the component supplies none of it: the expander's
+ * open-state rule, the prefix match that marks a race from one of its own tabs,
+ * the teal current-page fill, closing the drawer on navigation, and the wallet
+ * chip in the footer.
  */
 import { ChevronDownIcon, ChevronRightIcon, LayoutDashboardIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { useEvents } from "@/hooks/useEvents";
 import { shortAddress } from "@/utils/format";
 
@@ -34,15 +60,21 @@ const RACES = "/org/events";
 /**
  * What marks the page you are on, shared so the two kinds of row cannot drift.
  *
- * It is written as one attribute, `aria-current`, and the fill is drawn from
- * that same attribute rather than from a second boolean. So what a screen
- * reader announces and what the eye sees are one fact, and there is no way for
- * them to disagree.
+ * shadcn spends one name, `sidebar-accent`, on both hover and the current page,
+ * which leaves the row under the pointer indistinguishable from the row you are
+ * actually on. In this app teal means "here, or actionable", so the current
+ * page takes the teal and hover keeps the accent. It is written as a
+ * `data-[active=true]` override rather than a new `aria-[current=page]` rule so
+ * that `tailwind-merge` can see it conflicts with what the component already
+ * says and drop the loser; two rules under different modifiers would both
+ * survive and the winner would be decided by stylesheet order.
+ *
+ * Both facts still come from one boolean below, so what a screen reader
+ * announces (`aria-current`) and what the eye sees (`data-active`) cannot
+ * disagree.
  */
 const MARK =
-  "hover:bg-paper/10 aria-[current=page]:bg-teal aria-[current=page]:font-medium aria-[current=page]:text-paper";
-const ITEM = `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm ${MARK}`;
-const RACE_ITEM = `block rounded-md py-1.5 pl-9 pr-2.5 text-sm ${MARK}`;
+  "data-[active=true]:bg-teal data-[active=true]:font-medium data-[active=true]:text-paper";
 
 /**
  * Whether a race's row is the page you are on, its own tabs included.
@@ -63,6 +95,13 @@ function marksRace(pathname: string, href: string): boolean {
 export function ConsoleSidebar({ address }: { address: string }) {
   const pathname = usePathname();
   const { data } = useEvents();
+  /*
+    At phone width the rail is a drawer over the page. A drawer that stays open
+    on top of the page you have just asked for reads as "the link did nothing",
+    so every link in here shuts it on the way out. On a wide screen
+    `setOpenMobile` is not what is showing and the call changes nothing.
+  */
+  const { setOpenMobile } = useSidebar();
   const inRace = pathname.startsWith(`${RACES}/`);
   /*
     Null means nobody has touched it, so the path decides: collapsed on the
@@ -79,87 +118,102 @@ export function ConsoleSidebar({ address }: { address: string }) {
   */
   const [open, setOpen] = useState<boolean | null>(null);
   const expanded = open ?? inRace;
+  const onDashboard = pathname === "/org";
 
   const mine = data?.events.filter(({ event }) => event.organiser === address) ?? [];
 
   return (
-    /*
-      One screen tall and pinned there, rather than as tall as the page.
-
-      The wallet chip sits at the bottom of the rail, and on a rail that grows
-      with the page the bottom is wherever the page ends: on a short laptop
-      screen the chip was already below the fold on the dashboard, and a wallet
-      you have to scroll to find is a wallet you cannot check before you sign.
-      `h-dvh` with `self-start` stops the rail stretching, `sticky` keeps it in
-      view, and the races scroll inside the nav instead of pushing the chip
-      down. `shrink-0` is what keeps a long race name from squeezing the rail
-      narrower than it was drawn.
-    */
-    <aside className="sticky top-0 flex h-dvh w-52 shrink-0 flex-col self-start bg-ink px-2.5 py-4 text-n-300">
+    <Sidebar>
       {/* The way back to the public site, and the only one the console has:
           there is no header over these pages. A wordmark is where everybody
           already looks for it, so it is the wordmark rather than a new row in
           the nav, which would have to be named and would compete with the two
-          items that are actually the console. The connect screen draws the same
-          component, so the exit cannot exist in one state and not the other. */}
-      <ConsoleWordmark className="mb-5 shrink-0 self-start" />
+          items that are actually the console. The connect screen and the
+          phone-width bar draw the same component, so the exit cannot exist in
+          one state and not the others. */}
+      <SidebarHeader className="px-2 pt-4 pb-3">
+        <ConsoleWordmark onClick={() => setOpenMobile(false)} />
+      </SidebarHeader>
 
-      <nav
-        aria-label="Organiser console"
-        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
-      >
-        <Link href="/org" aria-current={pathname === "/org" ? "page" : undefined} className={ITEM}>
-          <LayoutDashboardIcon aria-hidden className="size-4" />
-          Dashboard
-        </Link>
+      <SidebarContent className="px-2">
+        {/* `SidebarContent` is a plain div, and the rail has to be a landmark
+            a screen reader can skip past to reach the page. */}
+        <nav aria-label="Organiser console">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={onDashboard} className={MARK}>
+                <Link
+                  href="/org"
+                  aria-current={onDashboard ? "page" : undefined}
+                  onClick={() => setOpenMobile(false)}
+                >
+                  <LayoutDashboardIcon aria-hidden />
+                  <span>Dashboard</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
 
-        <button
-          type="button"
-          onClick={() => setOpen(!expanded)}
-          aria-expanded={expanded}
-          className={ITEM}
-        >
-          {expanded ? (
-            <ChevronDownIcon aria-hidden className="size-4" />
-          ) : (
-            <ChevronRightIcon aria-hidden className="size-4" />
-          )}
-          Events
-        </button>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => setOpen(!expanded)}
+                aria-expanded={expanded}
+                className={MARK}
+              >
+                {expanded ? (
+                  <ChevronDownIcon aria-hidden />
+                ) : (
+                  <ChevronRightIcon aria-hidden />
+                )}
+                <span>Events</span>
+              </SidebarMenuButton>
 
-        {expanded ? (
-          <ul className="flex flex-col gap-0.5">
-            {mine.map(({ event }) => {
-              const href = `${RACES}/${event.eventId}`;
-              return (
-                <li key={event.eventId}>
-                  <Link
-                    href={href}
-                    aria-current={marksRace(pathname, href) ? "page" : undefined}
-                    className={RACE_ITEM}
-                  >
-                    {event.name}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-      </nav>
+              {expanded ? (
+                <SidebarMenuSub>
+                  {mine.map(({ event }) => {
+                    const href = `${RACES}/${event.eventId}`;
+                    const here = marksRace(pathname, href);
+                    return (
+                      <SidebarMenuSubItem key={event.eventId}>
+                        <SidebarMenuSubButton asChild isActive={here} className={MARK}>
+                          <Link
+                            href={href}
+                            aria-current={here ? "page" : undefined}
+                            onClick={() => setOpenMobile(false)}
+                          >
+                            <span>{event.name}</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    );
+                  })}
+                </SidebarMenuSub>
+              ) : null}
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </nav>
+      </SidebarContent>
 
       {/* Which wallet's races these are, and the only place the console says
           so: there is no site header over these pages, because the rail already
           carries the wordmark and this chip. The rail lists exactly what this
           address organises, so the address belongs beside the list.
 
+          It sits in the footer rather than after the nav, because the nav
+          scrolls and the footer does not: on a short laptop screen a chip that
+          travelled with a long list of races was already below the fold, and a
+          wallet you have to scroll to find is a wallet you cannot check before
+          you sign.
+
           The label is read, not seen. A shortened address on its own is a
           shape on screen and a string of letters read aloud, and neither says
           what it is the address of. */}
-      <p className="mt-4 flex shrink-0 items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs">
-        <span aria-hidden className="size-5 shrink-0 rounded-full bg-teal-300" />
-        <span className="sr-only">Connected wallet</span>
-        <span className="numeric truncate">{shortAddress(address)}</span>
-      </p>
-    </aside>
+      <SidebarFooter className="px-2 pb-4">
+        <p className="flex items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs">
+          <span aria-hidden className="size-5 shrink-0 rounded-full bg-teal-300" />
+          <span className="sr-only">Connected wallet</span>
+          <span className="numeric truncate">{shortAddress(address)}</span>
+        </p>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
