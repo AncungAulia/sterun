@@ -189,7 +189,7 @@ export function statusLabel(status: EventStatus): string {
 pnpm --filter fe test test/status-label.test.ts
 ```
 
-Expected: PASS, 4 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 5: Use it in the badge**
 
@@ -632,7 +632,7 @@ export function clearRunProgress(address: string): void {
 pnpm --filter fe test test/run-progress.test.ts
 ```
 
-Expected: PASS, 8 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 5: Wire it into the run**
 
@@ -926,7 +926,7 @@ export function ConsoleSidebar({ address }: { address: string }) {
 pnpm --filter fe test test/ConsoleSidebar.test.tsx
 ```
 
-Expected: PASS, 4 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 5: Write the header**
 
@@ -1486,7 +1486,7 @@ export function buildNeeds({ events, nowS, scannerCounts, resultCounts }: NeedsI
 pnpm --filter fe test test/needs.test.ts
 ```
 
-Expected: PASS, 18 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 5: Commit**
 
@@ -1751,7 +1751,7 @@ export function finishedCount(records: readonly IndexedRecord[]): number {
 pnpm --filter fe test test/records.test.ts
 ```
 
-Expected: PASS, 11 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 5: Write the hooks**
 
@@ -1860,6 +1860,7 @@ git commit -m "fe: read entries and scanner lists out of the index (STE-17)"
 **Files:**
 - Create: `fe/src/modules/organiser/component/NeedsBell.tsx`
 - Create: `fe/src/modules/organiser/component/UrgentBanner.tsx`
+- Create: `fe/src/modules/organiser/component/NeedsContext.tsx`
 - Create: `fe/src/hooks/useNeeds.ts`
 - Create: `fe/test/NeedsBell.test.tsx`
 - Modify: `fe/src/modules/organiser/component/ConsoleFrame.tsx` (pass the bell down)
@@ -2054,7 +2055,7 @@ export function NeedsBell({ needs }: { needs: readonly Need[] }) {
 pnpm --filter fe test test/NeedsBell.test.tsx
 ```
 
-Expected: PASS, 7 tests. If the popover's content is not in the document until opened, the two
+Expected: PASS, every case green. If the popover's content is not in the document until opened, the two
 tests that click first already account for it; the badge test reads the trigger only.
 
 - [ ] **Step 5: Write the banner**
@@ -2073,6 +2074,10 @@ Create `fe/src/modules/organiser/component/UrgentBanner.tsx`:
  * organiser sees this more than about once a week, it has stopped meaning
  * anything and the condition in `needs.ts` should be narrowed, not the colour
  * changed.
+ *
+ * It prints `eventName` and `detail` as they were built rather than taking them
+ * apart: a race is free to have a dash in its name, and a banner that slices on
+ * punctuation would quietly lose half its sentence the day one does.
  */
 import { TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
@@ -2087,8 +2092,7 @@ export function UrgentBanner({ need }: { need: Need }) {
     >
       <TriangleAlertIcon aria-hidden className="size-4 shrink-0 text-warning" />
       <p className="text-sm text-warning">
-        <strong className="font-semibold">{need.title.split(" — ")[1]} {need.detail.split(".")[0].toLowerCase()}.</strong>{" "}
-        {need.detail.split(". ").slice(1).join(". ")}
+        <strong className="font-semibold">{need.eventName}</strong> {need.detail}
       </p>
       <Link
         href={need.href}
@@ -2330,7 +2334,7 @@ export function sparklinePath(
 pnpm --filter fe test test/chart.test.ts
 ```
 
-Expected: PASS, 6 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 5: Write the two small components**
 
@@ -2604,7 +2608,7 @@ export function RacesTable({ rows, nowS }: { rows: readonly RaceRow[]; nowS: big
 pnpm --filter fe test test/RacesTable.test.tsx
 ```
 
-Expected: PASS, 7 tests.
+Expected: PASS, every case green.
 
 - [ ] **Step 9: Rebuild the page**
 
