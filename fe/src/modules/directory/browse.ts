@@ -254,3 +254,23 @@ export function placeLine(document: EventMetadata | null): string | null {
   if (name && city) return normalise(name).includes(normalise(city)) ? name : `${name}, ${city}`;
   return name || city || null;
 }
+
+/**
+ * Everything the public directory is allowed to list.
+ *
+ * A race reaches the chain one transaction before its distances do, and its
+ * entries are opened by a later one still. In between it is a real event with a
+ * real id and nothing anybody can do with it, and until now the grid listed it:
+ * only `pickFeatured` and the "hide full races" filter ever looked at status.
+ *
+ * Applied where the summaries enter the page rather than inside the filters, so
+ * that search, ordering and the featured row all see the same list. A filter
+ * can be switched off; this cannot.
+ *
+ * Closed, Completed and Cancelled all stay. Somebody who paid has a reason to
+ * find the page again, and a cancelled race is exactly the one a runner most
+ * needs to be able to reach.
+ */
+export function publicEvents(summaries: readonly EventSummary[]): EventSummary[] {
+  return summaries.filter(({ event }) => event.status !== "Draft");
+}

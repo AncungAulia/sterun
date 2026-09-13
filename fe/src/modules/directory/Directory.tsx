@@ -54,6 +54,7 @@ import { cn } from "@/utils/cn";
 import {
   matchesSearch,
   pickFeatured,
+  publicEvents,
   sortByPlace,
   type DateOrder,
   type DirectoryEntry,
@@ -69,7 +70,7 @@ import { NO_FILTERS, activeFilterCount, matchesFilters, type Filters } from "./f
 export function Directory() {
   const queryClient = useQueryClient();
   const { data, isPending, isError, isFetching, refetch } = useEvents();
-  const summaries = data?.events ?? [];
+  const summaries = publicEvents(data?.events ?? []);
   const documents = useEventDocuments(summaries);
   const { place, setPlace, clearPlace } = useArea();
   const nowS = useNowSeconds();
