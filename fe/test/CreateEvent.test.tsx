@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { WalletGate } from "@/components/layouts/WalletGate";
 import { CreateEvent } from "@/modules/organiser/CreateEvent";
 import { useWallet } from "@/hooks/useWallet";
 import { provincesOf } from "@/lib/places";
@@ -78,7 +79,22 @@ function renderWizard() {
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
-  return { user: userEvent.setup(), ...render(<CreateEvent />, { wrapper: Wrapper }) };
+  /*
+    Wrapped in the gate the route puts in front of it. `CreateEvent` used to
+    carry its own; it now lives in `app/(organiser)/org/new/layout.tsx`, so
+    rendering the component alone would render a wizard nothing had gated and
+    the case below would be asking its question of a component that no longer
+    answers it.
+  */
+  return {
+    user: userEvent.setup(),
+    ...render(
+      <WalletGate>
+        <CreateEvent />
+      </WalletGate>,
+      { wrapper: Wrapper },
+    ),
+  };
 }
 
 /** Fill everything step one insists on, then move to the distances. */

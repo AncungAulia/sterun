@@ -29,7 +29,13 @@ export function ConsoleFrame({ children }: { children: ReactNode }) {
   return (
     <div className="flex w-full flex-1">
       <ConsoleSidebar address={address} />
-      <div className="flex min-w-0 flex-1 flex-col bg-n-50">{children}</div>
+      {/* The page, and the landmark. `SiteFrame` gives every other route a
+          <main>; without one here the console was the only part of the app a
+          screen reader could not skip the navigation of, and the rail is
+          exactly the thing worth skipping. It wraps the page rather than the
+          whole frame, because a landmark that contains the navigation is not a
+          landmark. */}
+      <main className="flex min-w-0 flex-1 flex-col bg-n-50">{children}</main>
     </div>
   );
 }

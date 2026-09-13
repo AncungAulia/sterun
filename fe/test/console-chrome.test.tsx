@@ -9,7 +9,7 @@
  * only on how many of each thing a person can see.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -83,6 +83,27 @@ describe("the console owns its chrome", () => {
         await screen.findByRole("navigation", { name: "Organiser console" }),
       ).toBeInTheDocument();
     });
+
+    it("puts the page in a main landmark, with the rail outside it", async () => {
+      // SiteFrame gives every other route one. Without it here the console was
+      // the only part of the app whose navigation a screen reader could not
+      // skip, and the rail is exactly the thing worth skipping.
+      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
+      await screen.findByText("dashboard");
+
+      const main = screen.getByRole("main");
+      expect(within(main).getByText("dashboard")).toBeInTheDocument();
+      expect(
+        within(main).queryByRole("navigation", { name: "Organiser console" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers the way back to the public site", async () => {
+      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
+      await screen.findByText("dashboard");
+
+      expect(screen.getByRole("link", { name: "STERUN" })).toHaveAttribute("href", "/");
+    });
   });
 
   describe("edge", () => {
@@ -113,6 +134,23 @@ describe("the public pages and the wizard keep the site header", () => {
 
       expect(screen.getByRole("link", { name: "Sterun home" })).toBeInTheDocument();
       expect(screen.getByText("step one")).toBeInTheDocument();
+    });
+  });
+
+  describe("edge", () => {
+    it("gates the wizard itself, now that the page no longer does", () => {
+      // CreateEvent used to carry its own WalletGate and the console group took
+      // over the gating for its routes only. If this layout had not picked the
+      // wizard's up, /org/new would draw six steps for a wallet that is not
+      // there, and CreateGate would render a blank page rather than an ask.
+      wallet = { ...wallet, address: null };
+      render(<NewEventLayout><p>step one</p></NewEventLayout>, { wrapper: Wrapper });
+
+      // Scoped to the page: the site header carries a connect button of its
+      // own, as it did before any of this, so an unscoped query finds two.
+      const main = screen.getByRole("main");
+      expect(within(main).getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+      expect(screen.queryByText("step one")).not.toBeInTheDocument();
     });
   });
 

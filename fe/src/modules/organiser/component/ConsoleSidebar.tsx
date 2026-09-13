@@ -29,18 +29,54 @@ import { shortAddress } from "@/utils/format";
 /** Where a race's own pages live. One spelling for the links and for the test below. */
 const RACES = "/org/events";
 
-const ITEM =
-  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-paper/10 aria-[current=page]:bg-teal aria-[current=page]:font-medium aria-[current=page]:text-paper";
+/**
+ * What marks the page you are on, shared so the two kinds of row cannot drift.
+ *
+ * It is written as one attribute, `aria-current`, and the fill is drawn from
+ * that same attribute rather than from a second boolean. So what a screen
+ * reader announces and what the eye sees are one fact, and there is no way for
+ * them to disagree.
+ */
+const MARK =
+  "hover:bg-paper/10 aria-[current=page]:bg-teal aria-[current=page]:font-medium aria-[current=page]:text-paper";
+const ITEM = `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm ${MARK}`;
+const RACE_ITEM = `block rounded-md py-1.5 pl-9 pr-2.5 text-sm ${MARK}`;
+
+/**
+ * Whether a race's row is the page you are on, its own tabs included.
+ *
+ * Exact match would be right only for as long as a race is one page. It is not
+ * going to be: entries, scanners and results are tabs underneath it, and on
+ * `/org/events/3/entries` an exact match marks nothing at all. That failure is
+ * silent, which is the worst kind for navigation, so the prefix is written here
+ * once rather than discovered later.
+ *
+ * The separator matters. `startsWith(href)` alone would let `/org/events/30`
+ * mark race 3.
+ */
+function marksRace(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function ConsoleSidebar({ address }: { address: string }) {
   const pathname = usePathname();
   const { data } = useEvents();
+  const inRace = pathname.startsWith(`${RACES}/`);
   /*
-    Collapsed on the dashboard, open inside a race. The rail should show where
-    you are without being asked, and it should not push the dashboard's own
-    navigation down a screenful of race names on the page that needs it least.
+    Null means nobody has touched it, so the path decides: collapsed on the
+    dashboard, open inside a race. The rail should show where you are without
+    being asked, and it should not push the dashboard's own navigation down a
+    screenful of race names on the page that needs it least.
+
+    Deriving it on every render rather than seeding `useState` once is the whole
+    point. The rail lives in a layout precisely so that it does NOT remount
+    between console pages, so a seed is read once, on a hard load, and never
+    again: clicking a race from the dashboard left Events shut and marked a row
+    that was not on the screen. Once somebody toggles it by hand, their answer
+    wins and the path stops speaking.
   */
-  const [open, setOpen] = useState(pathname.startsWith(`${RACES}/`));
+  const [open, setOpen] = useState<boolean | null>(null);
+  const expanded = open ?? inRace;
 
   const mine = data?.events.filter(({ event }) => event.organiser === address) ?? [];
 
@@ -58,9 +94,17 @@ export function ConsoleSidebar({ address }: { address: string }) {
       narrower than it was drawn.
     */
     <aside className="sticky top-0 flex h-dvh w-52 shrink-0 flex-col self-start bg-ink px-2.5 py-4 text-n-300">
-      <span className="shrink-0 px-3 pb-5 text-sm font-semibold tracking-[0.14em] text-paper">
+      {/* The way back to the public site, and the only one the console has:
+          there is no header over these pages. A wordmark is where everybody
+          already looks for it, so it is the wordmark rather than a new row in
+          the nav, which would have to be named and would compete with the two
+          items that are actually the console. */}
+      <Link
+        href="/"
+        className="mb-5 shrink-0 self-start rounded-md px-3 text-sm font-semibold tracking-[0.14em] text-paper"
+      >
         STERUN
-      </span>
+      </Link>
 
       <nav
         aria-label="Organiser console"
@@ -73,11 +117,11 @@ export function ConsoleSidebar({ address }: { address: string }) {
 
         <button
           type="button"
-          onClick={() => setOpen((was) => !was)}
-          aria-expanded={open}
+          onClick={() => setOpen(!expanded)}
+          aria-expanded={expanded}
           className={ITEM}
         >
-          {open ? (
+          {expanded ? (
             <ChevronDownIcon aria-hidden className="size-4" />
           ) : (
             <ChevronRightIcon aria-hidden className="size-4" />
@@ -85,7 +129,7 @@ export function ConsoleSidebar({ address }: { address: string }) {
           Events
         </button>
 
-        {open ? (
+        {expanded ? (
           <ul className="flex flex-col gap-0.5">
             {mine.map(({ event }) => {
               const href = `${RACES}/${event.eventId}`;
@@ -93,8 +137,8 @@ export function ConsoleSidebar({ address }: { address: string }) {
                 <li key={event.eventId}>
                   <Link
                     href={href}
-                    aria-current={pathname === href ? "page" : undefined}
-                    className="block rounded-md py-1.5 pl-9 pr-2.5 text-sm hover:bg-paper/10 aria-[current=page]:bg-teal aria-[current=page]:font-medium aria-[current=page]:text-paper"
+                    aria-current={marksRace(pathname, href) ? "page" : undefined}
+                    className={RACE_ITEM}
                   >
                     {event.name}
                   </Link>
@@ -108,9 +152,14 @@ export function ConsoleSidebar({ address }: { address: string }) {
       {/* Which wallet's races these are, and the only place the console says
           so: there is no site header over these pages, because the rail already
           carries the wordmark and this chip. The rail lists exactly what this
-          address organises, so the address belongs beside the list. */}
+          address organises, so the address belongs beside the list.
+
+          The label is read, not seen. A shortened address on its own is a
+          shape on screen and a string of letters read aloud, and neither says
+          what it is the address of. */}
       <p className="mt-4 flex shrink-0 items-center gap-2 rounded-md bg-paper/5 px-2.5 py-2 text-xs">
         <span aria-hidden className="size-5 shrink-0 rounded-full bg-teal-300" />
+        <span className="sr-only">Connected wallet</span>
         <span className="numeric truncate">{shortAddress(address)}</span>
       </p>
     </aside>

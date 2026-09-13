@@ -321,7 +321,7 @@ What is settled:
 | Group | Chrome | Routes |
 | --- | --- | --- |
 | `app/(browse)/layout.tsx` | `SiteFrame` (header + `<main>`) | `/`, `/events/[id]`, `/preview/done` |
-| `app/(organiser)/org/new/layout.tsx` | `SiteFrame` | `/org/new` |
+| `app/(organiser)/org/new/layout.tsx` | `SiteFrame` + `WalletGate` | `/org/new` |
 | `app/(organiser)/org/(console)/layout.tsx` | `WalletGate` + `ConsoleFrame` (the rail), **no header** | `/org`, and `/org/events/[id]` next |
 
 The reason is a bug you could only see in a browser: the console's rail carries the wordmark and the
@@ -348,11 +348,15 @@ the wizard, no rail beside the wizard.
 
 Everything under `/org` except the wizard sits in `app/(organiser)/org/(console)/layout.tsx`:
 `WalletGate`, then `modules/organiser/component/ConsoleFrame.tsx`, which draws the dark rail beside
-the page. Four consequences worth knowing before adding a page there:
+the page. Six consequences worth knowing before adding a page there:
 
-- **The gate is the layout's, not the page's.** `OrganiserHome` used to wrap itself in `WalletGate`
-  and no longer does. A new page under `/org` must not add its own: gating twice means two
-  components deciding separately whether the wallet is still restoring.
+- **The gate is the layout's, not the page's, everywhere under `/org`.** `OrganiserHome` used to
+  wrap itself in `WalletGate` and no longer does, and neither does `CreateEvent`: the wizard's gate
+  moved up to `app/(organiser)/org/new/layout.tsx` when the console group took over the gating for
+  its own routes. No page under `/org` may add one. Gating twice means two components deciding
+  separately whether the wallet is still restoring, and the second gate is dead code that reads as
+  a rule. `CreateEvent.test.tsx` and `OrganiserHome.test.tsx` both render their component inside
+  `WalletGate`, so each still tests the tree the route actually builds.
 - **A layout rather than a wrapper each page imports**, so the rail survives navigation between
   races: its expander stays open and its scroll position stays put, which is the only reason to have
   a rail rather than a breadcrumb. `ConsoleFrame` exists because the file under `app/` stays a
@@ -363,11 +367,23 @@ the page. Four consequences worth knowing before adding a page there:
   "all races" page behind it, because the dashboard is that list. Anything race-scoped, entries,
   scanners, results, belongs inside a race at `/org/events/[id]`, never in the rail. A failed chain
   read empties the expander and nothing else: the rail is navigation, and a node that will not
-  answer must not take away the way back. It is collapsed on `/org` and open inside a race.
+  answer must not take away the way back. **The expander follows the path on every render**
+  (`open ?? pathname.startsWith("/org/events/")`, with `open` starting as `null`), rather than
+  seeding `useState` once: the rail is in a layout precisely so that it does NOT remount between
+  console pages, so a seed is read on a hard load and never again, and clicking a race from the
+  dashboard left Events shut while marking a row that was not on screen. A hand on the expander
+  wins from then on. **A race's row is marked by prefix**, `pathname === href` or
+  `pathname.startsWith(href + "/")` (`marksRace`), because entries, scanners and results are tabs
+  under the race and an exact match would silently mark nothing on any of them. **Dashboard stays
+  an exact match**: a prefix there lights it up on the wizard and inside every race.
 - **The rail is one screen tall and pinned, not as tall as the page** (`sticky top-0 h-dvh
   self-start`, with the nav scrolling inside it). The wallet chip sits at its bottom, and on a rail
   that grows with the page the bottom is wherever the page ends: at 900px it was already below the
   fold. A wallet you have to scroll to find is a wallet you cannot check before you sign.
+- **The rail carries the only way out of the console.** Its wordmark is a `Link` to `/`: with no
+  site header over these pages, without it there is no route back to the public app but the address
+  bar. `ConsoleFrame` puts the page in a `<main>` and leaves the rail outside it, so the
+  navigation is skippable, which is the one thing a landmark is for.
 - **`ConsoleHeader` is every console page's top bar**: a title, an optional status badge, an
   optional bell, and **one** action. One, not a row: each tab inside a race has exactly one thing to
   do, and keeping it in the bar rather than under the content means it does not travel down the page
