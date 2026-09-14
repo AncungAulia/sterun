@@ -18,6 +18,7 @@ import BrowseLayout from "../app/(browse)/layout";
 import ConsoleLayout from "../app/(organiser)/org/(console)/layout";
 import NewEventLayout from "../app/(organiser)/org/new/layout";
 import BrowseNotFound from "../app/(browse)/not-found";
+import ConsoleNotFound from "../app/(organiser)/org/(console)/not-found";
 import NotFound from "../app/not-found";
 import { shortAddress } from "@/utils/format";
 
@@ -330,6 +331,26 @@ describe("the console at phone width", () => {
           screen.queryByRole("navigation", { name: "Organiser console" }),
         ).not.toBeInTheDocument(),
       );
+    });
+  });
+});
+
+describe("a race id the console cannot find", () => {
+  describe("negative", () => {
+    it("draws no site header over the rail and only one landmark", async () => {
+      // notFound() from /org/events/banana lands INSIDE the console layout,
+      // which has already drawn the rail and the <main>. The root not-found
+      // would add the site header and a second <main> on top of both.
+      render(
+        <ConsoleLayout>
+          <ConsoleNotFound />
+        </ConsoleLayout>,
+        { wrapper: Wrapper },
+      );
+
+      expect(await screen.findByRole("link", { name: "Browse races" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Sterun home" })).not.toBeInTheDocument();
+      expect(screen.getAllByRole("main")).toHaveLength(1);
     });
   });
 });
