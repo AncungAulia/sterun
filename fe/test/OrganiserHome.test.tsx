@@ -245,7 +245,10 @@ describe("OrganiserHome", () => {
 
       expect(await screen.findByText("280")).toBeInTheDocument();
       expect(screen.getByText("7,000")).toBeInTheDocument();
-      expect(screen.getByText("sUSD")).toBeInTheDocument();
+      // With the bars gone, what a sell-out would pay is written beside the
+      // figure instead: 300 + 100 places at 25 sUSD.
+      expect(screen.getByText("of 10,000 sUSD")).toBeInTheDocument();
+      expect(screen.getByText("of 400")).toBeInTheDocument();
     });
 
     it("compares the races, under a title that is not Pace", async () => {

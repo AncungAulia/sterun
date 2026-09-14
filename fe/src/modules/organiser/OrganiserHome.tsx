@@ -134,11 +134,6 @@ function comparisonOf(
   return [...(benchmark ? [benchmark] : []), ...live].map(build);
 }
 
-/** A share, or nothing to compare against. Never a division by zero. */
-function share(part: number, whole: number): number | undefined {
-  return whole > 0 ? part / whole : undefined;
-}
-
 export function OrganiserHome() {
   const { address } = useWallet();
   const { allowed, isChecking } = useCanCreateEvents(address);
@@ -240,18 +235,16 @@ export function OrganiserHome() {
                 label="Races published"
                 value={String(totals.published)}
                 unit={`of ${mine.length}`}
-                filled={share(totals.published, mine.length)}
               />
               <StatCard
                 label="Entries, all races"
                 value={totals.entries.toLocaleString("en-US")}
-                filled={share(totals.entries, totals.quota)}
+                unit={`of ${totals.quota.toLocaleString("en-US")}`}
               />
               <StatCard
                 label="Received, all races"
                 value={formatAmount(totals.received)}
-                unit="sUSD"
-                filled={share(Number(totals.received), Number(totals.potential))}
+                unit={`of ${formatAmount(totals.potential)} sUSD`}
               />
             </div>
 

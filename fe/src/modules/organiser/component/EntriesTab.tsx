@@ -15,6 +15,7 @@
  * from the chain instead. Neither shows a guess.
  */
 import { useQueryClient } from "@tanstack/react-query";
+import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
@@ -57,10 +58,6 @@ const TRIGGER = "h-9 border-n-200 bg-paper text-ink";
 const ALL = "all";
 const HEAD = "bg-n-100 px-4 py-2.5 text-left font-medium whitespace-nowrap text-n-600";
 const CELL = "border-b border-n-200 px-4 py-3 align-middle whitespace-nowrap";
-
-function share(part: number, whole: number): number | undefined {
-  return whole > 0 ? part / whole : undefined;
-}
 
 export function EntriesTab({ summary }: { summary: EventSummary }) {
   const { eventId } = summary.event;
@@ -111,13 +108,10 @@ export function EntriesTab({ summary }: { summary: EventSummary }) {
           label="Entries"
           value={records.length.toLocaleString("en-US")}
           unit={`of ${quota.toLocaleString("en-US")}`}
-          filled={share(records.length, quota)}
         />
         <StatCard
           label="Race packs still to hand out"
           value={(records.length - collected).toLocaleString("en-US")}
-          filled={share(collected, records.length)}
-          tone="success"
         />
         {showAddOns ? (
           <StatCard label="Add-ons to hand out" value={(owed ?? 0).toLocaleString("en-US")} />
@@ -126,20 +120,25 @@ export function EntriesTab({ summary }: { summary: EventSummary }) {
             label="Add-ons sold"
             value={sold.toLocaleString("en-US")}
             unit={stock > 0 ? `of ${stock.toLocaleString("en-US")}` : undefined}
-            filled={share(sold, stock)}
           />
         )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search a bib number or a wallet"
-          aria-label="Search a bib number or a wallet"
-          className="w-full sm:w-72"
-        />
+        <div className="relative w-full sm:w-72">
+          <SearchIcon
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-n-400"
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search a bib number or a wallet"
+            aria-label="Search a bib number or a wallet"
+            className="pl-9"
+          />
+        </div>
         <Select
           value={categoryId === null ? ALL : String(categoryId)}
           onValueChange={(value) => setCategoryId(value === ALL ? null : Number(value))}

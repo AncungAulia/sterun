@@ -26,10 +26,6 @@ import { StatCard } from "./StatCard";
 const DAYS = 14;
 const ACTIVITY_ROWS = 5;
 
-function share(part: number, whole: number): number | undefined {
-  return whole > 0 ? part / whole : undefined;
-}
-
 export function OverviewTab({ summary }: { summary: EventSummary }) {
   const { eventId } = summary.event;
   const nowS = useNowSeconds();
@@ -50,20 +46,16 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
           label="Entries"
           value={totals.entered.toLocaleString("en-US")}
           unit={`of ${totals.quota.toLocaleString("en-US")}`}
-          filled={share(totals.entered, totals.quota)}
         />
         <StatCard
           label="Payments received"
           value={formatAmount(totals.received)}
           unit={`of ${formatAmount(totals.potential)} sUSD`}
-          filled={share(Number(totals.received), Number(totals.potential))}
         />
         <StatCard
           label="Race packs collected"
           value={collectedValue}
           unit={collected === null ? undefined : `of ${totals.entered.toLocaleString("en-US")}`}
-          filled={collected === null ? undefined : share(collected, totals.entered)}
-          tone="success"
         />
       </div>
 

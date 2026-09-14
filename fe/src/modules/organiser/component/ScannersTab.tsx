@@ -17,6 +17,7 @@
  */
 import { StrKey } from "@stellar/stellar-sdk";
 import { useQueryClient } from "@tanstack/react-query";
+import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
@@ -106,14 +107,20 @@ export function ScannersTab({ summary }: { summary: EventSummary }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search a wallet"
-          aria-label="Search a wallet"
-          className="w-full sm:w-72"
-        />
+        <div className="relative w-full sm:w-72">
+          <SearchIcon
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-n-400"
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search a wallet"
+            aria-label="Search a wallet"
+            className="pl-9"
+          />
+        </div>
         <Button onClick={() => setAdding(true)}>Add scanner</Button>
         <span className="ml-auto text-sm text-n-500">
           {rows.length === 1 ? "1 scanner" : `${rows.length} scanners`}
