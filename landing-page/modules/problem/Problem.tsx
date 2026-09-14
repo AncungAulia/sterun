@@ -58,14 +58,6 @@ const BAND = 40;
 /** Stroke added at the peak of the highlight. About a weight step heavier at this size. */
 const HIGHLIGHT_STROKE = "0.035em";
 
-/** Take a computed rgb() colour and return it at the given alpha. */
-function withAlpha(color: string, alpha: number): string {
-  const channels = color.match(/[\d.]+/g);
-  if (!channels || channels.length < 3) return color;
-  const [r, g, b] = channels;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 function ArrowUpRight() {
   return (
     <svg
@@ -88,6 +80,7 @@ export function Problem() {
   const copyRef = useRef<HTMLDivElement>(null);
   const inkProbeRef = useRef<HTMLSpanElement>(null);
   const accentProbeRef = useRef<HTMLSpanElement>(null);
+  const paperProbeRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger, SplitText);
@@ -96,7 +89,8 @@ export function Problem() {
     const copy = copyRef.current;
     const inkProbe = inkProbeRef.current;
     const accentProbe = accentProbeRef.current;
-    if (!strip || !copy || !inkProbe || !accentProbe) return;
+    const paperProbe = paperProbeRef.current;
+    if (!strip || !copy || !inkProbe || !accentProbe || !paperProbe) return;
 
     // Everything is set up inside a reduced-motion query. With the preference
     // on, the text is never split and keeps its CSS colour. If it changes
@@ -108,6 +102,7 @@ export function Problem() {
       // written here, so a token change reaches the animation too.
       const ink = getComputedStyle(inkProbe).color;
       const accent = getComputedStyle(accentProbe).color;
+      const paper = getComputedStyle(paperProbe).color;
 
       // Words are kept whole so lines only break at spaces; aria "auto" labels
       // each paragraph with its full text and hides the split pieces, so a
@@ -118,7 +113,7 @@ export function Problem() {
         aria: "auto",
       });
 
-      // Faded -> brand blue, thickened -> ink, one character after another in
+      // Page colour -> brand blue, thickened -> ink, one character after another in
       // reading order across both paragraphs, scrubbed to the scroll so
       // scrolling back runs it back. The end is measured from the bottom of the
       // copy rather than its top, so the last line is revealed while it is on
@@ -132,7 +127,9 @@ export function Problem() {
       // left 20 and 112 characters blue and thickened forever at the foot of the
       // page. Clamping finishes the reveal at the bottom instead, and does
       // nothing once there is enough page below.
-      gsap.set(split.chars, { color: withAlpha(ink, 0.1), "--char-bold": "0em" });
+      // Before its turn a character is the colour of the page itself rather than
+      // a faint ink, so the copy is simply not there until the band reaches it.
+      gsap.set(split.chars, { color: paper, "--char-bold": "0em" });
       gsap
         .timeline({
           scrollTrigger: { trigger: copy, start: "top 80%", end: "clamp(bottom 60%)", scrub: 0.5 },
@@ -174,6 +171,7 @@ export function Problem() {
       </h2>
       <span ref={inkProbeRef} aria-hidden className="hidden text-ink" />
       <span ref={accentProbeRef} aria-hidden className="hidden text-teal-400" />
+      <span ref={paperProbeRef} aria-hidden className="hidden text-paper" />
 
       {/* The page gutter, not a section-specific one, so the left column and
           the dark block start on the same line as the wordmark and the hero
