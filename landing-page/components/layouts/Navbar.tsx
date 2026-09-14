@@ -167,8 +167,8 @@ function NavRow({
  * The fixed header, drawn as a photographic negative of whatever is behind it.
  *
  * Four stacked copies of the same row:
- *   onLight   ink logo and MENU, teal CTA        shown over light surfaces
- *   onDark x2 paper logo, MENU and CTA           shown over dark surfaces
+ *   onLight   ink logo and MENU, ink-filled CTA with paper type     over light surfaces
+ *   onDark x2 paper logo and MENU, paper-filled CTA with ink type   over dark surfaces
  *   hit       the real link and button, invisible, never clipped
  *
  * Each painted layer is clipped to the parts of the header band its colour

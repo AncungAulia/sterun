@@ -84,14 +84,16 @@ html::-webkit-scrollbar {
   position: absolute;
   inset: 0;
   --nav-fg: var(--color-ink);
-  --nav-cta: var(--color-teal);
+  --nav-cta: var(--color-ink);
   --nav-cta-contrast: var(--color-paper);
   color: var(--nav-fg);
 }
 
-/* Painted over light surfaces: ink logo and MENU, brand teal CTA (the base). */
+/* Painted over light surfaces: ink logo and MENU, a filled ink CTA with paper
+   type (the base). */
 
-/* Painted over dark surfaces: everything paper. */
+/* Painted over dark surfaces: paper logo and MENU, a filled paper CTA with ink
+   type. */
 .nav__layer--onDark {
   --nav-fg: var(--color-paper);
   --nav-cta: var(--color-paper);
@@ -128,18 +130,23 @@ html::-webkit-scrollbar {
 }
 
 /* --- CTA -----------------------------------------------------------------
-   Outline at rest in the layer's CTA colour. On hover a fill of that same
-   colour sweeps in from the left, the label rolls up to its own duplicate and
-   turns the layer's contrast colour, and the arrow holds still because a moving
-   target is harder to aim at. The label's colour lags the fill slightly so it
-   flips once the ground beneath it has actually changed. */
+   Filled at rest: ink with paper type over light surfaces, paper with ink type
+   over dark ones, so a split header shows both halves of the same button. On
+   hover the button inverts: the type colour sweeps in from the left as the new
+   fill, the label rolls up to its own duplicate in the old fill colour, and
+   the border keeps the old fill so the button keeps its shape against a ground
+   of the same colour. Not a brand-teal hover: teal disappears over the blue
+   How it works box. The arrow holds still because a moving target is harder to
+   aim at, and the label's colour lags the fill slightly so it flips once the
+   ground beneath it has actually changed. */
 .nav-cta {
   position: relative;
   overflow: hidden;
   isolation: isolate;
   border: 1px solid var(--nav-cta);
   border-radius: 9999px;
-  color: var(--nav-cta);
+  background: var(--nav-cta);
+  color: var(--nav-cta-contrast);
   transition: color 0.25s ease 0.12s;
 }
 .nav-cta::before {
@@ -147,7 +154,7 @@ html::-webkit-scrollbar {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--nav-cta);
+  background: var(--nav-cta-contrast);
   transform: scaleX(0);
   transform-origin: right;
   transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
@@ -195,7 +202,7 @@ html::-webkit-scrollbar {
 /* Hover only where a pointer can hover; on touch a tap would leave it stuck. */
 @media (hover: hover) {
   .nav[data-hover="cta"] .nav-cta {
-    color: var(--nav-cta-contrast);
+    color: var(--nav-cta);
   }
   .nav[data-hover="cta"] .nav-cta::before {
     transform: scaleX(1);
@@ -216,7 +223,7 @@ html::-webkit-scrollbar {
 /* Keyboard focus mirrors hover, plus a visible ring. The ring is drawn here on
    the painted layers because the focused element itself is invisible. */
 .nav[data-focus="cta"] .nav-cta {
-  color: var(--nav-cta-contrast);
+  color: var(--nav-cta);
 }
 .nav[data-focus="cta"] .nav-cta::before {
   transform: scaleX(1);
