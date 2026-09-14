@@ -138,7 +138,8 @@ describe("EntriesTab", () => {
       expect(screen.getByText("1 entry")).toBeInTheDocument();
 
       await userEvent.clear(screen.getByRole("searchbox"));
-      await userEvent.selectOptions(screen.getByRole("combobox", { name: "Status" }), "collected");
+      await userEvent.click(screen.getByRole("combobox", { name: "Status" }));
+      await userEvent.click(await screen.findByRole("option", { name: "Pack collected" }));
       const rows = await bodyRows();
       expect(rows).toHaveLength(1);
       expect(rows[0]).toHaveTextContent("Pack collected");

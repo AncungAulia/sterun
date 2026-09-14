@@ -20,6 +20,13 @@ import { useState } from "react";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEventAddOns } from "@/hooks/useEvents";
 import { useRaceRecords, useRaceRecordsFailed } from "@/hooks/useRaceRecords";
 import type { EventSummary } from "@/lib/events";
@@ -43,8 +50,11 @@ const STATUS: Record<EntryStatus, { label: string; variant: "success" | "warning
   dnf: { label: "Did not finish", variant: "muted" },
 };
 
-const SELECT =
-  "h-9 rounded-md border border-n-200 bg-paper px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-ring";
+/** Neutral, like every filter here: no colour for a chosen value. */
+const TRIGGER = "h-9 border-n-200 bg-paper text-ink";
+
+/** Radix Select refuses an empty value, so "no filter" has a word of its own. */
+const ALL = "all";
 const HEAD = "bg-n-100 px-4 py-2.5 text-left font-medium whitespace-nowrap text-n-600";
 const CELL = "border-b border-n-200 px-4 py-3 align-middle whitespace-nowrap";
 
@@ -130,32 +140,35 @@ export function EntriesTab({ summary }: { summary: EventSummary }) {
           aria-label="Search a bib number or a wallet"
           className="w-full sm:w-72"
         />
-        <select
-          aria-label="Distance"
-          className={SELECT}
-          value={categoryId ?? ""}
-          onChange={(e) => setCategoryId(e.target.value === "" ? null : Number(e.target.value))}
+        <Select
+          value={categoryId === null ? ALL : String(categoryId)}
+          onValueChange={(value) => setCategoryId(value === ALL ? null : Number(value))}
         >
-          <option value="">All distances</option>
-          {summary.categories.map((category) => (
-            <option key={category.categoryId} value={category.categoryId}>
-              {category.code}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Status"
-          className={SELECT}
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatusFilter)}
-        >
-          <option value="all">All statuses</option>
-          {(Object.keys(STATUS) as EntryStatus[]).map((key) => (
-            <option key={key} value={key}>
-              {STATUS[key].label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Distance" className={TRIGGER}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value={ALL}>All distances</SelectItem>
+            {summary.categories.map((category) => (
+              <SelectItem key={category.categoryId} value={String(category.categoryId)}>
+                {category.code}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
+          <SelectTrigger aria-label="Status" className={TRIGGER}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value={ALL}>All statuses</SelectItem>
+            {(Object.keys(STATUS) as EntryStatus[]).map((key) => (
+              <SelectItem key={key} value={key}>
+                {STATUS[key].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <span className="ml-auto text-sm text-n-500">
           {shown.length === 1 ? "1 entry" : `${shown.length.toLocaleString("en-US")} entries`}
         </span>
