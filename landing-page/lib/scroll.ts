@@ -61,13 +61,36 @@ export function startSmoothScroll(): () => void {
 }
 
 /**
- * Freeze page scrolling, for the menu overlay. A no-op under reduced motion,
- * where Lenis never starts and the overlay's own overflow lock does the job.
+ * Freeze page scrolling, for overlays (the menu, an opened step). The one place
+ * that decides how.
+ *
+ * With Lenis running it is lenis.stop(), which already sets overflow: clip on
+ * <html>. Without Lenis (reduced motion) it sets overflow: hidden on <html>.
+ *
+ * Never on <body>. Once <html> has any overflow other than visible, a hidden
+ * body no longer hands its overflow up to the viewport: <body> becomes a scroll
+ * container of its own, and every sticky element on the page is suddenly
+ * sticky to <body> at scroll 0 instead of to the screen. The menu did exactly
+ * that, and the held How it works stage jumped behind it.
  */
+let previousRootOverflow: string | null = null;
+
 export function lockScroll(): void {
-  lenis?.stop();
+  if (lenis) {
+    lenis.stop();
+    return;
+  }
+  if (previousRootOverflow !== null) return;
+  previousRootOverflow = document.documentElement.style.overflow;
+  document.documentElement.style.overflow = "hidden";
 }
 
 export function unlockScroll(): void {
-  lenis?.start();
+  if (lenis) {
+    lenis.start();
+    return;
+  }
+  if (previousRootOverflow === null) return;
+  document.documentElement.style.overflow = previousRootOverflow;
+  previousRootOverflow = null;
 }

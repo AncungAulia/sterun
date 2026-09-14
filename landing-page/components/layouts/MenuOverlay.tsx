@@ -247,21 +247,16 @@ export function MenuOverlay({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose, closeButtonRef]);
 
-  // Lock the page behind the overlay. Restoring the previous value rather than
-  // clearing it keeps this from fighting anything else that sets overflow.
-  //
-  // Two locks, because there are two ways the page scrolls. lockScroll stops
-  // Lenis, which otherwise keeps turning the wheel into page movement behind the
-  // overlay; the overflow lock covers reduced motion, where Lenis never runs.
+  // Lock the page behind the overlay, through lockScroll only. This used to set
+  // overflow: hidden on <body> as well. With Lenis stopped, <html> is already
+  // overflow: clip, so the body's hidden no longer passes up to the viewport and
+  // <body> becomes a scroll container of its own; every sticky element on the
+  // page (the How it works stage) came unstuck behind the opening menu and the
+  // page jumped. lockScroll picks the one lock that fits.
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     lockScroll();
-    return () => {
-      document.body.style.overflow = previous;
-      unlockScroll();
-    };
+    return () => unlockScroll();
   }, [open]);
 
   return (

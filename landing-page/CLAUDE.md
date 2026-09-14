@@ -101,8 +101,11 @@ Cara kerjanya (`components/layouts/Navbar.tsx`, `lib/navTheme.ts`):
   melempar event scroll native dan ScrollTrigger sinkron sendiri. Proxy atau loop update kedua di
   atasnya membuat keduanya berebut. Terukur dengan scroll roda mouse: progres reveal mengikuti
   posisi scroll.
-- Kunci scroll lewat `lockScroll()` / `unlockScroll()` dari `lib/scroll.ts` (`lenis.stop()` /
-  `lenis.start()`), bukan dengan memegang instance-nya. Overlay menu memanggil keduanya.
+- Kunci scroll **hanya** lewat `lockScroll()` / `unlockScroll()` dari `lib/scroll.ts`: `lenis.stop()`
+  kalau Lenis jalan, `overflow: hidden` di `<html>` kalau tidak. **Jangan pernah** memasang
+  `overflow: hidden` di `<body>`: saat Lenis berhenti `<html>` sudah `overflow: clip`, jadi body
+  berubah jadi scroll container sendiri dan semua elemen `sticky` lepas dari layar (stage How it
+  works sempat melompat di belakang menu karena ini).
 - Elemen yang scroll sendiri di dalam halaman (panel menu) diberi `data-lenis-prevent`.
 - Di bawah `prefers-reduced-motion` Lenis **tidak dijalankan sama sekali**
   (`components/elements/SmoothScroll.tsx`), dan preferensi itu diikuti langsung.
