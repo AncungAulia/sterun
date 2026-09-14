@@ -9,7 +9,7 @@
  * for a file nobody had touched.
  */
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Pool } from "pg";
@@ -130,5 +130,36 @@ describe.skipIf(!DATABASE_URL)(`migrate (${DATABASE_URL ? "postgres" : SKIP_REAS
       "SELECT count(*)::text AS n FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'ok'",
     );
     expect(rows[0]?.n).toBe("0");
+  });
+});
+
+/**
+ * The checksums of migrations production has already applied, as it recorded
+ * them in `schema_migrations` (read from the live database on 2026-09-14).
+ *
+ * The runtime guard above only fires at startup, on the box — which is the most
+ * expensive place to find out. This pins the same fact in CI instead. It is not
+ * hypothetical: an English pass over the repository edited a comment inside
+ * 006, the runtime guard would have refused to start the API on the next
+ * deploy, and nothing before that deploy said so.
+ *
+ * Adding a migration means adding a line here once it has run in production.
+ * Changing a line here means an applied migration was edited, which is the bug.
+ */
+describe("migrations already applied in production", () => {
+  const APPLIED: Record<string, string> = {
+    "001_pii_vault.sql": "19684fc1545af812887ea2985c3a5895e4de3899dd000908f08feef9fe143ff4",
+    "002_indexer.sql": "ad6e2aad01d5f796f9a531811c6dfe84ea8cb8038fdb7b1524d28c235b12d3f9",
+    "003_name_fragment.sql": "58d04ca0f79bb75f33890bf5b610ff7033c9159c0ff2ec0fd9a60d8bbe7d6d4c",
+    "004_auth_nonces.sql": "708aad2328f108b128de2bf7b8ec87aa962a05db8ac11aae81e739ade7baefc1",
+    "005_add_ons.sql": "353f85995c4de375bc511731b3bb75bd811c740bc9d41a0937562cdfe7922e6d",
+    "006_cancelled_status.sql": "1bebfd8dbaa54e78c98d00d6bf02444390148d0712996ac506d6521813e44f8a",
+  };
+
+  it.each(Object.entries(APPLIED))("%s is byte-for-byte what production ran", (name, sha256) => {
+    const sql = readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8");
+    // Compared through the runtime's own checksum, so this test and the startup
+    // guard can never disagree about what "changed" means.
+    expect(migrationChecksum(sql)).toBe(sha256);
   });
 });
