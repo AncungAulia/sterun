@@ -31,6 +31,7 @@ const HASH = "ab".repeat(32);
 
 /** The exact shape `scValToNative` produces for `RecordData`. */
 const record = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+  addon_ids: [],
   bib_no: 7,
   category_id: 1,
   claimed_at: null,
@@ -170,7 +171,19 @@ describe("RecordData", () => {
       claimedAt: null,
       finishTimeS: null,
       resultAt: null,
+      addonIds: [],
     });
+  });
+
+  it("decodes the add-ons an entry bought, keeping reservation order (STE-42)", () => {
+    expect(decodeRecord(1, record({ addon_ids: [2, 0] })).addonIds).toEqual([2, 0]);
+  });
+
+  it("refuses addon_ids that are not a vec of u32", () => {
+    // A negative or a string here is not an add-on anyone paid for, and
+    // storing it would let the console count a jersey that was never sold.
+    expect(() => decodeRecord(5, record({ addon_ids: [-1] }))).toThrow(/RecordData\(5\)\.addon_ids\[0\]/);
+    expect(() => decodeRecord(5, record({ addon_ids: "0,1" }))).toThrow(/RecordData\(5\)\.addon_ids/);
   });
 
   it("decodes a finished record with every Option present", () => {
@@ -199,6 +212,8 @@ describe("RecordData", () => {
   });
 
   it.each([
+    // Required, not optional: its absence means a v1 record, not "bought none".
+    "addon_ids",
     "bib_no",
     "category_id",
     "claimed_at",

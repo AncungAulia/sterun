@@ -694,6 +694,11 @@ export class Indexer {
         row.finishTimeS !== onChain.finishTimeS
           ? `finish_time_s ${row.finishTimeS} != ${onChain.finishTimeS}`
           : "",
+        // Compared in order: the contract preserves reservation order, so
+        // [1,0] and [0,1] are different facts about the same entry.
+        row.addonIds.join(",") !== onChain.addonIds.join(",")
+          ? `addon_ids [${row.addonIds}] != [${onChain.addonIds}]`
+          : "",
       ].filter(Boolean);
       if (differences.length > 0) {
         findings.push({ kind: "record-differs", detail: `record ${tokenId}: ${differences.join("; ")}` });

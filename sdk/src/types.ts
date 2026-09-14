@@ -142,6 +142,12 @@ export interface SterunRecord {
    */
   finishTimeS: number | null;
   resultAt: bigint | null;
+  /**
+   * The add-ons this entry paid for, in the order they were reserved (v2).
+   * `[]` when it bought none. Ids only: resolve names and prices with
+   * `listAddOns(eventId)`.
+   */
+  addonIds: number[];
 }
 
 /** 7 decimals, like every classic Stellar asset exposed through a SAC. */
@@ -247,5 +253,6 @@ export function toSterunRecord(tokenId: number, data: RecordData): SterunRecord 
     claimedAt: data.claimed_at ?? null,
     finishTimeS: data.finish_time_s ?? null,
     resultAt: data.result_at ?? null,
+    addonIds: [...(data.addon_ids ?? [])],
   };
 }

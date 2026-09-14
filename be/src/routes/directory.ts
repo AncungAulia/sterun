@@ -76,6 +76,7 @@ const recordSchema = {
     "state",
     "entered_at",
     "last_ledger",
+    "addon_ids",
   ],
   properties: {
     token_id: { type: "integer" },
@@ -94,6 +95,10 @@ const recordSchema = {
     result_at: { type: ["string", "null"], pattern: DIGITS },
     source: { type: "string", enum: ["event", "state"] },
     last_ledger: { type: "integer" },
+    // STE-42. Ids, not names or prices: those live on the event's add-ons, and
+    // copying them here would be a second place for them to go stale. `[]`,
+    // never null, for an entry that bought nothing.
+    addon_ids: { type: "array", items: { type: "integer", minimum: 0 } },
   },
 } as const;
 
@@ -237,6 +242,7 @@ const toRecordJson = (r: store.RecordRow) => ({
   result_at: r.resultAt?.toString() ?? null,
   source: r.source,
   last_ledger: r.lastLedger,
+  addon_ids: r.addonIds,
 });
 
 const pageQuery = {

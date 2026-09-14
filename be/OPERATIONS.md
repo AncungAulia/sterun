@@ -821,6 +821,14 @@ Stop the poller first for the same reason as the v2 move: a poller writing durin
 transaction would race it. Then confirm the drift is gone — `rebuild` runs `doctor` itself, and
 `GET /records/14` and `/records/17` should say `Finished` with `finish_time_s: null`.
 
+### Deploying migration 008 (record add-ons) — rebuild afterwards too
+
+008 adds `records.addon_ids` with a default of `[]`, which backfills every existing row with "bought
+nothing" — true for most records and false for any v2 entry that did buy add-ons. Only the chain
+knows which, so run the same stop-poller / rebuild / restart sequence as for 007. `rebuild` then runs
+`doctor`, which compares `addon_ids` in order, so a record the default got wrong is reported rather
+than served.
+
 ### Nonces now live in Postgres
 
 Since STE-31, auth nonces live in the `auth_nonces` table rather than in process memory. That is what

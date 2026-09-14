@@ -29,6 +29,7 @@ const record: SterunRecord = {
   claimedAt: 1788252342n,
   finishTimeS: 3161,
   resultAt: 1788252352n,
+  addonIds: [],
 };
 
 const event: SterunEvent = {

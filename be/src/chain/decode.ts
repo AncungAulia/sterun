@@ -86,6 +86,11 @@ export interface ChainRecord {
   claimedAt: bigint | null;
   finishTimeS: number | null;
   resultAt: bigint | null;
+  /**
+   * The add-ons this entry paid for, in reservation order (v2, STE-35). `[]`
+   * when it bought none — the contract never stores an absent value here.
+   */
+  addonIds: number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +285,9 @@ export function decodeRecord(tokenId: number, value: unknown): ChainRecord {
     claimedAt: optional(field(value, "claimed_at", at), `${at}.claimed_at`, u64),
     finishTimeS: optional(field(value, "finish_time_s", at), `${at}.finish_time_s`, u32),
     resultAt: optional(field(value, "result_at", at), `${at}.result_at`, u64),
+    // Required, not optional: every v2 record carries it, and `field()` failing
+    // on a missing key is how a v1 record pointed at by mistake gets noticed.
+    addonIds: decodeTokenIds(field(value, "addon_ids", at), `${at}.addon_ids`),
   };
 }
 

@@ -148,7 +148,46 @@ describe("contract shapes become caller shapes", () => {
       claimedAt: 1788252342n,
       finishTimeS: 3161,
       resultAt: 1788252352n,
+      addonIds: [],
     });
+  });
+
+  it("carries the add-ons an entry paid for, in reservation order (STE-42)", () => {
+    const addonIds = [2, 0];
+    const record = toSterunRecord(4, {
+      addon_ids: addonIds,
+      bib_no: 1,
+      category_id: 0,
+      claimed_at: undefined,
+      entered_at: 1788252277n,
+      event_id: 0,
+      finish_time_s: undefined,
+      participant_hash: Buffer.from(HASH, "hex"),
+      result_at: undefined,
+      state: { tag: "Entered", values: undefined },
+    });
+    // Order is part of the fact: the contract keeps reservation order.
+    expect(record.addonIds).toEqual([2, 0]);
+    // A copy, so a caller sorting it for display cannot reorder the source.
+    record.addonIds.sort();
+    expect(addonIds).toEqual([2, 0]);
+  });
+
+  it("gives [] rather than undefined when a record carries no addon_ids at all", () => {
+    // A v1 RecordData has no such field. `[]` keeps `record.addonIds.length`
+    // safe for every caller instead of only the careful ones.
+    const v1 = {
+      bib_no: 0,
+      category_id: 0,
+      claimed_at: undefined,
+      entered_at: 0n,
+      event_id: 0,
+      finish_time_s: undefined,
+      participant_hash: Buffer.from(HASH, "hex"),
+      result_at: undefined,
+      state: { tag: "Entered" as const, values: undefined },
+    } as unknown as Parameters<typeof toSterunRecord>[1];
+    expect(toSterunRecord(0, v1).addonIds).toEqual([]);
   });
 
   it("turns a freshly entered record's absent optionals into null, not undefined", () => {

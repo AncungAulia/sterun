@@ -117,6 +117,8 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       // v2.2: record_finish_untimed leaves the time None on chain.
       finishTimeS: untimed ? null : 3_600,
       resultAt: 1_800_000_700n,
+      // v2 add-ons, in reservation order (STE-42).
+      addonIds: [2, 0],
     });
     chain.addRecord({
       tokenId: 1,
@@ -535,6 +537,51 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
     });
   });
 
+  describe("the add-ons each entry bought (STE-42)", () => {
+    it("stores them in reservation order from the poller, and [] for none", async () => {
+      const { events } = seedFullRace();
+      await build(new FakeEventSource([events])).pollOnce();
+      expect((await store.getRecord(pool, 0))?.addonIds).toEqual([2, 0]);
+      expect((await store.getRecord(pool, 1))?.addonIds).toEqual([]);
+    });
+
+    it("rebuild reproduces exactly what the poller stored", async () => {
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      const polled = [(await store.getRecord(pool, 0))?.addonIds, (await store.getRecord(pool, 1))?.addonIds];
+
+      await indexer.rebuild();
+      expect([(await store.getRecord(pool, 0))?.addonIds, (await store.getRecord(pool, 1))?.addonIds]).toEqual(
+        polled,
+      );
+    });
+
+    it("lets doctor report add-ons that drifted, including a changed order", async () => {
+      // Migration 008 backfills [] on existing rows, which is wrong for any v2
+      // entry that bought something. doctor is what makes that visible.
+      seedFullRace();
+      const indexer = build(new FakeEventSource([]));
+      await indexer.rebuild();
+      await pool.query("UPDATE records SET addon_ids = '{0,2}' WHERE token_id = 0");
+
+      const report = await indexer.doctor();
+      expect(report.ok).toBe(false);
+      expect(report.findings).toContainEqual({
+        kind: "record-differs",
+        detail: "record 0: addon_ids [0,2] != [2,0]",
+      });
+    });
+
+    it("refuses a negative id at the database, not only in the decoder", async () => {
+      seedFullRace();
+      await build(new FakeEventSource([])).rebuild();
+      await expect(
+        pool.query("UPDATE records SET addon_ids = '{-1}' WHERE token_id = 0"),
+      ).rejects.toThrow(/check constraint/);
+    });
+  });
+
   describe("rebuild from contract state", () => {
     it("reconstructs everything from state alone, with no events at all", async () => {
       seedFullRace();
@@ -790,6 +837,7 @@ describe("reconstructTransitions", () => {
     claimedAt: null,
     finishTimeS: null,
     resultAt: null,
+    addonIds: [],
   };
 
   it("gives an entered record one step", () => {

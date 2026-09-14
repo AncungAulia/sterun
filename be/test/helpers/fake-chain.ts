@@ -54,6 +54,8 @@ export interface FakeRecord {
   claimedAt: bigint | null;
   finishTimeS: number | null;
   resultAt: bigint | null;
+  /** RecordData.addon_ids (v2). */
+  addonIds: number[];
 }
 
 const sym = (s: string): xdr.ScVal => xdr.ScVal.scvSymbol(s);
@@ -168,6 +170,7 @@ export class FakeChain implements ContractCaller {
       claimedAt: null,
       finishTimeS: null,
       resultAt: null,
+      addonIds: [],
       ...record,
     };
     this.records.set(full.tokenId, full);
@@ -292,6 +295,7 @@ export class FakeChain implements ContractCaller {
             participant_hash: bytes(record.participantHash),
             result_at: opt(record.resultAt === null ? null : u64(record.resultAt)),
             state: unitVariant(record.state),
+            addon_ids: xdr.ScVal.scvVec(record.addonIds.map((id) => u32(id))),
           }),
           [...instance, fakeLedgerKey(this.addresses.raceRecord, `record:${record.tokenId}`)],
         );

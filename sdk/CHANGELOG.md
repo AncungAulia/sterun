@@ -36,6 +36,13 @@ already in other people's hands.
 
 ### Added
 
+- `SterunRecord.addonIds: number[]` — the add-ons an entry paid for, in the
+  order they were reserved, read from `RecordData.addon_ids` (v2, STE-42). `[]`
+  when it bought none, and `[]` rather than `undefined` for a v1-shaped record,
+  so `record.addonIds.length` is always safe. Ids only; resolve names and prices
+  with `listAddOns(eventId)`. A new **required** field on a returned type, so a
+  consumer constructing `SterunRecord` literals must add it — which is why this
+  is a MINOR bump at release rather than a patch.
 - `recordFinishUntimed(tokenId, options?)` — marks a finish with **no official
   time**, for events without chip timing (STE-41, `docs/specs/INTERFACE.md`
   v2.2.0). Organiser only, from `RacepackClaimed` only, terminal. The record

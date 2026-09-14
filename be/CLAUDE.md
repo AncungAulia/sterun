@@ -306,6 +306,21 @@ place an authorised caller gets a whole event's entries in a single request, and
 it: the organiser counts sizes, and a volunteer at the race pack desk needs to know which shirt goes
 in the bag.
 
+**Not to be confused with `records.addon_ids`** (migration 008, STE-42). The two answer different
+questions and come from different places:
+
+| | `participants.add_ons` | `records.addon_ids` |
+| --- | --- | --- |
+| Holds | a choice, e.g. `{ item: "Event jersey", choice: "L" }` | the add-on ids paid for, e.g. `[2, 0]` |
+| Source | the vault, at submit time | the chain, `RecordData.addon_ids` |
+| Trust | what the runner said | what the runner paid for |
+| Served on | the roster bundle | `/records`, `/events/:id/records`, `/runners/:address/records` |
+
+`addon_ids` keeps the contract's reservation order, and `doctor` compares it in order. It is `[]`,
+never `null`, for an entry that bought nothing. After deploying 008, run a rebuild: the column's
+default backfills `[]` onto every existing row, which is wrong for any v2 entry that did buy
+add-ons.
+
 **What v1 cannot do: per-size stock.** Contract quota is counted per category and knows nothing
 about M or L, so "M is sold out" cannot be enforced. The way an organiser sells that is separate
 categories (`10K` vs `10K_JERSEY`), and the jersey category's quota is the number of shirts ordered.

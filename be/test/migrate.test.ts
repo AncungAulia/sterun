@@ -154,6 +154,8 @@ describe("migrations already applied in production", () => {
     "004_auth_nonces.sql": "708aad2328f108b128de2bf7b8ec87aa962a05db8ac11aae81e739ade7baefc1",
     "005_add_ons.sql": "353f85995c4de375bc511731b3bb75bd811c740bc9d41a0937562cdfe7922e6d",
     "006_cancelled_status.sql": "1bebfd8dbaa54e78c98d00d6bf02444390148d0712996ac506d6521813e44f8a",
+    // Applied in production 2026-09-14, deploy of fc3ca31.
+    "007_untimed_finish.sql": "6be88b02dfc602242e409f3d2301cad0a8e2ecd2ac6d550d81dc230d12913a9f",
   };
 
   it.each(Object.entries(APPLIED))("%s is byte-for-byte what production ran", (name, sha256) => {

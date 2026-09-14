@@ -260,8 +260,8 @@ export async function upsertRecord(
   await db.query(
     `INSERT INTO records (token_id, event_id, category_id, bib_no, runner_address,
                           participant_hash, state, entered_at, claimed_at, finish_time_s,
-                          result_at, source, last_ledger, updated_at)
-     VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, $9, $10, $11, $12, $13, now())
+                          result_at, source, last_ledger, addon_ids, updated_at)
+     VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, $9, $10, $11, $12, $13, $14, now())
      ON CONFLICT (token_id) DO UPDATE
        SET event_id = EXCLUDED.event_id,
            category_id = EXCLUDED.category_id,
@@ -275,6 +275,7 @@ export async function upsertRecord(
            result_at = EXCLUDED.result_at,
            source = EXCLUDED.source,
            last_ledger = GREATEST(records.last_ledger, EXCLUDED.last_ledger),
+           addon_ids = EXCLUDED.addon_ids,
            updated_at = now()`,
     [
       rec.tokenId,
@@ -290,6 +291,7 @@ export async function upsertRecord(
       rec.resultAt?.toString() ?? null,
       at.source,
       at.ledger,
+      rec.addonIds,
     ],
   );
 }
@@ -470,6 +472,8 @@ export interface RecordRow {
   resultAt: bigint | null;
   source: RowSource;
   lastLedger: number;
+  /** RecordData.addon_ids, in reservation order. `[]` when none. */
+  addonIds: number[];
 }
 
 interface RawEventRow {
@@ -498,13 +502,14 @@ interface RawRecordRow {
   result_at: string | null;
   source: RowSource;
   last_ledger: number;
+  addon_ids: number[];
 }
 
 const EVENT_COLUMNS =
   "event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger";
 const RECORD_COLUMNS =
   "token_id, event_id, category_id, bib_no, runner_address, participant_hash, state, " +
-  "entered_at, claimed_at, finish_time_s, result_at, source, last_ledger";
+  "entered_at, claimed_at, finish_time_s, result_at, source, last_ledger, addon_ids";
 
 /**
  * `bigint` columns come back from `pg` as strings, which is correct and easy to
@@ -537,6 +542,7 @@ const toRecordRow = (r: RawRecordRow): RecordRow => ({
   resultAt: r.result_at === null ? null : BigInt(r.result_at),
   source: r.source,
   lastLedger: r.last_ledger,
+  addonIds: r.addon_ids,
 });
 
 export async function listEvents(
