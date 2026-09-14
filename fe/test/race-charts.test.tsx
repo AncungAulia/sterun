@@ -60,7 +60,7 @@ describe("EntriesPerDay", () => {
 
 describe("DistanceRings", () => {
   describe("positive", () => {
-    it("keys the distances longest first with their counts", () => {
+    it("keys the distances longest first, marking the full one and printing no counts", () => {
       render(
         <DistanceRings
           categories={[
@@ -71,11 +71,9 @@ describe("DistanceRings", () => {
         />,
       );
       const rows = screen.getAllByRole("listitem");
-      expect(rows.map((row) => row.textContent)).toEqual([
-        "21K14 / 100",
-        "10K98 / 200",
-        "5KFull200 / 200",
-      ]);
+      // The counts are on the Entries tab. Here a long code next to a count
+      // pushed the count out of the card.
+      expect(rows.map((row) => row.textContent)).toEqual(["21K", "10K", "5KFull"]);
       expect(screen.getByRole("img")).toHaveAccessibleName(
         "21K 14 percent, 10K 49 percent, 5K full",
       );

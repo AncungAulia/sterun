@@ -55,7 +55,11 @@ export function DistanceRings({ categories }: { categories: readonly SterunCateg
       {rings.length === 0 ? (
         <p className="grid min-h-32 place-items-center text-sm text-n-500">No distances</p>
       ) : (
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+        /* Rings over their key, centred, at every width. The key used to sit
+           beside the rings with a count per row, and a long code such as
+           3K_FUN_WALK pushed the count out of the card. The counts live on the
+           Entries tab; this panel is the shape. */
+        <div className="flex flex-col items-center gap-4">
           <svg
             viewBox="0 0 300 176"
             role="img"
@@ -91,22 +95,17 @@ export function DistanceRings({ categories }: { categories: readonly SterunCateg
             </g>
           </svg>
 
-          <ul className="flex w-full flex-col gap-2.5 text-sm">
+          <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
             {rings.map(({ category, colour }) => (
-              <li key={category.categoryId} className="flex items-center gap-2">
+              <li key={category.categoryId} className="flex min-w-0 items-center gap-2">
                 <span
                   aria-hidden
                   className="size-2.5 shrink-0 rounded-sm"
                   /* The one inline style: the colour is picked per ring at runtime. */
                   style={{ background: colour }}
                 />
-                <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-ink">
-                  {category.code}
-                  {isFull(category) ? <Badge variant="warning">Full</Badge> : null}
-                </span>
-                <span className="numeric whitespace-nowrap text-n-600">
-                  {category.enteredCount} / {category.quota}
-                </span>
+                <span className="font-medium break-all text-ink">{category.code}</span>
+                {isFull(category) ? <Badge variant="warning">Full</Badge> : null}
               </li>
             ))}
           </ul>
