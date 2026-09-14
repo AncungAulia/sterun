@@ -11,9 +11,6 @@
  * but its organiser, so it gets one sentence and a way back, not three tabs of
  * buttons that would each fail at the wallet prompt.
  */
-import Link from "next/link";
-
-import { EmptyState } from "@/components/elements/EmptyState";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
 import { useEvent } from "@/hooks/useEvents";
@@ -22,6 +19,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { ConsoleHeader } from "./component/ConsoleHeader";
 import { EntriesTab } from "./component/EntriesTab";
 import { useNeedsContext } from "./component/NeedsContext";
+import { NotYourRace } from "./component/NotYourRace";
 import { OverviewTab } from "./component/OverviewTab";
 import { RaceTabs } from "./component/RaceTabs";
 import { ScannersTab } from "./component/ScannersTab";
@@ -69,19 +67,7 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
   }
 
   if (data.event.organiser !== address) {
-    return (
-      <>
-        <ConsoleHeader title={data.event.name} />
-        <div className="px-4 py-6 md:px-6">
-          <EmptyState title="This race belongs to another wallet">
-            Only the wallet that created a race can manage it.{" "}
-            <Link href="/org" className="text-teal underline">
-              Back to your races
-            </Link>
-          </EmptyState>
-        </div>
-      </>
-    );
+    return <NotYourRace />;
   }
 
   // The same rule as the dashboard: one interruption at most, and only this

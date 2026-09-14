@@ -134,12 +134,20 @@ describe("RaceConsole", () => {
       readClient.getEvent.mockResolvedValue(event({ organiser: SOMEONE_ELSE }));
       renderRace();
 
-      expect(await screen.findByText("This race belongs to another wallet")).toBeInTheDocument();
-      expect(screen.queryByRole("navigation", { name: "Race sections" })).not.toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Back to your races" })).toHaveAttribute(
-        "href",
-        "/org",
+      const page = await screen.findByRole("alertdialog", {
+        name: "This race isn't yours to manage",
+      });
+      expect(page).toHaveAccessibleDescription(
+        "It was created by another wallet, and only that wallet can manage it.",
       );
+      // A page of its own: no race header, no tabs, no status action.
+      expect(screen.queryByRole("navigation", { name: "Race sections" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /Fun Run Sleman/ })).not.toBeInTheDocument();
+      // Exactly one way out, to the races that are this wallet's.
+      const links = within(page).getAllByRole("link");
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAccessibleName("Go to your races");
+      expect(links[0]).toHaveAttribute("href", "/org");
     });
 
     it("does not interrupt for another race's need", async () => {
