@@ -52,19 +52,41 @@ Landing menjual protokolnya, jadi klaim di halaman ini harus benar:
 
 ## Section dan header
 
-Header fixed di atas semua section dan warnanya **mengikuti section yang ada di bawahnya**: putih di
-atas section gelap (hero, overlay menu), ink di atas section terang. Setiap section selebar layar
-**wajib** membawa salah satu:
+Header `fixed` di atas semua section, **selalu terlihat** (tidak pernah disembunyikan saat scroll,
+tidak di-fade, tidak di-translate), dan warnanya **mengikuti section di bawahnya**. Saat tepi section
+melewati header, header **terbelah horizontal** tepat di garis itu: bagian atas satu warna, bagian
+bawah warna lain. Setiap section selebar layar membawa:
 
 ```tsx
-<section data-header-tone="dark">   // hero, section berlatar gelap
-<section data-header-tone="light">  // Problem, section berlatar terang
+<section data-nav-theme="dark">   // hero, section berlatar gelap
+<section data-nav-theme="light">  // Problem, section berlatar terang (default kalau tidak ditandai)
 ```
 
-Tanpa atribut itu, header mempertahankan warna section terakhir yang dilewatinya, dan di atas latar
-yang salah logo, CTA, serta MENU menghilang. Deteksinya di `useHeaderTone` (`Navbar.tsx`): satu
-garis 1px di tengah tinggi header, jadi warna berganti saat tepi section melewati header, bukan saat
-section baru muncul di bawah layar.
+Section tanpa atribut dianggap terang. Blok yang tidak selebar layar dan tidak pernah sampai ke
+header (mis. kotak coal di bawah Problem) tidak perlu ditandai.
+
+Cara kerjanya (`components/layouts/Navbar.tsx`, `lib/navTheme.ts`):
+
+- **Empat salinan baris header** dengan geometri identik: `nav__layer--onLight` (ink + CTA teal),
+  dua `nav__layer--onDark` (paper), dan `nav__layer--hit` yang **tak terlihat** (`opacity: 0`) tapi
+  berisi link dan tombol asli. Layer bercat `aria-hidden`, `inert`, `pointer-events: none`.
+  Hit layer dipisah karena `clip-path` ikut memotong hit-testing: tombol yang kepotong setengah
+  cuma bisa diklik setengah.
+- Tiap frame, script menghitung pita gelap yang menimpa header dan menulis `clip-path` inline:
+  onDark `inset()` per pita (pool dua layer), onLight kebalikannya (polygon even-odd). **Jangan
+  pernah** memberi `transition` pada `clip-path` layer ini, garisnya akan tertinggal dari tepi
+  section.
+- Update jalan dari `subscribeScroll` (`lib/scroll.ts`; event scroll Lenis di frame yang sama, atau
+  scroll native tanpa Lenis), plus resize, `ScrollTrigger` refresh, `ResizeObserver`, dan
+  `document.fonts.ready`. Offset section di-cache; jangan baca layout di loop scroll.
+- Panel overlay menu ditandai `data-nav-surface` + `data-nav-theme`; selama menu bergerak, posisinya
+  dibaca live per frame, jadi header ikut terbelah di atas panel yang sedang turun.
+- Hover dan fokus keyboard disimpan di `<header>` sebagai `data-hover` / `data-focus`
+  (`cta` | `menu` | `logo`) dan di-style dari sana, jadi dua belahan CTA ter-wipe bersamaan.
+  **Jangan** pakai `:hover` untuk efek header, cuma satu layer yang menerimanya.
+- Logo inline SVG `currentColor` (`components/elements/Lockup.tsx`, di-generate dari
+  `public/brand/logo/sterun-lockup-black.svg`). Satu `<symbol>`, tiap layer `<use>`.
+- **Tidak** memakai `mix-blend-mode` di header.
 
 ## Motion
 
