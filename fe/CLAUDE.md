@@ -342,9 +342,10 @@ What is settled:
 | --- | --- | --- |
 | `app/(browse)/layout.tsx` | `SiteFrame` (header + `<main>`) | `/`, `/events/[id]`, `/preview/done` |
 | `app/(organiser)/org/new/layout.tsx` | `SiteFrame` + `WalletGate` | `/org/new` |
-| `app/(organiser)/org/(console)/layout.tsx` | `ConsoleFrame` (rail or connect screen), **no header** | `/org`, and `/org/events/[id]` next |
+| `app/(organiser)/org/(console)/layout.tsx` | `ConsoleFrame` (rail or connect screen), **no header** | `/org`, `/org/events/[id]` |
 | `app/not-found.tsx` | `SiteFrame` | a URL matching no route at all |
 | `app/(browse)/not-found.tsx` | none of its own, the group layout has it | `notFound()` from a public page |
+| `app/(organiser)/org/(console)/not-found.tsx` | none of its own, the console layout has it | `notFound()` from a console page |
 
 **A 404 needs one file per boundary, and they are not the same file.** Next renders the CLOSEST
 `not-found.tsx`, inside that segment's layouts. A URL matching no route lands at the ROOT boundary,
@@ -505,6 +506,38 @@ knowing before adding a page there:
 - The per-distance breakdown moved into the race's own page. A dashboard row answers "is this one
   behind", and a race with four distances would be four lines tall in a table meant for comparing
   races.
+
+### `/org/events/[id]` — one race (STE-17)
+
+`modules/organiser/RaceConsole.tsx`. Plan:
+`docs/superpowers/plans/2026-09-13-org-event-console-tabs.md`. What is settled:
+
+- **Three tabs, Overview, Entries, Scanners, and the tab is in the address** (`?tab=`, parsed by
+  `race-tab.ts`, which has no `"use client"` because the route imports it). The bell already links to
+  `?tab=scanners`, and the rail lives in a layout that must not remount. **Results is deferred**
+  until the backend accepts untimed finishes and DNF rows and there is a way to record many results
+  without one signature per runner (STE-44); `?tab=results` opens Overview until then.
+- **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
+  the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
+  back, never tabs of buttons that would each fail at the wallet prompt.
+- **The header's one action is the status move** (`status-action.ts`): open, close or reopen
+  entries, always behind a dialog. The dialog for opening states that a race which has opened never
+  returns to not open. Completing and cancelling are not offered here.
+- **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
+  (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
+  `lib/records.ts` and `lib/scanners.ts`. The column or card that needs one is drawn once the data
+  carries it, and not before; nothing is estimated in the meantime.
+- **Anything read from the index tells "not answered" from "failed" from "empty"**
+  (`useRaceRecordsFailed`). Zero race packs collected on race morning is a finding; a timeout is not.
+- **A search that is only digits is a bib, never part of a wallet** (`filterEntries`). Almost every
+  address contains a digit, so bib 7 would otherwise list half the race.
+- **The Scanners tab keeps what it signed for** until the index catches up, shown as "Just added",
+  because the index lags a signature by a poll and a scanner that vanished after being paid for gets
+  added twice. The add dialog refuses the organiser's own wallet, an already-listed one and a
+  malformed address before any signature.
+- **A `beforeEach` that resets a mock needs braces.** `beforeEach(() => mock.mockReset())` returns the
+  mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
+  with an error that points at the mock rather than at the cause.
 
 ## Tests
 
