@@ -32,7 +32,7 @@
  * the teal current-page fill, closing the drawer on navigation, and the wallet
  * chip in the footer.
  */
-import { ChevronDownIcon, FlagIcon, LayoutDashboardIcon } from "lucide-react";
+import { ChevronDownIcon, FlagIcon, LayoutDashboardIcon, MenuIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -116,7 +116,7 @@ export function ConsoleSidebar({
     so every link in here shuts it on the way out. On a wide screen
     `setOpenMobile` is not what is showing and the call changes nothing.
   */
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, toggleSidebar, isMobile } = useSidebar();
   const inRace = pathname.startsWith(`${RACES}/`);
   /*
     Null means nobody has touched it, so the path decides: collapsed on the
@@ -150,8 +150,32 @@ export function ConsoleSidebar({
           items that are actually the console. The connect screen and the
           phone-width bar draw the same component, so the exit cannot exist in
           one state and not the others. */}
-      <SidebarHeader className="px-2 pt-4 pb-3">
-        <ConsoleWordmark onClick={() => setOpenMobile(false)} />
+      {/* The rail's own toggle lives here, beside what it folds (Ancung,
+          2026-09-14), not in the page header. Open: the wordmark on the left,
+          the menu icon on the right. Folded: the mark alone, and a pointer or
+          keyboard focus over it turns it into the menu icon, so the folded rail
+          stays branded without losing its way back open. The wordmark stays in
+          the DOM under that button, so keyboard users still reach home. */}
+      <SidebarHeader className="flex-row items-center justify-between gap-2 px-2 pt-4 pb-3">
+        <div className="relative">
+          <ConsoleWordmark onClick={() => setOpenMobile(false)} />
+          <button
+            type="button"
+            aria-label="Expand the menu"
+            onClick={toggleSidebar}
+            className="absolute inset-0 hidden items-center justify-center rounded-md bg-sidebar text-sidebar-foreground opacity-0 transition-opacity group-data-[state=collapsed]:flex hover:opacity-100 focus-visible:opacity-100"
+          >
+            <MenuIcon aria-hidden className="size-5" />
+          </button>
+        </div>
+        <button
+          type="button"
+          aria-label={isMobile ? "Close the menu" : "Collapse the menu"}
+          onClick={toggleSidebar}
+          className="grid size-8 shrink-0 place-items-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-paper group-data-[state=collapsed]:hidden"
+        >
+          <MenuIcon aria-hidden className="size-5" />
+        </button>
       </SidebarHeader>
 
       <SidebarContent className="px-2">

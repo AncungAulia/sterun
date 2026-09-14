@@ -266,3 +266,37 @@ describe("ConsoleSidebar", () => {
     });
   });
 });
+
+describe("the rail's own toggle", () => {
+  function rail() {
+    return document.querySelector('[data-slot="sidebar"][data-state]');
+  }
+
+  describe("positive", () => {
+    it("folds from its own header and opens again from the mark", async () => {
+      // The toggle moved out of the page header into the rail it folds
+      // (Ancung, 2026-09-14). Folded, the mark itself becomes the way back.
+      listEvents.mockResolvedValue({ events: [], unreadable: [] });
+      await renderRail();
+
+      expect(rail()).toHaveAttribute("data-state", "expanded");
+      await userEvent.click(screen.getByRole("button", { name: "Collapse the menu" }));
+      expect(rail()).toHaveAttribute("data-state", "collapsed");
+
+      await userEvent.click(screen.getByRole("button", { name: "Expand the menu" }));
+      expect(rail()).toHaveAttribute("data-state", "expanded");
+    });
+  });
+
+  describe("negative", () => {
+    it("keeps the way home in the header when the rail is folded", async () => {
+      // The button that opens a folded rail covers the mark on screen, but the
+      // link stays in the document, so a keyboard still reaches the public site.
+      listEvents.mockResolvedValue({ events: [], unreadable: [] });
+      await renderRail();
+
+      await userEvent.click(screen.getByRole("button", { name: "Collapse the menu" }));
+      expect(screen.getByRole("link", { name: "Sterun" })).toHaveAttribute("href", "/");
+    });
+  });
+});

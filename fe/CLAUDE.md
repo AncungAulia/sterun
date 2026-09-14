@@ -417,8 +417,14 @@ knowing before adding a page there:
   over the page you just asked for reads as "the link did nothing".
 - **`ConsoleFrame` deliberately does not use `SidebarInset`.** That component renders the `<main>`
   itself, and the menu button has to sit outside the landmark, for the same reason the rail does: a
-  landmark whose navigation you cannot skip is not a landmark. So the page keeps its own `<main>`
-  and the phone-width bar (wordmark plus trigger, `md:hidden`) sits above it.
+  landmark whose navigation you cannot skip is not a landmark. So the page keeps its own `<main>`.
+  **There is no phone-width bar above it any more** (Ancung, 2026-09-14): it scrolled away with the
+  page. Below `md` the one button that opens the drawer is **Menu**, at the left of the pinned
+  `ConsoleHeader`, and the wordmark is inside the drawer it opens.
+- **The rail folds from its own header, not from the page's.** Open: the wordmark on the left and a
+  menu icon on the right (**Collapse the menu**). Folded: only the mark, covered by an **Expand the
+  menu** button that is invisible until pointer or keyboard focus reaches it. The mark stays in the
+  DOM under that button, so a keyboard still reaches the public site from a folded rail.
 - **The wordmark is the brand lockup**, `public/brand/logo/sterun-lockup-white.svg` through
   `next/image`, not the letters STERUN set in a typeface. White because the rail is `ink`. Its link
   carries no `aria-label`, so its accessible name is the image's `alt`, "Sterun". That must stay

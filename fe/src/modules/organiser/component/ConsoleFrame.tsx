@@ -31,7 +31,7 @@
 import type { ReactNode } from "react";
 
 import { WalletGate } from "@/components/layouts/WalletGate";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useNeeds } from "@/hooks/useNeeds";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -74,14 +74,10 @@ export function ConsoleFrame({ children }: { children: ReactNode }) {
       <ConsoleSidebar address={address} onDisconnect={() => void disconnect()} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Phone width only, where there is no rail to carry either of these.
-            The button is named for what it opens rather than for the component
-            that opens: nobody reading this bar is thinking about a sidebar. */}
-        <div className="flex shrink-0 items-center gap-2 bg-ink px-2 py-2 md:hidden">
-          <SidebarTrigger aria-label="Menu" className="text-paper hover:bg-n-800 hover:text-paper" />
-          <ConsoleWordmark />
-        </div>
-
+        {/* No phone-width bar above the page any more (Ancung, 2026-09-14).
+            It carried the wordmark and the menu button, and scrolled away with
+            the page; the menu button now sits in the pinned ConsoleHeader and
+            the wordmark in the drawer it opens. */}
         {/* The page, and the landmark. `SiteFrame` gives every other route a
             <main>; without one here the console was the only part of the app a
             screen reader could not skip the navigation of, and the rail is

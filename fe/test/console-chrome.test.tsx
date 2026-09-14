@@ -20,6 +20,7 @@ import NewEventLayout from "../app/(organiser)/org/new/layout";
 import BrowseNotFound from "../app/(browse)/not-found";
 import ConsoleNotFound from "../app/(organiser)/org/(console)/not-found";
 import NotFound from "../app/not-found";
+import { ConsoleHeader } from "@/modules/organiser/component/ConsoleHeader";
 import { shortAddress } from "@/utils/format";
 
 const ADDRESS = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
@@ -277,8 +278,10 @@ describe("the console at phone width", () => {
       // The whole reason for the change: a 208px rail on a 375px screen left
       // the dashboard 167px and scrolled the page sideways.
       setWidth(390);
-      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
-      await screen.findByText("dashboard");
+      // A real page header, because that is where the phone's menu button
+      // lives now: the dark bar above the page that used to carry it is gone.
+      render(<ConsoleLayout><ConsoleHeader title="Dashboard" /></ConsoleLayout>, { wrapper: Wrapper });
+      await screen.findByRole("heading", { name: "Dashboard" });
 
       await waitFor(() =>
         expect(screen.getByRole("button", { name: "Menu" })).toBeInTheDocument(),
@@ -290,8 +293,10 @@ describe("the console at phone width", () => {
 
     it("opens onto the same two items", async () => {
       setWidth(390);
-      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
-      await screen.findByText("dashboard");
+      // A real page header, because that is where the phone's menu button
+      // lives now: the dark bar above the page that used to carry it is gone.
+      render(<ConsoleLayout><ConsoleHeader title="Dashboard" /></ConsoleLayout>, { wrapper: Wrapper });
+      await screen.findByRole("heading", { name: "Dashboard" });
 
       await userEvent.click(await screen.findByRole("button", { name: "Menu" }));
 
@@ -300,15 +305,17 @@ describe("the console at phone width", () => {
       expect(within(nav).getByRole("button", { name: /races/i })).toBeInTheDocument();
     });
 
-    it("still carries the way out of the console before the drawer is opened", async () => {
-      // A drawer is a place to put navigation, not a place to hide the only
-      // link back to the public site behind a press.
+    it("keeps the way out of the console one press away, in the drawer", async () => {
+      // There is no bar above the page now, so the wordmark lives in the
+      // drawer with the rest of the navigation, one press behind Menu.
       setWidth(390);
-      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
-      await screen.findByText("dashboard");
+      // A real page header, because that is where the phone's menu button
+      // lives now: the dark bar above the page that used to carry it is gone.
+      render(<ConsoleLayout><ConsoleHeader title="Dashboard" /></ConsoleLayout>, { wrapper: Wrapper });
+      await screen.findByRole("heading", { name: "Dashboard" });
 
-      await waitFor(() => expect(screen.getByRole("button", { name: "Menu" })).toBeInTheDocument());
-      const home = screen.getAllByRole("link", { name: "Sterun" });
+      await userEvent.click(await screen.findByRole("button", { name: "Menu" }));
+      const home = await screen.findAllByRole("link", { name: "Sterun" });
       expect(home.length).toBeGreaterThan(0);
       for (const link of home) expect(link).toHaveAttribute("href", "/");
     });
@@ -319,8 +326,10 @@ describe("the console at phone width", () => {
       // A navigation drawer left open over the page you have just asked for
       // reads as "the link did nothing", and on a phone it covers the answer.
       setWidth(390);
-      render(<ConsoleLayout><p>dashboard</p></ConsoleLayout>, { wrapper: Wrapper });
-      await screen.findByText("dashboard");
+      // A real page header, because that is where the phone's menu button
+      // lives now: the dark bar above the page that used to carry it is gone.
+      render(<ConsoleLayout><ConsoleHeader title="Dashboard" /></ConsoleLayout>, { wrapper: Wrapper });
+      await screen.findByRole("heading", { name: "Dashboard" });
 
       await userEvent.click(await screen.findByRole("button", { name: "Menu" }));
       const nav = await screen.findByRole("navigation", { name: "Organiser console" });

@@ -2,10 +2,12 @@
  * The console's wordmark, and its only way back to the public site.
  *
  * There is no site header over `/org`, so this link is the whole exit. It lives
- * in a file of its own because it has to appear in three places that share no
- * other markup: in the rail once a wallet is connected, on the connect screen
- * before there is a rail at all, and in the phone-width bar that carries the
- * menu button. Two copies of an exit is how one of them ends up missing.
+ * in a file of its own because it has to appear in two places that share no
+ * other markup: in the rail once a wallet is connected (which is also the
+ * drawer at phone width), and on the connect screen before there is a rail at
+ * all. There used to be a third, a phone-width bar over the page; it was
+ * removed on 2026-09-14. Two copies of an exit is how one of them ends up
+ * missing.
  *
  * It is the brand lockup rather than the letters STERUN set in a typeface. The
  * word was a stand-in: the app already owned the real mark and the site header
