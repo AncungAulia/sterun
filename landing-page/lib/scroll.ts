@@ -16,12 +16,45 @@ import Lenis from "lenis";
  * One instance for the page. Components never hold it; they call the helpers.
  */
 let lenis: Lenis | null = null;
+let lenisOff: (() => void) | null = null;
+
+/**
+ * Per-frame scroll listeners, for work that has to land on the exact frame the
+ * page moves (the adaptive header's split line).
+ *
+ * A window "scroll" listener is not enough on its own while Lenis runs. Lenis
+ * moves the page inside its requestAnimationFrame callback, and the browser
+ * only dispatches the resulting scroll event at the start of the next frame,
+ * so anything positioned from it trails the page by one frame. Lenis's own
+ * "scroll" event fires synchronously right after it moves the page, so while
+ * Lenis runs, listeners are called from there. The window listener stays
+ * attached for native scrolling (reduced motion, keyboard, scrollbar drags);
+ * when both fire for the same position, the second call finds nothing to
+ * change, so listeners must be idempotent.
+ */
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
+export function subscribeScroll(listener: () => void): () => void {
+  if (listeners.size === 0) window.addEventListener("scroll", emit, { passive: true });
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) window.removeEventListener("scroll", emit);
+  };
+}
 
 /** Start Lenis. Returns the function that tears it down again. */
 export function startSmoothScroll(): () => void {
   if (lenis) return () => {};
   lenis = new Lenis({ autoRaf: true });
+  lenisOff = lenis.on("scroll", emit);
   return () => {
+    lenisOff?.();
+    lenisOff = null;
     lenis?.destroy();
     lenis = null;
   };
