@@ -129,7 +129,16 @@ export function windowed(points: readonly FillPoint[], days: number): FillPoint[
  * territory at this scale, but note that it is a drawing convenience: the
  * numbers people act on are in the key, not read off the curve.
  */
-export function smoothPath(points: readonly (readonly [number, number])[]): string {
+export function smoothPath(
+  points: readonly (readonly [number, number])[],
+  /**
+   * Keeps the control points inside a vertical band. Without it a spike
+   * between two flat days bends the curve past the floor, which on a count
+   * axis draws entries below zero.
+   */
+  band?: { min: number; max: number },
+): string {
+  const clampY = (y: number) => (band ? Math.min(band.max, Math.max(band.min, y)) : y);
   if (points.length === 0) return "";
   if (points.length === 1) return `M ${n(points[0][0])},${n(points[0][1])}`;
 
@@ -140,9 +149,9 @@ export function smoothPath(points: readonly (readonly [number, number])[]): stri
     const [x2, y2] = points[i + 1];
     const [x3, y3] = points[i + 2] ?? points[points.length - 1];
     const c1x = x1 + (x2 - x0) / 6;
-    const c1y = y1 + (y2 - y0) / 6;
+    const c1y = clampY(y1 + (y2 - y0) / 6);
     const c2x = x2 - (x3 - x1) / 6;
-    const c2y = y2 - (y3 - y1) / 6;
+    const c2y = clampY(y2 - (y3 - y1) / 6);
     d += ` C ${n(c1x)},${n(c1y)} ${n(c2x)},${n(c2y)} ${n(x2)},${n(y2)}`;
   }
   return d;
@@ -183,7 +192,7 @@ export function areaPaths(
     return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
   });
 
-  const line = smoothPath(points);
+  const line = smoothPath(points, { min: box.yTop, max: box.yBase });
   const last = points[points.length - 1];
   const area = `${line} L ${n(last[0])},${n(box.yBase)} L ${n(points[0][0])},${n(box.yBase)} Z`;
   return { line, area, points };

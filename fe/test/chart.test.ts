@@ -261,3 +261,19 @@ describe("halfRingPath", () => {
     expect(halfRingPath(150, 160, 132)).toBe("M 18,160 A 132,132 0 0 1 282,160");
   });
 });
+
+describe("areaPaths, around a spike", () => {
+  it("never bends the curve below the floor between flat days", () => {
+    // Seen in a browser: one busy day between quiet ones dipped the smoothed
+    // line under the zero gridline, which reads as entries below zero.
+    const box = { x0: 0, x1: 100, yTop: 0, yBase: 50 };
+    const drawn = areaPaths([0, 0, 0, 3, 0, 0, 0], box, 5)!;
+    const ys = drawn.line
+      .replace(/[MC]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .map((pair) => Number(pair.split(",")[1]));
+    expect(Math.max(...ys)).toBeLessThanOrEqual(50);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+  });
+});
