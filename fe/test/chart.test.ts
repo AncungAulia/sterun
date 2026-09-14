@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { fillByDaysOut, smoothPath, sparklinePath, windowed } from "@/modules/organiser/chart";
+import {
+  areaPaths,
+  fillByDaysOut,
+  halfRingPath,
+  niceCeiling,
+  smoothPath,
+  sparklinePath,
+  windowed,
+} from "@/modules/organiser/chart";
 
 describe("sparklinePath", () => {
   describe("positive", () => {
@@ -204,5 +212,52 @@ describe("smoothPath", () => {
         [10, 10],
       ]),
     ).not.toContain("NaN");
+  });
+});
+
+describe("niceCeiling", () => {
+  it("rounds up to a multiple of five, never below five", () => {
+    expect(niceCeiling(0)).toBe(5);
+    expect(niceCeiling(5)).toBe(5);
+    expect(niceCeiling(22)).toBe(25);
+  });
+});
+
+describe("areaPaths", () => {
+  const box = { x0: 0, x1: 100, yTop: 0, yBase: 50 };
+
+  describe("positive", () => {
+    it("spreads the days across the box and scales them to the ceiling", () => {
+      const drawn = areaPaths([0, 5, 10], box, 10);
+      expect(drawn?.points).toEqual([
+        [0, 50],
+        [50, 25],
+        [100, 0],
+      ]);
+      expect(drawn?.area.endsWith("L 100,50 L 0,50 Z")).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    it("draws nothing for a fortnight with no entries", () => {
+      // A line along the bottom reads as a measured zero, and the panel says
+      // "no entries" in words instead.
+      expect(areaPaths([0, 0, 0], box, 5)).toBeNull();
+      expect(areaPaths([], box, 5)).toBeNull();
+    });
+  });
+
+  describe("edge", () => {
+    it("centres a single day rather than dividing by zero", () => {
+      const drawn = areaPaths([3], box, 5);
+      expect(drawn?.points).toEqual([[50, 20]]);
+      expect(drawn?.line).not.toContain("NaN");
+    });
+  });
+});
+
+describe("halfRingPath", () => {
+  it("draws the top half of a circle, left to right", () => {
+    expect(halfRingPath(150, 160, 132)).toBe("M 18,160 A 132,132 0 0 1 282,160");
   });
 });

@@ -147,3 +147,49 @@ export function smoothPath(points: readonly (readonly [number, number])[]): stri
   }
   return d;
 }
+
+/** The top of a count axis: a round number, and never a scale of zero. */
+export function niceCeiling(top: number): number {
+  return Math.max(5, Math.ceil(top / 5) * 5);
+}
+
+export interface PlotBox {
+  x0: number;
+  x1: number;
+  yTop: number;
+  yBase: number;
+}
+
+/**
+ * The line and the filled area under it for a run of daily counts.
+ *
+ * `null` when every day is zero, for the same reason `sparklinePath` returns
+ * one: a line along the floor claims a measurement, and the panel says "no
+ * entries" in words instead. `points` is returned too, because the hover
+ * marker has to sit exactly on the line it describes.
+ */
+export function areaPaths(
+  values: readonly number[],
+  box: PlotBox,
+  ceiling: number,
+): { line: string; area: string; points: [number, number][] } | null {
+  if (values.length === 0 || Math.max(...values) <= 0 || ceiling <= 0) return null;
+
+  const span = box.x1 - box.x0;
+  const points = values.map((value, index): [number, number] => {
+    const x =
+      values.length === 1 ? box.x0 + span / 2 : box.x0 + (index / (values.length - 1)) * span;
+    const y = box.yBase - (Math.min(value, ceiling) / ceiling) * (box.yBase - box.yTop);
+    return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+  });
+
+  const line = smoothPath(points);
+  const last = points[points.length - 1];
+  const area = `${line} L ${n(last[0])},${n(box.yBase)} L ${n(points[0][0])},${n(box.yBase)} Z`;
+  return { line, area, points };
+}
+
+/** The upper half of a circle centred on (cx, cy), drawn left to right. */
+export function halfRingPath(cx: number, cy: number, r: number): string {
+  return `M ${n(cx - r)},${n(cy)} A ${n(r)},${n(r)} 0 0 1 ${n(cx + r)},${n(cy)}`;
+}
