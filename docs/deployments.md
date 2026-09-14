@@ -2031,10 +2031,89 @@ The SDK decodes the live empty `finish_time_s` as `finishTimeS: null`, never `0`
 The contract can now produce a `Finished` record with no time, and **tokens 14 and 17 on testnet
 already are one**. Until these land, that state is on chain but not shown correctly:
 
-- **`be/` indexer (James)** — `be/migrations/002_indexer.sql` has a `finish_time_s > 0` CHECK and the
-  `finished_records_were_claimed` constraint, and there is no handler for `record_finished_untimed`.
-- **`be/` results CSV (James)** — `be/src/results/csv.ts` requires a time column.
+- ~~**`be/` indexer (James)** — `be/migrations/002_indexer.sql` has a `finish_time_s > 0` CHECK and the
+  `finished_records_were_claimed` constraint, and there is no handler for `record_finished_untimed`.~~
+  **Done, live 2026-09-14** (`1226d91`, migration 007) — see "Backend deploys of 2026-09-14" below.
+- ~~**`be/` results CSV (James)** — `be/src/results/csv.ts` requires a time column.~~ **Done**
+  (`90fb977`, STE-44): a `status` column makes a row timed, untimed or DNF.
 - **`fe/` profile (Ancung)** — show "Finished — no official time, declared by the organiser" rather
   than a time.
 
 `be/` and `fe/` were deliberately not touched here.
+
+---
+
+## Backend deploys of 2026-09-14 — the untimed index fix, and STE-42
+
+Three backend changes reached `api-sterun.jameshub.fun` today. Every deploy took a database backup
+first, ran its migrations at API start, then stopped the poller, rebuilt the index from contract
+state and restarted it. Each claim below was read back from the production box.
+
+### Before anything: the index was wrong, and `main` could not have been deployed
+
+Checked against testnet rather than assumed. RaceRecord v2.2 went live on 2026-09-11; since then:
+
+| Token | On chain | In the production index |
+| --- | --- | --- |
+| 14 | `Finished`, no time | `RacepackClaimed` |
+| 17 | `Finished`, no time | `RacepackClaimed` |
+
+The poller dropped `record_finished_untimed` as an unknown name, and a rebuild would have aborted on
+002's constraint. Separately, a documentation commit had edited a comment inside the already-applied
+`006_cancelled_status.sql`; the migrator refuses to boot when an applied file changes, so deploying
+`main` as it stood would have taken the API down. Both were caught by comparing the repository against
+production (`schema_migrations` checksums, record-by-record state) before deploying.
+
+The poller had also restarted **28 times**: any transient RPC failure exited the process.
+
+### Deploy 1 — `fc3ca31`: index the untimed finish
+
+Backup: `/opt/sterun/backups/pre-untimed-20260914T152050Z.sql.gz` (11 tables).
+
+```
+007_untimed_finish.sql applied            (006 still 1bebfd8d..., as production recorded it)
+rebuilt in 39593ms: 16 events, 28 categories, 19 records, 37 transitions
+doctor: index matches the chain
+indexer restarts=0
+token 14 Finished finish_time_s=None source=state
+token 17 Finished finish_time_s=None source=state
+```
+
+`migrate.test.ts` now pins the checksum of every migration production has applied, so an edit to one
+fails CI instead of failing at boot.
+
+### Deploy 2 — `5aa85ed`: STE-42, each entry's add-on ids
+
+Backup: `/opt/sterun/backups/pre-addons-20260914T154715Z.sql.gz`.
+
+```
+008_record_addon_ids.sql applied
+rebuilt in 67370ms: 16 events, 28 categories, 19 records, 37 transitions
+doctor: index matches the chain
+indexer restarts=0
+records with add-ons:  token 0 -> {0,1}   token 1 -> {0}
+API /records/0 addon_ids = [0, 1]
+```
+
+Those two rows match the v2 add-on rehearsal above: token 0 bought the jersey and the tumbler, token 1
+the jersey. The rebuild matters here, not only after 007: 008's column default writes `[]` onto every
+existing row, which was wrong for exactly these two.
+
+### Deploy 3 — `90fb977`: STE-43 scanner dates and counts, STE-44 untimed and DNF results
+
+No migration: STE-43 computes both new columns from `chain_events` at query time, and STE-44 is
+parser and response changes only. The poller and keeper were restarted onto the same image as the API.
+
+```
+api / indexer / keeper  image=sha256:24bc338e...  restarts=0
+GET /events/5/scanners   GARWZA...  added_ledger 4589980  added_at 1788973487  scans 1
+GET /events/6/scanners   GCE7ON...  added_ledger 4589996  added_at 1788973567  scans 1
+GET /events/8/scanners   GDGVWL...  added_ledger 4592154  added_at 1788984357  scans 1
+GET /events/15/scanners  GCBVYK...  added_ledger 4620686  added_at 1789127017  scans 1
+/openapi.json            results preview rows carry kind (timed | untimed | dnf)
+verify-deployment.sh     18 passed, 0 failed — 2026-09-14T16:07:42Z
+```
+
+Recording many results in one signature (STE-44's second half) is not in this deploy: a transaction
+holds one `InvokeHostFunctionOp`, so it needs a batch function on RaceRecord — handed to Axel as a
+spec change.
