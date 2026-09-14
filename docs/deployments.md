@@ -2117,3 +2117,24 @@ verify-deployment.sh     18 passed, 0 failed — 2026-09-14T16:07:42Z
 Recording many results in one signature (STE-44's second half) is not in this deploy: a transaction
 holds one `InvokeHostFunctionOp`, so it needs a batch function on RaceRecord — handed to Axel as a
 spec change.
+
+### Deploy 4 — `2dcf42e`: STE-47, the entry form's fields in the vault
+
+Backup: `/opt/sterun/backups/pre-entry-form-20260914T180631Z.sql.gz`. No rebuild: `participants` is
+not part of the index.
+
+```
+009_entry_form_fields.sql applied            7 new participants columns present
+api / indexer / keeper  image=sha256:37705c80...  restarts=0
+verify-deployment.sh    18 passed, 0 failed — 2026-09-14T18:14:37Z
+```
+
+The E.164 rule, checked live without writing anything — an unsigned submit whose only fault is a
+local-format emergency contact. Validation runs before auth, so it is refused on the field:
+
+```json
+{"error":"invalid-request","message":"the request did not match the schema for this endpoint",
+ "details":[{"path":"/emergency_contact","problem":"must be a phone number in E.164 form: a plus and the country code, digits only, e.g. +6281234567890"}]}
+```
+
+`SELECT count(*) FROM participants` stayed at 0 afterwards.
