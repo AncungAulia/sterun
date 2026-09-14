@@ -61,14 +61,14 @@ export function Navbar() {
           <Link
             href="/"
             aria-label="Sterun home"
-            className={`transition-opacity duration-300 motion-reduce:transition-none ${
+            className={`shrink-0 transition-opacity duration-300 motion-reduce:transition-none ${
               open ? "pointer-events-none opacity-0" : "opacity-100"
             }`}
           >
             <Wordmark variant="white" />
           </Link>
 
-          <div className="flex items-center gap-4 sm:gap-8 lg:gap-10">
+          <div className="flex shrink-0 items-center gap-3 sm:gap-8 lg:gap-10">
             {/* Rendered whether or not APP_URL is set: the header's right side
                 is composed around this control, and a hole there reads as an
                 unfinished page. Deployment must set NEXT_PUBLIC_APP_URL
@@ -78,14 +78,25 @@ export function Navbar() {
                 because a control that moves while you aim at it is harder to
                 hit. Both halves of the roll say the same thing, so the second
                 is hidden from the accessibility tree. */}
+            {/* Below 640px the label goes and the pill becomes a 44px circle.
+                Measured at 320 wide, wordmark + labelled pill + MENU needed
+                361px of a 280px row and pushed MENU off the screen; at 375 the
+                pill was squeezed until its label read "Launch". The accessible
+                name stays on the link, so the icon-only state is still
+                announced as Launch app. */}
             <a
               href={APP_URL || "#"}
-              className="cta inline-flex items-center gap-2.5 px-5 py-3 text-[15px] font-medium text-paper sm:px-7 sm:py-3.5"
+              aria-label="Launch app"
+              className="cta inline-flex size-11 items-center justify-center text-[15px] font-medium text-paper sm:size-auto sm:gap-2.5 sm:px-7 sm:py-3.5"
             >
-              <span className="cta-roll">
-                <span>
-                  <span>Launch app</span>
-                  <span aria-hidden>Launch app</span>
+              {/* The roll carries display:block from globals.css, which beats a
+                  utility class, so visibility is switched on this wrapper. */}
+              <span aria-hidden className="hidden sm:inline-flex">
+                <span className="cta-roll">
+                  <span>
+                    <span>Launch app</span>
+                    <span>Launch app</span>
+                  </span>
                 </span>
               </span>
               <span className="cta-arrow inline-flex">
@@ -99,7 +110,7 @@ export function Navbar() {
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
               aria-controls="site-menu"
-              className="heading-hero wipe-underline relative text-[26px] uppercase leading-none tracking-[-0.03em] text-paper sm:text-[34px]"
+              className="heading-hero wipe-underline relative shrink-0 text-[26px] uppercase leading-none tracking-[-0.03em] text-paper sm:text-[34px]"
             >
               {open ? "Close" : "Menu"}
             </button>

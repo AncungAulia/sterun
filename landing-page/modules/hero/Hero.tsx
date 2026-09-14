@@ -31,7 +31,14 @@ export function Hero() {
       className="relative flex min-h-[100svh] flex-col justify-end overflow-hidden bg-ink"
     >
       {/* The still sits underneath and stays for reduced-motion users, who get
-          the frame without the movement instead of a blank ink field. */}
+          the frame without the movement instead of a blank ink field.
+
+          Both layers are anchored to the right edge on narrow screens. The
+          footage is 16:9 with the runner's face in the last sixth of the frame
+          (lens from 83%, nose at 97%). A portrait phone shows only about a
+          quarter of the width: centred, that quarter was her hair; at 78% it
+          was her ear. Anchored right it is the lens, nose and mouth. From
+          640px up the frame is wide enough to centre again. */}
       {/* eslint-disable-next-line @next/next/no-img-element -- a full-bleed
           background with a known intrinsic size; next/image adds a wrapper and
           srcset machinery this single 39 KB file has no use for. */}
@@ -40,10 +47,10 @@ export function Hero() {
         alt=""
         aria-hidden
         fetchPriority="high"
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover object-right sm:object-center"
       />
       <video
-        className="absolute inset-0 h-full w-full object-cover motion-reduce:hidden"
+        className="absolute inset-0 h-full w-full object-cover object-right motion-reduce:hidden sm:object-center"
         autoPlay
         muted
         loop
@@ -74,7 +81,7 @@ export function Hero() {
       />
 
       <div className="relative mx-auto w-full max-w-[1600px] px-5 pb-16 pt-32 sm:px-10 sm:pb-20 lg:px-[68px] lg:pb-24">
-        <h1 className="heading-hero max-w-[92%] text-[clamp(3rem,11vw,8.5rem)] uppercase leading-[0.9] text-paper lg:max-w-[56%]">
+        <h1 className="heading-hero max-w-[92%] text-balance text-[clamp(3rem,11vw,8.5rem)] uppercase leading-[0.9] text-paper lg:max-w-[56%]">
           Runs you can&rsquo;t fake
         </h1>
 
