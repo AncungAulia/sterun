@@ -17,6 +17,17 @@ STE-21 is split into two rounds, each with its own spec, plan and PR:
 `/profile` moves to STE-24. Round 1 ships on its own: after it, a runner can enter and pay on
 testnet.
 
+**Mockup:** [`2026-09-15-entry-flow-mockup.html`](2026-09-15-entry-flow-mockup.html), eight blocks,
+approved by Ancung. Open it in a browser before building.
+
+## Building rules (Ancung, 2026-09-15)
+
+- **Every UI component comes from shadcn** (`src/components/ui/`), added with the shadcn CLI when it
+  is missing. Nothing generic is written from scratch. Where shadcn has no component (a phone input
+  with a country picker), use a shadcn-based community one before writing one.
+- **Every icon comes from `lucide-react`.**
+- The success page's confetti is the wizard's, reused.
+
 ## Decisions (taken with Ancung, 2026-09-15; not to be reopened here)
 
 1. **One person, one entry per race.** Indonesian races allow one category per participant per race
@@ -73,11 +84,19 @@ because it decides whether somebody pays twice.
 
 ### Step 1 — Distance & race pack
 
-- The distance, preselected from `?category=`, changeable among distances with places left.
-- The add-ons offered to that distance (`includedIn` in the document), each with its price from
-  chain. Sized items show their sizes; a size with no units left cannot be picked. Items included
-  with the ticket show as included and still record the choice (their on-chain unit is reserved).
-- A running total.
+Three cards and a summary beside them (under them on a phone):
+
+- **Distance**: the distance, preselected from `?category=`, changeable among distances with places
+  left; a sold-out distance stays visible and cannot be picked.
+- **Race pack** ("Comes with every entry."): the items offered to that distance (`includedIn`) whose
+  price is zero. Sized items ask for a size; a size with no units left is shown struck through and
+  cannot be picked. Their on-chain unit is still reserved at entry.
+- **Add-ons** ("Optional extras, paid with your entry."): the priced items, each a checkbox with its
+  price from chain and the units left. The card is absent when a race sells none.
+
+The two are separate cards on purpose (Ancung, from the mockup): every runner gets a race pack, and
+putting paid extras inside it made the race pack read like something bought. The summary lists the
+entry, each race pack item as Included, each add-on with its price, and the total.
 
 ### Step 2 — Your details
 
@@ -149,8 +168,13 @@ from IndexedDB** (neither is on chain, and the vault returns neither), so they a
 browser that entered; elsewhere the page shows the rest and says the receipt is on the device that
 entered.
 
-1. "You're in!" with the race, date and distance.
-2. The bib number, large, and the name on the bib.
+1. "You're in!" with the race and date, and **the same confetti as the wizard's Done step**
+   (`/org/new`), reused rather than rebuilt.
+2. **The bib, drawn as a bib** (Ancung, from the mockup): a landscape sheet with a pin hole in each
+   corner; an ink band across the top with the race name centred and nothing else; the bib number
+   large in the hero face (`text-bib`) with the name on the bib under it; the distance on a teal tab
+   at the left and right edges; a pale teal band along the bottom carrying only the Sterun mark. No
+   date and no race pack on the bib.
 3. The receipt box: "Keep this receipt. Together with your ID details, it proves this race record is
    yours." The code, partly masked with a reveal; **Download receipt**; **Copy code**.
 4. "I've saved my receipt", which enables the way on (the race page in round 1, the pass in round 2).
