@@ -28,7 +28,7 @@ export function Hero() {
   return (
     <section
       id="top"
-      data-header-tone="dark"
+      data-nav-theme="dark"
       className="relative flex min-h-[100svh] flex-col justify-end overflow-hidden bg-ink"
     >
       {/* The still sits underneath and stays for reduced-motion users, who get

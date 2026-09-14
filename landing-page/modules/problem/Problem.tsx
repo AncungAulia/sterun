@@ -162,7 +162,7 @@ export function Problem() {
   return (
     <section
       id="problem"
-      data-header-tone="light"
+      data-nav-theme="light"
       aria-labelledby="problem-heading"
       className="relative flex min-h-[100svh] flex-col bg-paper text-ink"
     >

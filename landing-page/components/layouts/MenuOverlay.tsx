@@ -277,6 +277,10 @@ export function MenuOverlay({
         <div
           key={layer.key}
           aria-hidden
+          // The header reads these panels live while they sweep, so it can
+          // show the right colour over each one as it passes behind it.
+          data-nav-surface
+          data-nav-theme={layer.key === "paper" ? "light" : "dark"}
           className={`absolute inset-0 transition-transform duration-[620ms] ease-[cubic-bezier(0.76,0,0.24,1)] motion-reduce:duration-0 ${layer.className}`}
           // Inline rather than a `-translate-y-full` class: Tailwind emitted no
           // rule for that here, so the class sat on the element doing nothing

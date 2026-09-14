@@ -49,83 +49,178 @@
   transform-origin: left;
 }
 
+/* ============================================================================
+   Adaptive header.
+   ----------------------------------------------------------------------------
+   Four stacked copies of the header row (see Navbar.tsx). The painted layers
+   are clipped per frame by script; nothing here may transition clip-path, or
+   the split line would trail behind the section edge it is meant to sit on.
+
+   Interaction state lives on <header> as data-hover / data-focus, written by
+   the invisible interactive layer, and every painted layer styles itself from
+   it. :hover cannot be used: the painted layers ignore the pointer, so only
+   one of them would ever react and a split CTA would wipe on one side only.
+   ========================================================================= */
+
+/* The dark-on-light values are the base, set on every layer including the
+   invisible interactive one. They must be: the CTA border is declared as
+   var(--nav-cta), and on a layer without the variable that declaration is
+   invalid, the border drops to nothing, and that layer's CTA comes out 2px
+   smaller than the painted ones. Measured before this, 2px off at every width. */
+.nav__layer {
+  position: absolute;
+  inset: 0;
+  --nav-fg: var(--color-ink);
+  --nav-cta: var(--color-teal);
+  --nav-cta-contrast: var(--color-paper);
+  color: var(--nav-fg);
+}
+
+/* Painted over light surfaces: ink logo and MENU, brand teal CTA (the base). */
+
+/* Painted over dark surfaces: everything paper. */
+.nav__layer--onDark {
+  --nav-fg: var(--color-paper);
+  --nav-cta: var(--color-paper);
+  --nav-cta-contrast: var(--color-ink);
+  color: var(--nav-fg);
+}
+
+.nav__layer--paint {
+  pointer-events: none;
+}
+
+/* Server-rendered state, before the script's first measurement: the page opens
+   on the dark hero, so the first light-on-dark layer shows and the others are
+   hidden. The script overwrites these inline before the first paint. */
+.nav__layer--onLight,
+.nav__layer--onDark[data-pool="1"] {
+  clip-path: inset(50% 0 50% 0);
+}
+
+/* The real link and button. Invisible and never clipped, because clip-path
+   clips hit-testing too; its focus ring is drawn by the painted layers. */
+.nav__layer--hit {
+  opacity: 0;
+}
+
+.nav-logo {
+  transition: opacity 0.3s ease;
+}
+.nav[data-open] .nav-logo {
+  opacity: 0;
+}
+.nav[data-open] .nav__layer--hit .nav-logo {
+  pointer-events: none;
+}
+
 /* --- CTA -----------------------------------------------------------------
-   Outline at rest. On hover a fill sweeps in from the left, the label rolls up
-   to its own duplicate, and the arrow stays put because a moving target is
-   harder to aim at than a still one. Text colour lags the fill slightly so it
+   Outline at rest in the layer's CTA colour. On hover a fill of that same
+   colour sweeps in from the left, the label rolls up to its own duplicate and
+   turns the layer's contrast colour, and the arrow holds still because a moving
+   target is harder to aim at. The label's colour lags the fill slightly so it
    flips once the ground beneath it has actually changed. */
-.cta {
+.nav-cta {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  border: 1px solid currentColor;
+  border: 1px solid var(--nav-cta);
   border-radius: 9999px;
+  color: var(--nav-cta);
   transition: color 0.25s ease 0.12s;
 }
-.cta::before {
+.nav-cta::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--color-paper);
+  background: var(--nav-cta);
   transform: scaleX(0);
   transform-origin: right;
   transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
 }
-.cta:hover,
-.cta:focus-visible {
-  color: var(--color-ink);
-}
-.cta:hover::before,
-.cta:focus-visible::before {
-  transform: scaleX(1);
-  transform-origin: left;
-}
 
-/* Over a light section the header turns ink, so the CTA's fill has to become
-   ink and its text paper. Without this it would fill with paper on a paper
-   background and the label would vanish into it on hover. */
-.cta[data-tone="light"]::before {
-  background: var(--color-ink);
-}
-.cta[data-tone="light"]:hover,
-.cta[data-tone="light"]:focus-visible {
-  color: var(--color-paper);
-}
-
-/* The label and its stacked duplicate.
-   Three levels, and each one earns its place: the outer box is one line tall
-   and clips, the middle one is what actually travels, and the two inner copies
-   are given an explicit height so the distance to move is a known quantity
-   rather than a percentage of whatever the font decided.
-   An earlier version moved every child of .cta-roll, which meant both copies
-   slid half their own height instead of one copy sliding a whole line, and the
-   label tore in two mid-hover. */
-.cta-roll {
+/* The label and its stacked duplicate. Three levels, each earning its place:
+   the outer box is one line tall and clips, the middle one travels, and the two
+   copies carry an explicit height so the distance moved is exact. Moving every
+   child instead once slid each copy half its own height and tore the label. */
+.nav-cta-roll {
   display: block;
   overflow: hidden;
   height: 1.2em;
 }
-.cta-roll > span {
+.nav-cta-roll > span {
   display: block;
   transition: transform 0.4s cubic-bezier(0.76, 0, 0.24, 1);
 }
-.cta-roll > span > span {
+.nav-cta-roll > span > span {
   display: block;
   height: 1.2em;
   line-height: 1.2em;
 }
-.cta:hover .cta-roll > span,
-.cta:focus-visible .cta-roll > span {
-  transform: translateY(-1.2em);
-}
-
-.cta-arrow {
+.nav-cta-arrow {
   transition: transform 0.25s cubic-bezier(0.65, 0, 0.35, 1);
 }
-.cta:hover .cta-arrow,
-.cta:focus-visible .cta-arrow {
-  transform: translateX(3px);
+
+/* --- MENU underline ------------------------------------------------------ */
+.nav-underline {
+  position: relative;
+}
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.08em;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Hover only where a pointer can hover; on touch a tap would leave it stuck. */
+@media (hover: hover) {
+  .nav[data-hover="cta"] .nav-cta {
+    color: var(--nav-cta-contrast);
+  }
+  .nav[data-hover="cta"] .nav-cta::before {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  .nav[data-hover="cta"] .nav-cta-roll > span {
+    transform: translateY(-1.2em);
+  }
+  .nav[data-hover="cta"] .nav-cta-arrow {
+    transform: translateX(3px);
+  }
+  .nav[data-hover="menu"] .nav-underline::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+/* Keyboard focus mirrors hover, plus a visible ring. The ring is drawn here on
+   the painted layers because the focused element itself is invisible. */
+.nav[data-focus="cta"] .nav-cta {
+  color: var(--nav-cta-contrast);
+}
+.nav[data-focus="cta"] .nav-cta::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+.nav[data-focus="cta"] .nav-cta-roll > span {
+  transform: translateY(-1.2em);
+}
+.nav[data-focus="menu"] .nav-underline::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+.nav[data-focus="logo"] .nav__layer--paint .nav-logo,
+.nav[data-focus="cta"] .nav__layer--paint .nav-cta,
+.nav[data-focus="menu"] .nav__layer--paint .nav-underline {
+  outline: 2px solid var(--color-teal-400);
+  outline-offset: 3px;
 }
 
 /* --- Problem reveal ------------------------------------------------------
@@ -141,10 +236,12 @@
 @media (prefers-reduced-motion: reduce) {
   .nav-fill,
   .wipe-underline::after,
-  .cta,
-  .cta::before,
-  .cta-roll > span,
-  .cta-arrow {
+  .nav-logo,
+  .nav-cta,
+  .nav-cta::before,
+  .nav-cta-roll > span,
+  .nav-cta-arrow,
+  .nav-underline::after {
     transition: none;
   }
 }
