@@ -43,7 +43,8 @@ const PARAGRAPHS = [
  * Copy size, shared with the block row beneath it so the gap above the blocks
  * is the same 2.9em as the gap between paragraphs.
  */
-const COPY_SIZE = "clamp(1.125rem, 2.26vw, 1.75rem)";
+/** 1.5x the first size, clamp(1.125rem, 2.26vw, 1.75rem). */
+const COPY_SIZE = "clamp(1.6875rem, 3.39vw, 2.625rem)";
 
 /**
  * How many characters are mid-transition at any moment. Each character takes
