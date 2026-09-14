@@ -10,10 +10,10 @@ import { CONTRACTS, REPO_URL } from "@/lib/links";
 /**
  * STE-12 Problem, the first light section after the hero.
  *
- * Three kinds of motion and nothing else: the left column fades up once, the
- * copy is revealed character by character against the scroll, and two colour
- * blocks rise out of their masks, falling back when the reader scrolls above
- * them and rising again on the way down. No parallax, nothing floating.
+ * Two kinds of motion and nothing else: the left column fades up once, and the
+ * copy is revealed character by character against the scroll. The colour blocks
+ * beneath are still; they are the ground the section stands on, not something
+ * that arrives. No parallax, nothing floating.
  *
  * Copy is fixed by docs/landing-copy.md.
  */
@@ -85,7 +85,6 @@ function ArrowUpRight() {
 export function Problem() {
   const stripRef = useRef<HTMLDivElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
-  const blocksRef = useRef<HTMLDivElement>(null);
   const inkProbeRef = useRef<HTMLSpanElement>(null);
   const accentProbeRef = useRef<HTMLSpanElement>(null);
 
@@ -94,14 +93,13 @@ export function Problem() {
 
     const strip = stripRef.current;
     const copy = copyRef.current;
-    const blocks = blocksRef.current;
     const inkProbe = inkProbeRef.current;
     const accentProbe = accentProbeRef.current;
-    if (!strip || !copy || !blocks || !inkProbe || !accentProbe) return;
+    if (!strip || !copy || !inkProbe || !accentProbe) return;
 
     // Everything is set up inside a reduced-motion query. With the preference
-    // on, the text is never split, keeps its CSS colour, and the blocks sit in
-    // place. If it changes mid-session, matchMedia reverts the lot.
+    // on, the text is never split and keeps its CSS colour. If it changes
+    // mid-session, matchMedia reverts the lot.
     const mm = gsap.matchMedia();
 
     mm.add("(prefers-reduced-motion: no-preference)", () => {
@@ -155,17 +153,6 @@ export function Problem() {
         ease: "power2.out",
         stagger: 0.06,
         scrollTrigger: { trigger: strip, start: "top 85%", once: true },
-      });
-
-      // Plays on the way down, reverses when the reader scrolls back above the
-      // start, and plays again on the next pass. power2.inOut is cubic in-out,
-      // the same curve as cubic-bezier(0.65, 0, 0.35, 1).
-      gsap.from(gsap.utils.toArray<HTMLElement>("[data-block]", blocks), {
-        yPercent: 100,
-        duration: 0.7,
-        ease: "power2.inOut",
-        stagger: 0.15,
-        scrollTrigger: { trigger: blocks, start: "top 85%", toggleActions: "play none none reverse" },
       });
 
       return () => split.revert();
@@ -243,23 +230,20 @@ export function Problem() {
             carries the copy's font size so its 2.9em top margin matches the
             gap between paragraphs exactly, however long the copy gets. */}
         <div
-          ref={blocksRef}
           aria-hidden
           className="mt-[2.9em] flex items-end"
           style={{ fontSize: COPY_SIZE, "--coal-w": "max(21vw, 9rem)" } as CSSProperties}
         >
           <div
-            className="shrink-0 overflow-hidden"
+            data-block
+            className="shrink-0 bg-ink"
             style={{ width: "var(--coal-w)", height: "calc(var(--coal-w) / 1.7)" }}
-          >
-            <div data-block className="h-full w-full bg-ink" />
-          </div>
+          />
           <div
-            className="min-w-0 flex-1 overflow-hidden"
+            data-block
+            className="min-w-0 flex-1 bg-teal"
             style={{ height: "calc(var(--coal-w) / 1.7 * 0.3)" }}
-          >
-            <div data-block className="h-full w-full bg-teal" />
-          </div>
+          />
         </div>
       </div>
     </section>
