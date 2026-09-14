@@ -128,6 +128,16 @@
   transform: translateX(3px);
 }
 
+/* --- Problem reveal ------------------------------------------------------
+   Characters are thickened while highlighted with a stroke in their own
+   colour, driven by a variable GSAP animates. It is not font-weight on
+   purpose: Poppins is loaded at fixed weights, and a heavier weight is wider,
+   so every character after the highlight would shift and lines would rewrap
+   mid-scroll. A stroke thickens the glyph without touching its advance width. */
+.problem-char {
+  -webkit-text-stroke: var(--char-bold, 0em) currentColor;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nav-fill,
   .wipe-underline::after,
