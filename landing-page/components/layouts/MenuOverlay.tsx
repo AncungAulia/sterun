@@ -330,7 +330,13 @@ export function MenuOverlay({
                           >
                             {item.n}
                           </span>
-                          <span className="block pl-[2.4vw]">
+                          {/* Indent is 2.4vw with a 1.75rem floor. 2.4vw alone is 9px on a
+                              375px phone, narrower than the 10px number beside
+                              it, and measured gaps came out between -1 and -6px:
+                              the numbers overlapped the words. The floor only
+                              takes over below ~1170px, so desktop spacing is
+                              unchanged. */}
+                          <span className="block pl-[max(2.4vw,1.75rem)]">
                             <span className="heading-hero relative inline-block whitespace-nowrap uppercase">
                               {/* The fill. A 1:1 copy of the word underneath,
                                   revealed bottom-up by a clip-path rather than
