@@ -41,6 +41,20 @@ describe("fetchScanners", () => {
     });
   });
 
+  describe("edge", () => {
+    it("reads a scanner the index could not date as having no date", async () => {
+      // The live index (STE-43) sends `added_at: null` for a scanner it
+      // recovered without a ledger close time. That is not a parse failure.
+      vi.mocked(apiFetch).mockResolvedValue({
+        scanners: [{ address: ADDRESS, added_ledger: 120, added_at: null, scans: 0 }],
+        last_ledger: 130,
+      });
+      expect(await fetchScanners(3)).toEqual([
+        { address: ADDRESS, addedLedger: 120, addedAt: null, scans: 0 },
+      ]);
+    });
+  });
+
   describe("negative", () => {
     it("passes a refusal on rather than reading it as no scanners", async () => {
       vi.mocked(apiFetch).mockImplementation(async () => {

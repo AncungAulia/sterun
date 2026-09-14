@@ -21,7 +21,12 @@ export interface IndexedScanner {
 interface ScannerJson {
   address: string;
   added_ledger: number;
-  added_at?: string;
+  /**
+   * Optional for an index older than STE-43, and `null` from one that has it
+   * but could not date this scanner (one recovered by a rebuild). Both read as
+   * "no date"; `BigInt(null)` would throw and take the whole tab down.
+   */
+  added_at?: string | null;
   scans?: number;
 }
 
@@ -32,7 +37,7 @@ export async function fetchScanners(eventId: number): Promise<IndexedScanner[]> 
   return body.scanners.map((row) => ({
     address: row.address,
     addedLedger: row.added_ledger,
-    addedAt: row.added_at === undefined ? null : BigInt(row.added_at),
+    addedAt: row.added_at === undefined || row.added_at === null ? null : BigInt(row.added_at),
     scans: row.scans ?? null,
   }));
 }
