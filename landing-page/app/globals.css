@@ -16,6 +16,19 @@
    translate utilities used here earlier, which cost an afternoon.
    ========================================================================= */
 
+/* --- Page scrollbar -------------------------------------------------------
+   Hidden, while scrolling keeps working. The page is driven by the scroll
+   itself (Lenis, the held stages, the step track), so the bar added nothing but
+   a strip down the right edge of every full-bleed section. scrollbar-width
+   covers Firefox and current Chromium; the pseudo-element covers Safari and
+   older Chromium. */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+
 /* --- Nav fill ------------------------------------------------------------
    A 1:1 copy of the word, clipped away at the bottom and revealed upward on
    hover, so the colour reads as poured in rather than swapped. */
