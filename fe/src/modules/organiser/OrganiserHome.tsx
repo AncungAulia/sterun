@@ -205,7 +205,9 @@ export function OrganiserHome() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-3 px-6 py-6">
+      {/* 16px at the sides on a phone, 24px from md: the same as the header
+          above it, so the menu button and the first card share an edge. */}
+      <div className="flex flex-1 flex-col gap-3 px-4 py-6 md:px-6">
         {urgent ? <UrgentBanner need={urgent} /> : null}
 
         {allowed === false ? <NotAllowedNotice address={address} /> : null}
