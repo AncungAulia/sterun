@@ -174,7 +174,14 @@ export function EntriesTab({ summary }: { summary: EventSummary }) {
         </span>
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-n-200 bg-paper">
+      {/* With nothing in the table, the card takes the rest of the screen
+          (Ancung, 2026-09-14): a short empty box under three cards left most
+          of the page blank. */}
+      <section
+        className={`overflow-hidden rounded-lg border border-n-200 bg-paper ${
+          shown.length === 0 ? "grid flex-1 place-items-center" : ""
+        }`}
+      >
         {records.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-n-500">Nobody has entered yet</p>
         ) : shown.length === 0 ? (

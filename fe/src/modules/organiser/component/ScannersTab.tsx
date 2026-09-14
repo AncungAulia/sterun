@@ -120,7 +120,12 @@ export function ScannersTab({ summary }: { summary: EventSummary }) {
         </span>
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-n-200 bg-paper">
+      {/* Same as Entries: an empty list takes the rest of the screen. */}
+      <section
+        className={`overflow-hidden rounded-lg border border-n-200 bg-paper ${
+          shown.length === 0 ? "grid flex-1 place-items-center" : ""
+        }`}
+      >
         {rows.length === 0 ? (
           <div className="px-4 py-10 text-center">
             <p className="text-sm font-medium text-ink">No scanner yet</p>

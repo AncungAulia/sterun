@@ -90,12 +90,17 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
 
   return (
     <>
-      <ConsoleHeader
-        title={data.event.name}
-        badge={<EventStatusBadge status={data.event.status} />}
-        action={<StatusAction summary={data} />}
-      />
-      <RaceTabs eventId={eventId} current={tab} />
+      {/* Pinned, so a long entries table scrolls under the race's name, its
+          status, its one action and the way to the other tabs rather than
+          taking them off screen. */}
+      <div className="sticky top-0 z-20">
+        <ConsoleHeader
+          title={data.event.name}
+          badge={<EventStatusBadge status={data.event.status} />}
+          action={<StatusAction summary={data} />}
+        />
+        <RaceTabs eventId={eventId} current={tab} />
+      </div>
       <div className="flex flex-1 flex-col gap-3 px-4 py-6 md:px-6">
         {urgent ? <UrgentBanner need={urgent} /> : null}
         {tab === "overview" ? <OverviewTab summary={data} /> : null}
