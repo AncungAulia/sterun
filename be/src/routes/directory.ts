@@ -163,10 +163,17 @@ const scannerListResponse = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["address", "added_ledger"],
+          required: ["address", "added_ledger", "added_at", "scans"],
           properties: {
             address: { type: "string" },
             added_ledger: { type: "integer" },
+            // STE-43. A ledger number is not a date an organiser can read.
+            // Unix seconds as a decimal string (rule 5b). null only if the raw
+            // log lost the add event, which a normal index cannot do.
+            added_at: { type: ["string", "null"], pattern: DIGITS },
+            // Race packs this address checked in for this event. 0, never
+            // missing, for a scanner that has not scanned anyone.
+            scans: { type: "integer", minimum: 0 },
           },
         },
       },
@@ -365,7 +372,12 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
       const scanners = await store.listScanners(pool, request.params.eventId);
       const cursor = await store.getCursor(pool);
       return {
-        scanners: scanners.map((s) => ({ address: s.address, added_ledger: s.addedLedger })),
+        scanners: scanners.map((s) => ({
+          address: s.address,
+          added_ledger: s.addedLedger,
+          added_at: s.addedAt?.toString() ?? null,
+          scans: s.scans,
+        })),
         last_ledger: cursor?.lastLedger ?? 0,
       };
     },

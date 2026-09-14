@@ -158,7 +158,17 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
     it("lists the scanners still on the allowlist", async () => {
       const body = (await app.inject({ url: "/events/0/scanners" })).json();
 
-      expect(body.scanners).toEqual([{ address: SCANNER, added_ledger: 150 }]);
+      expect(body.scanners).toEqual([
+        {
+          address: SCANNER,
+          added_ledger: 150,
+          // STE-43: ledger 150 closes at 1_800_000_000 + 150 * 5, as a string.
+          added_at: "1800000750",
+          // The only check-in in this seed was made by the organiser, which
+          // must not be counted against this scanner.
+          scans: 0,
+        },
+      ]);
     });
 
     it("leaves out a scanner that was removed", async () => {

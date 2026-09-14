@@ -582,6 +582,95 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
     });
   });
 
+  describe("the scanner list the console shows (STE-43)", () => {
+    // FakeEventSource closes ledger N at 1_800_000_000 + N * 5.
+    const closedAt = (ledger: number): bigint => 1_800_000_000n + BigInt(ledger) * 5n;
+
+    it("dates a scanner by the close of the ledger that added it, and counts its check-ins", async () => {
+      const { events } = seedFullRace();
+      await build(new FakeEventSource([events])).pollOnce();
+
+      // seedFullRace adds SCANNER at ledger 101 and it claims token 0 at 120.
+      expect(await store.listScanners(pool, 0)).toEqual([
+        { eventId: 0, address: SCANNER, addedLedger: 101, addedAt: closedAt(101), scans: 1 },
+      ]);
+    });
+
+    it("counts two check-ins by one scanner as 2", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([racepackClaimed({ ...raceRecord, ledger: 150 }, 1, 0, SCANNER)]);
+      await indexer.pollOnce();
+
+      expect((await store.listScanners(pool, 0))[0]?.scans).toBe(2);
+    });
+
+    it("does not count a check-in by the organiser against any scanner", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([racepackClaimed({ ...raceRecord, ledger: 150 }, 1, 0, ORGANISER)]);
+      await indexer.pollOnce();
+
+      expect((await store.listScanners(pool, 0))[0]?.scans).toBe(1);
+    });
+
+    it("gives a scanner that never scanned 0, not a missing value", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([scannerAdded({ ...registry, ledger: 160 }, 0, RUNNER_B)]);
+      await indexer.pollOnce();
+
+      const idle = (await store.listScanners(pool, 0)).find((s) => s.address === RUNNER_B);
+      expect(idle).toEqual({
+        eventId: 0,
+        address: RUNNER_B,
+        addedLedger: 160,
+        addedAt: closedAt(160),
+        scans: 0,
+      });
+    });
+
+    it("dates a removed-then-re-added scanner by its latest add", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([
+        scannerRemoved({ ...registry, ledger: 200 }, 0, SCANNER),
+        scannerAdded({ ...registry, ledger: 210 }, 0, SCANNER),
+      ]);
+      await indexer.pollOnce();
+
+      const [row] = await store.listScanners(pool, 0);
+      expect(row).toMatchObject({ addedLedger: 210, addedAt: closedAt(210) });
+      // Check-ins made before the removal still happened; they are not reset.
+      expect(row?.scans).toBe(1);
+    });
+
+    it("keeps the date and the count for a scanner a rebuild recovered", async () => {
+      // Both come from chain_events at query time, and that raw log is exactly
+      // what a rebuild keeps — so there is nothing to backfill.
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+
+      await indexer.rebuild();
+      expect(await store.listScanners(pool, 0)).toEqual([
+        { eventId: 0, address: SCANNER, addedLedger: 101, addedAt: closedAt(101), scans: 1 },
+      ]);
+    });
+  });
+
   describe("rebuild from contract state", () => {
     it("reconstructs everything from state alone, with no events at all", async () => {
       seedFullRace();

@@ -686,22 +686,66 @@ export async function listScannerCandidates(db: Queryable): Promise<ScannerRow[]
  * on the answer should still check each address against the chain: this is an
  * index, and an index can lag.
  */
-export async function listScanners(db: Queryable, eventId: number): Promise<ScannerRow[]> {
+/** A scanner as the organiser console lists it (STE-43). */
+export interface ScannerListRow extends ScannerRow {
+  /**
+   * Unix seconds when the current allowlisting landed: the close time of the
+   * `scanner_added` at `addedLedger`. `null` only when the raw log has no such
+   * event, which a normal index cannot produce — see listScanners.
+   */
+  addedAt: bigint | null;
+  /** `racepack_claimed` events for this event whose operator is this address. */
+  scans: number;
+}
+
+export async function listScanners(db: Queryable, eventId: number): Promise<ScannerListRow[]> {
+  // Both columns come from chain_events at query time rather than being stored
+  // on event_scanners, for one reason: that raw log is the thing a rebuild
+  // keeps. A scanner recovered by rebuild therefore keeps its date and count
+  // with no backfill, and there is no second copy to drift.
+  //
+  // added_at joins on the ledger addScanner recorded, not "the latest add":
+  // after a remove and re-add, added_ledger already IS the latest add, and
+  // matching on it keeps an earlier add in the same log from answering.
+  //
+  // scans counts claims by operator, so a claim made by the organiser counts
+  // against no scanner — unless the organiser allowlisted their own address,
+  // in which case those claims genuinely were made by that scanner.
   const { rows } = await db.query<{
     event_id: number;
     scanner_address: string;
     added_ledger: number;
+    added_at: string | null;
+    scans: string;
   }>(
-    `SELECT event_id, scanner_address, added_ledger
-       FROM event_scanners
-      WHERE event_id = $1 AND removed_ledger IS NULL
-      ORDER BY added_ledger, scanner_address`,
+    `SELECT s.event_id,
+            s.scanner_address,
+            s.added_ledger,
+            (SELECT floor(extract(epoch FROM e.ledger_closed_at))::bigint::text
+               FROM chain_events e
+              WHERE e.name = 'scanner_added'
+                AND e.ledger = s.added_ledger
+                AND e.payload->>'scanner' = s.scanner_address
+                AND (e.payload->>'eventId')::int = s.event_id
+              ORDER BY e.id DESC
+              LIMIT 1) AS added_at,
+            (SELECT count(*)
+               FROM chain_events c
+              WHERE c.name = 'racepack_claimed'
+                AND c.payload->>'operator' = s.scanner_address
+                AND (c.payload->>'eventId')::int = s.event_id) AS scans
+       FROM event_scanners s
+      WHERE s.event_id = $1 AND s.removed_ledger IS NULL
+      ORDER BY s.added_ledger, s.scanner_address`,
     [eventId],
   );
   return rows.map((r) => ({
     eventId: r.event_id,
     address: r.scanner_address,
     addedLedger: r.added_ledger,
+    addedAt: r.added_at === null ? null : BigInt(r.added_at),
+    // count(*) is bigint in Postgres and arrives as a string.
+    scans: Number(r.scans),
   }));
 }
 
