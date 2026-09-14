@@ -42,10 +42,14 @@ export function ConsoleHeader({
             in the dark bar above this one, so a second one here would be two
             buttons for one thing. */}
         <SidebarTrigger aria-label="Collapse the menu" className="hidden md:flex" />
-        <h1 className="heading-strong truncate text-xl text-ink">
-          {title}
-          {badge ? <span className="ml-2 align-middle">{badge}</span> : null}
-        </h1>
+        {/* The badge sits beside the title from `md` and under it below. It
+            used to live inside the <h1>, which truncates, so on a phone a long
+            race name cut the status off entirely: the one fact an organiser
+            opening this at the gate needs, whether entries are open. */}
+        <div className="flex min-w-0 flex-col items-start gap-1 md:flex-row md:items-center md:gap-2">
+          <h1 className="heading-strong max-w-full truncate text-xl text-ink">{title}</h1>
+          {badge ? <span className="shrink-0">{badge}</span> : null}
+        </div>
       </div>
       <div className="flex items-center gap-2.5">
         {bell === undefined ? <NeedsBell needs={needs} /> : bell}
