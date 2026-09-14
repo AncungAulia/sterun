@@ -207,15 +207,15 @@ when the balance or trustline is missing.
 
 ## Backend and product work this needs
 
-Tickets to file with this spec:
+Filed 2026-09-15:
 
-| # | Owner | What |
+| Ticket | Owner | What |
 | --- | --- | --- |
-| 1 | James | a faucet route for Get test sUSD (testnet only, rate-limited per address) |
-| 2 | James | delete vault rows never confirmed after 24 hours |
-| 3 | James | refuse a second entry with the same identity document number in the same race |
-| 4 | James | return a record's `totp_secret` to the wallet that owns it (used in round 2) |
-| 5 | Axel | how bib numbers are shown, given they start at 0 per distance |
+| STE-49 | James | a faucet route for Get test sUSD (testnet only, rate-limited per address) |
+| STE-50 | James | delete vault rows never confirmed after 24 hours |
+| STE-51 | James | refuse a second entry with the same identity document number in the same race |
+| STE-52 | James | return a record's `totp_secret` to the wallet that owns it (used in round 2) |
+| STE-53 | Axel | how bib numbers are shown, given they start at 0 per distance |
 
 ## Testing
 
