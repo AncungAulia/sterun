@@ -26,13 +26,13 @@ describe("FeaturedCard", () => {
     it("shows the venue, date, entries left, price and status on the lead card", () => {
       const lead = race();
 
-      render(<FeaturedCard entry={entry(lead, metadata())} size="lead" />);
+      const { container } = render(<FeaturedCard entry={entry(lead, metadata())} size="lead" />);
 
       expect(screen.getByText("FT UGM, Sleman")).toBeInTheDocument();
       expect(screen.getByText(formatEventDate(lead.event.startsAt))).toBeInTheDocument();
       expect(screen.getByText("500 entries left")).toBeInTheDocument();
       expect(screen.getByText("From sUSD 25")).toBeInTheDocument();
-      expect(screen.getByText("Open")).toBeInTheDocument();
+      expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
     });
 
     it("describes the link by its details, so Tab announces where, when and how much", () => {
@@ -68,14 +68,14 @@ describe("FeaturedCard", () => {
     it("keeps a side card to title, date and entries left, without the hero face", () => {
       const side = race();
 
-      render(<FeaturedCard entry={entry(side, metadata())} size="side" />);
+      const { container } = render(<FeaturedCard entry={entry(side, metadata())} size="side" />);
 
       const heading = screen.getByRole("heading", { name: "Jakarta Marathon 7" });
       expect(heading).toHaveClass("heading-strong", "text-xl", "line-clamp-2");
       expect(heading).not.toHaveClass("heading-hero");
       expect(screen.getByText(formatEventDate(side.event.startsAt))).toBeInTheDocument();
       expect(screen.getByText("500 entries left")).toBeInTheDocument();
-      expect(screen.getByText("Open")).toBeInTheDocument();
+      expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
       expect(screen.queryByText("FT UGM, Sleman")).not.toBeInTheDocument();
       expect(screen.queryByText("From sUSD 25")).not.toBeInTheDocument();
     });
@@ -122,10 +122,10 @@ describe("FeaturedCard", () => {
     });
 
     it("puts the status badge after the text, so the fade can never dim it", () => {
-      render(<FeaturedCard entry={entry(race(), metadata())} size="lead" />);
+      const { container } = render(<FeaturedCard entry={entry(race(), metadata())} size="lead" />);
 
       const link = screen.getByRole("link");
-      const badge = screen.getByText("Open");
+      const badge = container.querySelector('[data-status="Open"]') as HTMLElement;
       const overlay = screen.getByRole("heading", { name: "Jakarta Marathon 7" }).parentElement;
       expect(link.lastElementChild).toContainElement(badge);
       // Node.DOCUMENT_POSITION_FOLLOWING: the badge comes later in the markup.
@@ -235,10 +235,10 @@ describe("FeaturedCard", () => {
 
   describe("negative", () => {
     it("does not count entries for a race that is not open", () => {
-      render(<FeaturedCard entry={entry(race({ status: "Closed" }), metadata())} size="lead" />);
+      const { container } = render(<FeaturedCard entry={entry(race({ status: "Closed" }), metadata())} size="lead" />);
 
       expect(screen.queryByText(/entries left/)).not.toBeInTheDocument();
-      expect(screen.getByText("Closed")).toBeInTheDocument();
+      expect(container.querySelector('[data-status="Closed"]')).not.toBeNull();
     });
   });
 });

@@ -20,13 +20,13 @@ describe("EventCard", () => {
         category(1, { quota: 10, enteredCount: 10, priceStroops: 40n * SUSD }),
       ]);
 
-      render(<EventCard entry={entry(race, metadata())} documentLoading={false} />);
+      const { container } = render(<EventCard entry={entry(race, metadata())} documentLoading={false} />);
 
       expect(screen.getByText("FT UGM, Sleman")).toBeInTheDocument();
       expect(screen.getByText(formatEventDate(race.event.startsAt))).toBeInTheDocument();
       expect(screen.getByText("500 entries left")).toBeInTheDocument();
       expect(screen.getByText("From sUSD 25")).toBeInTheDocument();
-      expect(screen.getByText("Open")).toBeInTheDocument();
+      expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
     });
 
     it("puts the poster in the frame", () => {
@@ -98,12 +98,12 @@ describe("EventCard", () => {
 
   describe("negative", () => {
     it("does not count entries for a race that is not open", () => {
-      render(
+      const { container } = render(
         <EventCard entry={entry(summary(7, { status: "Closed" }, [category(0)]), metadata())} documentLoading={false} />,
       );
 
       expect(screen.queryByText(/entries left/)).not.toBeInTheDocument();
-      expect(screen.getByText("Closed")).toBeInTheDocument();
+      expect(container.querySelector('[data-status="Closed"]')).not.toBeNull();
     });
   });
 });

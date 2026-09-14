@@ -9,7 +9,7 @@ describe("EventStatusBadge", () => {
     it("names the status it was given", () => {
       render(<EventStatusBadge status="Open" />);
 
-      expect(screen.getByText("Open")).toBeInTheDocument();
+      expect(screen.getByText("Open for entry")).toBeInTheDocument();
     });
 
     it("renders every status the contract can hold", () => {
@@ -17,9 +17,14 @@ describe("EventStatusBadge", () => {
       // (INTERFACE.md §1.2). A badge that only knows four would render a blank
       // chip on a real event, so this walks whatever the SDK currently holds
       // rather than a list written out here that can fall behind it.
+      //
+      // It matches on `data-status`, not on the words: the words are a product
+      // decision that has already changed once (Draft → "Not open yet") and
+      // this test is about coverage, not copy.
       for (const status of EVENT_STATUSES) {
-        const { unmount } = render(<EventStatusBadge status={status} />);
-        expect(screen.getByText(status)).toBeInTheDocument();
+        const { container, unmount } = render(<EventStatusBadge status={status} />);
+        expect(container.querySelector(`[data-status="${status}"]`)).not.toBeNull();
+        expect(container.textContent?.trim()).not.toBe("");
         unmount();
       }
     });
@@ -64,7 +69,16 @@ describe("EventStatusBadge", () => {
     it("carries the status as data, so it can be found without reading colour", () => {
       render(<EventStatusBadge status="Completed" />);
 
-      expect(screen.getByText("Completed")).toHaveAttribute("data-status", "Completed");
+      expect(screen.getByText("Finished")).toHaveAttribute("data-status", "Completed");
+    });
+
+    it("never prints the word Draft", () => {
+      // The contract's vocabulary stays in `data-status`; the chip is read by
+      // an organiser who has not drafted anything.
+      const { container } = render(<EventStatusBadge status="Draft" />);
+
+      expect(container.textContent).not.toMatch(/draft/i);
+      expect(container.querySelector('[data-status="Draft"]')).not.toBeNull();
     });
   });
 });

@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Big_Shoulders, Poppins } from "next/font/google";
 
-import { Header } from "@/components/layouts/Header";
-
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -56,11 +54,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`h-full antialiased ${poppins.variable} ${bigShoulders.variable}`}
     >
+      {/*
+        No header and no <main> here. Both used to live at this level, which
+        made them unconditional: the organiser console, which draws its own
+        wordmark and wallet chip in its rail, inherited a second copy of each.
+        A root layout can only say "every page", so the chrome moved down to the
+        route groups, which can disagree. `(browse)` and the wizard render
+        `SiteFrame`; the console renders its own.
+      */}
       <body className="flex min-h-full flex-col">
-        <Providers>
-          <Header />
-          <main className="flex flex-1 flex-col">{children}</main>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

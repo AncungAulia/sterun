@@ -25,6 +25,7 @@
  * written out and repeated in `data-status`.
  */
 import { Badge } from "@/components/ui/badge";
+import { statusLabel } from "@/lib/status-label";
 import type { EventStatus } from "@sterunxyz/sdk";
 
 const VARIANTS = {
@@ -35,10 +36,15 @@ const VARIANTS = {
   Cancelled: "destructive",
 } as const satisfies Record<EventStatus, string>;
 
+/**
+ * The chip shows `statusLabel`, and `data-status` still carries the contract's
+ * own word. Tests and stylesheets match on the attribute rather than on the
+ * sentence, so the wording can change again without either of them moving.
+ */
 export function EventStatusBadge({ status }: { status: EventStatus }) {
   return (
     <Badge variant={VARIANTS[status]} data-status={status}>
-      {status}
+      {statusLabel(status)}
     </Badge>
   );
 }

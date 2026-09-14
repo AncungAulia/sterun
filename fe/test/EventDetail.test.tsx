@@ -109,9 +109,10 @@ describe("EventDetail", () => {
     it("shows the event status", async () => {
       getEventSummary.mockResolvedValue(summary({ status: "Closed" }));
 
-      renderDetail();
+      const { container } = renderDetail();
 
-      expect(await screen.findByText("Closed")).toBeInTheDocument();
+      await screen.findByText("Borobudur Marathon");
+      expect(container.querySelector('[data-status="Closed"]')).not.toBeNull();
     });
 
     it("lists every category with its price and what is left of its quota", async () => {

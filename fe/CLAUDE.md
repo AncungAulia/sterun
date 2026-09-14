@@ -75,7 +75,16 @@ Three things that confuse people who do not know:
   as two copies of `@stellar/stellar-sdk` (the root `CLAUDE.md`).
 - **The `dark:` classes in generated components are dead**, because v1 is light-only (an STE-7
   decision). They are left as they are so the files stay easy to diff against upstream at update
-  time.
+  time. What makes them *actually* dead is one line the `sidebar` generator added to `globals.css`:
+  `@custom-variant dark (&:is(.dark *))`. Without it Tailwind v4 resolves a bare `dark:` against
+  `prefers-color-scheme`, so every one of those "dead" classes fires on a laptop whose OS is set to
+  dark. Nothing in this app ever writes a `.dark` class, which is the point.
+- **Some generated files do not pass this repo's lint**, and the fix goes in the file rather than in
+  the config. `sidebar.tsx` calls `Math.random()` inside a `useMemo` (`react-hooks/purity`), which
+  is deliberate in a skeleton and carries a one-line disable. `hooks/use-mobile.ts` set state from
+  an effect (`react-hooks/set-state-in-effect`) and was rewritten onto `useSyncExternalStore`; that
+  one is not only a lint fix, since the generated version answers "not a phone" on the first client
+  render and then swaps.
 
 ### The variants we added ourselves
 
@@ -89,6 +98,17 @@ from a test: `Draft` and `Closed` looked identical on screen while meaning oppos
 time. See the header of `elements/EventStatusBadge.tsx`.
 
 `ui/tabs.tsx` is also ours (the event page is built on it).
+
+`ui/sidebar.tsx` (plus `separator`, `skeleton` and `hooks/use-mobile.ts`, which come with it) is the
+console rail, added 2026-09-14. Its eight colour names are resolved in `globals.css` like every
+other shadcn name: `--sidebar` is `--color-ink`, `--sidebar-foreground` is `--color-n-300`,
+`--sidebar-accent` is `--color-n-800`, `--sidebar-ring` is `--color-teal-400`. They are declared in
+a `:root` block rather than only as `@theme inline` aliases because `sidebar.tsx` also reads
+`var(--sidebar-border)` directly in its `outline` variant, which an alias would leave pointing at
+nothing. **`--sidebar-accent` is hover, not the current page**: shadcn spends that one name on both,
+so the row under the pointer would be indistinguishable from the row you are on. The teal current
+page is an override carried by `ConsoleSidebar` itself. The generator's `.dark` block was deleted
+rather than remapped.
 
 ## Required reading before building a flow
 
@@ -313,6 +333,137 @@ What is settled:
   Dialog's scroll lock stops its list from scrolling by wheel or touch.
 - All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
 
+### Who renders the site header (2026-09-13)
+
+**`app/layout.tsx` renders no `<Header />` and no `<main>`.** It holds `<html>`, `<body>` and
+`<Providers>` and nothing else. The chrome is chosen one level down, by the route group:
+
+| Group | Chrome | Routes |
+| --- | --- | --- |
+| `app/(browse)/layout.tsx` | `SiteFrame` (header + `<main>`) | `/`, `/events/[id]`, `/preview/done` |
+| `app/(organiser)/org/new/layout.tsx` | `SiteFrame` + `WalletGate` | `/org/new` |
+| `app/(organiser)/org/(console)/layout.tsx` | `ConsoleFrame` (rail or connect screen), **no header** | `/org`, `/org/events/[id]` |
+| `app/not-found.tsx` | `SiteFrame` | a URL matching no route at all |
+| `app/(browse)/not-found.tsx` | none of its own, the group layout has it | `notFound()` from a public page |
+| `app/(organiser)/org/(console)/not-found.tsx` | none of its own, the console layout has it | `notFound()` from a console page |
+
+**A 404 needs one file per boundary, and they are not the same file.** Next renders the CLOSEST
+`not-found.tsx`, inside that segment's layouts. A URL matching no route lands at the ROOT boundary,
+which is in none of the groups, so once the header moved down into them a 404 had no chrome at all:
+no header, no `<main>`, no link back, on the one page somebody reaches entirely by accident. Hence
+`app/not-found.tsx` with `SiteFrame`. But `notFound()` from `/events/[id]` lands **inside**
+`(browse)/layout.tsx`, which has already drawn the header, and the root page there printed the
+lockup and the `<main>` twice. Measured in a browser at `/events/banana`, not guessed. So
+`(browse)` has its own, with no `SiteFrame`, and both render
+`components/layouts/NotFoundMessage.tsx` so the sentence is written once. The rule for anything
+added later, including `error.tsx`: **a boundary file supplies the chrome only if its own layouts
+do not.** A console route that ever calls `notFound()` will need one in the `(console)` group under
+the same rule.
+
+The reason is a bug you could only see in a browser: the console's rail carries the wordmark and the
+wallet chip, so with a global header above it a person on `/org` read "STERUN" twice inside about
+sixty pixels and their own address twice. A root layout can only say "every page", so the decision
+moved to where the pages can disagree.
+
+`components/layouts/SiteFrame.tsx` is the header plus the `<main className="flex flex-1 flex-col">`,
+shared rather than copied because the two go together: that `<main>` is what lets a page fill the
+space the header leaves, and the pair has to stay one thing. A third group wanting site chrome
+renders `SiteFrame` too.
+
+**The `(console)` group is what keeps the shell off the wizard.** `/org/new` is six steps that end
+in signing; permanent navigation beside it is a way out of a half-finished race at every moment, and
+a second one next to the step's own back link. A layout at `org/` would take it along, so the
+console's own routes moved into a parenthesised group instead. **No URL changed**, and none may: a
+parenthesised segment never appears in the path.
+
+`test/console-chrome.test.tsx` holds the rule. It renders each layout and counts what is on screen,
+never a class: one wordmark and one address under the console, a header over the browse pages and
+the wizard, no rail beside the wizard.
+
+### The console shell (STE-17)
+
+Everything under `/org` except the wizard sits in `app/(organiser)/org/(console)/layout.tsx`, which
+renders `modules/organiser/component/ConsoleFrame.tsx` and nothing else. Six consequences worth
+knowing before adding a page there:
+
+- **`ConsoleFrame` draws two frames, and the gate is inside it.** Connected, the rail beside the
+  page. Not connected, a bar carrying the wordmark over a `<main>` holding `WalletGate`'s ask. The
+  gate used to stand outside the frame in the layout, which put every piece of chrome the console
+  owns behind a connected wallet: `/org` with no wallet is the **first screen a new organiser ever
+  sees**, and it was a card floating on an empty page with no landmark and no way back to the site.
+  It cannot be fixed inside `WalletGate`, which also gates `/org/new`, where a second wordmark
+  would sit under the site header. The wordmark itself is `ConsoleWordmark`, one component drawn by
+  both frames, so the exit cannot exist in one state and be missing from the other.
+- **The gate is the layout's, not the page's, everywhere under `/org`.** `OrganiserHome` used to
+  wrap itself in `WalletGate` and no longer does, and neither does `CreateEvent`: the wizard's gate
+  moved up to `app/(organiser)/org/new/layout.tsx` when the console group took over the gating for
+  its own routes. No page under `/org` may add one. Gating twice means two components deciding
+  separately whether the wallet is still restoring, and the second gate is dead code that reads as
+  a rule. `CreateEvent.test.tsx` and `OrganiserHome.test.tsx` both render their component inside
+  `WalletGate`, so each still tests the tree the route actually builds.
+- **A layout rather than a wrapper each page imports**, so the rail survives navigation between
+  races: its expander stays open and its scroll position stays put, which is the only reason to have
+  a rail rather than a breadcrumb. `ConsoleFrame` exists because the file under `app/` stays a
+  server component while the rail needs `useWallet()`, which is the same three-line split every
+  route file in this app already uses.
+- **The rail is shadcn's `sidebar`** (2026-09-14), not a hand-rolled `<aside>`. The reason is a
+  measurement, not tidiness: the old rail was `w-52` at every size, so at 390 by 844 it took 208px
+  of a 375px viewport, left the dashboard 167px and pushed the page's `scrollWidth` to 543 so the
+  whole thing scrolled sideways. `Sidebar` is `hidden md:block` and becomes a `Sheet` behind
+  `SidebarTrigger` below `md`, which is the behaviour that was missing. What the component does NOT
+  supply, and what therefore stays hand-written in `ConsoleSidebar`, is all of the behaviour below:
+  the expander's open-state rule, the prefix match, the teal marker, and closing the drawer on
+  navigation. **Every link in the rail calls `setOpenMobile(false)`**: a navigation drawer left open
+  over the page you just asked for reads as "the link did nothing".
+- **`ConsoleFrame` deliberately does not use `SidebarInset`.** That component renders the `<main>`
+  itself, and the menu button has to sit outside the landmark, for the same reason the rail does: a
+  landmark whose navigation you cannot skip is not a landmark. So the page keeps its own `<main>`.
+  **There is no phone-width bar above it any more** (Ancung, 2026-09-14): it scrolled away with the
+  page. Below `md` the one button that opens the drawer is **Menu**, at the left of the pinned
+  `ConsoleHeader`, and the wordmark is inside the drawer it opens.
+- **The rail folds from its own header, not from the page's.** Open: the wordmark on the left and a
+  menu icon on the right (**Collapse the menu**). Folded: only the mark, covered by an **Expand the
+  menu** button that is invisible until pointer or keyboard focus reaches it. The mark stays in the
+  DOM under that button, so a keyboard still reaches the public site from a folded rail.
+- **The wordmark is the brand lockup**, `public/brand/logo/sterun-lockup-white.svg` through
+  `next/image`, not the letters STERUN set in a typeface. White because the rail is `ink`. Its link
+  carries no `aria-label`, so its accessible name is the image's `alt`, "Sterun". That must stay
+  different from the site header's "Sterun home": `console-chrome.test.tsx` proves no site header is
+  drawn over the console by looking for that exact name. The mark appears twice in the DOM when a
+  wallet is connected, once per breakpoint, and never twice on screen, so no test counts it.
+- **The rail has two items and the second is an expander**, not a page: **Races** opens into this
+  wallet's races (`useEvents()` filtered by organiser, so no extra read). There is deliberately no
+  "all races" page behind it, because the dashboard is that list. Anything race-scoped, entries,
+  scanners, results, belongs inside a race at `/org/events/[id]`, never in the rail. A failed chain
+  read empties the expander and nothing else: the rail is navigation, and a node that will not
+  answer must not take away the way back. **The expander follows the path on every render**
+  (`open ?? pathname.startsWith("/org/events/")`, with `open` starting as `null`), rather than
+  seeding `useState` once: the rail is in a layout precisely so that it does NOT remount between
+  console pages, so a seed is read on a hard load and never again, and clicking a race from the
+  dashboard left Events shut while marking a row that was not on screen. A hand on the expander
+  wins from then on. **A race's row is marked by prefix**, `pathname === href` or
+  `pathname.startsWith(href + "/")` (`marksRace`), because entries, scanners and results are tabs
+  under the race and an exact match would silently mark nothing on any of them. **Dashboard stays
+  an exact match**: a prefix there lights it up on the wizard and inside every race.
+- **The rail is one screen tall and pinned, not as tall as the page.** `Sidebar` does this itself
+  now (`fixed inset-y-0 h-svh`), where the hand-rolled version said `sticky top-0 h-dvh self-start`.
+  The wallet chip is in `SidebarFooter`, which does not scroll, while the races scroll in
+  `SidebarContent`: on a rail that grows with the page the bottom is wherever the page ends, and at
+  900px the chip was already below the fold. A wallet you have to scroll to find is a wallet you
+  cannot check before you sign.
+- **The wordmark carries the only way out of the console**, in both frames: with no site header over
+  these pages, without it there is no route back to the public app but the address bar.
+  `ConsoleFrame` puts the page in a `<main>` and leaves the rail outside it, so the navigation is
+  skippable, which is the one thing a landmark is for.
+- **`ConsoleHeader` is every console page's top bar**: a title, an optional status badge, an
+  optional bell, and **one** action. One, not a row: each tab inside a race has exactly one thing to
+  do, and keeping it in the bar rather than under the content means it does not travel down the page
+  as a table grows. The page owns the header, the layout owns the rail. **The header is pinned**
+  (`sticky top-0`, Ancung 2026-09-14), so the title, the bell and the action stay in reach however
+  far a page scrolls; a race page pins the header and its tab strip together as one block. Pinning
+  works only because nothing between it and the window scrolls: an `overflow` added to
+  `ConsoleFrame` or its `<main>` would quietly make it scroll away again.
+
 ### `/org` — the events this wallet organises
 
 `modules/organiser/OrganiserHome.tsx`. Three things are settled:
@@ -324,9 +475,79 @@ What is settled:
   allowlist still sees its existing events, because the contract still lets it manage them (STE-36).
   A refused wallet gets `NotAllowedNotice` (a note, not the full-screen `NotAllowlisted`). The button
   is hidden **while** the allowlist is being asked, and still appears when the node fails to answer.
-- **The card is not the directory's `EventCard`.** An organiser needs "how many entered out of the
-  quota" per distance, sold-out ones included, not price and places left. For now it links to
-  `/events/[id]`, because `/org/events/[id]` (scanner, results) is not built yet.
+- **It is a dashboard, not a card grid** (2026-09-13, mockup block 0 in
+  `docs/superpowers/specs/2026-09-13-org-console-mockup.html`). Three stat cards, a two-column row
+  holding **Entries comparison** and **Trending entries**, then one **All races** table, one row a
+  race, linking into `/org/events/[id]`. `OrganiserEventCard` is deleted with the grid it was drawn
+  for. The reason is the question the page is opened with: *which of my races is behind* is
+  comparative, and a grid of cards makes a comparison into a scroll.
+- **What is waiting on the organiser lives in the bell, and one case also interrupts.**
+  `ConsoleFrame` builds the list once (`hooks/useNeeds.ts`) and puts it on `NeedsContext`;
+  `ConsoleHeader` fills its own `bell` slot from that context, so a console page cannot forget the
+  bell. Exactly one need may also reach `UrgentBanner`: a race days away with nobody able to check
+  runners in. **If a second kind of thing can reach the banner the rule is already broken** - narrow
+  the condition in `needs.ts`, do not change the colour. The count on the bell is drawn only when
+  there is something to count, because a badge that is always lit is furniture.
+- **A chart with no data draws its frame but no shape** (Ancung, 2026-09-14, reversing the
+  no-axes half of this rule). A race nobody has entered still gets a plain grey rule in its table
+  row rather than a flat line along the bottom, because a line at zero reads as a measurement. The
+  **panels** go the other way: `EntriesComparison` always draws its grid and both axes, and
+  `TrendingEntries` always draws its three ruled rows, with the answer laid over the top. The
+  earlier rule treated an empty panel and an empty plot as the same thing, and they are not: a
+  sentence alone does not say what the panel would have held, so the first entry a race takes
+  changes the shape of the page instead of filling in a chart somebody was already reading. What
+  must never appear is invented data, a zero line or a list of plausible names. Every division that
+  could be by zero is guarded in `modules/organiser/chart.ts`, where a test can see it, rather than
+  in a component: **an SVG path containing `NaN` does not throw**, the browser silently drops it,
+  and the panel renders empty with nothing in the console.
+- **The comparison chart is titled "Entries comparison", never "Pace".** In a running product *pace*
+  means minutes per kilometre, so a runner glancing at an organiser's screen would read it as a
+  chart about how fast people run. Its x-axis is **days to race day** and its y-axis is a
+  **percentage of quota**, both labelled on the chart, because two races months apart cannot be
+  compared on calendar dates and 240 places is not 500 places. A finished race is the benchmark,
+  dashed and grey; live races stop where they are today with a dot rather than running to the
+  right-hand edge.
+- **Panel titles are plain nouns** and the explanatory sentence that used to sit under one is gone.
+  The caption on the right of a panel header (`Percent of quota`, `Last 7 days`) is `text-n-500`,
+  not teal: nothing is behind it, and in this app teal means actionable.
+- **`useNowSeconds()` is `bigint | undefined`.** Its server snapshot is `undefined`, so the first
+  render has no clock at all. Anything that would call a race overdue, or ask the index about a race
+  because of how close it is, has to guard that.
+- The per-distance breakdown moved into the race's own page. A dashboard row answers "is this one
+  behind", and a race with four distances would be four lines tall in a table meant for comparing
+  races.
+
+### `/org/events/[id]` — one race (STE-17)
+
+`modules/organiser/RaceConsole.tsx`. Plan:
+`docs/superpowers/plans/2026-09-13-org-event-console-tabs.md`. What is settled:
+
+- **Three tabs, Overview, Entries, Scanners, and the tab is in the address** (`?tab=`, parsed by
+  `race-tab.ts`, which has no `"use client"` because the route imports it). The bell already links to
+  `?tab=scanners`, and the rail lives in a layout that must not remount. **Results is deferred**
+  until the backend accepts untimed finishes and DNF rows and there is a way to record many results
+  without one signature per runner (STE-44); `?tab=results` opens Overview until then.
+- **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
+  the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
+  back, never tabs of buttons that would each fail at the wallet prompt.
+- **The header's one action is the status move** (`status-action.ts`): open, close or reopen
+  entries, always behind a dialog. The dialog for opening states that a race which has opened never
+  returns to not open. Completing and cancelling are not offered here.
+- **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
+  (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
+  `lib/records.ts` and `lib/scanners.ts`. The column or card that needs one is drawn once the data
+  carries it, and not before; nothing is estimated in the meantime.
+- **Anything read from the index tells "not answered" from "failed" from "empty"**
+  (`useRaceRecordsFailed`). Zero race packs collected on race morning is a finding; a timeout is not.
+- **A search that is only digits is a bib, never part of a wallet** (`filterEntries`). Almost every
+  address contains a digit, so bib 7 would otherwise list half the race.
+- **The Scanners tab keeps what it signed for** until the index catches up, shown as "Just added",
+  because the index lags a signature by a poll and a scanner that vanished after being paid for gets
+  added twice. The add dialog refuses the organiser's own wallet, an already-listed one and a
+  malformed address before any signature.
+- **A `beforeEach` that resets a mock needs braces.** `beforeEach(() => mock.mockReset())` returns the
+  mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
+  with an error that points at the mock rather than at the cause.
 
 ## Tests
 

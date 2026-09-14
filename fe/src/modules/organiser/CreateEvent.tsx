@@ -37,7 +37,6 @@ import { useMemo, useState } from "react";
 import { Stepper } from "@/components/elements/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { WalletGate } from "@/components/layouts/WalletGate";
 import { NotAllowlisted } from "./component/NotAllowlisted";
 import { useEventRun } from "@/hooks/useEventRun";
 import { useExistingEventNames } from "@/hooks/useExistingEventNames";
@@ -77,12 +76,14 @@ const STEPS = [
 ] as const;
 type Step = (typeof STEPS)[number]["id"];
 
+/**
+ * The wallet gate is the layout's, not this component's. It used to wrap itself
+ * in one; with the gate at `app/(organiser)/org/new/layout.tsx` a second copy
+ * here would be a second component deciding whether the wallet is still
+ * restoring, and the two can only ever agree by accident.
+ */
 export function CreateEvent() {
-  return (
-    <WalletGate>
-      <CreateGate />
-    </WalletGate>
-  );
+  return <CreateGate />;
 }
 
 /**

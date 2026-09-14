@@ -37,3 +37,12 @@ vendor-dist/
 # anybody else's checkout.
 .playwright-mcp/
 .gstack/
+
+# Agent skills installed locally with `npx skills add`. The installer writes
+# into the repo it is run from: .agents/ holds the skill itself, .claude/ is a
+# tree of symlinks pointing at it, and skills-lock.json pins the versions.
+# Nothing here is Sterun's code, and a symlink tree does not survive a clone on
+# Windows anyway — so whoever wants a skill installs it themselves.
+.agents/
+.claude/
+skills-lock.json

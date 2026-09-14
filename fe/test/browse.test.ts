@@ -8,6 +8,7 @@ import {
   pickFeatured,
   placeLine,
   priceLine,
+  publicEvents,
   sortByDate,
   sortByPlace,
 } from "@/modules/directory/browse";
@@ -411,5 +412,47 @@ describe("sortByPlace, from the visitor's own coordinates", () => {
     const races = [pinned(1, 2, JAKARTA_PIN), pinned(2, 30, YOGYAKARTA), pinned(3, 9, SEMARANG)];
 
     expect(ids(pickFeatured(races, NOW, { place: AT_TUGU }))).toEqual([2, 3, 1]);
+  });
+});
+
+describe("publicEvents", () => {
+  describe("positive", () => {
+    it("keeps a race that is open for entry", () => {
+      const open = summary(1, { status: "Open" });
+
+      expect(publicEvents([open])).toEqual([open]);
+    });
+
+    it("keeps a race whose entries have closed, and one that has been cancelled", () => {
+      // Both are races that happened or will happen, and a runner who paid has
+      // every reason to find the page again. Not-open-yet is the only status
+      // where there is nothing to find.
+      const closed = summary(2, { status: "Closed" });
+      const cancelled = summary(3, { status: "Cancelled" });
+
+      expect(publicEvents([closed, cancelled])).toEqual([closed, cancelled]);
+    });
+  });
+
+  describe("negative", () => {
+    it("drops a race whose entries are not open yet", () => {
+      const notOpen = summary(4, { status: "Draft" });
+
+      expect(publicEvents([notOpen])).toEqual([]);
+    });
+  });
+
+  describe("edge", () => {
+    it("keeps the order it was given", () => {
+      const a = summary(5, { status: "Open" });
+      const b = summary(6, { status: "Draft" });
+      const c = summary(7, { status: "Completed" });
+
+      expect(publicEvents([a, b, c])).toEqual([a, c]);
+    });
+
+    it("returns an empty list rather than throwing on an empty one", () => {
+      expect(publicEvents([])).toEqual([]);
+    });
   });
 });

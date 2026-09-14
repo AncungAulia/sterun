@@ -54,6 +54,7 @@ import { cn } from "@/utils/cn";
 import {
   matchesSearch,
   pickFeatured,
+  publicEvents,
   sortByPlace,
   type DateOrder,
   type DirectoryEntry,
@@ -69,7 +70,7 @@ import { NO_FILTERS, activeFilterCount, matchesFilters, type Filters } from "./f
 export function Directory() {
   const queryClient = useQueryClient();
   const { data, isPending, isError, isFetching, refetch } = useEvents();
-  const summaries = data?.events ?? [];
+  const summaries = publicEvents(data?.events ?? []);
   const documents = useEventDocuments(summaries);
   const { place, setPlace, clearPlace } = useArea();
   const nowS = useNowSeconds();
@@ -180,13 +181,13 @@ export function Directory() {
         />
       ) : null}
 
-      {data && data.events.length === 0 ? (
+      {data && summaries.length === 0 ? (
         <EmptyState title="No races yet">
           Refresh this page to check for races published since you opened it.
         </EmptyState>
       ) : null}
 
-      {data && data.events.length > 0 ? (
+      {data && summaries.length > 0 ? (
         <>
           <FeaturedEvents entries={featured} />
 
