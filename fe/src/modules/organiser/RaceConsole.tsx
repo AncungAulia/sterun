@@ -22,6 +22,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { ConsoleHeader } from "./component/ConsoleHeader";
 import { useNeedsContext } from "./component/NeedsContext";
 import { RaceTabs } from "./component/RaceTabs";
+import { StatusAction } from "./component/StatusAction";
 import { UrgentBanner } from "./component/UrgentBanner";
 import type { RaceTab } from "./race-tab";
 
@@ -89,6 +90,7 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
       <ConsoleHeader
         title={data.event.name}
         badge={<EventStatusBadge status={data.event.status} />}
+        action={<StatusAction summary={data} />}
       />
       <RaceTabs eventId={eventId} current={tab} />
       <div className="flex flex-1 flex-col gap-3 px-4 py-6 md:px-6">
