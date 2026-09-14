@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { lockScroll, unlockScroll } from "@/lib/scroll";
 import { CONTRACTS, REPO_URL, SDK_URL, SECTIONS, X_URL } from "@/lib/links";
 
 /** Links that leave the site get the diagonal arrow and the new-tab treatment. */
@@ -248,12 +249,18 @@ export function MenuOverlay({
 
   // Lock the page behind the overlay. Restoring the previous value rather than
   // clearing it keeps this from fighting anything else that sets overflow.
+  //
+  // Two locks, because there are two ways the page scrolls. lockScroll stops
+  // Lenis, which otherwise keeps turning the wheel into page movement behind the
+  // overlay; the overflow lock covers reduced motion, where Lenis never runs.
   useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    lockScroll();
     return () => {
       document.body.style.overflow = previous;
+      unlockScroll();
     };
   }, [open]);
 
@@ -289,6 +296,9 @@ export function MenuOverlay({
           there is nothing to see until the reveals begin. */}
       <div
         ref={panelRef}
+        // Lenis would otherwise swallow wheel and touch here while stopped, and
+        // the menu scrolls on its own on short screens.
+        data-lenis-prevent
         className="absolute inset-0 overflow-y-auto text-paper"
         style={{
           translate: open ? "0 0" : "0 -100%",
