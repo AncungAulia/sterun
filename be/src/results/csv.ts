@@ -23,6 +23,19 @@
  * globally unique bibs never see it.
  */
 
+/**
+ * What a row asks the contract to do (STE-44).
+ *
+ * `timed`   — `record_finish(token_id, finish_time_s)`
+ * `untimed` — `record_finish_untimed(token_id)`: finished, no official time
+ * `dnf`     — `record_dnf(token_id)`: did not finish, or did not start
+ *
+ * All three are terminal on chain, which is why a row never *infers* one. An
+ * empty time cell with no status is far likelier a missed keystroke than an
+ * untimed finish, and guessing wrong cannot be undone.
+ */
+export type ResultKind = "timed" | "untimed" | "dnf";
+
 /** What one parsed line means, before it is checked against the index. */
 export interface ParsedRow {
   /** 1-based line number in the source file, for pointing a human at it. */
@@ -33,6 +46,8 @@ export interface ParsedRow {
   /** Present only when the file said so. */
   categoryId: number | null;
   finishTimeS: number | null;
+  /** `null` exactly when `problem` is set. */
+  kind: ResultKind | null;
   /** Set when the line could not be read at all; the fields above stay null. */
   problem: string | null;
 }
@@ -45,7 +60,7 @@ export interface ParsedCsv {
   skipped: number;
 }
 
-const HEADER_ALIASES: Record<string, "bib_no" | "category_id" | "finish_time_s"> = {
+const HEADER_ALIASES: Record<string, "bib_no" | "category_id" | "finish_time_s" | "status"> = {
   bib: "bib_no",
   bib_no: "bib_no",
   bibno: "bib_no",
@@ -63,6 +78,34 @@ const HEADER_ALIASES: Record<string, "bib_no" | "category_id" | "finish_time_s">
   net_time: "finish_time_s",
   chip_time: "finish_time_s",
   duration: "finish_time_s",
+  status: "status",
+  result: "status",
+  outcome: "status",
+  finish_status: "status",
+};
+
+/**
+ * Status cell -> kind, after the same normalisation as a header.
+ *
+ * Deliberately a closed list. An unrecognised word is a malformed row rather
+ * than a timed finish, because "DQ" or "pending" read as `timed` would publish a
+ * result nobody declared.
+ */
+const STATUS_ALIASES: Record<string, ResultKind> = {
+  finished: "timed",
+  finish: "timed",
+  timed: "timed",
+  untimed: "untimed",
+  finished_untimed: "untimed",
+  no_time: "untimed",
+  notime: "untimed",
+  no_official_time: "untimed",
+  dnf: "dnf",
+  did_not_finish: "dnf",
+  dns: "dnf",
+  did_not_start: "dnf",
+  no_show: "dnf",
+  noshow: "dnf",
 };
 
 const normaliseHeader = (cell: string): string =>
@@ -179,16 +222,20 @@ export function parseResultsCsv(text: string): ParsedCsv {
   const headerCells = splitLine(lines[firstContent] ?? "", delimiter).map(normaliseHeader);
   const mapped = headerCells.map((h) => HEADER_ALIASES[h]);
 
-  if (!mapped.includes("bib_no") || !mapped.includes("finish_time_s")) {
+  // A fun run with no timing has nothing to put in a time column, so a status
+  // column alone is enough. A file with neither says nothing about any result.
+  if (!mapped.includes("bib_no") || (!mapped.includes("finish_time_s") && !mapped.includes("status"))) {
     throw new CsvFormatError(
-      `the header row must name a bib column and a finish time column; got ` +
+      `the header row must name a bib column and a finish time or status column; got ` +
         `[${headerCells.join(", ")}]. Recognised names: bib_no/bib/number, ` +
-        `finish_time_s/finish_time/time/chip_time, and optionally category_id.`,
+        `finish_time_s/finish_time/time/chip_time, status/result (finished, untimed, dnf), ` +
+        `and optionally category_id.`,
     );
   }
 
   const bibAt = mapped.indexOf("bib_no");
   const timeAt = mapped.indexOf("finish_time_s");
+  const statusAt = mapped.indexOf("status");
   const categoryAt = mapped.indexOf("category_id");
 
   const rows: ParsedRow[] = [];
@@ -204,21 +251,53 @@ export function parseResultsCsv(text: string): ParsedCsv {
     const cells = splitLine(raw, delimiter);
     const line = i + 1;
     const bibCell = cells[bibAt] ?? "";
-    const timeCell = cells[timeAt] ?? "";
+    const timeCell = timeAt === -1 ? "" : (cells[timeAt] ?? "");
+    const statusCell = statusAt === -1 ? "" : (cells[statusAt] ?? "");
     const categoryCell = categoryAt === -1 ? "" : (cells[categoryAt] ?? "");
 
     const bibNo = parseIndex(bibCell);
-    const finishTimeS = parseFinishTime(timeCell);
     const categoryId = categoryCell.trim() === "" ? null : parseIndex(categoryCell);
+    const timeText = timeCell.trim();
+    const statusText = statusCell.trim();
+    // undefined: the cell said something that is not a status we know.
+    const status: ResultKind | null | undefined =
+      statusText === "" ? null : STATUS_ALIASES[normaliseHeader(statusText)];
 
+    let kind: ResultKind | null = null;
+    let finishTimeS: number | null = null;
     let problem: string | null = null;
+
     if (bibNo === null) {
       problem = `bib number ${JSON.stringify(bibCell.trim())} is not a whole number`;
-    } else if (finishTimeS === null) {
+    } else if (status === undefined) {
       problem =
-        `finish time ${JSON.stringify(timeCell.trim())} is not a number of seconds ` +
-        `or a mm:ss / hh:mm:ss duration`;
-    } else if (categoryAt !== -1 && categoryCell.trim() !== "" && categoryId === null) {
+        `status ${JSON.stringify(statusText)} is not one of finished, untimed or dnf — ` +
+        `a result is terminal on chain, so an unknown word is not read as a finish`;
+    } else if (status === "untimed" || status === "dnf") {
+      if (timeText !== "") {
+        // Refused rather than resolved either way: keeping the time contradicts
+        // the status, and dropping it would throw away a time someone measured.
+        problem =
+          `a ${status} row must leave the finish time empty, but it says ` +
+          `${JSON.stringify(timeText)} — remove the time, or set the status to finished`;
+      } else {
+        kind = status;
+      }
+    } else {
+      finishTimeS = parseFinishTime(timeCell);
+      if (finishTimeS === null) {
+        problem =
+          timeText === "" && status === "timed"
+            ? `a finished row needs a finish time — write untimed in the status column ` +
+              `if this race has no official time`
+            : `finish time ${JSON.stringify(timeText)} is not a number of seconds ` +
+              `or a mm:ss / hh:mm:ss duration`;
+      } else {
+        kind = "timed";
+      }
+    }
+
+    if (problem === null && categoryAt !== -1 && categoryCell.trim() !== "" && categoryId === null) {
       problem = `category ${JSON.stringify(categoryCell.trim())} is not a whole number`;
     }
 
@@ -228,6 +307,7 @@ export function parseResultsCsv(text: string): ParsedCsv {
       bibNo: problem === null ? bibNo : null,
       categoryId: problem === null ? categoryId : null,
       finishTimeS: problem === null ? finishTimeS : null,
+      kind: problem === null ? kind : null,
       problem,
     });
   }

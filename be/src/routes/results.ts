@@ -32,7 +32,7 @@ import type { ChallengeStore } from "../auth.js";
 import type { ChainReader } from "../chain/reader.js";
 import * as store from "../indexer/store.js";
 import { RATE_LIMITS } from "../http/hardening.js";
-import { CsvFormatError, parseResultsCsv } from "../results/csv.js";
+import { CsvFormatError, parseResultsCsv, type ResultKind } from "../results/csv.js";
 import { reviewResults } from "../results/anomalies.js";
 
 /** Enough for a very large marathon; beyond it, something else is going on. */
@@ -65,9 +65,20 @@ const anomalySchema = {
 const rowSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["line", "bib_no", "category_id", "finish_time_s", "token_id", "state", "anomalies"],
+  required: [
+    "line",
+    "bib_no",
+    "category_id",
+    "finish_time_s",
+    "kind",
+    "token_id",
+    "state",
+    "anomalies",
+  ],
   properties: {
     line: { type: "integer" },
+    // STE-44. null only for a row that could not be read.
+    kind: { type: ["string", "null"], enum: ["timed", "untimed", "dnf", null] },
     bib_no: { type: ["integer", "null"] },
     category_id: { type: ["integer", "null"] },
     // u32 seconds — small enough for a JSON number, unlike the u64 timestamps.
@@ -145,19 +156,25 @@ const previewResponse = {
       },
       rows: { type: "array", items: rowSchema },
       /**
-       * The subset with no anomalies at all, as `record_finish` arguments.
+       * The subset with no anomalies at all, one entry per contract call.
        * Sent separately so the console never has to re-derive "which rows are
        * safe" — the one decision this endpoint exists to make.
+       *
+       * `kind` picks the function: `timed` -> record_finish(token_id,
+       * finish_time_s), `untimed` -> record_finish_untimed(token_id), `dnf` ->
+       * record_dnf(token_id). `finish_time_s` is null exactly for the last two,
+       * and must never be sent as 0.
        */
       publishable: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["token_id", "finish_time_s", "bib_no", "category_id"],
+          required: ["token_id", "kind", "finish_time_s", "bib_no", "category_id"],
           properties: {
             token_id: { type: "integer" },
-            finish_time_s: { type: "integer" },
+            kind: { type: "string", enum: ["timed", "untimed", "dnf"] },
+            finish_time_s: { type: ["integer", "null"] },
             bib_no: { type: "integer" },
             category_id: { type: "integer" },
           },
@@ -304,15 +321,17 @@ export async function resultsRoutes(
           bib_no: row.bibNo,
           category_id: row.categoryId,
           finish_time_s: row.finishTimeS,
+          kind: row.kind,
           token_id: row.tokenId,
           state: row.state,
           anomalies: row.anomalies,
         })),
         publishable: review.publishable.map((row) => ({
           // Non-null by construction: a row with no anomalies resolved to a
-          // record and carried a usable time.
+          // record and has a kind. Its time is present exactly when timed.
           token_id: row.tokenId as number,
-          finish_time_s: row.finishTimeS as number,
+          kind: row.kind as ResultKind,
+          finish_time_s: row.finishTimeS,
           bib_no: row.bibNo as number,
           category_id: row.categoryId as number,
         })),

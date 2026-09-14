@@ -222,3 +222,71 @@ describe("what reaches `publishable`", () => {
     expect(result.counts.publishable).toBe(0);
   });
 });
+
+/**
+ * STE-44 — untimed finishes and DNFs.
+ *
+ * They share the checks about the record and differ where the contract does:
+ * record_finish_untimed refuses an unclaimed record like record_finish, while
+ * record_dnf is allowed straight from Entered (a no-show is exactly the runner
+ * who never came for a race pack).
+ */
+describe("untimed finishes and DNFs", () => {
+  const MIXED =
+    "bib_no,category_id,finish_time,status\n" +
+    "0,0,52:41,finished\n" + // token 10, RacepackClaimed
+    "1,0,,untimed\n" + // token 11, RacepackClaimed
+    "2,0,,dnf\n"; // token 12, Entered — a no-show
+
+  it("previews a mixed file with each row's kind, and publishes all three", () => {
+    const result = review(MIXED);
+    expect(result.rows.map((r) => [r.tokenId, r.kind, r.anomalies.length])).toEqual([
+      [10, "timed", 0],
+      [11, "untimed", 0],
+      [12, "dnf", 0],
+    ]);
+    expect(result.publishable.map((r) => [r.tokenId, r.kind, r.finishTimeS])).toEqual([
+      [10, "timed", 3161],
+      [11, "untimed", null],
+      [12, "dnf", null],
+    ]);
+  });
+
+  it("flags an untimed row for a runner who never collected a race pack", () => {
+    const result = review("bib_no,category_id,status\n2,0,untimed\n");
+    expect(kinds(result, 2)).toEqual(["not_claimed"]);
+    expect(result.rows[0]?.anomalies[0]?.reason).toMatch(/record_finish_untimed reverts/);
+    expect(result.rows[0]?.anomalies[0]?.severity).toBe("reverts");
+  });
+
+  it("does NOT flag a DNF for a runner who never collected a race pack", () => {
+    expect(kinds(review("bib_no,category_id,status\n2,0,dnf\n"), 2)).toEqual([]);
+  });
+
+  it.each(["untimed", "dnf"])("refuses a %s row over a result that is already final", (status) => {
+    // tokens 13 (Finished) and 14 (Dnf) are terminal on chain.
+    const result = review(`bib_no,category_id,status\n3,0,${status}\n4,0,${status}\n`);
+    expect(kinds(result, 2)).toEqual(["already_final"]);
+    expect(kinds(result, 3)).toEqual(["already_final"]);
+  });
+
+  it("never judges the time of a row that has none", () => {
+    // impossible_time is about a measured time; running it on an untimed row
+    // would either crash or invent a zero-second finish.
+    const result = review("bib_no,category_id,status\n1,0,untimed\n0,1,dnf\n");
+    expect(result.counts.impossible_time).toBe(0);
+  });
+
+  it("counts the same runner twice as a duplicate even when the two rows disagree on kind", () => {
+    const result = review("bib_no,category_id,finish_time,status\n0,0,3161,\n0,0,,dnf\n");
+    expect(kinds(result, 3)).toEqual(["duplicate_bib"]);
+    expect(result.publishable.map((r) => r.kind)).toEqual(["timed"]);
+  });
+
+  it("keeps a contradictory row out of publishable as malformed", () => {
+    const result = review("bib_no,category_id,finish_time,status\n1,0,52:41,untimed\n");
+    expect(kinds(result, 2)).toEqual(["malformed_row"]);
+    expect(result.rows[0]?.kind).toBeNull();
+    expect(result.publishable).toEqual([]);
+  });
+});

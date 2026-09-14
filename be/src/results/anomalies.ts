@@ -20,8 +20,20 @@
  *
  * Every anomaly carries `severity` for exactly that reason, and the second kind
  * is never auto-approved.
+ *
+ * ## Three kinds of result (STE-44)
+ *
+ * A row is `timed`, `untimed` or `dnf` (see csv.ts). They share the checks that
+ * are about the record — which runner, whether it is already final — and differ
+ * on the two that are about the contract function:
+ *
+ *   not_claimed      applies to `timed` and `untimed`: both finish functions
+ *                    refuse a record that never collected its race pack. It does
+ *                    NOT apply to `dnf`, which the contract allows straight from
+ *                    Entered — a no-show is exactly the runner who never came.
+ *   impossible_time  applies to `timed` only; the other two carry no time.
  */
-import type { ParsedRow } from "./csv.js";
+import type { ParsedRow, ResultKind } from "./csv.js";
 
 export type AnomalyKind =
   | "malformed_row"
@@ -49,6 +61,8 @@ export interface ReviewedRow {
   bibNo: number | null;
   categoryId: number | null;
   finishTimeS: number | null;
+  /** What this row asks the contract to do. `null` only for a malformed row. */
+  kind: ResultKind | null;
   /** Resolved from the index. `null` whenever an anomaly prevented resolution. */
   tokenId: number | null;
   /** The record's current on-chain state, when one was found. */
@@ -174,7 +188,12 @@ export function reviewResults(
     const anomalies: Anomaly[] = [];
     let record: IndexedRecord | null = null;
 
-    if (row.problem !== null || row.bibNo === null || row.finishTimeS === null) {
+    if (
+      row.problem !== null ||
+      row.bibNo === null ||
+      row.kind === null ||
+      (row.kind === "timed" && row.finishTimeS === null)
+    ) {
       anomalies.push({
         kind: "malformed_row",
         reason: row.problem ?? "the row could not be read",
@@ -185,6 +204,7 @@ export function reviewResults(
         bibNo: row.bibNo,
         categoryId: row.categoryId,
         finishTimeS: row.finishTimeS,
+        kind: null,
         tokenId: null,
         state: null,
         anomalies,
@@ -241,12 +261,13 @@ export function reviewResults(
 
     // 3. Lifecycle: what the contract will do with this record.
     if (record) {
-      if (record.state === "Entered") {
+      if (record.state === "Entered" && row.kind !== "dnf") {
+        const fn = row.kind === "untimed" ? "record_finish_untimed" : "record_finish";
         anomalies.push({
           kind: "not_claimed",
           reason:
             `bib ${row.bibNo} is still Entered — the runner never collected a race pack, so ` +
-            `record_finish reverts with InvalidState. Check them in first, or mark a DNF.`,
+            `${fn} reverts with InvalidState. Check them in first, or mark a DNF.`,
           severity: "reverts",
         });
       } else if (record.state === "Finished" || record.state === "Dnf") {
@@ -261,15 +282,19 @@ export function reviewResults(
     }
 
     // 4. Is the time itself believable?
-    const distance = record ? (distanceOf.get(record.categoryId) ?? null) : null;
-    const timeProblem = timeAnomaly(row.finishTimeS, distance);
-    if (timeProblem) anomalies.push(timeProblem);
+    // Only a timed row has a time to judge.
+    if (row.kind === "timed" && row.finishTimeS !== null) {
+      const distance = record ? (distanceOf.get(record.categoryId) ?? null) : null;
+      const timeProblem = timeAnomaly(row.finishTimeS, distance);
+      if (timeProblem) anomalies.push(timeProblem);
+    }
 
     rows.push({
       line: row.line,
       bibNo: row.bibNo,
       categoryId: record?.categoryId ?? row.categoryId,
       finishTimeS: row.finishTimeS,
+      kind: row.kind,
       tokenId: record?.tokenId ?? null,
       state: record?.state ?? null,
       anomalies,

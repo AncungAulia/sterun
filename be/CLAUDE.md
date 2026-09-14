@@ -410,6 +410,50 @@ The parser is lenient about **shape** and strict about **meaning**: `52:41`, `1:
 parsing. That is what gets recorded in the event metadata so published results stay tamper-evident
 (SYSTEM_DESIGN §11, risk 4).
 
+### Untimed finishes and DNFs (STE-44)
+
+An optional **`status`** column (`status`/`result`/`outcome`) turns a row into one of three kinds,
+and each row and each `publishable` entry carries `kind`:
+
+| `kind` | Status values | Contract call | `finish_time_s` |
+| --- | --- | --- | --- |
+| `timed` | `finished`, `finish`, `timed`, or no status with a time | `record_finish(token_id, t)` | the time |
+| `untimed` | `untimed`, `no time`, `no official time` | `record_finish_untimed(token_id)` | `null` |
+| `dnf` | `dnf`, `did not finish`, `dns`, `no show` | `record_dnf(token_id)` | `null` |
+
+A file with a bib and a status column and **no time column** is valid — that is a fun run.
+
+Three rules, all following from every one of these being terminal on chain:
+
+- **Nothing is inferred.** An empty time with no status is still malformed: a blank cell is far
+  likelier a missed keystroke than a declared untimed finish.
+- **Contradictions are refused, not resolved.** `untimed` or `dnf` with a time in the cell is
+  malformed — keeping the time contradicts the status, dropping it discards a measured time.
+- **An unknown status is refused.** `DQ` read as a finish would publish a result nobody declared.
+
+`not_claimed` applies to `timed` and `untimed` (both finish functions refuse an unclaimed record) but
+**not** to `dnf`, which the contract allows straight from `Entered`. `impossible_time` applies to
+`timed` only.
+
+### Recording many results: needs a contract change, not a backend one
+
+The ticket asked for "record many results without one signature per runner". Checked against the
+network, not assumed:
+
+- **A Stellar transaction may contain only one `InvokeHostFunctionOp`** (developers.stellar.org,
+  "Stellar transaction"). So there is no way to put 312 `record_finish` calls into one transaction
+  from the client side. Batching has to be a single contract function that loops.
+- **Live testnet per-transaction limits** (`stellar network settings`, 2026-09-14): 400,000,000 CPU
+  instructions, 200 disk-read entries, 200 written entries, 132,096 write bytes, and **16,384 bytes of
+  contract events**. One result writes one `Record` entry and emits one event, so the events cap and
+  the 200-entry write cap bound a batch well before instructions do.
+
+So the batch is a new organiser-gated `record_results(...)` on RaceRecord, installed by in-place
+`upgrade` — a frozen-spec change (`docs/specs/CLAUDE.md`, Axel + fable), handed to Axel on STE-44.
+Its batch size must be **measured by simulating a full batch**, not computed from these numbers:
+the per-result event size and the auth entries are what actually decide it. Until it exists, the
+console records a preview's `publishable` rows one call at a time, choosing the function by `kind`.
+
 ```bash
 pnpm --filter be e2e:results   # needs DATABASE_URL + PII_KEYS + STERUN_ADMIN_SECRET
 ```
