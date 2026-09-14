@@ -36,7 +36,10 @@ export function ConsoleHeader({
   const needs = useNeedsContext();
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-n-200 bg-paper px-6 py-4">
+    // Pinned on every console page (Ancung, 2026-09-14): the title, the bell and
+    // the page's one action stay in reach however far the content scrolls.
+    // A race page wraps this and its tab strip in one pinned block of its own.
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-n-200 bg-paper px-6 py-4">
       <div className="flex min-w-0 items-center gap-3">
         {/* Desktop only. Below `md` the rail is a drawer and its trigger lives
             in the dark bar above this one, so a second one here would be two

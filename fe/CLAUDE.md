@@ -452,7 +452,11 @@ knowing before adding a page there:
 - **`ConsoleHeader` is every console page's top bar**: a title, an optional status badge, an
   optional bell, and **one** action. One, not a row: each tab inside a race has exactly one thing to
   do, and keeping it in the bar rather than under the content means it does not travel down the page
-  as a table grows. The page owns the header, the layout owns the rail.
+  as a table grows. The page owns the header, the layout owns the rail. **The header is pinned**
+  (`sticky top-0`, Ancung 2026-09-14), so the title, the bell and the action stay in reach however
+  far a page scrolls; a race page pins the header and its tab strip together as one block. Pinning
+  works only because nothing between it and the window scrolls: an `overflow` added to
+  `ConsoleFrame` or its `<main>` would quietly make it scroll away again.
 
 ### `/org` — the events this wallet organises
 
