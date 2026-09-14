@@ -16,6 +16,8 @@ function record(overrides: Partial<IndexedRecord> = {}): IndexedRecord {
     enteredAt: NOW,
     claimedAt: null,
     finishTimeS: null,
+    resultAt: null,
+    addonIds: null,
     ...overrides,
   };
 }

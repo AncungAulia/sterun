@@ -25,6 +25,14 @@ export interface IndexedRecord {
   claimedAt: bigint | null;
   /** `null` is "finished, no official time" (STE-41). Never render it as 0. */
   finishTimeS: number | null;
+  /** When the result was recorded. `null` until there is one. */
+  resultAt: bigint | null;
+  /**
+   * The add-ons this runner bought, by id. `null` means the index does not
+   * send them yet (STE-42), which is not the same as `[]`, a runner who bought
+   * none.
+   */
+  addonIds: number[] | null;
 }
 
 interface RecordJson {
@@ -37,6 +45,10 @@ interface RecordJson {
   entered_at: string;
   claimed_at: string | null;
   finish_time_s: number | null;
+  /** Optional in the type so a fixture from before this field still parses. */
+  result_at?: string | null;
+  /** Not sent yet; see `IndexedRecord.addonIds`. */
+  addon_ids?: number[];
 }
 
 const PAGE = 200;
@@ -52,6 +64,8 @@ function toRecord(row: RecordJson): IndexedRecord {
     enteredAt: BigInt(row.entered_at),
     claimedAt: row.claimed_at === null ? null : BigInt(row.claimed_at),
     finishTimeS: row.finish_time_s,
+    resultAt: row.result_at === null || row.result_at === undefined ? null : BigInt(row.result_at),
+    addonIds: row.addon_ids ?? null,
   };
 }
 

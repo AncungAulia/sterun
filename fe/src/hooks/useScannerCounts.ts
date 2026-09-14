@@ -10,16 +10,7 @@
  */
 import { useQueries } from "@tanstack/react-query";
 
-import { apiFetch } from "@/lib/api";
-
-interface ScannerList {
-  scanners: { address: string; added_ledger: number }[];
-  last_ledger: number;
-}
-
-export function fetchScanners(eventId: number): Promise<ScannerList> {
-  return apiFetch<ScannerList>(`/events/${eventId}/scanners`);
-}
+import { fetchScanners } from "@/lib/scanners";
 
 export function useScannerCounts(eventIds: readonly number[]): Map<number, number> {
   const results = useQueries({
@@ -33,7 +24,7 @@ export function useScannerCounts(eventIds: readonly number[]): Map<number, numbe
 
   const counts = new Map<number, number>();
   results.forEach((result, index) => {
-    if (result.data) counts.set(eventIds[index], result.data.scanners.length);
+    if (result.data) counts.set(eventIds[index], result.data.length);
   });
   return counts;
 }
