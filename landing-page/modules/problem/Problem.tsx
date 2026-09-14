@@ -33,17 +33,17 @@ const CONTRACT_LINKS = [
   { label: "Source", href: REPO_URL },
 ] as const;
 
+/** One paragraph per problem: the roster that does not match the runner, and the result that does not outlive the organiser. */
 const PARAGRAPHS = [
   "Bibs get resold in group chats, and the organiser has one name on the roster while someone else runs the course. Nobody finds out until it matters. When someone goes down at kilometre 8, the medical team opens the wrong file.",
-  "A finish time is a row in one organiser’s database. When the company folds, the row goes with it.",
-  "Runners keep screenshots, and nobody can verify a screenshot. Sterun makes the record outlive the race.",
+  "A finish time is a row in one organiser’s database. When the company folds, the row goes with it. Runners keep screenshots, and nobody can verify a screenshot. Sterun makes the record outlive the race.",
 ] as const;
 
 /**
  * Copy size, shared with the block row beneath it so the gap above the blocks
  * is the same 2.9em as the gap between paragraphs.
  */
-const COPY_SIZE = "clamp(2.25rem, 4.52vw, 3.5rem)";
+const COPY_SIZE = "clamp(1.125rem, 2.26vw, 1.75rem)";
 
 /**
  * How many characters are mid-transition at any moment. Each character takes
@@ -120,12 +120,12 @@ export function Problem() {
       });
 
       // Faded -> brand blue, thickened -> ink, one character after another in
-      // reading order across all three paragraphs, scrubbed to the scroll so
+      // reading order across both paragraphs, scrubbed to the scroll so
       // scrolling back runs it back. The end is measured from the bottom of the
-      // copy rather than its top: the copy is taller than the screen, and ending
-      // on "top" would finish the last lines while they are still out of sight.
-      // With these two points the moving edge of the reveal travels from 80% of
-      // the way down the screen to 60%, so it is always in view.
+      // copy rather than its top, so the last line is revealed while it is on
+      // screen however tall the copy runs (on a phone it is several screens of
+      // text). With these two points the moving edge of the reveal travels from
+      // 80% of the way down the screen to 60%, so it is always in view.
       gsap.set(split.chars, { color: withAlpha(ink, 0.1), "--char-bold": "0em" });
       gsap
         .timeline({

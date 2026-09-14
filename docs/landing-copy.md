@@ -92,7 +92,7 @@ Catatan implementasi:
 
 > [!NOTE]
 > **Draft, perlu persetujuan Nabil.** Bentuk section berubah (referensi nbnzia.com): dua blok
-> berjudul diganti kolom kiri berisi klaim + tautan bukti, dan tiga paragraf besar di kanan.
+> berjudul diganti kolom kiri berisi klaim + tautan bukti, dan dua paragraf besar di kanan.
 > Kalimatnya dari copy Problem yang sudah disetujui; Nabil mengizinkan copy lebih panjang.
 
 ### Kolom kiri: klaim dan bukti
@@ -126,12 +126,14 @@ dan alamat basi di landing adalah kesalahan yang mahal.
 
 ### Kolom kanan: copy
 
+Satu paragraf per masalah yang disetujui: roster yang tidak cocok dengan pelari, dan hasil yang
+tidak bertahan lebih lama dari panitianya.
+
 > Bibs get resold in group chats, and the organiser has one name on the roster while someone else
 > runs the course. Nobody finds out until it matters. When someone goes down at kilometre 8, the
 > medical team opens the wrong file.
 
 > A finish time is a row in one organiser's database. When the company folds, the row goes with it.
-
 > Runners keep screenshots, and nobody can verify a screenshot. Sterun makes the record outlive the
 > race.
 
@@ -141,7 +143,7 @@ dan alamat basi di landing adalah kesalahan yang mahal.
 | --- | --- | --- |
 | READABLE FOREVER. | OUTLIVES THE ORGANISER. | "Forever" berlebihan: data persisten Soroban punya TTL dan dijaga keeper. Versi ini cocok dengan subhead hero yang sudah disetujui. |
 | NO ORGANISER REQUIRED. | CHECKED BY ANYONE. | Salah secara faktual: panitia membuat event dan menandatangani hasil finish. Yang benar tanpa panitia adalah *memeriksanya*, sesuai langkah 4 How it works. |
-| P1/P2 draf brief | tiga paragraf dari copy Problem yang sudah disetujui | Brief minta draf diganti kalau copy sendiri sudah ada. Draf brief juga memakai dua deretan tiga hal ("a spreadsheet, a PDF, or…", "they get edited, they get lost, and…"), pola yang dilarang di atas. Kalimat penutup brief *"Sterun makes the record outlive the race"* dipertahankan. |
+| P1/P2 draf brief | dua paragraf dari copy Problem yang sudah disetujui | Brief minta draf diganti kalau copy sendiri sudah ada. Draf brief juga memakai dua deretan tiga hal ("a spreadsheet, a PDF, or…", "they get edited, they get lost, and…"), pola yang dilarang di atas. Kalimat penutup brief *"Sterun makes the record outlive the race"* dipertahankan. |
 
 Dari copy Problem lama, cuma *"Which is the whole reason the record can't live in the organiser's
 database"* yang tidak dipakai; perannya (menjawab "kenapa harus blockchain") dibawa *"Sterun makes
@@ -149,7 +151,8 @@ the record outlive the race."* Kalimat *kilometre 8* kembali setelah copy boleh 
 
 ### Ukuran dan jarak
 
-- Copy `clamp(2.25rem, 4.52vw, 3.5rem)`, dua kali ukuran pertama. Terukur 56px di 1440, 36px di 375.
+- Copy `clamp(1.125rem, 2.26vw, 1.75rem)`. Sempat dicoba dua kali lebih besar, lalu dikembalikan:
+  copy jadi hampir dua layar tingginya dan reveal butuh sekitar 1800px scroll.
 - Jarak antar paragraf 2.9em (dua baris). Jarak copy ke baris blok **sama persis**, karena baris
   blok membawa ukuran font copy: terukur 162px = 162px di 1440, 104px = 104px di 375. Copy boleh
   memanjang tanpa merusak posisi blok.
