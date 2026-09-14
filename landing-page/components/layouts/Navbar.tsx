@@ -57,7 +57,7 @@ export function Navbar() {
   return (
     <>
       <header className="fixed inset-x-0 top-0 z-50 h-16 sm:h-[86px]">
-        <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between px-5 sm:px-10 lg:px-[68px]">
+        <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between px-5 max-[359px]:px-4 sm:px-10 lg:px-[68px]">
           <Link
             href="/"
             aria-label="Sterun home"
@@ -68,7 +68,7 @@ export function Navbar() {
             <Wordmark variant="white" />
           </Link>
 
-          <div className="flex shrink-0 items-center gap-3 sm:gap-8 lg:gap-10">
+          <div className="flex shrink-0 items-center gap-3 max-[359px]:gap-2 sm:gap-8 lg:gap-10">
             {/* Rendered whether or not APP_URL is set: the header's right side
                 is composed around this control, and a hole there reads as an
                 unfinished page. Deployment must set NEXT_PUBLIC_APP_URL
@@ -78,24 +78,32 @@ export function Navbar() {
                 because a control that moves while you aim at it is harder to
                 hit. Both halves of the roll say the same thing, so the second
                 is hidden from the accessibility tree. */}
-            {/* Below 640px the label goes and the pill becomes a 44px circle.
-                Measured at 320 wide, wordmark + labelled pill + MENU needed
-                361px of a 280px row and pushed MENU off the screen; at 375 the
-                pill was squeezed until its label read "Launch". The accessible
-                name stays on the link, so the icon-only state is still
-                announced as Launch app. */}
+            {/* Below 640px the label shortens to "App". The full label does
+                not fit: measured at 320 wide, wordmark + "Launch app" pill +
+                MENU needed 361px of a 280px row and pushed MENU off screen, and
+                at 375 flex squeezed the pill until it read "Launch". The
+                accessible name stays "Launch app" at every width.
+
+                Even "App" is 25px too wide for a 320px phone, so below 360 the
+                gutter, gaps, pill padding and MENU size all tighten a step. */}
             <a
               href={APP_URL || "#"}
               aria-label="Launch app"
-              className="cta inline-flex size-11 items-center justify-center text-[15px] font-medium text-paper sm:size-auto sm:gap-2.5 sm:px-7 sm:py-3.5"
+              className="cta inline-flex h-11 items-center justify-center gap-2 px-4 text-[15px] font-medium text-paper max-[359px]:gap-1.5 max-[359px]:px-3 sm:h-auto sm:gap-2.5 sm:px-7 sm:py-3.5"
             >
-              {/* The roll carries display:block from globals.css, which beats a
-                  utility class, so visibility is switched on this wrapper. */}
-              <span aria-hidden className="hidden sm:inline-flex">
-                <span className="cta-roll">
+              {/* Each copy of the roll holds both labels and shows one by
+                  breakpoint. The swap happens one level inside the copies,
+                  because globals.css sets display:block on the copies
+                  themselves and that would beat a utility class there. */}
+              <span aria-hidden className="cta-roll">
+                <span>
                   <span>
-                    <span>Launch app</span>
-                    <span>Launch app</span>
+                    <span className="sm:hidden">App</span>
+                    <span className="hidden sm:inline">Launch app</span>
+                  </span>
+                  <span>
+                    <span className="sm:hidden">App</span>
+                    <span className="hidden sm:inline">Launch app</span>
                   </span>
                 </span>
               </span>
@@ -110,7 +118,7 @@ export function Navbar() {
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
               aria-controls="site-menu"
-              className="heading-hero wipe-underline relative shrink-0 text-[26px] uppercase leading-none tracking-[-0.03em] text-paper sm:text-[34px]"
+              className="heading-hero wipe-underline relative shrink-0 text-[26px] uppercase leading-none tracking-[-0.03em] text-paper max-[359px]:text-[22px] sm:text-[34px]"
             >
               {open ? "Close" : "Menu"}
             </button>

@@ -295,7 +295,7 @@ export function MenuOverlay({
       >
         {/* Same container and gutter as the header, so the wordmark, CLOSE, the
             01-04 numbers and the footer all sit on one line. */}
-        <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col px-5 pb-6 pt-20 sm:px-10 sm:pt-[86px] lg:px-[68px]">
+        <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col px-5 pb-6 pt-20 max-[359px]:px-4 sm:px-10 sm:pt-[86px] lg:px-[68px]">
           <div className="flex flex-1 flex-col gap-12 pt-2 lg:flex-row lg:gap-16 lg:pt-4">
             {/* Primary nav. In-page anchors, because there is no second page.
 
