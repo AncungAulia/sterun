@@ -38,6 +38,15 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
+/**
+ * Run the per-frame scroll listeners now. For scripted motion that changes what
+ * the listeners read (the How it works cover): calling this right after writing
+ * the transform keeps the header on the same frame instead of one behind.
+ */
+export function notifyScroll(): void {
+  emit();
+}
+
 export function subscribeScroll(listener: () => void): () => void {
   if (listeners.size === 0) window.addEventListener("scroll", emit, { passive: true });
   listeners.add(listener);

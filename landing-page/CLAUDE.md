@@ -88,6 +88,17 @@ Cara kerjanya (`components/layouts/Navbar.tsx`, `lib/navTheme.ts`):
   `public/brand/logo/sterun-lockup-black.svg`). Satu `<symbol>`, tiap layer `<use>`.
 - **Tidak** memakai `mix-blend-mode` di header.
 
+Permukaan yang digerakkan script, bukan cuma oleh scroll (lapisan biru polos di kotak How it
+works), ditandai `data-nav-surface data-nav-live data-nav-theme`: header membaca rect-nya **tiap
+update**, dipotong ke ancestor `data-nav-bounds`. Script yang menggerakkannya memanggil
+`notifyScroll()` tepat setelah menulis transform, supaya header tidak tertinggal satu frame.
+
+Section yang menahan layar (stage `sticky`, mis. How it works) tidak bisa dibaca header lewat
+offset yang di-cache, karena posisinya berubah selama ditahan. Tandai bagian gelapnya dengan
+elemen kosong `absolute` di **posisi akhirnya**, saat stage sudah dilepas (lihat marker di
+`modules/how-it-works/HowItWorks.tsx`). Selama stage ditahan, bagian gelap itu tetap di bawah
+header, jadi satu posisi statis itu benar di kedua fase.
+
 ## Motion
 
 ### Smooth scroll: Lenis

@@ -289,6 +289,7 @@ function useAdaptiveNav(
     let navH = 0;
     let sections: Surface[] = [];
     let panels: HTMLElement[] = [];
+    let live: HTMLElement[] = [];
 
     function measure() {
       navH = nav!.offsetHeight;
@@ -299,7 +300,8 @@ function useAdaptiveNav(
         const rect = el.getBoundingClientRect();
         return { top: rect.top + y, bottom: rect.bottom + y, dark: el.dataset.navTheme === "dark" };
       });
-      panels = Array.from(document.querySelectorAll<HTMLElement>("[data-nav-surface]"));
+      panels = Array.from(document.querySelectorAll<HTMLElement>("[data-nav-surface]:not([data-nav-live])"));
+      live = Array.from(document.querySelectorAll<HTMLElement>("[data-nav-surface][data-nav-live]"));
     }
 
     function update() {
@@ -309,6 +311,17 @@ function useAdaptiveNav(
         bottom: s.bottom - y,
         dark: s.dark,
       }));
+      // Surfaces that move by script rather than by scroll alone (the plain
+      // blue over the How it works box), read live every update and cut to the
+      // box that clips them, so a surface hidden by its container does not
+      // darken the header.
+      for (const surface of live) {
+        const rect = surface.getBoundingClientRect();
+        const bounds = surface.closest<HTMLElement>("[data-nav-bounds]")?.getBoundingClientRect();
+        const top = bounds ? Math.max(rect.top, bounds.top) : rect.top;
+        const bottom = bounds ? Math.min(rect.bottom, bounds.bottom) : rect.bottom;
+        if (bottom > top) painted.push({ top, bottom, dark: surface.dataset.navTheme === "dark" });
+      }
       if (overlayRef.current) {
         for (const panel of panels) {
           const rect = panel.getBoundingClientRect();
