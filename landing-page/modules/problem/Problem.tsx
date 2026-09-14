@@ -126,10 +126,17 @@ export function Problem() {
       // screen however tall the copy runs (on a phone it is several screens of
       // text). With these two points the moving edge of the reveal travels from
       // 80% of the way down the screen to 60%, so it is always in view.
+      //
+      // The end is clamped to the page's scrollable range. Unclamped, it sat
+      // past the bottom of the page whenever little followed the copy: measured
+      // 33px beyond the last scroll position at 1440 and 168px at 375, which
+      // left 20 and 112 characters blue and thickened forever at the foot of the
+      // page. Clamping finishes the reveal at the bottom instead, and does
+      // nothing once there is enough page below.
       gsap.set(split.chars, { color: withAlpha(ink, 0.1), "--char-bold": "0em" });
       gsap
         .timeline({
-          scrollTrigger: { trigger: copy, start: "top 80%", end: "bottom 60%", scrub: 0.5 },
+          scrollTrigger: { trigger: copy, start: "top 80%", end: "clamp(bottom 60%)", scrub: 0.5 },
         })
         .to(split.chars, {
           keyframes: [
