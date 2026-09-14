@@ -24,6 +24,7 @@ import { EntriesTab } from "./component/EntriesTab";
 import { useNeedsContext } from "./component/NeedsContext";
 import { OverviewTab } from "./component/OverviewTab";
 import { RaceTabs } from "./component/RaceTabs";
+import { ScannersTab } from "./component/ScannersTab";
 import { StatusAction } from "./component/StatusAction";
 import { UrgentBanner } from "./component/UrgentBanner";
 import type { RaceTab } from "./race-tab";
@@ -99,7 +100,7 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
         {urgent ? <UrgentBanner need={urgent} /> : null}
         {tab === "overview" ? <OverviewTab summary={data} /> : null}
         {tab === "entries" ? <EntriesTab summary={data} /> : null}
-        {/* tab bodies */}
+        {tab === "scanners" ? <ScannersTab summary={data} /> : null}
       </div>
     </>
   );
