@@ -7,14 +7,21 @@
  * paths live once in a <symbol> and every copy is a <use>, so four layers cost
  * one set of paths in the HTML rather than four.
  *
- * The viewBox is cropped to the artwork plus its stroke (49.3 77.1 1091.5 235.7) instead of the
- * 1245x400 export canvas, whose padding made the old <img> version need a
- * scale-and-offset crop in CSS. Regenerate rather than editing by hand if the
- * source SVG changes.
+ * The symbol's viewBox is cropped to the artwork plus its stroke (53.3 76.8 1084.6 232.0,
+ * measured in Chrome) instead of the 1245x400 export canvas, whose padding made
+ * the old <img> version need a scale-and-offset crop in CSS.
+ *
+ * The outer svg's viewBox starts at 0,0 on purpose. A <use> lays the symbol's
+ * viewport down from the origin of the outer coordinate system, so repeating the
+ * symbol's offset viewBox on the outer svg shifted the artwork up and left by
+ * that offset: the runner's head was clipped and the mark read smaller.
+ *
+ * Regenerate rather than editing by hand if the source SVG changes.
  */
 
 const SYMBOL_ID = "sterun-lockup";
-const VIEW_BOX = "49.3 77.1 1091.5 235.7";
+const VIEW_BOX = "53.3 76.8 1084.6 232.0";
+const OUTER_VIEW_BOX = "0 0 1084.6 232.0";
 
 /** Render once per page, before any <Lockup />. */
 export function LockupSymbol() {
@@ -40,7 +47,7 @@ export function LockupSymbol() {
 /** 30px tall below 640px, 40px from there up; width follows the artwork ratio. */
 export function Lockup() {
   return (
-    <svg aria-hidden className="block h-[30px] w-auto sm:h-10" viewBox={VIEW_BOX}>
+    <svg aria-hidden className="block h-[30px] w-auto sm:h-10" viewBox={OUTER_VIEW_BOX}>
       <use href={`#${SYMBOL_ID}`} />
     </svg>
   );
