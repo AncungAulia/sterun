@@ -20,6 +20,7 @@ import { useEvent } from "@/hooks/useEvents";
 import { useWallet } from "@/hooks/useWallet";
 
 import { ConsoleHeader } from "./component/ConsoleHeader";
+import { EntriesTab } from "./component/EntriesTab";
 import { useNeedsContext } from "./component/NeedsContext";
 import { OverviewTab } from "./component/OverviewTab";
 import { RaceTabs } from "./component/RaceTabs";
@@ -97,6 +98,7 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
       <div className="flex flex-1 flex-col gap-3 px-4 py-6 md:px-6">
         {urgent ? <UrgentBanner need={urgent} /> : null}
         {tab === "overview" ? <OverviewTab summary={data} /> : null}
+        {tab === "entries" ? <EntriesTab summary={data} /> : null}
         {/* tab bodies */}
       </div>
     </>
