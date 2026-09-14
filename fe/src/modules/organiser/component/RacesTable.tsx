@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Every race this wallet organises, one row each.
  *
@@ -14,6 +16,7 @@ import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
 
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatEventDate } from "@/utils/format";
 import type { EventStatus } from "@sterunxyz/sdk";
 
@@ -58,8 +61,53 @@ function fill(entered: number, quota: number): string {
 const CELL = "border-b border-n-200 px-4 py-3 align-middle";
 
 export function RacesTable({ rows, nowS }: { rows: readonly RaceRow[]; nowS: bigint }) {
+  const isMobile = useIsMobile();
+
   if (rows.length === 0) {
     return <p className="px-4 py-6 text-sm text-n-500">You have not published a race yet.</p>;
+  }
+
+  /*
+    A phone gets a list, not the table (Ancung, 2026-09-15). Six columns in
+    390px left the name column a few characters wide, so every race name broke
+    over three or four lines while the table scrolled sideways under it. Each
+    race is one row you tap, carrying what a phone reader needs to pick one:
+    the name, its status, when it runs and how full it is. The sparkline stays
+    on the wide table, where there is room to read a shape.
+
+    Chosen with `useIsMobile` rather than two trees hidden by CSS, so only one
+    exists in the document: jsdom applies no CSS, and two copies of every race
+    would make every query in the dashboard's tests find each race twice.
+  */
+  if (isMobile) {
+    return (
+      <ul className="border-t border-n-200">
+        {rows.map((race) => (
+          <li key={race.eventId} className="border-b border-n-200 last:border-b-0">
+            <Link href={`/org/events/${race.eventId}`} className="flex flex-col gap-2 px-4 py-3">
+              <span className="flex items-start justify-between gap-3">
+                <span className="min-w-0 font-medium text-ink">{race.name}</span>
+                <EventStatusBadge status={race.status} />
+              </span>
+              <span className="numeric text-xs text-n-500">
+                {formatEventDate(race.startsAt)} · {when(race.startsAt, nowS)}
+              </span>
+              <span className="flex items-center gap-3">
+                <span aria-hidden className="h-2 flex-1 overflow-hidden rounded-full bg-n-100">
+                  <span
+                    className="block h-full rounded-full bg-teal"
+                    style={{ width: fill(race.entered, race.quota) }}
+                  />
+                </span>
+                <span className="numeric text-sm whitespace-nowrap text-n-600">
+                  {race.entered} / {race.quota}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    );
   }
 
   return (

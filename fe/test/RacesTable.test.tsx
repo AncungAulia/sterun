@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { RacesTable, type RaceRow } from "@/modules/organiser/component/RacesTable";
 
@@ -109,6 +109,67 @@ describe("RacesTable", () => {
       render(<RacesTable rows={[row({ startsAt: 1_800_000_000n })]} nowS={1_800_000_000n} />);
 
       expect(screen.getByText(/today/)).toBeInTheDocument();
+    });
+  });
+});
+
+/**
+ * At phone width the races are a list you tap, not a table (Ancung,
+ * 2026-09-15). jsdom has no layout, so these force the one number
+ * `useIsMobile` reads, `window.innerWidth`, and ask only what is in the
+ * document.
+ */
+describe("RacesTable at phone width", () => {
+  const WIDE = window.innerWidth;
+  function setWidth(px: number) {
+    Object.defineProperty(window, "innerWidth", { value: px, configurable: true });
+  }
+  afterEach(() => setWidth(WIDE));
+
+  describe("positive", () => {
+    it("lists each race as one link carrying its name, status, date and fill", () => {
+      setWidth(390);
+      render(<RacesTable rows={[row(), row({ eventId: 2, name: "Lari Teknik" })]} nowS={1_800_000_000n} />);
+
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      const items = screen.getAllByRole("listitem");
+      expect(items).toHaveLength(2);
+
+      const link = within(items[0]).getByRole("link");
+      expect(link).toHaveAttribute("href", "/org/events/1");
+      expect(link).toHaveTextContent("Fun Run Sleman");
+      expect(link).toHaveTextContent("Open for entry");
+      expect(link).toHaveTextContent(/in 3 days/);
+      expect(link).toHaveTextContent("88 / 300");
+    });
+  });
+
+  describe("negative", () => {
+    it("gives a race one way in on a phone, not two", () => {
+      // The table's second link is an icon in the last column. In a row you
+      // tap, the whole row is the link and a second one would be a smaller
+      // target for the same place.
+      setWidth(390);
+      render(<RacesTable rows={[row()]} nowS={1_800_000_000n} />);
+
+      expect(screen.getAllByRole("link")).toHaveLength(1);
+    });
+  });
+
+  describe("edge", () => {
+    it("keeps the table on a wide screen", () => {
+      setWidth(1280);
+      render(<RacesTable rows={[row()]} nowS={1_800_000_000n} />);
+
+      expect(screen.getByRole("table")).toBeInTheDocument();
+      expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    });
+
+    it("still says there are no races on a phone", () => {
+      setWidth(390);
+      render(<RacesTable rows={[]} nowS={1_800_000_000n} />);
+
+      expect(screen.getByText("You have not published a race yet.")).toBeInTheDocument();
     });
   });
 });

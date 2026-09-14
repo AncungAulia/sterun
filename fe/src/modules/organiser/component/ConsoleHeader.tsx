@@ -43,7 +43,7 @@ export function ConsoleHeader({
     // Pinned on every console page (Ancung, 2026-09-14): the title, the bell and
     // the page's one action stay in reach however far the content scrolls.
     // A race page wraps this and its tab strip in one pinned block of its own.
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-n-200 bg-paper px-6 py-4">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-n-200 bg-paper px-4 py-4 md:gap-4 md:px-6">
       <div className="flex min-w-0 items-center gap-3">
         {/* Phone only. Above `md` the rail folds from its own header. Below it
             the rail is a drawer, and this is the one button that opens it: the
