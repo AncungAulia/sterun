@@ -23,10 +23,9 @@ Setelah STE-12 ditutup: [For developers](#backlog-setelah-ste-12) dan [FAQ](#bac
 
 ### Kenapa urutannya begini
 
-- **Proof strip tidak lagi jadi section sendiri.** Bentuk Problem (referensi: section kedua
-  nbnzia.com) membawa kolom kiri berisi empat baris klaim kecil, dan itu sudah mengisi peran strip
-  bukti tepat di bawah hero. Tautan kontrak yang dulu ada di strip pindah ke
-  [Product preview](#product-preview), bersebelahan dengan aplikasi yang bisa dicoba.
+- **Proof strip tidak lagi jadi section sendiri; isinya tinggal di kolom kiri Problem.** Empat
+  baris klaim, lalu tautan ke tiga kontrak dan source, tepat di bawah hero seperti yang dituju
+  strip bukti dari awal. Menu `04 PROOF` menunjuk ke blok tautan itu (`#proof`).
 - **Product preview ditaruh setelah How it works.** Empat langkah itu teks; section berikutnya
   langsung memperlihatkan hasilnya di aplikasi yang sungguhan jalan. Ini menjawab kritik terberat
   saat draf dibaca sebagai juri: *"halaman ini seluruhnya kata, aku tidak melihat produknya."*
@@ -74,9 +73,9 @@ Setelah STE-12 ditutup: [For developers](#backlog-setelah-ste-12) dan [FAQ](#bac
 Tombol: **Launch app** saja, di header (label **App** di bawah 640px).
 
 Baris `Live on Stellar testnet. No wallet needed to look.` dan tautan kontrak semula ada di hero.
-Keduanya sekarang tinggal di [Product preview](#product-preview), tempat pembaca benar-benar bisa
-membuktikannya. Tugas hero adalah menyebut ini apa; layar pertama cuma punya satu hal untuk
-ditekan.
+Tautan kontrak sekarang di kolom kiri [Problem](#problem), dan "no wallet needed" di
+[Product preview](#product-preview), tempat pembaca benar-benar bisa membuktikannya. Tugas hero
+adalah menyebut ini apa; layar pertama cuma punya satu hal untuk ditekan.
 
 Catatan implementasi:
 
@@ -93,23 +92,45 @@ Catatan implementasi:
 
 > [!NOTE]
 > **Draft, perlu persetujuan Nabil.** Bentuk section berubah (referensi nbnzia.com): dua blok
-> berjudul diganti empat baris klaim di kiri dan dua paragraf besar di kanan. Kalimatnya disusun
-> ulang dari copy Problem yang sudah disetujui supaya muat di bentuk baru.
+> berjudul diganti kolom kiri berisi klaim + tautan bukti, dan tiga paragraf besar di kanan.
+> Kalimatnya dari copy Problem yang sudah disetujui; Nabil mengizinkan copy lebih panjang.
 
-**Kolom kiri: klaim** (ditulis kapital oleh CSS, di sumbernya kalimat biasa):
+### Kolom kiri: klaim dan bukti
+
+Klaim (ditulis kapital oleh CSS, di sumbernya kalimat biasa):
 
 > VERIFIED ON STELLAR.
 > BOUND TO THE RUNNER.
 > OUTLIVES THE ORGANISER.
 > CHECKED BY ANYONE.
 
-**Kolom kanan: paragraf 1**
+Di bawahnya, dengan jarak supaya enak dibaca (anchor `#proof`, tujuan menu `04 PROOF`):
+
+> The contracts are already running. Read them yourself.
+>
+> EventRegistry ↗
+> RaceRecord ↗
+> sUSD ↗
+> Source ↗
+
+| Tautan | Tujuan |
+| --- | --- |
+| EventRegistry | `CDL6A734…GTA64` di stellar.expert (testnet) |
+| RaceRecord | `CDWFNF42…XNB4` di stellar.expert (testnet) |
+| sUSD | `CBQ6444F…MOOU` di stellar.expert (testnet) |
+| Source | `github.com/AncungAulia/sterun` |
+
+**Alamatnya diambil dari [`docs/deployments.md`](deployments.md) lewat `landing-page/lib/links.ts`,
+jangan diketik ulang.** Itu satu-satunya sumber yang diperbarui kalau kontraknya di-deploy ulang,
+dan alamat basi di landing adalah kesalahan yang mahal.
+
+### Kolom kanan: copy
 
 > Bibs get resold in group chats, and the organiser has one name on the roster while someone else
-> runs the course. A finish time is a row in one organiser's database. When the company folds, the
-> row goes with it.
+> runs the course. Nobody finds out until it matters. When someone goes down at kilometre 8, the
+> medical team opens the wrong file.
 
-**Kolom kanan: paragraf 2** (kalimat pukulan)
+> A finish time is a row in one organiser's database. When the company folds, the row goes with it.
 
 > Runners keep screenshots, and nobody can verify a screenshot. Sterun makes the record outlive the
 > race.
@@ -120,32 +141,50 @@ Catatan implementasi:
 | --- | --- | --- |
 | READABLE FOREVER. | OUTLIVES THE ORGANISER. | "Forever" berlebihan: data persisten Soroban punya TTL dan dijaga keeper. Versi ini cocok dengan subhead hero yang sudah disetujui. |
 | NO ORGANISER REQUIRED. | CHECKED BY ANYONE. | Salah secara faktual: panitia membuat event dan menandatangani hasil finish. Yang benar tanpa panitia adalah *memeriksanya*, sesuai langkah 4 How it works. |
-| P1/P2 draf brief | disusun dari copy Problem yang sudah disetujui | Brief minta draf diganti kalau copy sendiri sudah ada. Draf brief juga memakai dua deretan tiga hal ("a spreadsheet, a PDF, or…", "they get edited, they get lost, and…"), pola yang dilarang di atas. Kalimat penutup brief *"Sterun makes the record outlive the race"* dipertahankan. |
+| P1/P2 draf brief | tiga paragraf dari copy Problem yang sudah disetujui | Brief minta draf diganti kalau copy sendiri sudah ada. Draf brief juga memakai dua deretan tiga hal ("a spreadsheet, a PDF, or…", "they get edited, they get lost, and…"), pola yang dilarang di atas. Kalimat penutup brief *"Sterun makes the record outlive the race"* dipertahankan. |
 
-### Yang hilang dari copy Problem lama
+Dari copy Problem lama, cuma *"Which is the whole reason the record can't live in the organiser's
+database"* yang tidak dipakai; perannya (menjawab "kenapa harus blockchain") dibawa *"Sterun makes
+the record outlive the race."* Kalimat *kilometre 8* kembali setelah copy boleh lebih panjang.
 
-- *"When someone goes down at kilometre 8, the medical team opens the wrong file."* Kalimat
-  taruhan terkuat, tapi paragraf 1 jadi 6 baris di bentuk ini (target sekitar 4). Layak dipakai
-  lagi di section lain.
-- *"Which is the whole reason the record can't live in the organiser's database."* Perannya
-  (menjawab "kenapa harus blockchain") sekarang dibawa *"Sterun makes the record outlive the
-  race."*
+### Ukuran dan jarak
+
+- Copy `clamp(2.25rem, 4.52vw, 3.5rem)`, dua kali ukuran pertama. Terukur 56px di 1440, 36px di 375.
+- Jarak antar paragraf 2.9em (dua baris). Jarak copy ke baris blok **sama persis**, karena baris
+  blok membawa ukuran font copy: terukur 162px = 162px di 1440, 104px = 104px di 375. Copy boleh
+  memanjang tanpa merusak posisi blok.
 
 ### Motion
 
-Hanya tiga gerakan, section terasa diam setelahnya:
-
 | Elemen | Gerakan | Pemicu |
 | --- | --- | --- |
-| Baris klaim | fade + naik 12px, stagger 60ms | sekali saat masuk viewport |
-| Paragraf | reveal per karakter: pudar (ink 10%) → biru muda (`teal-300`) → ink | di-scrub ke scroll: mulai saat puncak blok di 80% layar, selesai di 30%, ikut mundur saat scroll balik |
-| Blok ink + blok teal | mask slide-up 0.7s, ink duluan, teal +150ms | sekali saat masuk viewport |
+| Kolom kiri | fade + naik 12px, stagger 60ms | sekali saat masuk viewport |
+| Copy | reveal per karakter (SplitText): pudar (ink 10%) → biru `teal-400` + ditebalkan → ink | di-scrub ke scroll: mulai saat puncak copy di 80% layar, selesai saat dasar copy di 60%, ikut mundur saat scroll balik |
+| Blok ink + blok teal | mask slide-up 0.7s, ink duluan, teal +150ms | masuk viewport; turun lagi saat scroll kembali ke atas; naik lagi di lintasan berikutnya |
 
-`prefers-reduced-motion`: semua langsung tampil tanpa gerakan, teks ink penuh.
+**Warna highlight `teal-400`**, bukan `teal-300`. Kontras terukur:
 
-Terukur di 1440×900: pita yang sedang transisi sekitar 40 karakter, sekitar 20 di antaranya
-terbaca biru; urutan mengikuti urutan baca; batas warna jatuh di tengah kata. Lebar pita diatur
-satu konstanta, `BAND` di `landing-page/modules/problem/Problem.tsx`.
+| Token | di atas `paper` | terhadap `ink` |
+| --- | --- | --- |
+| `teal-300` (lama) | 2.31:1 | 6.45:1 |
+| **`teal-400`** | **3.66:1** | **4.06:1** |
+| `teal` | 5.88:1 | 2.53:1 |
+
+`teal-300` terlalu pucat di atas kertas, jadi pitanya nyaris tidak terlihat. `teal` lebih kuat di
+kertas tapi terlalu dekat dengan ink, jadi perubahan dari biru ke hitam hampir tidak terasa.
+`teal-400` jelas terhadap keduanya.
+
+**Bold saat highlight memakai text-stroke, bukan font-weight.** Poppins dimuat di bobot tetap, dan
+huruf yang lebih tebal juga lebih lebar: setiap karakter setelahnya akan bergeser dan baris bisa
+pindah selama scroll. Stroke seukuran 0.035em (sekitar 2px di 56px) menebalkan huruf tanpa
+mengubah lebarnya. Terukur: 0 dari 352 karakter bergeser posisinya antara saat ditebalkan dan
+normal.
+
+Pita yang sedang transisi sekitar 40 karakter, sekitar 20 di antaranya terbaca biru; urutan
+mengikuti urutan baca; batas warna jatuh di tengah kata; ujung depan pita berada kira-kira di
+tengah layar. Lebar pita diatur satu konstanta, `BAND` di `landing-page/modules/problem/Problem.tsx`.
+
+`prefers-reduced-motion`: teks tidak dipecah, langsung ink penuh, blok diam di tempat.
 
 ---
 
@@ -190,23 +229,6 @@ Caption di bawah screenshot halaman detail event:
 
 > Sterun Demo Run 2026, read from EventRegistry on testnet. Its metadata document matches the hash
 > stored on chain, which is what "Document verified" means.
-
-Tautan kontrak, pindahan dari Proof strip lama:
-
-> The contracts are already running. Read them yourself.
->
-> EventRegistry ↗ · RaceRecord ↗ · sUSD ↗ · Source ↗
-
-| Tautan | Tujuan |
-| --- | --- |
-| EventRegistry | `CDL6A734…GTA64` di stellar.expert (testnet) |
-| RaceRecord | `CDWFNF42…XNB4` di stellar.expert (testnet) |
-| sUSD | `CBQ6444F…MOOU` di stellar.expert (testnet) |
-| Source | `github.com/AncungAulia/sterun` |
-
-**Alamatnya diambil dari [`docs/deployments.md`](deployments.md) lewat `landing-page/lib/links.ts`,
-jangan diketik ulang.** Itu satu-satunya sumber yang diperbarui kalau kontraknya di-deploy ulang,
-dan alamat basi di landing adalah kesalahan yang mahal.
 
 Visual:
 
@@ -297,7 +319,7 @@ Why Stellar dan Closing CTA.
 | Screenshot directory dan detail event | Diambil dari `fe/` yang jalan |
 | Screenshot QR pass dan scanner | STE-18 |
 | Diagram 4 langkah | Dikerjakan bersama section *How it works* |
-| Menu nav 04 | Masih `PROOF` → `#proof`, anchor yang sekarang tidak ada lagi. Ganti ke `PRODUCT` → `#product` begitu section itu dibangun |
+| Menu nav 04 | `PROOF` → `#proof`, blok tautan kontrak di kolom kiri Problem. Pertimbangkan tambah atau ganti ke `PRODUCT` begitu section itu dibangun |
 | Isi baris footer | Keputusan Axel |
 | URL app untuk Launch app dan Browse live events | STE-32 |
 | Landing jadi route `/` di `fe/` | Diskusi dengan Ancung |

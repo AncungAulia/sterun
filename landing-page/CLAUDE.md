@@ -68,15 +68,40 @@ section baru muncul di bawah layar.
 
 ## Motion
 
-- **GSAP + ScrollTrigger** (`gsap` 3.15, lisensi standar gratis) dipakai **hanya** untuk gerakan yang
-  tidak bisa diungkapkan CSS dengan bersih: reveal per karakter yang di-scrub ke scroll, dan
-  entrance yang dipicu viewport dengan stagger. Hover, underline, roll CTA, dan panel menu tetap
-  CSS / transition (`app/globals.css`, `MenuOverlay.tsx`). Jangan tambah library animasi lain.
+### Smooth scroll: Lenis
+
+- **`lenis` dipin persis `1.2.3`** (tanpa `^`). Default-nya berubah antar versi minor, dan rasa scroll
+  halaman ini datang dari default itu.
+- Init cuma `new Lenis({ autoRaf: true })` di `lib/scroll.ts`. **Jangan** override `lerp`,
+  `duration`, atau `easing`.
+- **Jangan** pakai `ScrollTrigger.scrollerProxy`, `lenis.on("scroll", ScrollTrigger.update)`, atau
+  `gsap.ticker.lagSmoothing(0)`. Lenis menggerakkan posisi scroll window yang asli, jadi browser
+  melempar event scroll native dan ScrollTrigger sinkron sendiri. Proxy atau loop update kedua di
+  atasnya membuat keduanya berebut. Terukur dengan scroll roda mouse: progres reveal mengikuti
+  posisi scroll.
+- Kunci scroll lewat `lockScroll()` / `unlockScroll()` dari `lib/scroll.ts` (`lenis.stop()` /
+  `lenis.start()`), bukan dengan memegang instance-nya. Overlay menu memanggil keduanya.
+- Elemen yang scroll sendiri di dalam halaman (panel menu) diberi `data-lenis-prevent`.
+- Di bawah `prefers-reduced-motion` Lenis **tidak dijalankan sama sekali**
+  (`components/elements/SmoothScroll.tsx`), dan preferensi itu diikuti langsung.
+
+### GSAP
+
+- **GSAP 3.15** (lisensi standar gratis). Plugin yang di-register: **ScrollTrigger** dan
+  **SplitText**. Flip dan InertiaPlugin ada di paket tapi baru di-register kalau benar-benar dipakai.
+- GSAP dipakai **hanya** untuk gerakan yang tidak bisa diungkapkan CSS dengan bersih: reveal per
+  karakter yang di-scrub ke scroll, dan entrance yang dipicu viewport dengan stagger. Hover,
+  underline, roll CTA, dan panel menu tetap CSS / transition (`app/globals.css`,
+  `MenuOverlay.tsx`). Jangan tambah library animasi lain.
 - Semua setup GSAP ada di dalam `gsap.matchMedia().add("(prefers-reduced-motion: no-preference)")`.
-  Dengan begitu reduced motion otomatis berarti tidak ada gerakan, dan `mm.revert()` di cleanup
-  membersihkan inline style serta ScrollTrigger saat komponen unmount.
-- Warna yang dianimasikan GSAP **dibaca dari elemen ber-kelas token** (`getComputedStyle`), bukan
-  ditulis sebagai hex. Tailwind v4 cuma meng-emit variabel `--color-*` yang dipakai oleh suatu kelas,
-  jadi membaca `var(--color-…)` langsung dari `:root` bisa kosong.
-- Teks yang dipecah per karakter disembunyikan dari assistive tech (`aria-hidden`) dan didampingi
-  salinan utuh `sr-only`, supaya screen reader membaca kalimat, bukan mengeja huruf.
+  Reduced motion otomatis berarti tidak ada gerakan, dan `mm.revert()` di cleanup membersihkan inline
+  style, ScrollTrigger, serta SplitText saat komponen unmount.
+- Pecah teks dengan **SplitText** (`type: "words,chars"`, `aria: "auto"`), bukan span buatan tangan.
+  Word wrapper menjaga baris cuma pecah di spasi, dan `aria: "auto"` membuat screen reader membaca
+  kalimat, bukan mengeja huruf.
+- Warna yang dianimasikan dibaca **dari elemen ber-kelas token** (`getComputedStyle`), bukan ditulis
+  sebagai hex. Tailwind v4 cuma meng-emit variabel `--color-*` yang dipakai oleh suatu kelas, jadi
+  membaca `var(--color-…)` langsung dari `:root` bisa kosong.
+- **Jangan animasikan `font-weight` pada teks yang mengalir.** Bobot yang lebih berat juga lebih
+  lebar, jadi setiap karakter setelahnya bergeser dan baris bisa pindah. Untuk efek tebal, pakai
+  `-webkit-text-stroke` berwarna sama (lihat `.problem-char` di `globals.css`).
