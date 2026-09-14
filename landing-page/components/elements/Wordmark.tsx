@@ -19,12 +19,19 @@ import Image from "next/image";
  *
  * If the SVG is ever re-exported tight, delete this and render the file plain.
  */
-export function Wordmark({ variant = "white" }: { variant?: "white" | "black" }) {
+export function Wordmark({
+  variant = "white",
+  alt = "Sterun",
+}: {
+  variant?: "white" | "black";
+  /** Empty when a second copy is stacked for a colour crossfade, so it is not announced twice. */
+  alt?: string;
+}) {
   return (
     <span className="relative block h-[30px] w-[143px] overflow-hidden sm:h-10 sm:w-[192px]">
       <Image
         src={`/brand/logo/sterun-lockup-${variant}.svg`}
-        alt="Sterun"
+        alt={alt}
         width={221}
         height={71}
         priority

@@ -31,8 +31,9 @@ function ArrowRight() {
  * the CTA and the MENU control do not move a pixel when the menu opens. Only
  * the wordmark goes, because the overlay carries its own way home.
  *
- * Everything is white: the header only ever sits on the hero video or on the
- * overlay, and both are dark. There is no light-background state to invert for.
+ * Its colour follows whatever section is under it. White over the hero video
+ * and the overlay, ink over light sections such as Problem. A section opts in
+ * by carrying data-header-tone="light" or "dark"; see useHeaderTone below.
  */
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -54,6 +55,11 @@ export function Navbar() {
     if (hasOpened.current) menuButtonRef.current?.focus({ preventScroll: true });
   }, [open]);
 
+  const tone = useHeaderTone();
+  // The overlay is dark whatever is underneath, so an open menu is always white.
+  const headerTone = open ? "dark" : tone;
+  const onLight = headerTone === "light";
+
   return (
     <>
       <header className="fixed inset-x-0 top-0 z-50 h-16 sm:h-[86px]">
@@ -65,7 +71,24 @@ export function Navbar() {
               open ? "pointer-events-none opacity-0" : "opacity-100"
             }`}
           >
-            <Wordmark variant="white" />
+            {/* Both colours are rendered and crossfaded rather than swapping
+                src, which would flash an empty box while the other file loads. */}
+            <span className="relative block">
+              <span
+                className={`block transition-opacity duration-300 motion-reduce:transition-none ${
+                  onLight ? "opacity-0" : "opacity-100"
+                }`}
+              >
+                <Wordmark variant="white" />
+              </span>
+              <span
+                className={`absolute inset-0 transition-opacity duration-300 motion-reduce:transition-none ${
+                  onLight ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                <Wordmark variant="black" alt="" />
+              </span>
+            </span>
           </Link>
 
           <div className="flex shrink-0 items-center gap-3 max-[359px]:gap-2 sm:gap-8 lg:gap-10">
@@ -89,7 +112,10 @@ export function Navbar() {
             <a
               href={APP_URL || "#"}
               aria-label="Launch app"
-              className="cta inline-flex h-11 items-center justify-center gap-2 px-4 text-[15px] font-medium text-paper max-[359px]:gap-1.5 max-[359px]:px-3 sm:h-auto sm:gap-2.5 sm:px-7 sm:py-3.5"
+              data-tone={headerTone}
+              className={`cta inline-flex h-11 items-center justify-center gap-2 px-4 text-[15px] font-medium max-[359px]:gap-1.5 max-[359px]:px-3 sm:h-auto sm:gap-2.5 sm:px-7 sm:py-3.5 ${
+                onLight ? "text-ink" : "text-paper"
+              }`}
             >
               {/* Each copy of the roll holds both labels and shows one by
                   breakpoint. The swap happens one level inside the copies,
@@ -118,7 +144,9 @@ export function Navbar() {
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
               aria-controls="site-menu"
-              className="heading-hero wipe-underline relative shrink-0 text-[26px] uppercase leading-none tracking-[-0.03em] text-paper max-[359px]:text-[22px] sm:text-[34px]"
+              className={`heading-hero wipe-underline relative shrink-0 text-[26px] uppercase leading-none tracking-[-0.03em] transition-colors duration-300 motion-reduce:transition-none max-[359px]:text-[22px] sm:text-[34px] ${
+                onLight ? "text-ink" : "text-paper"
+              }`}
             >
               {open ? "Close" : "Menu"}
             </button>
@@ -129,4 +157,47 @@ export function Navbar() {
       <MenuOverlay open={open} onClose={() => setOpen(false)} closeButtonRef={menuButtonRef} />
     </>
   );
+}
+
+/**
+ * Which tone of section is currently under the header.
+ *
+ * Watches a one-pixel line across the middle of the header, not the whole
+ * viewport: the header should change colour when a section edge crosses the
+ * header itself, not when the section first appears at the bottom of the
+ * screen. The observer is rebuilt on resize because the margin that places the
+ * line is in pixels and depends on the viewport height and the header height.
+ */
+function useHeaderTone(): "dark" | "light" {
+  const [tone, setTone] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    let observer: IntersectionObserver | null = null;
+
+    function build() {
+      observer?.disconnect();
+      // Half the header height: 64px below 640px, 86px from there up.
+      const line = window.innerWidth < 640 ? 32 : 43;
+      observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const value = (entry.target as HTMLElement).dataset.headerTone;
+            setTone(value === "light" ? "light" : "dark");
+          }
+        },
+        { rootMargin: `-${line}px 0px -${window.innerHeight - line - 1}px 0px` },
+      );
+      document.querySelectorAll("[data-header-tone]").forEach((el) => observer?.observe(el));
+    }
+
+    build();
+    window.addEventListener("resize", build);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", build);
+    };
+  }, []);
+
+  return tone;
 }

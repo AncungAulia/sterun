@@ -82,6 +82,17 @@
   transform-origin: left;
 }
 
+/* Over a light section the header turns ink, so the CTA's fill has to become
+   ink and its text paper. Without this it would fill with paper on a paper
+   background and the label would vanish into it on hover. */
+.cta[data-tone="light"]::before {
+  background: var(--color-ink);
+}
+.cta[data-tone="light"]:hover,
+.cta[data-tone="light"]:focus-visible {
+  color: var(--color-paper);
+}
+
 /* The label and its stacked duplicate.
    Three levels, and each one earns its place: the outer box is one line tall
    and clips, the middle one is what actually travels, and the two inner copies
