@@ -104,8 +104,29 @@ try {
         `following ${config.addresses.eventRegistry} and ${config.addresses.raceRecord} ` +
           `every ${config.indexer.pollIntervalMs}ms`,
       );
+      // Consecutive failed polls. A transient RPC failure (a dropped socket, a
+      // 5xx from testnet) used to escape this loop and exit the process, and
+      // production restarted the poller 28 times for it. Nothing is lost by
+      // retrying: the cursor only moves after a page commits, so the next
+      // attempt starts exactly where the failed one did.
+      let failures = 0;
       while (!stopping) {
-        const result = await indexer.pollOnce();
+        let result: Awaited<ReturnType<typeof indexer.pollOnce>>;
+        try {
+          result = await indexer.pollOnce();
+          failures = 0;
+        } catch (error) {
+          failures += 1;
+          // Doubling, capped at a minute. A consistency error is not transient,
+          // but it is still better logged every minute than crash-looped every
+          // second — and doctor, not a restart, is what fixes one.
+          const delay = Math.min(config.indexer.pollIntervalMs * 2 ** (failures - 1), 60_000);
+          console.error(
+            `poll failed (${failures} in a row), retrying in ${delay}ms: ${(error as Error).message}`,
+          );
+          await sleep(delay);
+          continue;
+        }
         if (result.applied > 0 || result.orphans > 0) {
           console.log(
             `ledger ${result.lastLedger}/${result.latestLedger}: ` +
