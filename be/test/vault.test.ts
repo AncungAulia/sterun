@@ -25,7 +25,17 @@ const PERSON = {
   nationalId: "3174012509900001",
   emergencyContact: "+6281234567890",
 };
-const ENTRY = { ...PERSON, eventId: 0, categoryId: 0, runnerAddress: RUNNER };
+/** STE-47: the entry form's fields. Not part of the hash. */
+const FORM = {
+  idType: "passport" as const,
+  bibName: "BUDI",
+  email: "budi.santoso@example.com",
+  phone: "+6281398765432",
+  gender: "male" as const,
+  dateOfBirth: "1990-05-17",
+  emergencyContactName: "Siti Rahayu",
+};
+const ENTRY = { ...PERSON, ...FORM, eventId: 0, categoryId: 0, runnerAddress: RUNNER };
 
 describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
@@ -80,7 +90,17 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
             AND data_type IN ('text','character varying')`,
       );
       // runner_address and enter_tx_hash are public on-chain values, not PII.
-      expect(rows.map((r) => r.column_name).sort()).toEqual(["enter_tx_hash", "runner_address"]);
+      // id_type (STE-47) says which kind of document was given, and "passport"
+      // identifies nobody. bib_name (STE-47) is the one text column that can
+      // hold a name, and holds it on purpose: it is chosen by the runner to be
+      // printed on the bib and read by the crowd, so encrypting it protects
+      // nothing. Anything else appearing here is still a failure.
+      expect(rows.map((r) => r.column_name).sort()).toEqual([
+        "bib_name",
+        "enter_tx_hash",
+        "id_type",
+        "runner_address",
+      ]);
     });
 
     it("gives every entry its own salt, so one person's two events do not collide", async () => {
@@ -112,10 +132,55 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
     });
   });
 
+  describe("the entry form's fields (STE-47)", () => {
+    it("keeps no plaintext in the five new encrypted columns — checked against stored bytes", async () => {
+      const r = await vault.submit(ENTRY);
+      const { rows } = await pool.query<Record<string, Buffer>>(
+        `SELECT email_enc, phone_enc, gender_enc, date_of_birth_enc, emergency_contact_name_enc
+           FROM participants WHERE id = $1`,
+        [r.participantId],
+      );
+      const row = rows[0] ?? {};
+      const secrets = [FORM.email, FORM.phone, FORM.gender, FORM.dateOfBirth, FORM.emergencyContactName];
+      for (const [column, bytes] of Object.entries(row)) {
+        expect(Buffer.isBuffer(bytes), column).toBe(true);
+        for (const secret of secrets) expect(bytes.includes(Buffer.from(secret)), column).toBe(false);
+      }
+    });
+
+    it("stores id_type and bib_name in the clear, which is the point of each", async () => {
+      const r = await vault.submit(ENTRY);
+      const { rows } = await pool.query<{ id_type: string; bib_name: string }>(
+        "SELECT id_type, bib_name FROM participants WHERE id = $1",
+        [r.participantId],
+      );
+      expect(rows[0]).toEqual({ id_type: "passport", bib_name: "BUDI" });
+    });
+
+    it("binds each new ciphertext to its own column, so two cannot be swapped", async () => {
+      // The AAD is "<column>:<row id>". A ciphertext copied from phone to email
+      // must fail to decrypt rather than read back as someone's email.
+      const r = await vault.submit(ENTRY);
+      await pool.query("UPDATE participants SET email_enc = phone_enc WHERE id = $1", [r.participantId]);
+      await expect(vault.decryptForAudit(r.participantId)).rejects.toThrow();
+    });
+
+    it("does not change the hash: the form fields are not part of participant_hash", async () => {
+      const r = await vault.submit(ENTRY);
+      const other = await vault.submit({ ...ENTRY, email: "someone.else@example.com", bibName: "X" });
+      expect(participantHash(PERSON, saltFromHex(r.saltHex))).toBe(r.participantHash);
+      expect(participantHash(PERSON, saltFromHex(other.saltHex))).toBe(other.participantHash);
+    });
+
+    it("refuses a bib name longer than a bib at the database, not only at the API", async () => {
+      await expect(vault.submit({ ...ENTRY, bibName: "X".repeat(17) })).rejects.toThrow(/bib_name/);
+    });
+  });
+
   describe("what comes back out", () => {
     it("round-trips PII only through the audit path", async () => {
       const r = await vault.submit(ENTRY);
-      expect(await vault.decryptForAudit(r.participantId)).toEqual(PERSON);
+      expect(await vault.decryptForAudit(r.participantId)).toEqual({ ...PERSON, ...FORM });
     });
 
     it("summary carries no PII at all", async () => {

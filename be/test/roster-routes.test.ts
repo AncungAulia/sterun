@@ -39,6 +39,15 @@ const runnerKp = keypairFor("runner-a");
 const runnerBKp = keypairFor("runner-b");
 
 const PERSON = {
+  // STE-47: required on every submission since migration 009. None of it is
+  // hashed or carried by the roster.
+  idType: "national_id_card" as const,
+  bibName: "BUDI",
+  email: "runner@example.com",
+  phone: "+6281398765432",
+  gender: "male" as const,
+  dateOfBirth: "1990-05-17",
+  emergencyContactName: "Siti Rahayu",
   name: "Budi Santoso",
   nationalId: "3174012509900001",
   emergencyContact: "+6281234567890",

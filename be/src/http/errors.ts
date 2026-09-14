@@ -64,12 +64,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Plain sentences for the validation failures a person will actually cause.
+ *
+ * Ajv's own wording names the rule, not the fix: `must match pattern
+ * "^\\+[1-9][0-9]{6,14}$"` tells a form builder nothing they can show a runner.
+ * Keyed by field and rule, so a message only replaces Ajv's where it is known to
+ * mean the same thing. Everything else keeps Ajv's message.
+ */
+const PROBLEM_HINTS: Record<string, string> = {
+  "/emergency_contact pattern":
+    "must be a phone number in E.164 form: a plus and the country code, digits only, " +
+    "e.g. +6281234567890",
+  "/phone pattern":
+    "must be a phone number in E.164 form: a plus and the country code, digits only, " +
+    "e.g. +6281234567890",
+  "/email format": "must be an email address, e.g. runner@example.com",
+  "/date_of_birth format": "must be a date of birth as YYYY-MM-DD, e.g. 1990-05-17, not an age",
+  "/date_of_birth type": "must be a date of birth as YYYY-MM-DD, e.g. 1990-05-17, not an age",
+  "/id_type enum": "must be one of national_id_card, passport, driving_licence, other",
+  "/gender enum": "must be female or male",
+};
+
 const validationDetails = (error: FastifyError): ErrorBody["details"] =>
   error.validation?.map((issue) => ({
     // `instancePath` is "" for a problem with the root object; "body" reads
     // better than an empty string in a client's error list.
     path: issue.instancePath === "" ? (error.validationContext ?? "body") : issue.instancePath,
-    problem: issue.message ?? "is invalid",
+    problem:
+      PROBLEM_HINTS[`${issue.instancePath} ${issue.keyword}`] ?? issue.message ?? "is invalid",
   }));
 
 /**

@@ -175,6 +175,33 @@ succeed.
 **Key custody, the rotation procedure, and what a database leak would mean:
 [`OPERATIONS.md`](OPERATIONS.md).** Read it before running this anywhere but your own laptop.
 
+**The entry form's fields (STE-47, migration 009).** A submission also carries `id_type`,
+`bib_name`, `email`, `phone`, `gender`, `date_of_birth` and `emergency_contact_name`. None is part
+of `participant_hash`, so the frozen spec is untouched.
+
+| Field | Stored | Why |
+| --- | --- | --- |
+| `email`, `phone`, `gender`, `date_of_birth`, `emergency_contact_name` | encrypted, AAD `pii.<field>:<row id>` | they identify or describe a person |
+| `id_type` | plain | "passport" identifies nobody |
+| `bib_name` | plain | its whole job is to be printed and read at the start line |
+
+Three rules worth knowing before touching them:
+
+- **`emergency_contact` must be E.164** (`^\+[1-9][0-9]{6,14}$`), refused at the schema otherwise. It
+  is hashed, and `norm_contact` strips spaces and punctuation but never adds a country code, so
+  `0812 3456 7890` and `+62 812 3456 7890` are one phone and two hashes. A medic or auditor
+  recomputing later would fail on correct data. E.164 is already what `norm_contact` outputs, so the
+  frozen vectors (`+6281234567890`) hash exactly as before.
+- **`date_of_birth` is a date, never an age.** A record is permanent and an age is not. The schema
+  refuses a non-date (`format: "date"` also refuses `1990-02-30`), and the handler refuses a future
+  date or one before 1900.
+- **Errors say how to fix it.** Ajv's wording names the rule (`must match pattern …`), so
+  `PROBLEM_HINTS` in `src/http/errors.ts` replaces it for these fields with a sentence a form can
+  show. It only replaces a message it knows means the same thing.
+
+The columns are nullable because rows from before migration 009 have none of these values; the API
+requires all of them for every new submission.
+
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
 

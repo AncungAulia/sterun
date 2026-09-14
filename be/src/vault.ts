@@ -25,7 +25,46 @@ import {
 } from "./spec/participant-hash.js";
 import { generateTotpSecret } from "./spec/totp.js";
 
-export interface SubmitParticipant extends ParticipantInput {
+/** Which kind of identity document `nationalId` holds (STE-47). Not PII. */
+export type IdType = "national_id_card" | "passport" | "driving_licence" | "other";
+
+/** For podium categories (STE-47). */
+export type Gender = "female" | "male";
+
+/**
+ * What the entry form collects beyond the three hashed fields (STE-47).
+ *
+ * None of it is part of `participant_hash`. Everything but `idType` and
+ * `bibName` is encrypted; see migration 009 for why those two are not.
+ */
+export interface EntryFormFields {
+  idType: IdType;
+  /** Printed on the bib. 1 to 16 characters. */
+  bibName: string;
+  email: string;
+  /** E.164, e.g. `+6281234567890`. */
+  phone: string;
+  gender: Gender;
+  /** `YYYY-MM-DD`. A date, never an age: a record is permanent and an age is not. */
+  dateOfBirth: string;
+  emergencyContactName: string;
+}
+
+/**
+ * Everything the audit path can decrypt. The STE-47 fields are `null` for rows
+ * written before migration 009, which never had them.
+ */
+export interface AuditedParticipant extends ParticipantInput {
+  idType: IdType | null;
+  bibName: string | null;
+  email: string | null;
+  phone: string | null;
+  gender: Gender | null;
+  dateOfBirth: string | null;
+  emergencyContactName: string | null;
+}
+
+export interface SubmitParticipant extends ParticipantInput, EntryFormFields {
   eventId: number;
   categoryId: number;
   runnerAddress: string;
@@ -146,8 +185,9 @@ export class Vault {
       `INSERT INTO participants
          (id, name_enc, national_id_enc, emergency_contact_enc, name_fragment_enc,
           salt, totp_secret, participant_hash, event_id, category_id, runner_address,
-          add_ons)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          add_ons, id_type, bib_name, email_enc, phone_enc, gender_enc,
+          date_of_birth_enc, emergency_contact_name_enc)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         id,
         encrypt(this.keyring, input.name, aad("pii.name", id)),
@@ -164,6 +204,15 @@ export class Vault {
         // column is exactly what this code decided and never whatever the pg
         // driver would infer from a bare object.
         JSON.stringify(input.addOns ?? []),
+        // STE-47. Same envelope and same per-row AAD pattern as the columns
+        // above, so a ciphertext cannot be moved to another row or column.
+        input.idType,
+        input.bibName,
+        encrypt(this.keyring, input.email, aad("pii.email", id)),
+        encrypt(this.keyring, input.phone, aad("pii.phone", id)),
+        encrypt(this.keyring, input.gender, aad("pii.gender", id)),
+        encrypt(this.keyring, input.dateOfBirth, aad("pii.date_of_birth", id)),
+        encrypt(this.keyring, input.emergencyContactName, aad("pii.emergency_contact_name", id)),
       ],
     );
 
@@ -308,18 +357,36 @@ export class Vault {
    * so a lawful subject-access request has a defined path instead of an
    * improvised one.
    */
-  async decryptForAudit(participantId: string): Promise<ParticipantInput> {
+  async decryptForAudit(participantId: string): Promise<AuditedParticipant> {
     const { rows } = await this.pool.query<{
       name_enc: Buffer;
       national_id_enc: Buffer;
       emergency_contact_enc: Buffer;
+      id_type: IdType | null;
+      bib_name: string | null;
+      email_enc: Buffer | null;
+      phone_enc: Buffer | null;
+      gender_enc: Buffer | null;
+      date_of_birth_enc: Buffer | null;
+      emergency_contact_name_enc: Buffer | null;
     }>(
-      "SELECT name_enc, national_id_enc, emergency_contact_enc FROM participants WHERE id = $1",
+      `SELECT name_enc, national_id_enc, emergency_contact_enc, id_type, bib_name, email_enc,
+              phone_enc, gender_enc, date_of_birth_enc, emergency_contact_name_enc
+         FROM participants WHERE id = $1`,
       [participantId],
     );
     const r = rows[0];
     if (!r) throw new ParticipantNotFoundError(participantId);
+    const open = (value: Buffer | null, column: string): string | null =>
+      value === null ? null : decrypt(this.keyring, value, aad(column, participantId));
     return {
+      idType: r.id_type,
+      bibName: r.bib_name,
+      email: open(r.email_enc, "pii.email"),
+      phone: open(r.phone_enc, "pii.phone"),
+      gender: open(r.gender_enc, "pii.gender") as Gender | null,
+      dateOfBirth: open(r.date_of_birth_enc, "pii.date_of_birth"),
+      emergencyContactName: open(r.emergency_contact_name_enc, "pii.emergency_contact_name"),
       name: decrypt(this.keyring, r.name_enc, aad("pii.name", participantId)),
       nationalId: decrypt(this.keyring, r.national_id_enc, aad("pii.national_id", participantId)),
       emergencyContact: decrypt(

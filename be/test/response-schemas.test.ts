@@ -51,6 +51,9 @@ describe("no response anywhere can carry PII", () => {
       "phone",
       "email",
       "date_of_birth",
+      // STE-47: encrypted in the vault, so no response may name them either.
+      "gender",
+      "emergency_contact_name",
     ]) {
       expect(names).not.toContain(forbidden);
     }

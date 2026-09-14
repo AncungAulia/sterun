@@ -28,7 +28,25 @@ const PERSON = {
   national_id: "3174012509900001",
   emergency_contact: "+6281234567890",
 };
-const PII_VALUES = [PERSON.name, PERSON.national_id, PERSON.emergency_contact];
+/** STE-47: the entry form's fields, none of them hashed. */
+const FORM = {
+  id_type: "national_id_card",
+  bib_name: "BUDI S",
+  email: "budi.santoso@example.com",
+  phone: "+6281398765432",
+  gender: "male",
+  date_of_birth: "1990-05-17",
+  emergency_contact_name: "Siti Rahayu",
+};
+const PII_VALUES = [
+  PERSON.name,
+  PERSON.national_id,
+  PERSON.emergency_contact,
+  FORM.email,
+  FORM.phone,
+  FORM.date_of_birth,
+  FORM.emergency_contact_name,
+];
 
 describe("response schemas cannot express PII", () => {
   // This test needs no database: it reads the schemas Fastify serialises from.
@@ -37,7 +55,16 @@ describe("response schemas cannot express PII", () => {
   // reading the contract rather than grepping the code.
   it.each(Object.entries(RESPONSE_SCHEMAS))("%s names no PII field", (_name, schema) => {
     const json = JSON.stringify(schema);
-    for (const forbidden of ["name", "national_id", "emergency_contact"]) {
+    for (const forbidden of [
+      "name",
+      "national_id",
+      "emergency_contact",
+      "email",
+      "phone",
+      "gender",
+      "date_of_birth",
+      "emergency_contact_name",
+    ]) {
       // `participant_id` etc. contain "id"; match whole property keys only.
       expect(json).not.toMatch(new RegExp(`"${forbidden}"\\s*:`));
     }
@@ -85,7 +112,14 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       method: "POST",
       url: "/participants",
       headers: await credentials(kp),
-      payload: { ...PERSON, event_id: 0, category_id: 0, runner_address: kp.publicKey(), ...overrides },
+      payload: {
+        ...PERSON,
+        ...FORM,
+        event_id: 0,
+        category_id: 0,
+        runner_address: kp.publicKey(),
+        ...overrides,
+      },
     });
 
   beforeAll(async () => {
@@ -128,6 +162,122 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       for (const value of PII_VALUES) expect(res.body).not.toContain(value);
     });
 
+    describe("the entry form's fields (STE-47)", () => {
+      it("stores every field, encrypted where it is PII, and echoes none of it", async () => {
+        const res = await submit(runner);
+        expect(res.statusCode).toBe(201);
+        for (const value of PII_VALUES) expect(res.body).not.toContain(value);
+
+        const stored = await new Vault(pool, keyring).decryptForAudit(res.json().participant_id);
+        expect(stored).toEqual({
+          name: PERSON.name,
+          nationalId: PERSON.national_id,
+          emergencyContact: PERSON.emergency_contact,
+          idType: FORM.id_type,
+          bibName: FORM.bib_name,
+          email: FORM.email,
+          phone: FORM.phone,
+          gender: FORM.gender,
+          dateOfBirth: FORM.date_of_birth,
+          emergencyContactName: FORM.emergency_contact_name,
+        });
+      });
+
+      it("hashes an E.164 emergency contact exactly as the frozen vectors do", async () => {
+        // +6281234567890 is the contact in docs/specs/vectors/participant_hash.json.
+        // E.164 is already what norm_contact produces, so requiring it changes
+        // no hash — it only stops a second spelling of the same number.
+        const res = await submit(runner);
+        const body = res.json();
+        expect(
+          participantHash(
+            {
+              name: PERSON.name,
+              nationalId: PERSON.national_id,
+              emergencyContact: "+6281234567890",
+            },
+            saltFromHex(body.salt),
+          ),
+        ).toBe(body.participant_hash);
+      });
+
+      const refusal = async (overrides: Record<string, unknown>) => {
+        const res = await submit(runner, overrides);
+        expect(res.statusCode).toBe(400);
+        return res.json();
+      };
+
+      it.each([
+        ["a local number without a country code", "0812 3456 7890"],
+        ["spaces inside an international number", "+62 812 3456 7890"],
+        ["a leading zero after the plus", "+0812345678"],
+      ])("refuses an emergency contact written as %s, and says how to fix it", async (_l, value) => {
+        const body = await refusal({ emergency_contact: value });
+        expect(body.details).toContainEqual({
+          path: "/emergency_contact",
+          problem: expect.stringMatching(/E\.164.*\+6281234567890/),
+        });
+      });
+
+      it("refuses a phone that is not E.164 the same way", async () => {
+        const body = await refusal({ phone: "081398765432" });
+        expect(body.details[0]).toMatchObject({ path: "/phone", problem: expect.stringMatching(/E\.164/) });
+      });
+
+      it("refuses a malformed email", async () => {
+        const body = await refusal({ email: "budi at example" });
+        expect(body.details).toContainEqual({
+          path: "/email",
+          problem: expect.stringMatching(/email address/),
+        });
+      });
+
+      it.each([
+        ["an age as a string", "34"],
+        ["an age as a number", 34],
+        ["a date that does not exist", "1990-02-30"],
+      ])("refuses %s instead of a date of birth", async (_l, value) => {
+        const body = await refusal({ date_of_birth: value });
+        expect(body.details[0]).toMatchObject({
+          path: "/date_of_birth",
+          problem: expect.stringMatching(/YYYY-MM-DD.*not an age/),
+        });
+      });
+
+      it("refuses a date of birth in the future", async () => {
+        const body = await refusal({ date_of_birth: "2999-01-01" });
+        expect(body.error).toBe("invalid-date-of-birth");
+      });
+
+      it("refuses an id_type it does not know", async () => {
+        const body = await refusal({ id_type: "student_card" });
+        expect(body.details[0]).toMatchObject({
+          path: "/id_type",
+          problem: expect.stringMatching(/national_id_card, passport, driving_licence, other/),
+        });
+      });
+
+      it("refuses a bib name that would not fit on a bib", async () => {
+        await refusal({ bib_name: "SEVENTEEN LETTERS" });
+      });
+
+      it.each(Object.keys(FORM))("refuses a submission missing %s", async (field) => {
+        const res = await app.inject({
+          method: "POST",
+          url: "/participants",
+          headers: await credentials(runner),
+          payload: {
+            ...PERSON,
+            ...Object.fromEntries(Object.entries(FORM).filter(([k]) => k !== field)),
+            event_id: 0,
+            category_id: 0,
+            runner_address: runner.publicKey(),
+          },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+    });
+
     it("refuses to store one account's documents under another's address", async () => {
       const res = await submit(runner, { runner_address: stranger.publicKey() });
       expect(res.statusCode).toBe(403);
@@ -154,7 +304,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
         method: "POST",
         url: "/participants",
         headers: headers as Record<string, string>,
-        payload: { ...PERSON, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
+        payload: { ...PERSON, ...FORM, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
       });
       expect(res.statusCode).toBe(401);
     });
@@ -170,7 +320,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
             stranger.sign(Buffer.from(creds["x-sterun-nonce"] as string, "utf8")),
           ).toString("base64"),
         },
-        payload: { ...PERSON, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
+        payload: { ...PERSON, ...FORM, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
       });
       expect(res.statusCode).toBe(401);
       expect(res.json().error).toBe("bad-signature");
@@ -178,7 +328,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
 
     it("refuses to accept the same nonce twice", async () => {
       const creds = await credentials(runner);
-      const payload = { ...PERSON, event_id: 0, category_id: 0, runner_address: runner.publicKey() };
+      const payload = { ...PERSON, ...FORM, event_id: 0, category_id: 0, runner_address: runner.publicKey() };
       const first = await app.inject({ method: "POST", url: "/participants", headers: creds, payload });
       expect(first.statusCode).toBe(201);
       // Replay: a captured signature must be worth nothing.
