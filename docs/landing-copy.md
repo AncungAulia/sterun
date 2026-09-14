@@ -151,8 +151,8 @@ the record outlive the race."* Kalimat *kilometre 8* kembali setelah copy boleh 
 
 ### Ukuran dan jarak
 
-- Copy `clamp(1.125rem, 2.26vw, 1.75rem)`. Sempat dicoba dua kali lebih besar, lalu dikembalikan:
-  copy jadi hampir dua layar tingginya dan reveal butuh sekitar 1800px scroll.
+- Copy `clamp(1.6875rem, 3.39vw, 2.625rem)`, 1.5x ukuran pertama. Dua kali lipat sempat dicoba lalu
+  dikembalikan, karena copy jadi hampir dua layar tingginya.
 - Jarak antar paragraf 2.9em (dua baris). Jarak copy ke baris blok **sama persis**, karena baris
   blok membawa ukuran font copy: terukur 162px = 162px di 1440, 104px = 104px di 375. Copy boleh
   memanjang tanpa merusak posisi blok.
@@ -162,8 +162,8 @@ the record outlive the race."* Kalimat *kilometre 8* kembali setelah copy boleh 
 | Elemen | Gerakan | Pemicu |
 | --- | --- | --- |
 | Kolom kiri | fade + naik 12px, stagger 60ms | sekali saat masuk viewport |
-| Copy | reveal per karakter (SplitText): pudar (ink 10%) → biru `teal-400` + ditebalkan → ink | di-scrub ke scroll: mulai saat puncak copy di 80% layar, selesai saat dasar copy di 60%, ikut mundur saat scroll balik |
-| Blok ink + blok teal | mask slide-up 0.7s, ink duluan, teal +150ms | masuk viewport; turun lagi saat scroll kembali ke atas; naik lagi di lintasan berikutnya |
+| Copy | reveal per karakter (SplitText): warna halaman (`paper`, tidak terlihat) → biru `teal-400` + ditebalkan → ink | di-scrub ke scroll: mulai saat puncak copy di 80% layar, selesai saat dasar copy di 60% (di-clamp ke batas scroll halaman), ikut mundur saat scroll balik |
+| Blok ink + blok teal | tidak ada; diam di tempat | — |
 
 **Warna highlight `teal-400`**, bukan `teal-300`. Kontras terukur:
 
@@ -187,7 +187,10 @@ Pita yang sedang transisi sekitar 40 karakter, sekitar 20 di antaranya terbaca b
 mengikuti urutan baca; batas warna jatuh di tengah kata; ujung depan pita berada kira-kira di
 tengah layar. Lebar pita diatur satu konstanta, `BAND` di `landing-page/modules/problem/Problem.tsx`.
 
-`prefers-reduced-motion`: teks tidak dipecah, langsung ink penuh, blok diam di tempat.
+Sebelum gilirannya, karakter berwarna sama dengan halaman, bukan ink tipis, jadi copy benar-benar
+muncul dari tidak ada.
+
+`prefers-reduced-motion`: teks tidak dipecah dan langsung ink penuh.
 
 ---
 
