@@ -30,6 +30,7 @@ import {
   mint,
   racepackClaimed,
   recordDnf,
+  recordFinishedUntimed,
   recordEntered,
   recordFinished,
   scannerAdded,
@@ -82,7 +83,9 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
    * indexer cross-checks them, and a fixture where they disagree would be
    * testing the cross-check rather than the flow.
    */
-  function seedFullRace(): { events: ReturnType<typeof eventCreated>[] } {
+  function seedFullRace(
+    { untimed = false }: { untimed?: boolean } = {},
+  ): { events: ReturnType<typeof eventCreated>[] } {
     chain.addEvent({
       eventId: 0,
       organiser: ORGANISER,
@@ -111,7 +114,8 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       state: "Finished",
       enteredAt: 1_800_000_500n,
       claimedAt: 1_800_000_600n,
-      finishTimeS: 3_600,
+      // v2.2: record_finish_untimed leaves the time None on chain.
+      finishTimeS: untimed ? null : 3_600,
       resultAt: 1_800_000_700n,
     });
     chain.addRecord({
@@ -137,7 +141,9 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
         mint({ ...raceRecord, ledger: 103 }, RUNNER_B, 1),
         recordEntered({ ...raceRecord, ledger: 103 }, RUNNER_B, 0, 1, 2),
         racepackClaimed({ ...raceRecord, ledger: 120 }, 0, 0, SCANNER),
-        recordFinished({ ...raceRecord, ledger: 140 }, 0, 0, 3_600),
+        untimed
+          ? recordFinishedUntimed({ ...raceRecord, ledger: 140 }, 0, 0)
+          : recordFinished({ ...raceRecord, ledger: 140 }, 0, 0, 3_600),
         recordDnf({ ...raceRecord, ledger: 141 }, 1, 0),
       ],
     };
@@ -472,6 +478,63 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
     });
   });
 
+  describe("the untimed finish v2.2 can emit (STE-41)", () => {
+    it("moves the record to Finished and leaves the time empty, never 0", async () => {
+      const { events } = seedFullRace({ untimed: true });
+      const result = await build(new FakeEventSource([events])).pollOnce();
+      expect(result.applied).toBe(events.length);
+      expect(result.ignored).toBe(0);
+
+      const finished = await store.getRecord(pool, 0);
+      expect(finished).toMatchObject({ state: "Finished", finishTimeS: null, source: "event" });
+      expect(finished?.claimedAt).toBe(1_800_000_600n);
+      expect(finished?.resultAt).toBe(1_800_000_700n);
+    });
+
+    it("records the same three transitions a timed finish does", async () => {
+      const { events } = seedFullRace({ untimed: true });
+      await build(new FakeEventSource([events])).pollOnce();
+      expect((await store.listTransitions(pool, 0)).map((t) => [t.fromState, t.toState])).toEqual([
+        [null, "Entered"],
+        ["Entered", "RacepackClaimed"],
+        ["RacepackClaimed", "Finished"],
+      ]);
+    });
+
+    it("survives a rebuild from state, which the old constraint aborted", async () => {
+      // The production failure this migration fixes: before 007 the whole
+      // rebuild transaction rolled back on the first untimed record it read.
+      seedFullRace({ untimed: true });
+      const indexer = build(new FakeEventSource([]));
+      await indexer.rebuild();
+      expect(await store.getRecord(pool, 0)).toMatchObject({
+        state: "Finished",
+        finishTimeS: null,
+        source: "state",
+      });
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("still refuses a Finished row that never claimed a race pack", async () => {
+      // Only the time half of the constraint was dropped. Both finish functions
+      // refuse a record that is not RacepackClaimed, so this row is invented.
+      seedFullRace({ untimed: true });
+      await build(new FakeEventSource([])).rebuild();
+      await expect(
+        pool.query("UPDATE records SET claimed_at = NULL WHERE token_id = 0"),
+      ).rejects.toThrow(/finished_records_were_claimed/);
+    });
+
+    it("still refuses a finish time of 0", async () => {
+      // NULL means untimed; 0 is what record_finish refuses, so it is a bug.
+      seedFullRace();
+      await build(new FakeEventSource([])).rebuild();
+      await expect(
+        pool.query("UPDATE records SET finish_time_s = 0 WHERE token_id = 0"),
+      ).rejects.toThrow(/check constraint/);
+    });
+  });
+
   describe("rebuild from contract state", () => {
     it("reconstructs everything from state alone, with no events at all", async () => {
       seedFullRace();
@@ -756,6 +819,26 @@ describe("reconstructTransitions", () => {
       { tokenId: 5, fromState: null, toState: "Entered", occurredAt: 100n },
       { tokenId: 5, fromState: "Entered", toState: "RacepackClaimed", occurredAt: 200n },
       { tokenId: 5, fromState: "RacepackClaimed", toState: "Finished", occurredAt: 300n },
+    ]);
+  });
+
+  it("gives an untimed finish the same three steps as a timed one", () => {
+    // record_finish_untimed (v2.2) leaves finish_time_s None. The history comes
+    // from the timestamps, not the time, so a missing time must not drop the
+    // Finished step — that would show a runner who finished as still holding
+    // their race pack.
+    expect(
+      reconstructTransitions({
+        ...base,
+        state: "Finished",
+        claimedAt: 200n,
+        finishTimeS: null,
+        resultAt: 300n,
+      }).map((t) => [t.fromState, t.toState]),
+    ).toEqual([
+      [null, "Entered"],
+      ["Entered", "RacepackClaimed"],
+      ["RacepackClaimed", "Finished"],
     ]);
   });
 

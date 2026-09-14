@@ -104,6 +104,12 @@ export const recordFinished = (
 ): RawChainEvent =>
   envelope(ctx, ["record_finished", tokenId, eventId], { finish_time_s: finishTimeS });
 
+export const recordFinishedUntimed = (
+  ctx: EventContext,
+  tokenId: number,
+  eventId: number,
+): RawChainEvent => envelope(ctx, ["record_finished_untimed", tokenId, eventId], {});
+
 export const recordDnf = (ctx: EventContext, tokenId: number, eventId: number): RawChainEvent =>
   envelope(ctx, ["record_dnf", tokenId, eventId], {});
 

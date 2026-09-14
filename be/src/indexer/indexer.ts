@@ -421,6 +421,12 @@ export class Indexer {
           resultAt: occurredAt,
         });
 
+      // No finishTimeS on purpose: applyRecordTransition COALESCEs it, so the
+      // column stays NULL, which is exactly what "finished, no official time"
+      // is on chain.
+      case "record_finished_untimed":
+        return this.advance(db, envelope, event.tokenId, "Finished", { resultAt: occurredAt });
+
       case "record_dnf":
         return this.advance(db, envelope, event.tokenId, "Dnf", { resultAt: occurredAt });
     }

@@ -65,6 +65,10 @@ export type DecodedEvent =
   | { name: "record_entered"; runner: string; eventId: number; bibNo: number; tokenId: number }
   | { name: "racepack_claimed"; tokenId: number; eventId: number; operator: string }
   | { name: "record_finished"; tokenId: number; eventId: number; finishTimeS: number }
+  // v2.2 (STE-41). A new name rather than record_finished with a 0, so nothing
+  // that already decodes record_finished can read a missing time as a
+  // zero-second race.
+  | { name: "record_finished_untimed"; tokenId: number; eventId: number }
   | { name: "record_dnf"; tokenId: number; eventId: number };
 
 export type DecodedEventName = DecodedEvent["name"];
@@ -96,6 +100,7 @@ const EMITTER: Readonly<Record<DecodedEventName, keyof KnownContracts>> = {
   record_entered: "raceRecord",
   racepack_claimed: "raceRecord",
   record_finished: "raceRecord",
+  record_finished_untimed: "raceRecord",
   record_dnf: "raceRecord",
 };
 
@@ -230,6 +235,14 @@ function decodePayload(name: DecodedEventName, raw: RawChainEvent, at: string): 
         tokenId: u32(topic(raw, 1, at), `${at}.token_id`),
         eventId: u32(topic(raw, 2, at), `${at}.event_id`),
         finishTimeS: u32(dataField(raw, "finish_time_s", at), `${at}.finish_time_s`),
+      };
+    // Same shape as record_dnf: both facts live in the topics and the data map
+    // is empty (INTERFACE.md §2.3).
+    case "record_finished_untimed":
+      return {
+        name,
+        tokenId: u32(topic(raw, 1, at), `${at}.token_id`),
+        eventId: u32(topic(raw, 2, at), `${at}.event_id`),
       };
     case "record_dnf":
       return {

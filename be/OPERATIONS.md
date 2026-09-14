@@ -801,6 +801,26 @@ docker compose -f compose.prod.yml logs -f indexer
 docker compose -f compose.prod.yml run --rm indexer node dist/cli/indexer.js rebuild
 ```
 
+### Deploying migration 007 (untimed finish) — rebuild afterwards
+
+Migration 007 lets the index hold a `Finished` record with no time. Deploying the code is **not
+enough on its own** for a box that has been running since RaceRecord v2.2 went live: the poller
+already skipped the `record_finished_untimed` events it did not understand, and its cursor has moved
+past them, so it will never see them again. Those records stay `RacepackClaimed` until a rebuild reads
+them from state.
+
+```bash
+# after the new image is up (migrations run at API start)
+docker compose -f compose.prod.yml -f compose.homelab.yml stop indexer
+docker compose -f compose.prod.yml -f compose.homelab.yml run --rm indexer \
+  node dist/cli/indexer.js rebuild
+docker compose -f compose.prod.yml -f compose.homelab.yml up -d indexer
+```
+
+Stop the poller first for the same reason as the v2 move: a poller writing during the rebuild's
+transaction would race it. Then confirm the drift is gone — `rebuild` runs `doctor` itself, and
+`GET /records/14` and `/records/17` should say `Finished` with `finish_time_s: null`.
+
 ### Nonces now live in Postgres
 
 Since STE-31, auth nonces live in the `auth_nonces` table rather than in process memory. That is what

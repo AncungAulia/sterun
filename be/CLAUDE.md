@@ -339,6 +339,29 @@ documents to those same `token_id`s; the roster maps `token_id` to `totp_secret`
 validate the wrong person. Procedure, ordering and rollback: [`OPERATIONS.md`](OPERATIONS.md),
 "Moving to the v2 contracts".
 
+## The untimed finish (RaceRecord v2.2, STE-41)
+
+`record_finish_untimed` went live through an in-place `upgrade`, and with it a state combination that
+could not exist before: **`Finished` with `finish_time_s = NULL`**, meaning finished with no official
+time. Never render it as `0`, never treat it as "not finished yet".
+
+The index was wrong about it for three days, and the way it was wrong is worth remembering:
+
+- The poller **silently skipped** `record_finished_untimed`, because `decodeChainEvent` returns `null`
+  for a name it does not know. That is correct for a forged event and wrong for a real new one — the
+  record just stayed `RacepackClaimed` in the index with no error anywhere.
+- `pnpm indexer rebuild`, the command that exists to repair drift, **would have aborted** on the
+  first such record: 002's `finished_records_were_claimed` required a time on every `Finished` row.
+
+Migration **007** drops only the time half of that constraint. "Finished implies a claimed race
+pack" stays, because both finish functions refuse an unclaimed record, and `finish_time_s > 0`
+stays, because a `0` is still something `record_finish` refuses.
+
+The general lesson: **a spec change that adds an event name is not additive for this indexer.**
+`test/chain-events.test.ts` pins `KNOWN_EVENT_NAMES` against the frozen spec, so the next one fails
+a test — but only once someone updates the spec here too. When `docs/specs/CHANGELOG.md` gains an
+event, the indexer needs a handler in the same week, not a follow-up ticket nobody owns.
+
 ## Results CSV (STE-20, C7)
 
 `POST /events/:eventId/results/preview` — the organiser uploads a CSV and gets a preview with

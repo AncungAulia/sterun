@@ -23,6 +23,7 @@ import {
   mint,
   racepackClaimed,
   recordDnf,
+  recordFinishedUntimed,
   recordEntered,
   recordFinished,
   scannerAdded,
@@ -124,6 +125,19 @@ describe("RaceRecord events (INTERFACE.md §2.3)", () => {
       eventId: 1,
       finishTimeS: 3_600,
     });
+  });
+
+  it("decodes record_finished_untimed without inventing a time", () => {
+    // v2.2. The decoded event must not carry finishTimeS at all: a 0 here is
+    // exactly the zero-second race that option B was rejected for.
+    const event = decode(recordFinishedUntimed(raceRecord, 7, 1))?.event;
+    expect(event).toEqual({ name: "record_finished_untimed", tokenId: 7, eventId: 1 });
+    expect(event).not.toHaveProperty("finishTimeS");
+  });
+
+  it("drops record_finished_untimed emitted by EventRegistry", () => {
+    // Only RaceRecord may finish a record. The name alone proves nothing.
+    expect(decode(recordFinishedUntimed(registry, 7, 1))).toBeNull();
   });
 
   it("decodes record_dnf, which has no data fields at all", () => {
@@ -255,6 +269,7 @@ describe("coverage of the frozen surface", () => {
       "record_dnf",
       "record_entered",
       "record_finished",
+      "record_finished_untimed",
       "scanner_added",
       "scanner_removed",
       "slot_reserved",
