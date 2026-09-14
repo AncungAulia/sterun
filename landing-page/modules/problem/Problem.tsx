@@ -3,7 +3,7 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
-import { type CSSProperties, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { CONTRACTS, REPO_URL } from "@/lib/links";
 
@@ -11,9 +11,9 @@ import { CONTRACTS, REPO_URL } from "@/lib/links";
  * STE-12 Problem, the first light section after the hero.
  *
  * Two kinds of motion and nothing else: the left column fades up once, and the
- * copy is revealed character by character against the scroll. The colour blocks
- * beneath are still; they are the ground the section stands on, not something
- * that arrives. No parallax, nothing floating.
+ * copy is revealed character by character against the scroll. No parallax,
+ * nothing floating. The colour blocks that used to close this section now open
+ * How it works, which animates them.
  *
  * Copy is fixed by docs/landing-copy.md.
  */
@@ -221,28 +221,6 @@ export function Problem() {
               </p>
             ))}
           </div>
-        </div>
-
-        {/* Dark block landscape at 1.7:1, blue runway 30% of its height,
-            touching it with no gap and running to the right gutter. Bottoms
-            align so the blue reads as a ledge leaving the dark block. The row
-            carries the copy's font size so its 2.9em top margin matches the
-            gap between paragraphs exactly, however long the copy gets. */}
-        <div
-          aria-hidden
-          className="mt-[2.9em] flex items-end"
-          style={{ fontSize: COPY_SIZE, "--coal-w": "max(21vw, 9rem)" } as CSSProperties}
-        >
-          <div
-            data-block
-            className="shrink-0 bg-ink"
-            style={{ width: "var(--coal-w)", height: "calc(var(--coal-w) / 1.7)" }}
-          />
-          <div
-            data-block
-            className="min-w-0 flex-1 bg-teal"
-            style={{ height: "calc(var(--coal-w) / 1.7 * 0.3)" }}
-          />
         </div>
       </div>
     </section>

@@ -243,6 +243,115 @@ html::-webkit-scrollbar {
   outline-offset: 3px;
 }
 
+/* --- How it works track --------------------------------------------------
+   Layout for HowItWorksTrack.tsx. The box (.hiw) clips the track, and --bw is
+   the box's width, written by the component. The script only ever writes
+   transforms. */
+.hiw__track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: max-content;
+}
+/* Each moving box gets its own compositor layer. Without it the scaled picture
+   and its window were repainted every frame of the scrub. */
+.hiw__panel,
+.hiw__window,
+.hiw__image {
+  will-change: transform;
+}
+/* akaru opens the window from its left edge, centred vertically. */
+.hiw__window {
+  transform-origin: 0 50%;
+}
+.hiw__image {
+  transform-origin: 50% 50%;
+}
+
+/* akaru's project button: a 1px ink ring. On hover an ink disc grows from the
+   centre to fill it, and the arrow is swapped: the resting one leaves toward
+   the top right while a paper one comes in from the bottom left. */
+.hiw-cta {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: var(--cta);
+  height: var(--cta);
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--color-ink);
+  color: var(--color-ink);
+  isolation: isolate;
+}
+.hiw-cta__dot {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--color-ink);
+  transform: scale(0);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hiw-cta__arrows {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  overflow: hidden;
+}
+.hiw-cta__arrow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.hiw-cta__arrow--hover {
+  color: var(--color-paper);
+  transform: translate(-100%, 100%);
+}
+/* The close button inside an opened step: the same ring and disc, with a cross
+   that turns paper and a quarter turn as the disc fills. */
+.hiw-cta__x {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  transition:
+    color 0.3s ease,
+    transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.hiw-cta:focus-visible .hiw-cta__x {
+  color: var(--color-paper);
+}
+@media (hover: hover) {
+  .hiw-cta:hover .hiw-cta__x {
+    color: var(--color-paper);
+    transform: rotate(90deg);
+  }
+}
+.hiw-cta:focus-visible {
+  outline: 2px solid var(--color-teal-400);
+  outline-offset: 3px;
+}
+.hiw-cta:focus-visible .hiw-cta__dot {
+  transform: scale(1);
+}
+.hiw-cta:focus-visible .hiw-cta__arrow--rest {
+  transform: translate(100%, -100%);
+}
+.hiw-cta:focus-visible .hiw-cta__arrow--hover {
+  transform: translate(0, 0);
+}
+@media (hover: hover) {
+  .hiw-cta:hover .hiw-cta__dot {
+    transform: scale(1);
+  }
+  .hiw-cta:hover .hiw-cta__arrow--rest {
+    transform: translate(100%, -100%);
+  }
+  .hiw-cta:hover .hiw-cta__arrow--hover {
+    transform: translate(0, 0);
+  }
+}
+
 /* --- Problem reveal ------------------------------------------------------
    Characters are thickened while highlighted with a stroke in their own
    colour, driven by a variable GSAP animates. It is not font-weight on
@@ -261,7 +370,17 @@ html::-webkit-scrollbar {
   .nav-cta::before,
   .nav-cta-roll > span,
   .nav-cta-arrow,
-  .nav-underline::after {
+  .nav-underline::after,
+  .hiw-cta__dot,
+  .hiw-cta__arrow,
+  .hiw-cta__x {
     transition: none;
+  }
+
+  /* The box becomes a plain horizontal scroller: no hold, no packing, every
+     step open and every title set. */
+  .hiw__mask {
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 }

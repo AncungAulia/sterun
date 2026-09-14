@@ -138,6 +138,45 @@ header, jadi satu posisi statis itu benar di kedua fase.
 - Warna yang dianimasikan dibaca **dari elemen ber-kelas token** (`getComputedStyle`), bukan ditulis
   sebagai hex. Tailwind v4 cuma meng-emit variabel `--color-*` yang dipakai oleh suatu kelas, jadi
   membaca `var(--color-…)` langsung dari `:root` bisa kosong.
+- **Menahan section di layar pakai CSS `sticky`, bukan `pin` ScrollTrigger.** Tidak ada pin
+  spacer yang menggeser layout saat refresh, dan offset section tetap statis untuk header. Ancestor
+  stage harus `overflow-x-clip`, bukan `overflow-hidden`: `hidden` menjadikannya scroll container
+  dan stage tidak pernah menempel.
+- **Scrub hanya `transform`** (`x`, `y`, `yPercent`) supaya compositor yang mengerjakan dan tidak
+  ada frame yang repaint. Wipe yang membuka isi pakai mask dua lapis (kotak bergerak ke satu arah,
+  isinya ke arah sebaliknya), bukan `width` atau `clip-path`.
+- **Hati-hati `invalidateOnRefresh` di timeline ber-stagger.** Tween yang di-invalidate lupa nilai
+  awalnya sampai playhead mencapainya, jadi panel yang belum gilirannya terukur sudah turun penuh.
+  Nilai fungsi (px hasil ukur) cuma untuk tween yang mulai di waktu 0; sisanya pakai persen.
+- **Track horizontal How it works** (`modules/how-it-works/HowItWorksTrack.tsx`, model di
+  `lib/hiwMotion.ts`). Gerakannya **diukur dari akaru.fr**, bukan dikarang: halaman mereka
+  di-sample di Chrome headless (1440x900, tiap 50px scroll) dan tiap kurva di `hiwMotion.ts` adalah
+  fit ke data itu. Jangan "merapikan" angkanya tanpa mengukur ulang.
+  - Track berada **di dalam kotak biru**. Kotak itu panel pour terakhir, sekaligus container
+    yang meng-clip track, dan tingginya satu layar penuh. Isinya di-counter-translate selama pour,
+    jadi diam saat tepi kotak turun. **Tidak ada jeda**: wipe coal/runway, lalu pour sambil halaman
+    terus scroll (judul naik keluar), dan pour mendarat tepat saat kotak sampai di atas layar, lalu
+    kotak ditahan. Pour-nya **satu lapisan** (kotak biru), selesai saat section sampai di atas
+    layar. Kotak membawa penutup `data-hiw-cover` (5 lapisan warna di atas track) yang di-wipe
+    turun **berlapis** (biru pergi duluan, ink terakhir) mulai dari tengah pour sampai kotak
+    menyentuh atas layar, jadi konten sudah terbuka selagi judul masih terlihat. Titik serah
+    wipe coal → pour: `HANDOVER_SCREEN` di `lib/hiwMotion.ts`. Satu-satunya penahan adalah stage sticky ber-`top` negatif (tinggi
+    judul). Titik serah wipe → pour ada di `HANDOVER`. Semua ukuran relatif ke **lebar kotak**
+    (`--bw`, di-update `ResizeObserver`), dan panjang scroll track = `3450/900 ×` tinggi kotak.
+  - Panel yang menunggu: jendela di-scale dari kiri-tengah dan turun sedikit, gambar di dalamnya
+    `2 - scale`. Tarikan ke kanan dilepas oleh progres **panel sebelumnya**, bukan posisinya
+    sendiri. Judul, pill, detail, dan tombol dimainkan dengan timer saat kiri panel melewati
+    ambangnya, dan mundur (lebih cepat, tanpa stagger) saat di-scroll balik.
+  - Enter menempati slot intro akaru, jadi mulai tergeser `0.5 - 0.666` ke kiri.
+  - Tombol panah membuka langkah itu jadi dialog penuh kotak (`StepDetail.tsx`, data di
+    `steps.ts`): kartu mengembang dari posisinya (clip-path), gambar mulai persis seperti di kartu
+    lalu jadi crop selebar kotak, judul meluncur ke kolom kiri, deskripsi + link muncul di kanan.
+    Selama terbuka: scroll dikunci (`lockScroll` + wheel/touch/tombol scroll dicegah), track
+    `inert`, Tab terkunci di dialog, Escape menutup, fokus kembali ke panah **setelah** render
+    berikutnya (sebelum itu track masih inert dan `focus()` diabaikan).
+  - Scroll lengths akaru mengikuti **tinggi** viewport, bukan lebar (diukur di 1440x700).
+  - **`gsap.quickSetter(el, "scale")` diam-diam tidak menulis apa pun** (`scale` alias). Tulis
+    `style.transform` langsung untuk elemen yang transform-nya milik sendiri.
 - **Jangan animasikan `font-weight` pada teks yang mengalir.** Bobot yang lebih berat juga lebih
   lebar, jadi setiap karakter setelahnya bergeser dan baris bisa pindah. Untuk efek tebal, pakai
   `-webkit-text-stroke` berwarna sama (lihat `.problem-char` di `globals.css`).
