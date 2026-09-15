@@ -27,6 +27,7 @@ export function TabCategories({
   categories,
   openForEntry,
   offerEntry = true,
+  enteredCategoryId,
 }: {
   categories: SterunCategory[];
   openForEntry: boolean;
@@ -37,6 +38,12 @@ export function TabCategories({
    * then ignores.
    */
   offerEntry?: boolean;
+  /**
+   * The distance the connected wallet already entered (STE-21). One entry per
+   * race, so no distance offers a way in, and the refund notice goes with the
+   * payment it warns about.
+   */
+  enteredCategoryId?: number;
 }) {
   if (categories.length === 0) {
     return (
@@ -46,7 +53,9 @@ export function TabCategories({
     );
   }
 
-  const anyWayIn = openForEntry && categories.some((category) => category.slotsLeft > 0);
+  const entered = enteredCategoryId !== undefined;
+  const anyWayIn =
+    openForEntry && !entered && categories.some((category) => category.slotsLeft > 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -76,7 +85,9 @@ export function TabCategories({
               <p className="numeric heading-strong text-2xl text-ink">
                 {formatPrice(category.priceStroops)}
               </p>
-              {openForEntry && !full && offerEntry ? (
+              {category.categoryId === enteredCategoryId ? (
+                <Badge variant="success">Entered</Badge>
+              ) : openForEntry && !full && offerEntry && !entered ? (
                 <Link
                   href={`/events/${category.eventId}/enter?category=${category.categoryId}`}
                   className="inline-flex h-10 items-center justify-center rounded-md bg-teal-500 px-4 text-base font-medium text-paper transition-colors hover:bg-teal-600 active:bg-teal-700"

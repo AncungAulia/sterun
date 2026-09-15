@@ -53,6 +53,14 @@ interface DateTimeFieldProps {
   required?: boolean;
   /** Warn when the moment is already gone. Used for the start time. */
   warnIfPast?: boolean;
+  /**
+   * The first and last months the calendar can reach. Given either, the
+   * caption becomes month and year dropdowns: a date of birth is decades back,
+   * and paging there one month at a time is not a picker anybody would finish
+   * (STE-21).
+   */
+  startMonth?: Date;
+  endMonth?: Date;
 }
 
 export function DateTimeField({
@@ -66,6 +74,8 @@ export function DateTimeField({
   dateOnly = false,
   required = false,
   warnIfPast = false,
+  startMonth,
+  endMonth,
 }: DateTimeFieldProps) {
   const [open, setOpen] = useState(false);
   /**
@@ -130,7 +140,10 @@ export function DateTimeField({
                 mode="single"
                 selected={chosenValid ? chosen : undefined}
                 onSelect={setDate}
-                defaultMonth={chosenValid ? chosen : undefined}
+                defaultMonth={chosenValid ? chosen : endMonth}
+                {...(startMonth || endMonth
+                  ? { captionLayout: "dropdown" as const, startMonth, endMonth }
+                  : {})}
                 autoFocus
               />
             </PopoverContent>

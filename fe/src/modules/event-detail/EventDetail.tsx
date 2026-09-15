@@ -23,6 +23,8 @@ import Link from "next/link";
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
+import { useRunnerRecords } from "@/hooks/useRunnerRecords";
+import { useWallet } from "@/hooks/useWallet";
 
 import { EventView } from "./EventView";
 import { TabProofs } from "./component/TabProofs";
@@ -31,6 +33,14 @@ export function EventDetail({ eventId }: { eventId: number }) {
   const { data, isPending, isError, refetch } = useEvent(eventId);
   const metadata = useEventMetadata(data?.event.uri ?? "", data?.event.metadataHash ?? "");
   const addOns = useEventAddOns(eventId);
+  /*
+    STE-21: a runner who already entered is offered their entry instead of a
+    way in. Read from chain, like the enter page's own check, and only for a
+    connected wallet: with none there is nobody to ask about.
+  */
+  const address = useWallet((state) => state.address);
+  const records = useRunnerRecords(address);
+  const mine = records.data?.find((record) => record.eventId === eventId);
 
   if (isPending) {
     return (
@@ -83,6 +93,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
         categories={categories}
         document={document}
         addOns={addOns.data ?? []}
+        myEntry={mine ? { tokenId: mine.tokenId, categoryId: mine.categoryId } : undefined}
         proofs={
           <TabProofs
             result={metadata.data}

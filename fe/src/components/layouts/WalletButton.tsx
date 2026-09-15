@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useSusdBalance } from "@/hooks/useSusdBalance";
 import { useWallet } from "@/hooks/useWallet";
-import { shortAddress } from "@/utils/format";
+import { IS_TESTNET } from "@/lib/env";
+import { GetTestSusd } from "@/modules/entry/component/GetTestSusd";
+import { formatAmount, shortAddress } from "@/utils/format";
 
 /**
  * Connect / connected / disconnect, in one control.
@@ -18,6 +21,8 @@ export function WalletButton() {
   const { address, isRestoring, isConnecting, error, connect, disconnect } = useWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Testnet only (STE-21): the label says sUSD, which mainnet does not use.
+  const balance = useSusdBalance(IS_TESTNET ? address : null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -72,6 +77,18 @@ export function WalletButton() {
         >
           <p className="text-xs text-n-500">Connected account</p>
           <p className="numeric mt-1 break-all text-sm text-n-800">{address}</p>
+          {IS_TESTNET ? (
+            <div className="mt-3 border-t border-n-200 pt-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-n-500">sUSD balance</span>
+                <span className="numeric text-base font-medium text-ink">
+                  {balance.data?.kind === "balance" ? formatAmount(balance.data.stroops) : balance.data ? "0" : ""}
+                </span>
+              </div>
+              <GetTestSusd address={address} size="sm" className="mt-2 [&>button]:w-full" />
+              <p className="mt-2 text-xs text-n-500">Test money for trying Sterun. It has no value.</p>
+            </div>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"

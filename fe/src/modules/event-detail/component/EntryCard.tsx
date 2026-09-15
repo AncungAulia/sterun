@@ -22,7 +22,16 @@
  * `reserve_slot` counts and what `enter` is given. So the button moves to the
  * distances rather than guessing one, and the real entry links live there,
  * one per distance, next to the price and the places left.
+ *
+ * ## A runner who already entered (STE-21)
+ *
+ * One entry per race, so the way in gives way to two ways back: the entry
+ * (the bib and the receipt) and the pass. Two, not one, on Ancung's call: each
+ * is proof of the entry in its own form. The pass opens in round 2 of STE-21,
+ * so until then its button is there and off, rather than a link to nothing.
  */
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -43,6 +52,7 @@ export function EntryCard({
   event,
   categories,
   onEnter,
+  myEntry,
 }: {
   event: SterunEvent;
   categories: SterunCategory[];
@@ -52,6 +62,8 @@ export function EntryCard({
    * on a race that does not exist yet.
    */
   onEnter?: () => void;
+  /** The connected wallet's entry in this race. Replaces the way in. */
+  myEntry?: { tokenId: number; categoryId: number };
 }) {
   const open = event.status === "Open";
   const left = categories.reduce((sum, category) => sum + category.slotsLeft, 0);
@@ -122,7 +134,28 @@ export function EntryCard({
       {/* `mt-auto`: the card is as tall as the poster beside it, and the one
           thing a runner is looking for should sit on the same line as the
           poster's bottom edge rather than floating in the middle of it. */}
-      {open ? (
+      {myEntry ? (
+        <div className="mt-auto flex flex-col gap-3">
+          {/* A cancelled race is still the most important fact, entry or not. */}
+          {event.status === "Cancelled" ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-base text-danger"
+            >
+              {CLOSED_REASON.Cancelled}
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button asChild className="sm:flex-1">
+              <Link href={`/events/${event.eventId}/entered/${myEntry.tokenId}`}>View my entry</Link>
+            </Button>
+            <Button variant="secondary" disabled className="sm:flex-1">
+              Open my pass
+            </Button>
+          </div>
+          <p className="text-sm text-n-500">Your pass will open here soon.</p>
+        </div>
+      ) : open ? (
         onEnter ? (
           <div className="mt-auto">
             <Button onClick={onEnter} disabled={left <= 0}>

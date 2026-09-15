@@ -31,6 +31,7 @@ fe/app/
     page.tsx                         /
     events/[eventId]/                /events/:id
     events/[eventId]/enter/          /events/:id/enter
+    events/[eventId]/entered/[tokenId]/  /events/:id/entered/:token
     runner/[address]/                /runner/G...
     profile/                         /profile
 
@@ -290,10 +291,10 @@ statistics and thumbnails are a layer on top — not the foundation, and STE-24 
 
 | URL | Shows | Ticket |
 | --- | --- | --- |
-| `/events/[id]/enter` | A stepper: choose a category → PII form → review → **one signature** (`enter`, with the sUSD fee covered by the auth tree) | STE-21 |
-| ↳ the success screen | Bib, `token_id`, a testnet transaction link, and the **salt receipt** | STE-21 |
-| `/pass/[tokenId]` | A QR regenerating every 30 seconds + a 6-digit code for the manual fallback, the bib, the event name, the state. Installable. Fully functional in airplane mode. | STE-21 |
-| `/profile` | My races + a shortcut to each pass. Thin: its contents are `/runner/[my-address]` (§3.2) | STE-21 |
+| `/events/[id]/enter` | Three steps: distance & race pack → details → review & pay, then **one button with two wallet approvals behind it** (a signed message for the vault, then `enter`). Built in STE-21 round 1; design in `superpowers/specs/2026-09-15-entry-flow-design.md` | STE-21 |
+| `/events/[id]/entered/[tokenId]` | The success page: the bib drawn as a bib, the **receipt code** with a PDF download, and a way on held until the receipt is saved | STE-21 |
+| `/pass/[tokenId]` | A QR regenerating every 30 seconds + a 6-digit code for the manual fallback, the bib, the event name, the state. Installable. Fully functional in airplane mode. | STE-21 (round 2) |
+| `/profile` | My races + a shortcut to each pass. Thin: its contents are `/runner/[my-address]` (§3.2) | STE-24 |
 
 **The success screen is its own page, not a modal.** The salt receipt appears exactly once in its
 life; if it is lost, the identity check at `/runner/[address]` is dead forever for that record. This
@@ -303,11 +304,21 @@ The `totp_secret` is stored in the runner's device IndexedDB and never touches t
 
 **Errors that must have their own presentation**, not a raw alert: `QuotaFull(5)`, `EventNotOpen(4)`,
 insufficient sUSD balance, and the user declining to sign. Plus one slippery case: **the PII was
-submitted but `enter` failed** — the user has to be able to retry without creating a duplicate row
-(an idempotency key per submission, agreed with James).
+submitted but `enter` failed** — the user has to be able to retry without submitting again.
 
-An error code is a `u32` with no contract identity; pick the error map from its band — `1..=99`
-EventRegistry, `100..=199` RaceRecord, `200+` OZ.
+How STE-21 settled both (2026-09-15; `fe/CLAUDE.md`, the entry flow):
+
+- **No idempotency key was needed.** The vault's answer (hash, salt, secret) is kept for the whole
+  attempt, so a retry pays with it and never submits again; only editing the details does. The
+  backend links a row to its record from the chain (STE-59), so entering takes two approvals and
+  no confirm call; rows that never get a record are swept (STE-50).
+- **`enter`'s refusals are explained from the chain, not the code.** An error code is a `u32` with no
+  contract identity, and `enter` calls the sUSD token, whose errors share EventRegistry's `1..=99`
+  band. So after a refusal the page re-reads the race, the distance, the add-on stock and the
+  balance, and says what is now true. For calls that reach only our contracts, pick the map from
+  the band as before: `1..=99` EventRegistry, `100..=199` RaceRecord, `200+` OZ.
+- **No answer is a check, never a guess.** The page looks for a record of this wallet in the race;
+  `enter` is atomic, so none found means nothing was charged.
 
 ---
 

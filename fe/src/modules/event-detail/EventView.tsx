@@ -62,6 +62,11 @@ export interface EventViewProps {
    * everything typed into it.
    */
   preview?: boolean;
+  /**
+   * The connected wallet's entry in this race, when it has one (STE-21). One
+   * entry per race, so every way in on the page gives way to it.
+   */
+  myEntry?: { tokenId: number; categoryId: number };
 }
 
 export function EventView({
@@ -71,6 +76,7 @@ export function EventView({
   addOns,
   proofs,
   preview = false,
+  myEntry,
 }: EventViewProps) {
   const [tab, setTab] = useState("details");
   /** Absent in a preview, and every Enter button on the page hangs off it. */
@@ -105,7 +111,12 @@ export function EventView({
           </div>
         )}
 
-        <EntryCard event={event} categories={categories} onEnter={onEnter} />
+        <EntryCard
+          event={event}
+          categories={categories}
+          onEnter={onEnter}
+          myEntry={preview ? undefined : myEntry}
+        />
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -160,7 +171,9 @@ export function EventView({
             startsAt={event.startsAt}
             categoryCodes={categories.map((category) => category.code)}
             canEnter={
-              event.status === "Open" && categories.some((category) => category.slotsLeft > 0)
+              !myEntry &&
+              event.status === "Open" &&
+              categories.some((category) => category.slotsLeft > 0)
             }
             onEnter={onEnter}
           />
@@ -171,6 +184,7 @@ export function EventView({
             categories={categories}
             openForEntry={event.status === "Open"}
             offerEntry={!preview}
+            enteredCategoryId={preview ? undefined : myEntry?.categoryId}
           />
         </TabsContent>
 

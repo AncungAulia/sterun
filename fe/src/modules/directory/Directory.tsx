@@ -33,11 +33,12 @@
  * under the heading names the place; a search or a filter takes it away, since
  * it would then claim an order the visitor can no longer check.
  *
- * The refresh control stays for the acceptance scenario in the ticket: create
- * an event, press refresh, and it appears without this app being redeployed.
+ * There is no refresh button (removed on Ancung's call, 2026-09-15). It existed
+ * for STE-13's acceptance scenario, a new race appearing without a redeploy,
+ * and that still holds without it: the list is a React Query read that goes
+ * back to the chain once it is stale and whenever the tab regains focus.
  */
-import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCwIcon, SearchIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { EmptyState } from "@/components/elements/EmptyState";
@@ -46,10 +47,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useArea } from "@/hooks/useArea";
 import { useEventDocuments } from "@/hooks/useEventDocuments";
-import { eventKeys, useEvents } from "@/hooks/useEvents";
+import { useEvents } from "@/hooks/useEvents";
 import { useNearbyPrompt } from "@/hooks/useNearbyPrompt";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
-import { cn } from "@/utils/cn";
 
 import {
   matchesSearch,
@@ -68,8 +68,7 @@ import { FilterDrawer } from "./component/FilterDrawer";
 import { NO_FILTERS, activeFilterCount, matchesFilters, type Filters } from "./filters";
 
 export function Directory() {
-  const queryClient = useQueryClient();
-  const { data, isPending, isError, isFetching, refetch } = useEvents();
+  const { data, isPending, isError, refetch } = useEvents();
   const summaries = publicEvents(data?.events ?? []);
   const documents = useEventDocuments(summaries);
   const { place, setPlace, clearPlace } = useArea();
@@ -108,10 +107,6 @@ export function Directory() {
     ? `${results.length} ${results.length === 1 ? "race matches" : "races match"}`
     : "All races";
 
-  function refresh() {
-    void queryClient.invalidateQueries({ queryKey: eventKeys.all });
-  }
-
   function clearNarrowing() {
     setQuery("");
     setFilters(NO_FILTERS);
@@ -127,17 +122,8 @@ export function Directory() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-8 sm:py-10">
       <header className="flex flex-col gap-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
           <AreaPicker place={place} onSave={setPlace} onClear={clearPlace} />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={isFetching ? "Refreshing" : "Refresh"}
-            onClick={refresh}
-            disabled={isFetching}
-          >
-            <RefreshCwIcon aria-hidden className={cn(isFetching && "animate-spin motion-reduce:animate-none")} />
-          </Button>
         </div>
 
         <div className="flex flex-col items-center gap-5 text-center">

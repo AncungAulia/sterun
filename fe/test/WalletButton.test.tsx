@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,16 @@ let state = {
 
 vi.mock("@/hooks/useWallet", () => ({
   useWallet: () => state,
+}));
+/*
+  STE-21: the menu shows the sUSD balance and Get test sUSD. Both are stubbed:
+  the balance is a chain read, and the button has its own test file.
+*/
+vi.mock("@/hooks/useSusdBalance", () => ({
+  useSusdBalance: () => ({ data: { kind: "balance", stroops: 200_000_000n }, isPending: false }),
+}));
+vi.mock("@/modules/entry/component/GetTestSusd", () => ({
+  GetTestSusd: () => <button type="button">Get test sUSD</button>,
 }));
 
 const ADDRESS = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
@@ -139,5 +149,16 @@ describe("connected", () => {
     render(<WalletButton />);
 
     expect(screen.getByText("GAAZ…CWN7")).toHaveClass("numeric");
+  });
+
+  it("shows the sUSD balance and a way to get test sUSD (mockup block 7)", async () => {
+    render(<WalletButton />);
+    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
+
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveTextContent("sUSD balance");
+    expect(within(menu).getByText("20")).toBeInTheDocument();
+    expect(within(menu).getByRole("button", { name: "Get test sUSD" })).toBeInTheDocument();
+    expect(menu).toHaveTextContent("Test money for trying Sterun. It has no value.");
   });
 });

@@ -1,9 +1,16 @@
+// @vitest-environment node
 /**
+ * Node rather than jsdom, and the sUSD case is why: deriving a contract id runs
+ * stellar-sdk's XDR encoder, which rejects a Buffer made in Node's realm when
+ * jsdom has installed its own Uint8Array as the global (fe/CLAUDE.md, Tests).
+ * Nothing in this file needs a DOM.
+ *
  * `lib/env.ts` reads process.env at module load, which is the whole point: a
  * missing address should stop the app at boot rather than surface as a failed
  * contract call three screens in. Testing it therefore means re-importing the
  * module per case with a different environment.
  */
+import { Asset } from "@stellar/stellar-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
@@ -15,6 +22,7 @@ const VALID = {
   NEXT_PUBLIC_EVENT_REGISTRY: "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
   NEXT_PUBLIC_RACE_RECORD: "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
   NEXT_PUBLIC_SUSD_SAC: "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU",
+  NEXT_PUBLIC_SUSD_ISSUER: "GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW",
 };
 
 async function loadEnv(overrides: Record<string, string | undefined> = {}) {
@@ -46,6 +54,25 @@ describe("positive", () => {
     for (const id of Object.values(env.CONTRACTS)) {
       expect(id).toMatch(/^C[A-Z2-7]{55}$/);
     }
+  });
+});
+
+describe("sUSD (STE-21)", () => {
+  it("names the issuer whose asset contract is the configured SAC", async () => {
+    // A trustline names the asset by code and issuer, the fee moves through
+    // the SAC. Deriving one from the other proves they are the same asset.
+    const env = await loadEnv();
+    const sac = new Asset("sUSD", env.SUSD_ISSUER).contractId(env.NETWORK.networkPassphrase);
+    expect(sac).toBe(env.CONTRACTS.susdSac);
+  });
+
+  it("knows the test network from the public one", async () => {
+    expect((await loadEnv()).IS_TESTNET).toBe(true);
+    expect((await loadEnv({ NEXT_PUBLIC_NETWORK_PASSPHRASE: PUBLIC_PASSPHRASE })).IS_TESTNET).toBe(false);
+  });
+
+  it("leaves the issuer empty rather than failing, so a page with no payment still boots", async () => {
+    expect((await loadEnv({ NEXT_PUBLIC_SUSD_ISSUER: undefined })).SUSD_ISSUER).toBe("");
   });
 });
 

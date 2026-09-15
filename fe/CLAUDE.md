@@ -549,6 +549,72 @@ knowing before adding a page there:
   mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
   with an error that points at the mock rather than at the cause.
 
+### `/events/[id]/enter` — a runner enters (STE-21, round 1)
+
+`modules/entry/`. Design: `docs/superpowers/specs/2026-09-15-entry-flow-design.md` and its mockup;
+plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
+
+- **Three steps, then a page of its own.** Distance & race pack → Your details → Review & pay, then
+  `/events/[id]/entered/[tokenId]`. `EntryForm` reads and gates; `EntryReady` is the form, mounted
+  only once everything has answered, so `useEntryAttempt` runs with a real plan below no early
+  return.
+- **Before the form, this wallet's records are read from chain** (`gate.ts`), never the index:
+  `enter` does not stop one wallet entering one race twice, and each entry charges again. An
+  existing entry wins over "closed".
+- **The race pack and the add-ons are split by price only** (`basket.ts`). Every pack unit is still
+  reserved by `enter`, so a sold-out size cannot be picked. Ids are built by walking the basket,
+  never the selection. A choice restored from sessionStorage is `sanitizeSelection`ed first.
+- **Personal details are never stored.** The distance and pack choice live in sessionStorage; the
+  details live in memory. Phones are `react-phone-number-input` in **national** mode, which turns
+  `0812…` into `+62812…`; the international mode keeps the zero, a well-formed wrong number, and
+  the emergency phone is hashed.
+- **Sign and pay is details first, payment second** (`attempt.ts`, a reducer). The vault's answer is
+  kept for the attempt, so a retry never resends details; changing the distance, pack or details
+  forgets it. No answer is never "it may have gone through": it is a check for a record, and
+  `enter` being atomic makes "not found" mean nothing was charged. A failed check can only be
+  checked again. The dialog cannot be closed while either runs. **Two approvals, nothing after
+  `enter`:** the backend links the vault row to the record from the chain (STE-59), so the web app
+  never calls `POST /participants/:id/confirm`. That call needed a third signed message, which
+  surfaced as wallet popups over the success page; do not bring it back. **The gates (already entered,
+  closed, sold out) decide once, before the form** (`EntryForm`): the landed entry refreshes the
+  records while the dialog is still linking, and re-deciding then unmounted the dialog and stranded
+  the runner on "You're already entered" instead of their bib.
+- **A refused `enter` is explained from the ledger afterwards** (`enter-failure.ts`): closed, no
+  places, an item out of units, a short balance. Never from the error code, which the sUSD token
+  shares with EventRegistry. A decline or no answer is read from the error and costs no chain read.
+- **`PayPanel` checks the sUSD balance before the button is usable**, and shows neither the notice
+  nor the balance for a free entry, where no money moves. **Get test sUSD** (testnet only) opens a
+  trustline when needed and calls `POST /faucet` (STE-49, `be/src/routes/faucet.ts`, live since
+  2026-09-15; every refusal it documents is mapped in `lib/susd.ts`). As of that day the live API
+  reports `faucet.payoutConfigured: false` in `/config`, so the route answers `faucet-unavailable`
+  and the button says test sUSD is not available yet, until a faucet key is set on the server. It imports
+  `lib/wallet` on press: statically it put Stellar Wallets Kit in every page's header graph.
+- **The success page reads the bib, race and distance from chain; the bib name and receipt code from
+  this device** (`lib/entry-store.ts`, IndexedDB), which is also what round 2's pass reads offline.
+  Another device gets the bib and a sentence saying where the receipt is. "Back to the race" waits
+  for "I've saved my receipt", once: the tick is remembered on the device (`receiptSaved`), so a
+  return visit through View my entry shows no box and no confetti, and confetti never fires on a
+  device that did not enter. The stored entry is read fresh on every visit and the tick updates the
+  page's copy at once; flags are written with idb-keyval `update`, never read-then-save, so two
+  landing together cannot undo each other. **The success page never asks the wallet to sign.** An
+  entry found by the no-answer check has no transaction hash to link with; STE-59 covers it.
+- **The receipt carries no personal details and never the check-in secret** (`receipt.ts`, tested;
+  `receipt-pdf.ts` only lays it out, with jspdf loaded on press).
+- **Bib numbers are shown exactly as the contract holds them.** Since STE-54 a bib is unique within
+  its race and counts from 1; a race created before that upgrade keeps its per-distance numbers from
+  0. The distance is never part of the number: it is the label beside it (the bib's tabs).
+- **On `/events/[id]`, a connected wallet that already entered gets no way in** (`EventDetail`
+  reads its records from chain, `myEntry` on `EventView`). The entry card shows two buttons, **View
+  my entry** (the success page) and **Open my pass**, off until round 2 builds `/pass/[tokenId]`
+  rather than a link to nothing; Ancung wanted both, as two forms of proof. The Distances tab marks
+  the entered distance **Entered** and drops every Enter link and the refund notice; the timeline's
+  Enter goes too. No wallet, or a preview, changes nothing.
+- **The calendar's month and year dropdowns are shadcn Selects** (`ui/calendar.tsx`, the
+  react-day-picker `Dropdown` slot), and **its nav is `pointer-events-none`**: the nav spans the
+  caption row and swallowed every click meant for them. jsdom has no layout, so only a browser
+  showed it. `DateTimeField` takes `startMonth`/`endMonth` to switch them on.
+- Blood type and medical history are not asked for: STE-48 is Axel's decision.
+
 ## Tests
 
 ```bash
@@ -647,7 +713,9 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   revert. `enter` hands control to the sUSD token contract, whose own errors are numbered in the same
   `1..=99` range, so a refusal to move money would otherwise print "This distance is full." The
   entry-time sentences (`QuotaFull`, `EventNotOpen`, `AddOnQuotaFull`) were removed for the same
-  reason and come back in STE-21, together with a way of telling a token revert from ours.
+  reason. STE-21 did not bring them back here: the entry flow says them from the chain's state
+  after a refusal (`modules/entry/enter-failure.ts`), which needs no way of telling a token revert
+  from ours.
   **A step that stopped without an answer gets its own sentence**, never the generic one: the SDK
   throws distinctly when a transaction went out with no result coming back, and the button under that
   message repeats the step, which for the first step would publish a second race that can never be
@@ -671,7 +739,7 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   STE-34). `enter` transfers the fee straight from runner to organiser with no escrow, so the
   contract never holds the money and no refund can be forced by anyone. The text stands directly
   above the button or link that takes money, not in a footer and not in a modal that can be dismissed
-  unread. Its current home is `TabCategories`; **the `/events/[id]/enter` page in STE-21 must place
+  unread. Its current home is `TabCategories`; **`PayPanel` on `/events/[id]/enter` (STE-21) places
   it again** near the signing button. It is shown only when there genuinely is a way in (`Open` and
   slots remaining) — a warning that appears where it does not apply is how warnings stop being read.
 - **Event descriptions and Terms are plain text**, rendered with `whitespace-pre-line`. Decided by

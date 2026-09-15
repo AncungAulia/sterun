@@ -10,7 +10,7 @@ import { SterunContractError, SterunNetworkError, classifyContractError } from "
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api";
-import { SOMETHING_WENT_WRONG, friendlyError } from "@/lib/errors";
+import { SOMETHING_WENT_WRONG, friendlyError, isDeclined, isNoAnswer } from "@/lib/errors";
 import { PlainError } from "@/lib/plain-error";
 
 /** A revert as the SDK hands one over. */
@@ -210,5 +210,46 @@ describe("friendlyError", () => {
       expect(friendlyError("boom")).toBe(SOMETHING_WENT_WRONG);
       expect(friendlyError({})).toBe(SOMETHING_WENT_WRONG);
     });
+  });
+});
+
+/**
+ * The same text rules, for a flow that branches on the kind of stop rather
+ * than printing a sentence: the entry flow's Sign and pay (STE-21). Tested
+ * against friendlyError's own inputs so the two can never disagree.
+ */
+describe("isNoAnswer", () => {
+  it.each([
+    "createEvent was submitted but the RPC returned no transaction hash",
+    "Waited 30 seconds for transaction to complete, but it did not. Returning anyway.",
+    "Transaction was sent to the network, but not yet awaited. No result to show.",
+  ])("recognises %s", (text) => {
+    expect(isNoAnswer(new Error(text))).toBe(true);
+  });
+
+  it("does not mistake a decline or a failure for no answer", () => {
+    expect(isNoAnswer(new Error("User declined access"))).toBe(false);
+    expect(isNoAnswer(new Error("insufficient balance"))).toBe(false);
+    expect(isNoAnswer(undefined)).toBe(false);
+  });
+});
+
+describe("isDeclined", () => {
+  it("recognises a decline in the shapes wallets send", () => {
+    expect(isDeclined(new Error("User declined access"))).toBe(true);
+    expect(isDeclined({ code: -4, message: "User rejected the request" })).toBe(true);
+    expect(isDeclined({ error: { code: -4, message: "Request cancelled by the user" } })).toBe(true);
+  });
+
+  it("is not a decline once the text says something already reached the network", () => {
+    // "Nothing was charged" is the sentence a decline earns in the entry flow,
+    // and it must not be printed over a payment that may exist.
+    expect(isDeclined(new Error("Submitted, then cancelled while pending"))).toBe(false);
+    expect(isDeclined(new Error("rejected: returned no transaction hash"))).toBe(false);
+  });
+
+  it("is not a decline for anything else", () => {
+    expect(isDeclined(new Error("enter reverted with Error(Contract, #10)"))).toBe(false);
+    expect(isDeclined(null)).toBe(false);
   });
 });

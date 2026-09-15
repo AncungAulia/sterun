@@ -204,17 +204,16 @@ describe("Directory", () => {
       expect(container.querySelector('[data-status="Completed"]')).not.toBeNull();
     });
 
-    it("re-reads the chain when asked to refresh", async () => {
-      // STE-13's acceptance scenario: create an event on testnet, refresh, see
-      // it here without redeploying anything.
+    it("offers no refresh button", async () => {
+      // Removed on Ancung's call (2026-09-15). STE-13's scenario, a new race
+      // appearing without a redeploy, still holds: the list is a React Query
+      // read that goes back to the chain when it goes stale and when the tab
+      // regains focus, so nobody has to press anything.
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
       renderDirectory();
       await screen.findByText("Jakarta Marathon 0");
 
-      listEvents.mockResolvedValue({ events: [summary(0), summary(1, { name: "Brand New Race" })], unreadable: [] });
-      await userEvent.click(screen.getByRole("button", { name: /refresh/i }));
-
-      expect(await screen.findByText("Brand New Race")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
     });
 
     it("features an open, upcoming race that has a poster", async () => {
