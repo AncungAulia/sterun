@@ -41,6 +41,7 @@ export const EVENT_REGISTRY_ERRORS: Readonly<Record<number, string>> = {
   16: "OrganiserAlreadyAdded",
   17: "OrganiserNotFound",
   18: "NotAllowlistedOrganiser",
+  19: "QuotaNotIncreased",
 };
 
 /** INTERFACE.md §2.4 — RaceRecord (C2). */
