@@ -18,6 +18,7 @@ authoritative design: `docs/SYSTEM_DESIGN.md` §3.1. The frozen interface: `docs
 | `AddOn(event_id, addon_id)` | persistent | `AddOnData` (v2) |
 | `AddOnCount(event_id)` | persistent | `u32` (v2) |
 | `Organiser(organiser)` | persistent | `bool` (v2.1) — the admin's allowlist, **contract-wide** |
+| `EventEntryCount(event_id)` | persistent | `u32` (v2.3) — entries taken across ALL distances; the bib sequence |
 
 `DataKey` is **not** documented in `INTERFACE.md`: it is a storage schema, not a surface clients
 call. `check-interface.mjs` records it as `internalTypes`, so any **new** `#[contracttype]` that
@@ -37,9 +38,24 @@ entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`
 2. **`reserve_slot` may only be called by RaceRecord.** Its gate is invoker-contract auth on the root
    frame. **`mock_all_auths()` cannot prove this gate** (recording mode satisfies `require_auth` for
    any address, contract addresses included) — use `env.mock_auths(&[...])`.
-3. **`entered_count` doubles as the bib number.** `reserve_slot` increments it and returns the value
-   as `seq`. So touching how that counter advances means changing bib numbers already printed into
-   on-chain records. That is not a refactor, it is a data change.
+3. **`entered_count` is the QUOTA counter; the bib comes from `EventEntryCount`.** (v2.3, STE-54)
+   They count different things and must not be merged back together. `reserve_slot` increments both:
+   `entered_count` for the distance the entrant chose, which is what `QuotaFull = 5` is measured
+   against, and `EventEntryCount(event_id)` for the event, whose new value **is** the bib. So the
+   first entrant of a race wears `1` whichever distance they picked, and the 10K and the 5K never
+   issue the same number.
+
+   Until v2.3 the bib *was* `entered_count`, read before the increment — per distance and 0-based,
+   which put two runners in one `0`. Three things follow that are easy to get wrong:
+   - **The distance is not in the number.** `category_id * 1000 + n` was rejected: one distance here
+     can hold tens of thousands of entrants (Merdeka Run 2026 takes 8,100 in one), so the scheme
+     overflows its own field. Distance is a label and a colour in `fe/`, never arithmetic.
+   - **Events created before the upgrade were not migrated.** Their counter starts at 0, so an entry
+     taken after the upgrade is bib 1, which one of their old per-distance bibs may be too. Seeding
+     it would mean summing every category inside the `enter` path — an unbounded read loop on the
+     call that takes a runner's money. `be/` keeps its duplicate-bib guard for those events.
+   - **Touching how either counter advances changes numbers already printed into on-chain records.**
+     That is not a refactor, it is a data change.
 4. **`EventStatus` transitions.** `Draft → Open → Closed → Completed`, with `Closed ↔ Open` allowed
    (an organiser can reopen entries) and `Completed` **terminal**. An illegal transition is
    `InvalidStatus = 11`. **v2** adds `Cancelled`: allowed from `Draft`/`Open`/`Closed`, terminal, and
@@ -86,7 +102,8 @@ not a C2 error. That is what the bands are for.
 ## The events emitted
 
 `EventCreated`, `CategoryAdded`, `EventStatusChanged`, `ScannerAdded`, `ScannerRemoved`,
-`SlotReserved`, plus in v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`, plus in v2.1:
+`SlotReserved` (its `seq` is the bib — event-wide and 1-based since v2.3, **same layout**), plus in
+v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`, plus in v2.1:
 `OrganiserAdded`, `OrganiserRemoved` (their topics carry **no** `event_id` — the allowlist is
 contract-wide).
 
@@ -100,7 +117,7 @@ is **alphabetical**, not declaration order. It is `#[topic]` that keeps declarat
 
 ## Tests
 
-`src/test.rs`, 66 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
+`src/test.rs`, 75 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
 `pub fn` or an error variant, add **positive + negative + edge** with it — `cargo test` is not a
 place for happy paths alone.
 
@@ -109,12 +126,16 @@ place for happy paths alone.
 `stellar contract build` is not merely advice here: stale wasm means the upgrade tests are testing
 yesterday's code.
 
-One test there does not use the local build as its "old code":
-`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` deploys the wasm that was
-**genuinely live** before STE-36 (`testdata/event_registry_live_pre_allowlist.wasm`, `22bb432e…`),
-writes an event/category/add-on/scanner/bib with it, then upgrades to the current build. That is the
-only pair that can prove `DataKey::Organiser` was added safely. The rules for replacing that fixture
-are in `testdata/README.md`.
+Two tests there do not use the local build as their "old code". Each deploys the wasm that was
+**genuinely live** before one upgrade, writes state with it, then upgrades to the current build —
+the only pair that can prove the storage change in question was safe:
+
+| Test | Fixture | Proves |
+| --- | --- | --- |
+| `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` | `event_registry_live_pre_allowlist.wasm`, `22bb432e…` | `DataKey::Organiser` was appended safely (STE-36) |
+| `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` | `event_registry_live_pre_bib.wasm`, `cf009033…` | the per-distance bibs on chain still decode once bibs go event-wide (STE-54) |
+
+The rules for adding the next fixture — add, never overwrite — are in `testdata/README.md`.
 
 ```bash
 cd sc && stellar contract build && cargo test -p event_registry

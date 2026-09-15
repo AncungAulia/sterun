@@ -1,6 +1,6 @@
-# INTERFACE — the FROZEN Sterun contracts (v2.2.0)
+# INTERFACE — the FROZEN Sterun contracts (v2.3.0)
 
-> **Status: FROZEN 2026-09-11 (v2.2 — the untimed finish in RaceRecord).**
+> **Status: FROZEN 2026-09-15 (v2.3 — bibs unique within an event).**
 > This document is handoff contract number 1 in `docs/SYSTEM_DESIGN.md` §9: the function
 > signatures and `#[contractevent]` layouts that **James** (backend/indexer) and **Ancung**
 > (web app, QR pass, scanner PWA) hold, so they can work in parallel without waiting for
@@ -9,6 +9,44 @@
 > Any change to a signature, an event layout, or an error code after this PR is merged requires:
 > **a new PR + approval from Axel (PM) + fable**, an entry in `docs/specs/CHANGELOG.md`, and
 > **regenerated TS bindings** (STE-14). Error codes are public ABI — **never renumber them**.
+
+## What changed from v2.2.0 (MINOR)
+
+STE-54. `reserve_slot` returned the category's `entered_count`, so a bib was a position **within a
+distance**, counting from **0**. The first 10K entrant and the first 5K entrant of one race were
+therefore both bib `0`: two runners at the same event wearing the same number, and an entry pass
+drawing a physical bib with a zero on it. v2.3 makes the bib a position **within the event**,
+counting from **1**.
+
+| Change | Impact on clients |
+| --- | --- |
+| **`reserve_slot` returns an event-wide number starting at 1** | **read this** — the signature, the types and the error list are all unchanged; what moved is the value |
+| `SlotReserved.seq` carries that number | layout untouched — same topics, same field; an indexer needs no change |
+| `RecordData.bib_no` / `RecordEntered.bib_no` carry it too | no C2 code change; C2's wasm is **not** rebuilt |
+| New storage key `DataKey::EventEntryCount(event_id)` | invisible to clients — `DataKey` is not part of this surface |
+| No new function, no new event, no new error code, no changed signature | — |
+| Installed by `upgrade` at the **same** address (`CAPB6NQP…`) | no new address; existing events intact |
+
+Three things you must read before using this version:
+
+- **The distance is not encoded in the number.** A scheme like `category_id * 1000 + n` caps a
+  distance at a thousand runners, and one distance here can hold tens of thousands (Merdeka Run 2026
+  fills 8,100 slots in a single distance). Bib `7` says "the seventh person who entered this race",
+  and nothing about which distance they entered. Render the distance as a label and a colour beside
+  the number, never as arithmetic on it.
+- **Events created before v2.3 keep the numbers they issued**, and there is no migration. Their
+  counter therefore starts at 0, so the first entry taken on such an event *after* the upgrade is
+  bib 1 — which one of its existing per-distance bibs may also be. Seeding the counter would mean
+  summing every category of the event inside `enter`, and an unbounded read loop on the path that
+  takes a runner's money is the worse failure. **A client that shows bibs for a pre-upgrade event
+  must not assume they are unique**; `be/` keeps its duplicate-bib guard for exactly those events.
+  Events created from v2.3 onwards cannot produce the collision at all.
+- **The bib is not the token id.** Token ids are global to RaceRecord and count from 0; bibs belong
+  to one race and count from 1. They coincide only on the first event ever run, and only by accident.
+
+**Quota is unchanged.** `entered_count` is still incremented per distance and `QuotaFull(5)` still
+fires from exactly the comparison it fired from before. The event counter numbers entrants; it gates
+nothing.
 
 ## What changed from v2.1.0 (MINOR, additive)
 
@@ -110,11 +148,18 @@ The artefacts used for this freeze:
 
 | Contract | Wasm | Wasm hash (sha256) | Size |
 | --- | --- | --- | ---: |
-| EventRegistry (C1, v2.1) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
+| EventRegistry (C1, v2.3) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
 | RaceRecord (C2, v2.2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
 
-EventRegistry did **not** change in v2.2 — its hash is exactly the one frozen at v2.1, and its
-address was not `upgrade`d.
+Each version moves exactly one of the two. EventRegistry did **not** change in v2.2 (its v2.1 hash
+stood, and its address was not `upgrade`d); RaceRecord does **not** change in v2.3 — `bib_no` carries
+a different number, but no C2 code produced it, so its hash is exactly the one frozen at v2.2.
+
+> RaceRecord's `bib_no` field still carries the doc comment "the category sequence handed out by
+> `EventRegistry::reserve_slot`", which v2.3 makes wrong. Doc comments travel in the contract spec
+> and therefore in the wasm hash, so correcting that sentence would mean an `upgrade` transaction
+> against a live contract whose behaviour did not change. The table in §2.2 below is right; the code
+> comment is corrected at C2's next real wasm change.
 
 Artefacts that have been **replaced at the same address** through `upgrade` (the full history and
 its transactions are in `docs/deployments.md`):
@@ -122,14 +167,17 @@ its transactions are in `docs/deployments.md`):
 | | sha256 | Size |
 | --- | --- | ---: |
 | EventRegistry v2.0.0/v2.0.1 | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22,952 B |
+| EventRegistry v2.1.0/v2.2.0 | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
 | RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21,795 B |
 | RaceRecord v2.0.1/v2.1.0 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
 
-Two of those artefacts are also **committed**, each as the "before" of an upgrade test that deploys
-the genuinely live code, writes state with it, then replaces it with the current build:
-`22bb432e…` in `sc/contracts/event_registry/testdata/` (proves `DataKey::Organiser` was added
-safely) and `27749180…` in `sc/contracts/race_record/testdata/` (proves every record state the old
-code could write still decodes, and that `record_finish_untimed` works on records it minted).
+Three of those artefacts are also **committed**, each as the "before" of an upgrade test that
+deploys the genuinely live code, writes state with it, then replaces it with the current build:
+`22bb432e…` and `cf009033…` in `sc/contracts/event_registry/testdata/` (the first proves
+`DataKey::Organiser` was added safely, the second that the per-distance bibs already on chain still
+decode once bibs become event-wide) and `27749180…` in `sc/contracts/race_record/testdata/` (proves
+every record state the old code could write still decodes, and that `record_finish_untimed` works on
+records it minted).
 
 The previously frozen v1 artefacts (still live at the v1 addresses, see `docs/deployments.md`):
 `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` (C1, 14,964 B) and
@@ -140,7 +188,7 @@ Stellar CLI:
 
 ```bash
 shasum -a 256 sc/target/wasm32v1-none/release/event_registry.wasm
-# cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0
+# c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd
 ```
 
 The toolchain that produced them: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`,
@@ -177,7 +225,7 @@ Every `Result<T, Error>` means: on success it returns `T`, on failure it **rever
 | `set_event_status` | `event_id: u32, status: EventStatus` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `InvalidStatus(11)` |
 | `add_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `ScannerAlreadyAdded(12)` |
 | `remove_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `ScannerNotFound(13)` |
-| `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (bib seq) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
+| `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (the bib: unique in the event, from 1) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
 | `reserve_addon` | `event_id: u32, addon_id: u32` | `Result<i128, Error>` (the price charged) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `AddOnNotFound(14)`, `AddOnQuotaFull(15)` |
 | `get_admin` | — | `Result<Address, Error>` | — (view) | `NotInitialized(1)` |
 | `get_race_record` | — | `Result<Address, Error>` | — (view) | `RaceRecordNotSet(6)` |
@@ -206,6 +254,10 @@ Important notes for D2/D3:
 - The quota check and the increment happen **inside one invocation**, so two simultaneous entries
   cannot both take the last slot; the second reads the already-incremented `entered_count` and
   reverts with `QuotaFull(5)`. The same holds for `reserve_addon` and `AddOnQuotaFull(15)`.
+- **`reserve_slot` returns a bib that is unique within the event and starts at 1** (v2.3). Every
+  distance of an event draws from one sequence, so no two runners at a race share a number and
+  nobody is given `0`. The number says nothing about the distance — see "What changed from v2.2.0"
+  above for why, and for what a pre-v2.3 event does instead.
 - **`reserve_addon` returns the PRICE, not a sequence number.** Its caller (`RaceRecord.enter`)
   needs the price in order to charge, and reading it through a second call would mean the amount
   charged and the unit taken come from two different reads. The unit's sequence number is still
@@ -248,7 +300,7 @@ EventData {
 CategoryData {
   code: Symbol,
   distance_m: u32,
-  entered_count: u32,   // also the next bib sequence number
+  entered_count: u32,   // slots taken in THIS distance; the quota counter, not the bib (v2.3)
   price_usdc: i128,     // 7-decimal representation
   quota: u32,
 }
@@ -303,7 +355,7 @@ alphabetically**, not in declaration order), and an **empty** `ScMap` when every
 | `ScannerRemoved` | `"scanner_removed"`, `event_id: u32`, `scanner: Address` | *(none)* |
 | `OrganiserAdded` | `"organiser_added"`, `organiser: Address` | *(none)* |
 | `OrganiserRemoved` | `"organiser_removed"`, `organiser: Address` | *(none)* |
-| `SlotReserved` | `"slot_reserved"`, `event_id: u32`, `category_id: u32` | `seq: u32` |
+| `SlotReserved` | `"slot_reserved"`, `event_id: u32`, `category_id: u32` | `seq: u32` (the bib — event-wide and from 1 since v2.3; layout unchanged) |
 | `AddOnReserved` | `"add_on_reserved"`, `event_id: u32`, `addon_id: u32` | `price: i128`, `seq: u32` |
 | `ContractUpgraded` | `"contract_upgraded"`, `new_wasm_hash: BytesN<32>` | *(none)* |
 
@@ -437,7 +489,7 @@ Important notes for D2/D3:
 ```text
 RecordData {
   addon_ids: Vec<u32>,           // add-ons bought by this entry, in reservation order
-  bib_no: u32,                   // the category seq from reserve_slot
+  bib_no: u32,                   // the bib from reserve_slot: unique in the event, from 1 (v2.3)
   category_id: u32,
   claimed_at: Option<u64>,
   entered_at: u64,
