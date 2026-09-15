@@ -9,7 +9,7 @@
  *
  * ## When errors show
  *
- * The wizard's split (`modules/organiser/missing.ts`). An impossible value is
+ * The wizard's split (`modules/organiser/create/lib/missing.ts`). An impossible value is
  * shown as soon as it exists; an empty field only after Continue.
  *
  * ## What is never kept

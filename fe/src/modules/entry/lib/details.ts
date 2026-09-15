@@ -3,7 +3,7 @@
  *
  * ## Two kinds of wrong, shown at two moments
  *
- * The same split as the wizard (`modules/organiser/missing.ts`). An empty
+ * The same split as the wizard (`modules/organiser/create/lib/missing.ts`). An empty
  * field waits for Continue, because a form that goes red under the cursor is a
  * form people learn to ignore. An impossible value (a bib name that will not
  * fit, a phone with no country code) is said as soon as it exists, because

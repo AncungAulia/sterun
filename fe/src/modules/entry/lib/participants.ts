@@ -1,7 +1,7 @@
 /**
  * The vault, as the entry flow uses it (STE-21).
  *
- * Authenticated the same way as uploads (`lib/upload.ts`, be/src/auth.ts): ask
+ * Authenticated the same way as uploads (`lib/api/upload.ts`, be/src/auth.ts): ask
  * for a nonce bound to the address, sign it, send it back in three headers.
  * One challenge per call, because a nonce is single-use and lives two minutes.
  *

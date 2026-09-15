@@ -13,7 +13,7 @@
  * its line breaks there while the public page kept them.
  *
  * So the review now draws `EventView`, the component `/events/[id]` draws,
- * fed with what the run is about to write (`modules/organiser/preview.ts`).
+ * fed with what the run is about to write (`modules/organiser/create/lib/preview.ts`).
  * Whatever the organiser checks here is what runners will see, down to the
  * tabs, because there is only one page. The Verification tab is the one part
  * that cannot be shown yet, since there is nothing published to check against,

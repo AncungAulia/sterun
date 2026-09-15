@@ -169,7 +169,7 @@ describe("FileField", () => {
 
     it("never puts the store's own words on screen", async () => {
       // Whatever the upload threw was written for a log. The field shows the
-      // one sentence `lib/errors.ts` has for a failure nobody can name.
+      // one sentence `lib/api/errors.ts` has for a failure nobody can name.
       const user = userEvent.setup();
       uploadEventFile.mockRejectedValueOnce(new Error("POST /events/files returned 502"));
       render(<Harness />);

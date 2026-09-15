@@ -8,7 +8,7 @@
  * The race, its date, the distance and the bib number are read from chain, so a
  * refresh, or this link opened anywhere, still shows them. The name on the bib
  * and the receipt code are on no chain and returned by no route, so they come
- * from this device (`lib/entry-store.ts`) and only appear in the browser that
+ * from this device (`modules/entry/lib/entry-store.ts`) and only appear in the browser that
  * entered. Elsewhere the page says where the receipt is.
  *
  * ## The way on waits for the receipt

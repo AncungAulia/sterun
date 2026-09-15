@@ -50,7 +50,7 @@ export function sparklinePath(
 
 const DAY = 86_400n;
 
-/** Just enough of a record for this maths; the full shape is in `lib/records.ts`. */
+/** Just enough of a record for this maths; the full shape is in `modules/organiser/shared/lib/records.ts`. */
 export interface EnteredAt {
   enteredAt: bigint;
 }

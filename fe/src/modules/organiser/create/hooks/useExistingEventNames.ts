@@ -4,7 +4,7 @@
  * Every event name the backend index currently knows.
  *
  * Read from `be/` rather than from the chain on purpose. The directory
- * assembles itself by asking the registry for each id in turn (`lib/events.ts`
+ * assembles itself by asking the registry for each id in turn (`lib/event/events.ts`
  * explains why the contract cannot list them), which is one RPC round trip per
  * event — acceptable once for a page, absurd for a field somebody is typing
  * into.

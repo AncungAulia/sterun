@@ -3,7 +3,7 @@
 /**
  * Walking the run of signatures that creates an event.
  *
- * The list itself is planned in `modules/organiser/run.ts`; this is the part
+ * The list itself is planned in `modules/organiser/create/lib/run.ts`; this is the part
  * that performs it. Kept out of the component because it is a loop with state
  * that outlives a render (the event id appears in the middle of the run and
  * every later step needs it) and because the thing worth testing is the
@@ -225,7 +225,7 @@ export function useEventRun({
         } catch (error) {
           // Mapped here rather than in the dialog: this is the one place the
           // run learns what went wrong, and what reaches the screen must be a
-          // sentence somebody wrote for a reader (`lib/errors.ts`).
+          // sentence somebody wrote for a reader (`lib/api/errors.ts`).
           //
           // The original is logged first, and only in development. Mapping
           // destroys it otherwise, and then an organiser who is stuck has

@@ -454,7 +454,7 @@ hosted at `uri`.
   ordering rule, no re-serialisation. Anyone can check it with `curl` + `sha256sum`, and there is no
   "canonical form" two implementations could read differently. The cost is real and deliberate:
   re-uploading the same document with different whitespace breaks the check forever, because events
-  are frozen (§2.2). Established in STE-13 (`fe/src/lib/metadata.ts`) and used by STE-17 when it
+  are frozen (§2.2). Established in STE-13 (`fe/src/lib/event/metadata.ts`) and used by STE-17 when it
   writes the document.
 - A document that fails its hash check is **not displayed at all**, rather than displayed with a
   warning. Content that cannot be proven remains unproven however it is labelled.

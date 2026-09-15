@@ -1,7 +1,7 @@
 /**
  * STE-17 — writing the off-chain event document the event page verifies.
  *
- * The other half of `lib/metadata.ts`. That module downloads a document,
+ * The other half of `lib/event/metadata.ts`. That module downloads a document,
  * hashes its bytes and compares them against `metadata_hash`; this one produces
  * the bytes in the first place. They are two ends of one convention, and there
  * is a test that runs a generated document straight through the reader rather

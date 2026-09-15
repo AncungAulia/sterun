@@ -97,7 +97,7 @@ function marksRace(pathname: string, href: string): boolean {
 
 /**
  * `onDisconnect` is passed in rather than read from `useWallet()` here, and
- * that is not ceremony: `useWallet` pulls in `lib/wallet.ts`, which pulls in
+ * that is not ceremony: `useWallet` pulls in `lib/wallet/kit.ts`, which pulls in
  * the whole Stellar Wallets Kit, which does not load under vitest at all and
  * costs seconds where it does. The frame above already holds the wallet.
  */

@@ -180,7 +180,7 @@ describe("friendlyError", () => {
     });
 
     it("keeps what the backend helper already turned into plain words", () => {
-      // lib/api.ts never passes the server's own text on, so what an ApiError
+      // lib/api/client.ts never passes the server's own text on, so what an ApiError
       // carries is already written for a reader.
       expect(friendlyError(new ApiError(503, "http-error", "Something went wrong on our side."))).toBe(
         "Something went wrong on our side.",

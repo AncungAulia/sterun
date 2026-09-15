@@ -15,7 +15,7 @@
  * Sterun to the one every other page shows. The white lockup is the variant
  * here because the rail is `ink`.
  *
- * `next/image` and the sizing follow `components/layouts/Header.tsx`, with one
+ * `next/image` and the sizing follow `components/layout/Header.tsx`, with one
  * difference: the numbers keep the file's own 1245 by 400 proportions, so the
  * mark fills the box it is given instead of letterboxing inside it. The link
  * carries no `aria-label`, so its name comes from the image's `alt` and reads

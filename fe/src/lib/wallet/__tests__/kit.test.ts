@@ -1,5 +1,5 @@
 /**
- * `lib/wallet.ts` is the only module allowed to touch Stellar Wallets Kit, so
+ * `lib/wallet/kit.ts` is the only module allowed to touch Stellar Wallets Kit, so
  * the kit is mocked here and nowhere else. What is worth asserting is not that
  * the kit works, but that this wrapper behaves sanely around it: a cancelled
  * modal is not a crash, a first visit is not an error, and a passphrase the kit

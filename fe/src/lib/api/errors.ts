@@ -20,15 +20,15 @@
  * Messages this app wrote itself. They are already aimed at the reader, and
  * genericising them would throw away the specific thing that went wrong ("your
  * race details were uploaded but could not be checked"). Those are marked by
- * their type: `PlainError` (`lib/plain-error.ts`) for anything we throw
- * deliberately, and `ApiError`, whose messages `lib/api.ts` already writes for
+ * their type: `PlainError` (`lib/api/plain-error.ts`) for anything we throw
+ * deliberately, and `ApiError`, whose messages `lib/api/client.ts` already writes for
  * the screen rather than passing the server's own text on.
  *
  * Everything else is foreign text, and a sentence nobody wrote for a reader is
  * worse than no sentence at all, so it becomes {@link SOMETHING_WENT_WRONG}.
  *
  * The original error is not swallowed: the two call sites that map one
- * (`hooks/useEventRun.ts`, `components/elements/FileField.tsx`) log it to the
+ * (`modules/organiser/create/hooks/useEventRun.ts`, `modules/organiser/create/components/FileField.tsx`) log it to the
  * console in development, so a stuck organiser still has something to send us.
  */
 import { SterunContractError, type ContractErrorSource } from "@sterunxyz/sdk";
@@ -55,7 +55,7 @@ export const SOMETHING_WENT_WRONG = "Something went wrong. Please try again.";
  * EventRegistry and RaceRecord.
  *
  * STE-21 kept `enter` out. Its refusals are explained by re-reading the ledger
- * after the failure instead (`modules/entry/enter-failure.ts`): if the
+ * after the failure instead (`modules/entry/lib/enter-failure.ts`): if the
  * distance now has no places, "sold out" is true whichever contract refused.
  */
 const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
@@ -82,7 +82,7 @@ const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
  * to be here and were taken out: they can only arrive from `enter`, which is
  * exactly the call this file refuses to classify, so a sentence for them could
  * never fire honestly. STE-21 did not bring them back here: the entry flow says
- * them from the chain's state after a refusal (`modules/entry/enter-failure.ts`),
+ * them from the chain's state after a refusal (`modules/entry/lib/enter-failure.ts`),
  * which needs no way of telling a token revert from ours.
  */
 const CONTRACT_MESSAGES: Partial<Record<`${ContractErrorSource}:${string}`, string>> = {

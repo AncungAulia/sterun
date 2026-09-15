@@ -5,7 +5,7 @@
  * jsdom has installed its own Uint8Array as the global (fe/CLAUDE.md, Tests).
  * Nothing in this file needs a DOM.
  *
- * `lib/env.ts` reads process.env at module load, which is the whole point: a
+ * `lib/chain/env.ts` reads process.env at module load, which is the whole point: a
  * missing address should stop the app at boot rather than surface as a failed
  * contract call three screens in. Testing it therefore means re-importing the
  * module per case with a different environment.

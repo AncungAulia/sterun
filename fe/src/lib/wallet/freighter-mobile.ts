@@ -8,7 +8,7 @@
  * every Stellar method Freighter mobile implements, which is the pairing we have
  * already seen work on a phone.
  *
- * Only `lib/wallet.ts` imports this. Everything here is browser-only.
+ * Only `lib/wallet/kit.ts` imports this. Everything here is browser-only.
  */
 import { createAppKit, type AppKit } from "@reown/appkit/core";
 import { mainnet } from "@reown/appkit/networks";

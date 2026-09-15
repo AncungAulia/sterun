@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Runs `modules/entry/attempt.ts` against the vault, the wallet and the chain (STE-21).
+ * Runs `modules/entry/lib/attempt.ts` against the vault, the wallet and the chain (STE-21).
  *
  * ## One effect, one step per state
  *

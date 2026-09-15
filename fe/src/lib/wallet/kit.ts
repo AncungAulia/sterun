@@ -14,7 +14,7 @@
  * NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID. Everywhere except Freighter's mobile
  * browser it is one more entry in the kit's picker, which pairs a phone wallet
  * by QR code or deep link. Inside Freighter's mobile browser the kit is bypassed
- * and `lib/freighter-mobile.ts` pairs directly.
+ * and `lib/wallet/freighter-mobile.ts` pairs directly.
  */
 import {
   KitEventType,
@@ -86,7 +86,7 @@ function walletConnectMetadata(): WalletConnectMetadata {
  * The kit's module with one answer changed. Inside Freighter's mobile browser
  * the stock module calls itself a "platform wrapper", and the picker then skips
  * itself and pairs through the kit. That browser is paired by
- * `lib/freighter-mobile.ts` instead, so this module must not claim it.
+ * `lib/wallet/freighter-mobile.ts` instead, so this module must not claim it.
  */
 class PickerWalletConnectModule extends WalletConnectModule {
   async isPlatformWrapper(): Promise<boolean> {

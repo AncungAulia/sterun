@@ -7,7 +7,7 @@
  * An error code out of `enter` cannot name its contract. `enter` hands control
  * to the sUSD token, which numbers its own errors in EventRegistry's `1..=99`
  * band, so reading `#5` as "this distance is full" could be a confident lie
- * about a payment that failed (`lib/errors.ts`, `OUR_OWN_METHODS`, which still
+ * about a payment that failed (`lib/api/errors.ts`, `OUR_OWN_METHODS`, which still
  * leaves `enter` out).
  *
  * ## What can be trusted instead

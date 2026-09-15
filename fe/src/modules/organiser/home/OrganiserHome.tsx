@@ -5,7 +5,7 @@
  *
  * Built on the directory's own read rather than a second one. EventRegistry has
  * no "events by organiser" view, for the same reason it has no "list events"
- * (`lib/events.ts`), so the page reads every event and keeps the ones this
+ * (`lib/event/events.ts`), so the page reads every event and keeps the ones this
  * wallet created. Sharing the directory's query also means `/` and `/org` in
  * one visit ask the chain once.
  *

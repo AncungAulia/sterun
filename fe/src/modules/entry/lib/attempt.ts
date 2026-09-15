@@ -22,7 +22,7 @@
  * charged, and a check that itself failed gets its own state whose only way
  * out is checking again, never paying again.
  *
- * Pure. `hooks/useEntryAttempt.ts` runs the step `nextStep` names.
+ * Pure. `modules/entry/hooks/useEntryAttempt.ts` runs the step `nextStep` names.
  */
 import type { Submitted } from "@/modules/entry/lib/participants";
 
