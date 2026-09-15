@@ -90,6 +90,12 @@ pub struct EventData {
 /// this category's `quota` slots are gone. Until v2.3 it doubled as the bib
 /// sequence, which is what made bibs restart at 0 in every distance — see
 /// [`DataKey::EventEntryCount`] and [`EventRegistry::reserve_slot`].
+///
+/// `quota` is the only field that can move after the category is created, and
+/// it moves in one direction: [`EventRegistry::increase_quota`] (v2.4) raises
+/// it for a second batch and refuses to lower it. The struct's shape has not
+/// changed since v1 — no field was added — which is why that function needed
+/// no storage change at all.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CategoryData {
@@ -204,6 +210,15 @@ pub enum Error {
     OrganiserNotFound = 17,
     /// `create_event` from an address the admin never allowlisted (v2.1).
     NotAllowlistedOrganiser = 18,
+    /// `increase_quota` with a `new_quota` that is not larger than the quota
+    /// the category already has (v2.4).
+    ///
+    /// One code for "equal" and for "smaller", because they are one rule: a
+    /// published quota only ever moves up. A caller that wants to know which
+    /// of the two it hit can read the current quota with `get_category` —
+    /// splitting it into two codes would make every client distinguish a
+    /// no-op from a shrink, and neither is allowed.
+    QuotaNotIncreased = 19,
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +242,25 @@ pub struct CategoryAdded {
     pub category_id: u32,
     pub quota: u32,
     pub price: i128,
+}
+
+/// Emitted when an organiser raises a category's quota (v2.4).
+///
+/// It carries **both** numbers on purpose. A second batch is a fact with a
+/// date — "the 5K went from 500 to 800 on the 14th" — and an indexer that saw
+/// only `current` would have to diff against its own previous read to say so,
+/// which is a different claim: it would be reporting what the indexer last
+/// saw, not what the chain did. `CategoryAdded` is deliberately left alone, so
+/// the original published quota stays readable as its own event.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QuotaIncreased {
+    #[topic]
+    pub event_id: u32,
+    #[topic]
+    pub category_id: u32,
+    pub previous: u32,
+    pub current: u32,
 }
 
 #[contractevent]
@@ -552,6 +586,85 @@ impl EventRegistry {
         }
         .publish(&env);
         Ok(category_id)
+    }
+
+    /// Raises a category's quota — a second batch for a distance that sold out
+    /// (STE-55, v2.4). Organiser-gated, exactly like [`Self::add_category`].
+    ///
+    /// **The quota only ever goes up.** `new_quota` must be strictly greater
+    /// than the quota the category has now; equal or smaller reverts with
+    /// [`Error::QuotaNotIncreased`]. That is not defensive validation, it is
+    /// the feature: runners paid against a published number, and a quota that
+    /// could shrink would let an organiser un-sell slots that are already on
+    /// chain — the `entered_count` of a shrunk category would sit above its own
+    /// quota, and `reserve_slot`'s guard would read as "sold out" for a race
+    /// that had simply been rewritten underneath its entrants. Shutting
+    /// registration is what [`EventStatus::Closed`] is for, and it is
+    /// reversible; this is not.
+    ///
+    /// **Why it exists at all.** Selling out in hours is the ordinary case at
+    /// Indonesian road races, not an edge case — Merdeka Run 2026 filled 8,100
+    /// slots in a single day and opened a second batch the next morning. Until
+    /// v2.4 the contract had no way to say that: `add_category` only ever
+    /// creates, and there was no `update_category`. An organiser who sold out
+    /// had one move left, and it was a bad one — a duplicate category with a
+    /// confusing name, which splits one distance into two and corrupts the
+    /// roster and the results that are built from it.
+    ///
+    /// **`entered_count` is not touched**, and neither is the bib sequence.
+    /// Nothing about the entries already taken changes; what changes is how
+    /// many more the distance will accept. The next entrant after an increase
+    /// therefore continues the event's bib numbering rather than restarting it
+    /// — the counter lives in [`DataKey::EventEntryCount`] and this function
+    /// never reads it.
+    ///
+    /// **No storage key is added and no struct changes shape.** `quota` is a
+    /// field [`CategoryData`] has carried since v1; this writes a larger value
+    /// into it. That is what makes the upgrade that ships this function
+    /// uninteresting from the storage side, which is the best thing an
+    /// in-place upgrade can be.
+    ///
+    /// **There is no status gate, and that is deliberate.** Raising the quota
+    /// of a `Closed` event is precisely the second-batch flow — lift the cap,
+    /// then re-open — so refusing it would block the case this exists for.
+    /// Raising it on a `Cancelled` or `Completed` event sells nothing either
+    /// way, because [`Self::reserve_slot`] demands `Open`; a gate here would
+    /// add an error a client must handle in exchange for stopping a write that
+    /// has no effect. [`Self::add_category`] takes the same position.
+    ///
+    /// **What the contract cannot check**: whether the organiser told anyone.
+    /// A published quota is part of what a runner saw when they paid, so
+    /// raising it is a real change to the thing they bought — a bigger field,
+    /// a busier start pen. The console must therefore pair every increase with
+    /// a signed announcement (the STE-34 pattern). That pairing is an
+    /// application-level rule. Nothing on chain enforces it, and this doc
+    /// comment is not a claim that anything does.
+    pub fn increase_quota(
+        env: Env,
+        event_id: u32,
+        category_id: u32,
+        new_quota: u32,
+    ) -> Result<(), Error> {
+        bump_instance(&env);
+        auth_organiser(&env, event_id)?;
+
+        let mut category = read_category(&env, event_id, category_id)?;
+        let previous = category.quota;
+        if new_quota <= previous {
+            return Err(Error::QuotaNotIncreased);
+        }
+
+        category.quota = new_quota;
+        write_category(&env, event_id, category_id, &category);
+
+        QuotaIncreased {
+            event_id,
+            category_id,
+            previous,
+            current: new_quota,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Adds a paid add-on to an event (STE-35). Add-on ids restart at 0 for
