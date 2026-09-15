@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sterun race day — QR pass and scanner (STE-18)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Mockups for STE-18. Every colour, size and radius here is a token from
+   tokens.css, which is generated from landing-page/app/tokens.css. No hex,
+   font name or raw size is invented in this file. */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+body { background: var(--color-n-200); color: var(--color-ink); font-family: var(--font-sans); padding: 40px 24px 80px; }
+.board { max-width: 1760px; margin: 0 auto; }
+.board > header { margin-bottom: 32px; }
+.board h1 { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-2xl); }
+.board p.lede { color: var(--color-n-600); font-size: var(--text-sm); margin-top: 6px; max-width: 70ch; }
+h2.group { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-xl); margin: 40px 0 4px; }
+p.groupNote { color: var(--color-n-600); font-size: var(--text-sm); margin-bottom: 20px; max-width: 78ch; }
+.row { display: flex; flex-wrap: wrap; gap: 28px; }
+figure { width: 390px; }
+figcaption { margin-top: 10px; font-size: var(--text-sm); color: var(--color-n-600); }
+figcaption b { display: block; color: var(--color-ink); font-weight: 500; }
+figcaption code { font-size: var(--text-xs); color: var(--color-n-500); }
+.device { width: 390px; height: 844px; border-radius: var(--radius-lg); overflow: hidden; position: relative;
+  background: var(--color-paper); box-shadow: var(--shadow-lifted); }
+
+/* --- shared screen furniture ------------------------------------------- */
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.statusbar { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; font-size: var(--text-xs); color: var(--color-n-500); }
+.statusbar.onDark { color: var(--color-n-300); }
+.pad { padding: 0 20px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-sm); padding: 4px 10px;
+  font-size: var(--text-xs); font-weight: 500; }
+.chip--entered { background: var(--color-teal-50); color: var(--color-teal-700); }
+.chip--claimed { background: var(--color-success-surface); color: var(--color-success); }
+.chip--queue { background: var(--color-n-800); color: var(--color-n-100); }
+.chip--clockOk { background: var(--color-n-800); color: var(--color-n-300); }
+.chip--refused { background: var(--color-danger-surface); color: var(--color-danger); }
+.numeric { font-variant-numeric: tabular-nums; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 56px; border-radius: var(--radius-md);
+  font-size: var(--text-base); font-weight: 500; background: var(--color-teal); color: var(--color-paper); text-decoration: none; }
+.btn--ghost { background: transparent; color: var(--color-ink); border: 1px solid var(--color-n-300); }
+.btn--onDark { background: var(--color-n-100); color: var(--color-ink); }
+.btn--ghostDark { background: transparent; color: var(--color-paper); border: 1px solid var(--color-n-700); }
+.muted { color: var(--color-n-500); font-size: var(--text-sm); }
+.mutedDark { color: var(--color-n-400); font-size: var(--text-sm); }
+.screenTitle { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-xl); }
+.stack { display: flex; flex-direction: column; }
+
+/* --- runner pass -------------------------------------------------------- */
+.pass { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 4px 20px 24px; }
+.pass > .qrCard { margin-top: auto; }
+.pass > .muted:last-child, .pass > .btn:last-child { margin-top: auto; }
+.pass__event { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-xl); }
+.pass__meta { color: var(--color-n-500); font-size: var(--text-sm); margin-top: 2px; }
+.bibRow { display: flex; align-items: flex-end; justify-content: space-between; }
+.bibLabel { font-size: var(--text-xs); letter-spacing: .12em; text-transform: uppercase; color: var(--color-n-500); }
+.bib { font-size: var(--text-bib); line-height: var(--text-bib--line-height); font-weight: 600; }
+.qrCard { background: var(--color-paper); border: 1px solid var(--color-n-200); border-radius: var(--radius-lg);
+  padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.qrCard img { width: 268px; height: 268px; display: block; }
+.codeLabel { font-size: var(--text-xs); color: var(--color-n-500); text-align: center; }
+.code { font-size: var(--text-3xl); font-weight: 600; letter-spacing: .22em; }
+.countdown { display: flex; align-items: center; gap: 10px; width: 100%; }
+.track { flex: 1; height: 6px; border-radius: 999px; background: var(--color-n-200); overflow: hidden; }
+.track > i { display: block; height: 100%; background: var(--color-teal); }
+.banner { display: flex; gap: 10px; align-items: flex-start; border-radius: var(--radius-md); padding: 12px 14px; }
+.banner--offline { background: var(--color-warning-strong); color: var(--color-ink); }
+.banner--info { background: var(--color-teal-50); color: var(--color-teal-800); }
+.banner b { font-weight: 600; font-size: var(--text-sm); }
+.banner span { font-size: var(--text-xs); }
+.claimedPanel { border-radius: var(--radius-lg); background: var(--color-success-surface); border: 1px solid var(--color-success-border);
+  padding: 28px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.claimedPanel .big { font-family: var(--font-hero); font-size: var(--text-3xl); color: var(--color-success); }
+
+/* --- scanner ------------------------------------------------------------ */
+.dark { background: var(--color-n-950); color: var(--color-paper); }
+.camera { flex: 1; position: relative; background:
+  repeating-linear-gradient(135deg, var(--color-n-900) 0 18px, var(--color-n-950) 18px 36px); }
+.reticle { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); width: 236px; height: 236px;
+  border-radius: var(--radius-lg); box-shadow: 0 0 0 9999px color-mix(in srgb, var(--color-n-950) 55%, transparent); }
+.reticle i { position: absolute; width: 34px; height: 34px; border: 3px solid var(--color-paper); }
+.reticle i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: var(--radius-md); }
+.reticle i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: var(--radius-md); }
+.reticle i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: var(--radius-md); }
+.reticle i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: var(--radius-md); }
+.scanTop { position: absolute; inset: 0 0 auto 0; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scanBottom { position: absolute; inset: auto 0 0 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.hint { text-align: center; font-size: var(--text-sm); color: var(--color-n-300); }
+
+/* Verdicts. Green and red are 1.26:1 apart in luminance, which is nothing, so
+   the colour is the last differentiator and never the first: the icon shape,
+   the word, and the striped ground on a refusal carry the meaning. */
+.verdict { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; text-align: center; }
+.verdict--ok { background: var(--color-success-strong); color: var(--color-ink); }
+.verdict--no { color: var(--color-paper); background:
+  repeating-linear-gradient(135deg, var(--color-danger-strong) 0 26px, var(--color-danger) 26px 52px); }
+.verdict__icon { width: 108px; height: 108px; border-radius: 999px; display: grid; place-items: center; flex: none; }
+.verdict--ok .verdict__icon { background: var(--color-ink); color: var(--color-success-strong); }
+.verdict--no .verdict__icon { background: var(--color-paper); color: var(--color-danger); }
+.verdict__word { font-family: var(--font-hero); font-weight: 700; font-size: var(--text-4xl); line-height: 1; text-transform: uppercase; }
+.verdict__bib { font-size: var(--text-bib); line-height: 1; font-weight: 600; }
+.verdict__who { font-size: var(--text-lg); }
+.verdict__why { font-size: var(--text-base); max-width: 26ch; }
+.verdict__foot { padding: 16px; display: flex; flex-direction: column; gap: 8px; background: var(--color-n-950); }
+.listRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--color-n-800); }
+.listRow:last-child { border-bottom: 0; }
+.listRow .who { font-size: var(--text-base); }
+.listRow .when { font-size: var(--text-sm); color: var(--color-n-400); }
+.card { border: 1px solid var(--color-n-200); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: var(--text-sm); color: var(--color-n-300); }
+.field .box { height: 68px; border-radius: var(--radius-md); border: 1px solid var(--color-n-700); background: var(--color-n-900);
+  display: flex; align-items: center; padding: 0 18px; font-size: var(--text-3xl); letter-spacing: .18em; }
+.field .box.empty { color: var(--color-n-500); }
+.clockBanner { background: var(--color-warning-strong); color: var(--color-ink); padding: 14px 16px; display: flex; gap: 10px; }
+.progress { height: 8px; border-radius: 999px; background: var(--color-n-800); overflow: hidden; }
+.progress > i { display: block; height: 100%; background: var(--color-teal-300); }
+svg { display: block; }
+</style>
+</head>
+<body>
+<div class="board">
+<header>
+  <h1>Race day — QR pass and scanner</h1>
+  <p class="lede">STE-18. Screens for STE-21 (runner pass) and STE-22 (scanner PWA). Every value comes from the design tokens; the QR codes are real payloads from <code>docs/specs/HASH_AND_TOTP.md</code> §5. The written spec is <code>docs/design/race-day/README.md</code>.</p>
+</header>
+
+<h2 class="group">Runner — the pass (STE-21, <code>/pass/[tokenId]</code>)</h2>
+<p class="groupNote">One screen, four states. The bib is the largest thing on it, because at a pickup desk the volunteer reads the bib before anything else; the QR and the six digits are two routes to the same check.</p>
+<div class="row">
+
+  <figure>
+    <div class="device" id="r1-pass-valid">
+      <div class="screen">
+        <div class="statusbar"><span>09:12</span><span>Sterun</span></div>
+        <div class="pass">
+          <div>
+            <div class="pass__event">Sasando Run 2026</div>
+            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+          </div>
+          <div class="bibRow">
+            <div>
+              <div class="bibLabel">Bib</div>
+              <div class="bib numeric">128</div>
+            </div>
+            <span class="chip chip--entered">Entered</span>
+          </div>
+          <div class="qrCard">
+            <img src="qr-sample-a.svg" alt="QR pass">
+            <div class="countdown">
+              <div class="track"><i style="width:62%"></i></div>
+              <span class="muted numeric">New code in 19s</span>
+            </div>
+          </div>
+          <div style="text-align:center">
+            <div class="codeLabel">Camera not working? Read these out</div>
+            <div class="code numeric">079663</div>
+          </div>
+          <div class="muted" style="text-align:center">Works without signal. Keep the screen bright.</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>R1 · Pass, valid</b>Default state. The QR and the six digits change together every 30 s.<code>/pass/7</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="r2-pass-rollover">
+      <div class="screen">
+        <div class="statusbar"><span>09:12</span><span>Sterun</span></div>
+        <div class="pass">
+          <div>
+            <div class="pass__event">Sasando Run 2026</div>
+            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+          </div>
+          <div class="bibRow">
+            <div><div class="bibLabel">Bib</div><div class="bib numeric">128</div></div>
+            <span class="chip chip--entered">Entered</span>
+          </div>
+          <div class="qrCard">
+            <img src="qr-sample-b.svg" alt="QR pass">
+            <div class="countdown">
+              <div class="track"><i style="width:7%"></i></div>
+              <span class="muted numeric">New code in 2s</span>
+            </div>
+          </div>
+          <div style="text-align:center">
+            <div class="codeLabel">Camera not working? Read these out</div>
+            <div class="code numeric">844761</div>
+          </div>
+          <div class="banner banner--info">
+            <div><b>A code that just changed still works</b><br><span>The scanner accepts the step before and after, so being scanned mid-change is fine.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>R2 · Pass, about to roll over</b>The note appears only in the last 5 s, so nobody re-reads their digits mid-scan.<code>/pass/7</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="r3-pass-offline">
+      <div class="screen">
+        <div class="statusbar"><span>09:12</span><span>No signal</span></div>
+        <div class="pass">
+          <div class="banner banner--offline">
+            <div><b>Offline — your pass still works</b><br><span>Codes are made on this phone. Nothing is downloaded at the desk.</span></div>
+          </div>
+          <div>
+            <div class="pass__event">Sasando Run 2026</div>
+            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+          </div>
+          <div class="bibRow">
+            <div><div class="bibLabel">Bib</div><div class="bib numeric">128</div></div>
+            <span class="chip chip--entered">Entered</span>
+          </div>
+          <div class="qrCard">
+            <img src="qr-sample-a.svg" alt="QR pass">
+            <div class="countdown">
+              <div class="track"><i style="width:40%"></i></div>
+              <span class="muted numeric">New code in 12s</span>
+            </div>
+          </div>
+          <div style="text-align:center">
+            <div class="codeLabel">Camera not working? Read these out</div>
+            <div class="code numeric">079663</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>R3 · Pass, airplane mode</b>The banner is reassurance, not an error: no signal is the expected state at a venue.<code>/pass/7</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="r4-pass-claimed">
+      <div class="screen">
+        <div class="statusbar"><span>09:41</span><span>Sterun</span></div>
+        <div class="pass">
+          <div>
+            <div class="pass__event">Sasando Run 2026</div>
+            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+          </div>
+          <div class="bibRow">
+            <div><div class="bibLabel">Bib</div><div class="bib numeric">128</div></div>
+            <span class="chip chip--claimed">Racepack claimed</span>
+          </div>
+          <div class="claimedPanel">
+            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+            <div class="big">Racepack collected</div>
+            <div class="muted">27 Sep, 09:41 · Hall A</div>
+          </div>
+          <div class="muted" style="text-align:center">The pass stops making codes once the racepack is collected. Keep it for the race record.</div>
+          <a class="btn btn--ghost">View race record</a>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>R4 · Pass, already claimed</b>No QR: a second scan can only fail, so it is not offered.<code>/pass/7</code></figcaption>
+  </figure>
+</div>
+
+<h2 class="group">Volunteer — the scanner (STE-22, <code>/scan</code>)</h2>
+<p class="groupNote">A verdict has to be readable at arm's length, in sunlight, in under two seconds. Green and red are 1.26:1 apart in luminance, which is nothing — so the icon shape, the word and the striped ground on a refusal carry the meaning, and the colour only confirms it.</p>
+<div class="row">
+
+  <figure>
+    <div class="device" id="s1-scan-events">
+      <div class="screen">
+        <div class="statusbar"><span>08:58</span><span>Online</span></div>
+        <div class="pad stack" style="gap:18px;padding-top:8px">
+          <div>
+            <div class="screenTitle">Scan check-in</div>
+            <div class="muted">Pick the event and download its roster while you still have signal.</div>
+          </div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <div>
+                <div style="font-size:var(--text-lg);font-weight:500">Sasando Run 2026</div>
+                <div class="muted numeric">412 entries · 10K, 5K</div>
+              </div>
+              <span class="chip chip--claimed">Downloaded</span>
+            </div>
+            <div class="muted numeric">Roster 09:02 · ledger 4,469,811</div>
+            <a class="btn">Open scanner</a>
+            <a class="btn btn--ghost">Download again</a>
+          </div>
+          <div class="card">
+            <div>
+              <div style="font-size:var(--text-lg);font-weight:500">Timor Coastal 10K</div>
+              <div class="muted numeric">96 entries · 10K</div>
+            </div>
+            <div class="muted">Not downloaded yet</div>
+            <a class="btn">Download roster</a>
+          </div>
+          <div class="muted">The download needs signal once. After that the whole desk works offline.</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S1 · Choose an event</b>Freshness is stated as a ledger and a time, never as the word "synced".<code>/scan</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s2-scan-idle">
+      <div class="screen dark">
+        <div class="statusbar onDark"><span>09:20</span><span>Offline · 3 queued</span></div>
+        <div class="camera">
+          <div class="scanTop">
+            <span class="chip chip--clockOk">Sasando Run · 10K</span>
+            <span class="chip chip--queue numeric">3 queued</span>
+          </div>
+          <div class="reticle"><i></i><i></i><i></i><i></i></div>
+          <div class="scanBottom">
+            <div class="hint">Hold the runner's QR inside the frame</div>
+            <a class="btn btn--onDark">Type the code instead</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S2 · Ready to scan</b>The queue count is always on screen, so nobody has to remember whether claims are pending.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s3-scan-green">
+      <div class="screen">
+        <div class="verdict verdict--ok">
+          <div class="verdict__icon">
+            <svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+          </div>
+          <div class="verdict__word">Hand over</div>
+          <div class="verdict__bib numeric">128</div>
+          <div class="verdict__who">Budi S. · 10K</div>
+        </div>
+        <div class="verdict__foot">
+          <div class="hint numeric">Queued to send · 4 waiting</div>
+          <a class="btn btn--onDark">Next runner</a>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S3 · GREEN</b>Ink on green measures 4.61:1. Word first, bib second, name third — the order a volunteer reads.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s4-scan-red-expired">
+      <div class="screen">
+        <div class="verdict verdict--no">
+          <div class="verdict__icon">
+            <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </div>
+          <div class="verdict__word">Code expired</div>
+          <div class="verdict__why">The code on the runner's phone changes every 30 seconds. Ask for the one showing now.</div>
+        </div>
+        <div class="verdict__foot">
+          <a class="btn btn--onDark">Scan again</a>
+          <a class="btn btn--ghostDark">Type the code instead</a>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S4 · RED, expired code</b>Recoverable, so the next action sits on the same screen.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s5-scan-red-claimed">
+      <div class="screen">
+        <div class="verdict verdict--no">
+          <div class="verdict__icon">
+            <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v4.5"/><path d="M12 16.6v.4"/></svg>
+          </div>
+          <div class="verdict__word">Already claimed</div>
+          <div class="verdict__bib numeric">128</div>
+          <div class="verdict__why">Collected 09:41 at desk 2. Do not hand over a second racepack.</div>
+        </div>
+        <div class="verdict__foot">
+          <a class="btn btn--onDark">Next runner</a>
+          <div class="hint">Kept in Refused for the organiser to reconcile</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S5 · RED, already claimed</b>A different icon from S4: this one cannot be fixed by scanning again.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s6-scan-red-unknown">
+      <div class="screen">
+        <div class="verdict verdict--no">
+          <div class="verdict__icon">
+            <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.2 2.4c-.7.2-1 .8-1 1.4v.3"/><path d="M11.8 16.8v.4"/></svg>
+          </div>
+          <div class="verdict__word">Not on roster</div>
+          <div class="verdict__bib numeric">512</div>
+          <div class="verdict__why">This bib is not in the download for this event. Check the runner is at the right race.</div>
+        </div>
+        <div class="verdict__foot">
+          <a class="btn btn--onDark">Next runner</a>
+          <div class="hint numeric">Roster 09:02 · ledger 4,469,811</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S6 · RED, unknown record</b>The roster's age is shown here, because a stale download is the likely cause.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s7-scan-manual">
+      <div class="screen dark">
+        <div class="statusbar onDark"><span>09:21</span><span>Offline · 3 queued</span></div>
+        <div class="pad stack" style="gap:20px;padding-top:8px;flex:1">
+          <div>
+            <div class="screenTitle">Type the code</div>
+            <div class="mutedDark">Ask the runner to read out the six digits, then their bib.</div>
+          </div>
+          <div class="field">
+            <label>Six-digit code</label>
+            <div class="box numeric">079663</div>
+          </div>
+          <div class="field">
+            <label>Bib number</label>
+            <div class="box numeric empty">128</div>
+          </div>
+          <div class="mutedDark">A code starting with 0 is normal — type all six.</div>
+          <div class="stack" style="margin-top:auto;gap:10px;padding-bottom:20px">
+            <a class="btn">Check</a>
+            <a class="btn btn--ghostDark">Back to camera</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S7 · Manual fallback</b>The bib replaces the token id, and the leading zero is called out because it is the classic failure.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s8-scan-clock">
+      <div class="screen dark">
+        <div class="statusbar onDark"><span>09:24</span><span>Offline · 3 queued</span></div>
+        <div class="clockBanner">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.4l3.2 2"/></svg>
+          <div>
+            <b>This phone's clock is 4 minutes fast</b>
+            <div style="font-size:var(--text-xs)">Every scan will fail until it is fixed. Settings → Date &amp; time → Set automatically, then come back.</div>
+          </div>
+        </div>
+        <div class="camera">
+          <div class="scanTop">
+            <span class="chip chip--clockOk">Sasando Run · 10K</span>
+            <span class="chip chip--queue numeric">3 queued</span>
+          </div>
+          <div class="reticle"><i></i><i></i><i></i><i></i></div>
+          <div class="scanBottom">
+            <a class="btn btn--onDark">I fixed it — check again</a>
+            <div class="hint">The code tolerates 90 seconds of drift, not four minutes.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S8 · Clock sanity</b>Shown when the device is more than ±90 s from the time the roster was signed.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s9-scan-queue">
+      <div class="screen dark">
+        <div class="statusbar onDark"><span>09:32</span><span>Offline</span></div>
+        <div class="pad stack" style="gap:16px;padding-top:8px;flex:1">
+          <div>
+            <div class="screenTitle">4 claims waiting</div>
+            <div class="mutedDark">Saved on this phone. They go to the chain by themselves once there is signal.</div>
+          </div>
+          <div>
+            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when">Budi S. · 09:41</div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 133</div><div class="when">Sari W. · 09:42</div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 141</div><div class="when">Andi P. · 09:44</div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 145</div><div class="when">Rina T. · 09:45</div></div><span class="chip chip--queue">Waiting</span></div>
+          </div>
+          <div class="mutedDark" style="margin-top:auto;padding-bottom:20px">Leaving this screen does not lose them. Keep the phone unlocked while they send.</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S9 · Offline queue</b>The names are the roster's name fragment, never a full name.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s10-scan-sync">
+      <div class="screen dark">
+        <div class="statusbar onDark"><span>09:47</span><span>Online</span></div>
+        <div class="pad stack" style="gap:16px;padding-top:8px;flex:1">
+          <div>
+            <div class="screenTitle">Sending 4 claims</div>
+            <div class="mutedDark">Back online at 09:47. One signature each, sent one after another.</div>
+          </div>
+          <div class="progress"><i style="width:50%"></i></div>
+          <div>
+            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when">Sent · ledger 4,469,902</div></div><span class="chip chip--claimed">Done</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 133</div><div class="when">Sent · ledger 4,469,902</div></div><span class="chip chip--claimed">Done</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 141</div><div class="when">Sending…</div></div><span class="chip chip--queue">Now</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 145</div><div class="when">Waiting</div></div><span class="chip chip--queue">Waiting</span></div>
+          </div>
+          <div class="mutedDark" style="margin-top:auto;padding-bottom:20px">A refused claim moves to Refused. Nothing is dropped silently.</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S10 · Syncing</b>Each row carries the ledger it landed in, so a claim can be checked afterwards.<code>/scan/0</code></figcaption>
+  </figure>
+
+  <figure>
+    <div class="device" id="s11-scan-flagged">
+      <div class="screen dark">
+        <div class="statusbar onDark"><span>10:02</span><span>Online</span></div>
+        <div class="pad stack" style="gap:16px;padding-top:8px;flex:1">
+          <div>
+            <div class="screenTitle">2 refused</div>
+            <div class="mutedDark">The chain would not take these. They are kept here so the organiser can reconcile.</div>
+          </div>
+          <div>
+            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when">Already claimed at desk 2 · 09:41</div></div><span class="chip chip--refused">Refused</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 204</div><div class="when">Already claimed at desk 1 · 09:52</div></div><span class="chip chip--refused">Refused</span></div>
+          </div>
+          <div class="mutedDark">Another desk got there first, which is the system working. Only chase it if the runner is still standing in front of you.</div>
+          <div style="margin-top:auto;padding-bottom:20px"><a class="btn btn--onDark">Copy list for the organiser</a></div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>S11 · Refused claims</b><code>AlreadyClaimed(102)</code> after the fact. Kept, not hidden.<code>/scan/0/flagged</code></figcaption>
+  </figure>
+</div>
+</div>
+</body>
+</html>
