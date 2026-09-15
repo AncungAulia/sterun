@@ -30,6 +30,7 @@ export {
   type CreateEventArgs,
   type AddAddonArgs,
   type AddCategoryArgs,
+  type IncreaseQuotaArgs,
   type EnterArgs,
 } from "./client.js";
 

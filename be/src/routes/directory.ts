@@ -35,14 +35,45 @@ const DEFAULT_PAGE = 50;
 const categorySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["category_id", "code", "distance_m", "quota", "price_stroops", "entered_count"],
+  required: [
+    "category_id",
+    "code",
+    "distance_m",
+    "quota",
+    "price_stroops",
+    "entered_count",
+    "quota_history",
+  ],
   properties: {
     category_id: { type: "integer" },
     code: { type: "string" },
     distance_m: { type: "integer" },
+    /** Today's quota. It only ever rises (v2.4); `quota_history` says when. */
     quota: { type: "integer" },
     price_stroops: { type: "string", pattern: DIGITS },
     entered_count: { type: "integer" },
+    /**
+     * Every rise of this category's quota the index has seen, oldest first, so a
+     * second batch reads as a dated fact ("2,000 → 3,000 on 15 Sep") instead of a
+     * number that moved (STE-56). `[]` when it was never raised — or was raised
+     * before this index started polling, which contract state cannot tell apart.
+     */
+    quota_history: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["previous", "current", "at", "ledger", "tx_hash"],
+        properties: {
+          previous: { type: "integer" },
+          current: { type: "integer" },
+          /** Unix seconds of the ledger that raised it, as a string like every u64 here. */
+          at: { type: "string", pattern: DIGITS },
+          ledger: { type: "integer" },
+          tx_hash: { type: "string" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -316,6 +347,7 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
         });
       }
       const categories = await store.listCategories(pool, request.params.eventId);
+      const increases = await store.listQuotaIncreases(pool, request.params.eventId);
       return {
         event: toEventJson(event),
         categories: categories.map((c) => ({
@@ -325,6 +357,15 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
           quota: c.quota,
           price_stroops: c.priceStroops.toString(),
           entered_count: c.enteredCount,
+          quota_history: increases
+            .filter((i) => i.categoryId === c.categoryId)
+            .map((i) => ({
+              previous: i.previous,
+              current: i.current,
+              at: i.at.toString(),
+              ledger: i.ledger,
+              tx_hash: i.txHash,
+            })),
         })),
       };
     },

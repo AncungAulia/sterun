@@ -236,6 +236,8 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
           // A price is money: string on the wire, always.
           price_stroops: "50000000",
           entered_count: 2,
+          // Never raised (v2.4 increase_quota), so no dated rises to show.
+          quota_history: [],
         },
       ]);
     });

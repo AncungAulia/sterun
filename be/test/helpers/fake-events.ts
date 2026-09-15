@@ -77,6 +77,16 @@ export const slotReserved = (
   seq: number,
 ): RawChainEvent => envelope(ctx, ["slot_reserved", eventId, categoryId], { seq });
 
+/** v2.4 (STE-55). Data fields in ScMap order: `current` before `previous`. */
+export const quotaIncreased = (
+  ctx: EventContext,
+  eventId: number,
+  categoryId: number,
+  previous: number,
+  current: number,
+): RawChainEvent =>
+  envelope(ctx, ["quota_increased", eventId, categoryId], { current, previous });
+
 export const mint = (ctx: EventContext, to: string, tokenId: number): RawChainEvent =>
   envelope(ctx, ["mint", to], { token_id: tokenId });
 

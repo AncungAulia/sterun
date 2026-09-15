@@ -36,6 +36,7 @@ import {
   scannerAdded,
   scannerRemoved,
   slotReserved,
+  quotaIncreased,
   toidCursor,
 } from "./helpers/fake-events.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
@@ -365,14 +366,39 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       );
     });
 
-    it("refuses a category_added whose quota disagrees with the contract", async () => {
+    it("refuses a category_added whose quota is LOWER on chain than published", async () => {
+      // A quota only ever rises (v2.4), so a lower one means the chain and the
+      // stream disagree about something real.
       chain.addEvent({ eventId: 0, organiser: ORGANISER });
-      chain.addCategory({ eventId: 0, categoryId: 0, quota: 100, priceStroops: 50_000_000n });
+      chain.addCategory({ eventId: 0, categoryId: 0, quota: 40, priceStroops: 50_000_000n });
       const page = [
         eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
         categoryAdded({ ...registry, ledger: 100 }, 0, 0, 50, 50_000_000n),
       ];
       await expect(build(new FakeEventSource([page])).pollOnce()).rejects.toThrow(/quota=50/);
+    });
+
+    it("accepts a category_added whose quota was raised since, and applies the rise when it replays", async () => {
+      // This used to throw and stop the poller for good: hydration reads the
+      // category as it is NOW, after an increase_quota further down the stream.
+      chain.addEvent({ eventId: 0, organiser: ORGANISER });
+      chain.addCategory({ eventId: 0, categoryId: 0, quota: 100, priceStroops: 50_000_000n });
+      const indexer = build(
+        new FakeEventSource([
+          [
+            eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+            categoryAdded({ ...registry, ledger: 100 }, 0, 0, 50, 50_000_000n),
+          ],
+          [quotaIncreased({ ...registry, ledger: 150 }, 0, 0, 50, 100)],
+        ]),
+      );
+
+      await indexer.pollOnce();
+      // The published number until the rise is reached, not today's.
+      expect((await store.listCategories(pool, 0))[0]?.quota).toBe(50);
+
+      await indexer.pollOnce();
+      expect((await store.listCategories(pool, 0))[0]?.quota).toBe(100);
     });
   });
 
@@ -668,6 +694,145 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       expect(await store.listScanners(pool, 0)).toEqual([
         { eventId: 0, address: SCANNER, addedLedger: 101, addedAt: closedAt(101), scans: 1 },
       ]);
+    });
+  });
+
+  describe("entry counts and second batches (STE-54, STE-55, STE-56)", () => {
+    /**
+     * One event, a 5K and a 10K. Three 5K entries take bibs 1-3, then one 10K
+     * entry takes bib 4: since v2.3 a bib runs across the whole event, and
+     * `slot_reserved.seq` is that bib.
+     */
+    function seedTwoDistances() {
+      chain.addEvent({ eventId: 0, organiser: ORGANISER });
+      const fiveK = chain.addCategory({ eventId: 0, categoryId: 0, code: "5K", quota: 100, enteredCount: 3 });
+      chain.addCategory({ eventId: 0, categoryId: 1, code: "10K", quota: 100, enteredCount: 1 });
+      const page: ReturnType<typeof eventCreated>[] = [
+        eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+        categoryAdded({ ...registry, ledger: 100 }, 0, 0, 100, 50_000_000n),
+        categoryAdded({ ...registry, ledger: 100 }, 0, 1, 100, 50_000_000n),
+      ];
+      const entries: Array<[tokenId: number, categoryId: number, bib: number, runner: string]> = [
+        [0, 0, 1, RUNNER],
+        [1, 0, 2, RUNNER_B],
+        [2, 0, 3, SCANNER],
+        [3, 1, 4, ORGANISER],
+      ];
+      for (const [tokenId, categoryId, bib, runner] of entries) {
+        chain.addRecord({ tokenId, eventId: 0, categoryId, owner: runner, bibNo: bib });
+        const ctx = { ledger: 110 + tokenId };
+        page.push(
+          slotReserved({ ...registry, ...ctx }, 0, categoryId, bib),
+          mint({ ...raceRecord, ...ctx }, runner, tokenId),
+          recordEntered({ ...raceRecord, ...ctx }, runner, 0, tokenId, bib),
+        );
+      }
+      return { page, fiveK };
+    }
+
+    const counts = async () =>
+      (await store.listCategories(pool, 0)).map((c) => [c.categoryId, c.enteredCount, c.quota]);
+
+    it("counts each distance's entrants when bibs run across the whole event (v2.3)", async () => {
+      // Before the fix: the 5K read 4 and the 10K read 5, because seq + 1 was
+      // taken as a count. Production had categories above their own quota.
+      const { page } = seedTwoDistances();
+      await build(new FakeEventSource([page])).pollOnce();
+      expect(await counts()).toEqual([
+        [0, 3, 100],
+        [1, 1, 100],
+      ]);
+    });
+
+    it("does not count an entry twice when its page is replayed", async () => {
+      const { page } = seedTwoDistances();
+      const source = new FakeEventSource([page]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+      source.replayLast();
+      await indexer.pollOnce();
+      expect(await counts()).toEqual([
+        [0, 3, 100],
+        [1, 1, 100],
+      ]);
+    });
+
+    it("raises the quota on quota_increased and keeps every rise as a dated fact", async () => {
+      const { page, fiveK } = seedTwoDistances();
+      fiveK.quota = 200;
+      const source = new FakeEventSource([
+        page,
+        [
+          quotaIncreased({ ...registry, ledger: 200, txHash: "aa".repeat(32) }, 0, 0, 100, 150),
+          quotaIncreased({ ...registry, ledger: 210, txHash: "bb".repeat(32) }, 0, 0, 150, 200),
+        ],
+      ]);
+      const follower = build(source);
+      await follower.pollOnce();
+      await follower.pollOnce();
+
+      expect(await counts()).toEqual([
+        [0, 3, 200],
+        [1, 1, 100],
+      ]);
+      // The fake closes ledger N at 1_800_000_000 + 5N seconds.
+      expect(await store.listQuotaIncreases(pool, 0)).toEqual([
+        { categoryId: 0, previous: 100, current: 150, at: 1_800_001_000n, ledger: 200, txHash: "aa".repeat(32) },
+        { categoryId: 0, previous: 150, current: 200, at: 1_800_001_050n, ledger: 210, txHash: "bb".repeat(32) },
+      ]);
+    });
+
+    it("stops the page on a quota_increased that is not an increase", async () => {
+      const { page } = seedTwoDistances();
+      const indexer = build(
+        new FakeEventSource([page, [quotaIncreased({ ...registry, ledger: 200 }, 0, 0, 100, 100)]]),
+      );
+      await indexer.pollOnce();
+      await expect(indexer.pollOnce()).rejects.toBeInstanceOf(IndexerConsistencyError);
+    });
+
+    it("counts a quota_increased for a category that is not indexed as an orphan", async () => {
+      const result = await build(
+        new FakeEventSource([[quotaIncreased({ ...registry, ledger: 200 }, 7, 0, 10, 20)]]),
+      ).pollOnce();
+      expect(result.orphans).toBe(1);
+      expect(warnings).toContain("quota increase for a category that is not indexed");
+    });
+
+    it("rebuilds today's quota from state and keeps the history, and doctor agrees", async () => {
+      const { page, fiveK } = seedTwoDistances();
+      fiveK.quota = 150;
+      const indexer = build(
+        new FakeEventSource([page, [quotaIncreased({ ...registry, ledger: 200 }, 0, 0, 100, 150)]]),
+      );
+      await indexer.pollOnce();
+      await indexer.pollOnce();
+
+      await indexer.rebuild();
+
+      expect(await counts()).toEqual([
+        [0, 3, 150],
+        [1, 1, 100],
+      ]);
+      // chain_events survives a rebuild, and the history is read from it.
+      expect(await store.listQuotaIncreases(pool, 0)).toHaveLength(1);
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("has doctor report a category whose count disagrees with the chain", async () => {
+      // The check that would have caught the production drift.
+      const { page } = seedTwoDistances();
+      const indexer = build(new FakeEventSource([page]));
+      await indexer.pollOnce();
+      await pool.query("UPDATE categories SET entered_count = 4 WHERE event_id = 0 AND category_id = 0");
+
+      const report = await indexer.doctor();
+
+      expect(report.ok).toBe(false);
+      expect(report.findings).toContainEqual({
+        kind: "category-differs",
+        detail: "category 0/0: entered_count 4 != 3",
+      });
     });
   });
 

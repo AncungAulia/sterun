@@ -143,6 +143,17 @@ describe("organiser flow maps onto EventRegistry", () => {
     });
   });
 
+  it("increaseQuota sends the new total for the right category (v2.4)", async () => {
+    // categoryId and newQuota are both small integers; swapped, the call would
+    // raise category 3000's quota to 1 — or revert for a reason nobody reads.
+    const { client, registry } = clientWith({ increase_quota: good(ok(undefined)) });
+
+    await client.increaseQuota({ eventId: 3, categoryId: 1, newQuota: 3_000 });
+
+    expect(registry.calls[0]?.method).toBe("increase_quota");
+    expect(registry.calls[0]?.args).toEqual({ event_id: 3, category_id: 1, new_quota: 3_000 });
+  });
+
   it("setEventStatus sends the tagged enum the bindings expect", async () => {
     const { client, registry } = clientWith({ set_event_status: good(ok(undefined)) });
     await client.setEventStatus(3, "Open");

@@ -21,6 +21,7 @@ import {
   eventCreated,
   eventStatusChanged,
   mint,
+  quotaIncreased,
   racepackClaimed,
   recordDnf,
   recordFinishedUntimed,
@@ -80,7 +81,21 @@ describe("EventRegistry events (INTERFACE.md §1.3)", () => {
     });
   });
 
-  it("decodes slot_reserved, whose seq is the count BEFORE the increment", () => {
+  it("decodes quota_increased with both the old and the new quota (v2.4)", () => {
+    expect(decode(quotaIncreased(registry, 3, 1, 2_000, 3_000))?.event).toEqual({
+      name: "quota_increased",
+      eventId: 3,
+      categoryId: 1,
+      previous: 2_000,
+      current: 3_000,
+    });
+  });
+
+  it("drops quota_increased emitted by RaceRecord", () => {
+    expect(decode(quotaIncreased(raceRecord, 3, 1, 2_000, 3_000))).toBeNull();
+  });
+
+  it("decodes slot_reserved, whose seq is the bib (event-wide since v2.3)", () => {
     expect(decode(slotReserved(registry, 1, 0, 4))?.event).toEqual({
       name: "slot_reserved",
       eventId: 1,
@@ -265,6 +280,7 @@ describe("coverage of the frozen surface", () => {
       "event_created",
       "event_status_changed",
       "mint",
+      "quota_increased",
       "racepack_claimed",
       "record_dnf",
       "record_entered",

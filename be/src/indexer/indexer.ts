@@ -101,6 +101,8 @@ export interface DoctorFinding {
     | "event-missing"
     | "event-differs"
     | "record-missing"
+    | "category-missing"
+    | "category-differs"
     | "record-differs";
   detail: string;
 }
@@ -320,16 +322,23 @@ export class Indexer {
           hydration.categories.get(categoryKey(event.eventId, event.categoryId)),
           `get_category(${event.eventId}, ${event.categoryId}) for ${envelope.id}`,
         );
-        if (hydrated.quota !== event.quota || hydrated.priceStroops !== event.priceStroops) {
+        // Price never changes, so it must match. The quota may legitimately be
+        // HIGHER on chain today than when it was published: since v2.4 an
+        // organiser can raise it, and hydration reads the category as it is
+        // now. Requiring equality stopped the poller for good on any category
+        // that was raised after this page. Lower than published is impossible
+        // (the quota only goes up) and still means something is wrong.
+        if (hydrated.quota < event.quota || hydrated.priceStroops !== event.priceStroops) {
           throw new IndexerConsistencyError(
             `category ${event.eventId}/${event.categoryId}: event says quota=${event.quota} ` +
               `price=${event.priceStroops}, get_category says quota=${hydrated.quota} ` +
               `price=${hydrated.priceStroops}`,
           );
         }
-        // Same reasoning as Draft above: `add_category` always starts at zero,
-        // and the slot_reserved events that raise it are still ahead of us.
-        await store.upsertCategory(db, { ...hydrated, enteredCount: 0 }, at);
+        // The published quota, not today's: a later quota_increased in the
+        // stream raises it. And zero entrants, the same reasoning as Draft
+        // above — the records that count are still ahead of us.
+        await store.upsertCategory(db, { ...hydrated, quota: event.quota, enteredCount: 0 }, at);
         return 0;
       }
 
@@ -356,14 +365,35 @@ export class Indexer {
         return 0;
 
       case "slot_reserved": {
-        const updated = await store.applySlotReserved(
+        // Nothing to count here: `seq` is a bib, not a count (store.touchCategory).
+        // The count follows from the record this same transaction mints.
+        const updated = await store.touchCategory(db, event.eventId, event.categoryId, at);
+        return updated ? 0 : 1;
+      }
+
+      case "quota_increased": {
+        if (event.current <= event.previous) {
+          throw new IndexerConsistencyError(
+            `category ${event.eventId}/${event.categoryId}: quota_increased from ` +
+              `${event.previous} to ${event.current}, which is not an increase`,
+          );
+        }
+        const raised = await store.raiseCategoryQuota(
           db,
           event.eventId,
           event.categoryId,
-          event.seq,
+          event.current,
           at,
         );
-        return updated ? 0 : 1;
+        if (!raised) {
+          this.log("warn", "quota increase for a category that is not indexed", {
+            eventId: event.eventId,
+            categoryId: event.categoryId,
+            eventRef: envelope.id,
+          });
+          return 1;
+        }
+        return 0;
       }
 
       // `mint` is redundant with `record_entered` — same token, same owner, one
@@ -407,6 +437,8 @@ export class Indexer {
           txHash: envelope.txHash,
           source: "event",
         });
+        // One record per slot, so the category's count is its records.
+        await store.recountCategory(db, hydrated.eventId, hydrated.categoryId);
         return 0;
       }
 
@@ -674,6 +706,41 @@ export class Indexer {
       ].filter(Boolean);
       if (differences.length > 0) {
         findings.push({ kind: "event-differs", detail: `event ${eventId}: ${differences.join("; ")}` });
+      }
+
+      // Categories were not compared at all, which is how an entered_count
+      // inflated by a misread slot_reserved went unnoticed in production.
+      const indexedCategories = new Map(
+        (await store.listCategories(this.pool, eventId)).map((c) => [c.categoryId, c]),
+      );
+      const categoryCount = await this.reader.categoryCount(eventId);
+      for (let categoryId = 0; categoryId < categoryCount; categoryId += 1) {
+        const chainCategory = await this.reader.getCategory(eventId, categoryId);
+        const rowCategory = indexedCategories.get(categoryId);
+        if (!rowCategory) {
+          findings.push({
+            kind: "category-missing",
+            detail: `category ${eventId}/${categoryId} is not indexed`,
+          });
+          continue;
+        }
+        const categoryDifferences = [
+          rowCategory.quota !== chainCategory.quota
+            ? `quota ${rowCategory.quota} != ${chainCategory.quota}`
+            : "",
+          rowCategory.enteredCount !== chainCategory.enteredCount
+            ? `entered_count ${rowCategory.enteredCount} != ${chainCategory.enteredCount}`
+            : "",
+          rowCategory.priceStroops !== chainCategory.priceStroops
+            ? `price ${rowCategory.priceStroops} != ${chainCategory.priceStroops}`
+            : "",
+        ].filter(Boolean);
+        if (categoryDifferences.length > 0) {
+          findings.push({
+            kind: "category-differs",
+            detail: `category ${eventId}/${categoryId}: ${categoryDifferences.join("; ")}`,
+          });
+        }
       }
     }
 

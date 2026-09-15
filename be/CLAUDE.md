@@ -434,7 +434,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-939 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+959 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that
@@ -558,6 +558,44 @@ The general lesson: **a spec change that adds an event name is not additive for 
 `test/chain-events.test.ts` pins `KNOWN_EVENT_NAMES` against the frozen spec, so the next one fails
 a test — but only once someone updates the spec here too. When `docs/specs/CHANGELOG.md` gains an
 event, the indexer needs a handler in the same week, not a follow-up ticket nobody owns.
+
+## Second batches and event-wide bibs (STE-54, STE-55, STE-56)
+
+Two contract upgrades changed what the indexer reads, and one of them made the index **wrong in
+production without an error**:
+
+- **v2.3 (STE-54): `slot_reserved.seq` is now the bib**, unique across the whole event and starting at
+  1. It used to be the category's count before the increment, and the indexer set
+  `entered_count = seq + 1`. After the upgrade, three 5K entries and then one 10K entry made the 10K
+  read **5** entrants. When found, 8 of 38 production categories showed more entrants than they had,
+  several above their own quota.
+- **v2.4 (STE-55): `increase_quota` and `quota_increased`.** The event was silently skipped (unknown
+  name), so a raised quota never reached the index. Worse, `category_added` required the published
+  quota to *equal* `get_category`'s, which reads the category as it is now, so any category raised
+  later stopped the poller for good.
+
+What the indexer does now:
+
+| | How | Why |
+| --- | --- | --- |
+| `entered_count` | recounted from `records` on each `record_entered` | `enter` is the only caller of `reserve_slot` and mints one record per slot, so they are one fact; a count is idempotent under replay and heals a bad row instead of preserving it |
+| `slot_reserved` | touches `last_ledger` only | its `seq` is a bib, not a count |
+| `category_added` | price must match; chain quota must be **≥** the published one | a quota only ever rises; lower still means the stream and state disagree |
+| `quota_increased` | `quota = GREATEST(quota, current)`; `current <= previous` stops the page | the contract refuses a non-increase, so seeing one means something is wrong |
+| quota history | `GET /events/:id` → each category's `quota_history: [{ previous, current, at, ledger, tx_hash }]` | a second batch is a dated fact ("2,000 → 3,000 on 15 Sep"), read from `chain_events`, which a rebuild keeps |
+| `doctor` | now compares every category's quota, `entered_count` and price with `get_category` | it compared events and records only, which is how the drift went unnoticed |
+
+A rise from before this index started polling is not in `quota_history`: contract state holds only
+today's quota. `rebuild` restores today's quota from state and the history from `chain_events`.
+
+The lesson from STE-41 held a second time: **a spec change is not additive for this indexer**, and a
+change to what an existing field *means* (v2.3) is worse than a new event name, because nothing even
+fails to decode. When `docs/specs/CHANGELOG.md` changes, read it against `src/chain/events.ts` and
+`src/indexer/` the same week.
+
+Guarded by tests, each checked by breaking the fix: removing the recount, restoring the equality
+check, making `quota_increased` a no-op, and dropping the category comparison from `doctor` each fail
+the suite.
 
 ## Results CSV (STE-20, C7)
 
