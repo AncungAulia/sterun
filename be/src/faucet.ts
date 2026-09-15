@@ -135,8 +135,19 @@ export class StellarFaucetPayer implements FaucetPayer {
     return (await this.stellar.trustlineBalance(this.address)) ?? 0n;
   }
 
+  /**
+   * Payments go one at a time. Each loads the faucet account's sequence number
+   * from Horizon, so two in flight at once built transactions with the same
+   * sequence and the second failed `tx_bad_seq` — two runners pressing the
+   * button within seconds, and one got a 500. Serialised in this process; a
+   * second API instance would need its own faucet account.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
+
   pay(to: string, stroops: bigint): Promise<string> {
-    return this.stellar.payoutSusd(this.secret, to, stroops);
+    const run = this.queue.then(() => this.stellar.payoutSusd(this.secret, to, stroops));
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 }
 

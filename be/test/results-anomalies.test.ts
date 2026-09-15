@@ -4,7 +4,7 @@
  * The ticket names four anomalies. There are seven here, and the two extra ones
  * are the interesting part:
  *
- *   ambiguous_bib   bib numbers restart at 0 in every category, because
+ *   ambiguous_bib   before contracts v2.3 bib numbers restart in every category, because
  *                   `reserve_slot` returns the *category's* entered_count. A
  *                   file of (bib, time) is therefore ambiguous the moment an
  *                   event has two categories, and guessing would publish one
@@ -82,13 +82,24 @@ describe("the four anomalies the ticket names", () => {
     expect(result.rows[0]?.anomalies[0]?.severity).toBe("reverts");
   });
 
-  it("duplicate_bib — the same runner twice in one file", () => {
+  it("duplicate_bib — the same runner twice in one file, and NEITHER row is publishable", () => {
     const result = review("bib_no,category_id,finish_time\n0,0,3161\n0,0,3200\n");
-    expect(kinds(result, 2)).toEqual([]);
+    // Both rows, not just the repeat: which time is right is unknown, and a
+    // Finished result is terminal. The first row used to be published.
+    expect(kinds(result, 2)).toEqual(["duplicate_bib"]);
     expect(kinds(result, 3)).toEqual(["duplicate_bib"]);
-    // Points at the first occurrence, so the organiser can compare the two.
+    // Each points at the other, so the organiser can compare the two.
+    expect(result.rows[0]?.anomalies[0]?.reason).toMatch(/again on line 3/);
     expect(result.rows[1]?.anomalies[0]?.reason).toMatch(/line 2/);
-    expect(result.counts.publishable).toBe(1);
+    expect(result.counts.publishable).toBe(0);
+    expect(result.publishable).toEqual([]);
+  });
+
+  it("flags the first row once, however many times the bib repeats", () => {
+    const result = review("bib_no,category_id,finish_time\n0,0,3161\n0,0,3200\n0,0,3300\n");
+    expect(kinds(result, 2)).toEqual(["duplicate_bib"]);
+    expect(result.counts.duplicate_bib).toBe(3);
+    expect(result.counts.publishable).toBe(0);
   });
 
   it("impossible_time — a duration read as a plain number", () => {
@@ -181,8 +192,9 @@ describe("rows can fail in more than one way at once", () => {
     );
     expect(result.counts).toMatchObject({
       total: 4,
-      publishable: 1,
-      duplicate_bib: 1,
+      // Lines 2 and 3 are the same bib twice, so neither is publishable.
+      publishable: 0,
+      duplicate_bib: 2,
       unknown_bib: 1,
       not_claimed: 1,
     });
@@ -278,9 +290,12 @@ describe("untimed finishes and DNFs", () => {
   });
 
   it("counts the same runner twice as a duplicate even when the two rows disagree on kind", () => {
+    // A finish time and a DNF for one runner: at most one is true, and nothing
+    // says which, so neither row may be published.
     const result = review("bib_no,category_id,finish_time,status\n0,0,3161,\n0,0,,dnf\n");
+    expect(kinds(result, 2)).toEqual(["duplicate_bib"]);
     expect(kinds(result, 3)).toEqual(["duplicate_bib"]);
-    expect(result.publishable.map((r) => r.kind)).toEqual(["timed"]);
+    expect(result.publishable).toEqual([]);
   });
 
   it("keeps a contradictory row out of publishable as malformed", () => {

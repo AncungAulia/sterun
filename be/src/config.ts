@@ -62,6 +62,13 @@ export interface Config {
    */
   readonly webOrigins: readonly string[];
   /**
+   * The header this deployment's edge sets to the client's address and
+   * overwrites when a client sends its own — `cf-connecting-ip` behind
+   * Cloudflare. Unset: the last `x-forwarded-for` hop. Name only a header the
+   * edge really controls: one a client can set is a rate-limit bypass.
+   */
+  readonly clientIpHeader: string | undefined;
+  /**
    * STE-16. The indexer and the TTL keeper. Always present — running them is
    * decided by which process you start, not by whether they are configured,
    * and a status endpoint that cannot say what the poll interval is is worse
@@ -168,6 +175,41 @@ const num = (v: string | undefined, fallback: number): number => {
   return n;
 };
 
+/**
+ * A whole number in a range, refused at startup otherwise.
+ *
+ * For values whose wrong setting does not fail loudly on its own: a sweep
+ * window of 0 throws inside a timer and only logs, and an interval above
+ * 2^31-1 ms makes Node fire every millisecond.
+ */
+const ranged = (
+  name: string,
+  v: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number => {
+  const n = num(v, fallback);
+  if (n < min || n > max) {
+    throw new Error(`${name} must be between ${min} and ${max}, got ${n}`);
+  }
+  return n;
+};
+
+/**
+ * A positive amount of stroops. An empty string used to become `BigInt("") =
+ * 0n`, which starts fine and then fails every payout with a 500.
+ */
+const positiveStroops = (name: string, v: string | undefined, fallback: bigint): bigint => {
+  if (v === undefined || v.trim() === "") return fallback;
+  if (!/^[0-9]+$/.test(v.trim())) {
+    throw new Error(`${name} must be a whole number of stroops, got ${JSON.stringify(v)}`);
+  }
+  const n = BigInt(v.trim());
+  if (n <= 0n) throw new Error(`${name} must be greater than 0`);
+  return n;
+};
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const fromDoc = loadDeployments();
 
@@ -198,10 +240,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // else in the environment. Rather than making that file wrong, both work;
     // the prefixed one wins where both are set.
     distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
-    faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    faucetAmount: positiveStroops("FAUCET_AMOUNT_STROOPS", env.FAUCET_AMOUNT_STROOPS, 500_000_000n), // 50 sUSD
     faucetSecret: env.STERUN_SUSD_FAUCET_SECRET,
-    faucetWindowHours: num(env.FAUCET_WINDOW_HOURS, 24),
-    faucetDailyCapStroops: BigInt(env.FAUCET_DAILY_CAP_STROOPS ?? "50000000000"), // 5,000 sUSD
+    faucetWindowHours: ranged("FAUCET_WINDOW_HOURS", env.FAUCET_WINDOW_HOURS, 24, 1, 24 * 365),
+    faucetDailyCapStroops: positiveStroops(
+      "FAUCET_DAILY_CAP_STROOPS",
+      env.FAUCET_DAILY_CAP_STROOPS,
+      50_000_000_000n,
+    ), // 5,000 sUSD
+    clientIpHeader: env.STERUN_CLIENT_IP_HEADER?.trim().toLowerCase() || undefined,
     webOrigins: (env.STERUN_WEB_ORIGIN ?? "")
       .split(",")
       .map((origin) => origin.trim())
@@ -225,8 +272,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       r2: loadR2Config(env),
     },
     retention: {
-      unconfirmedHours: num(env.VAULT_UNCONFIRMED_TTL_HOURS, 24),
-      sweepIntervalMs: num(env.VAULT_SWEEP_INTERVAL_MS, 60 * 60 * 1000),
+      unconfirmedHours: ranged("VAULT_UNCONFIRMED_TTL_HOURS", env.VAULT_UNCONFIRMED_TTL_HOURS, 24, 1, 24 * 365),
+      sweepIntervalMs: ranged(
+        "VAULT_SWEEP_INTERVAL_MS",
+        env.VAULT_SWEEP_INTERVAL_MS,
+        60 * 60 * 1000,
+        60_000,
+        2_147_483_647,
+      ),
     },
     vault: loadVaultConfig(env),
   };

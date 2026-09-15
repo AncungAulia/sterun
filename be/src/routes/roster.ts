@@ -219,11 +219,20 @@ export async function rosterRoutes(
       }
 
       const secrets = await vault.rosterSecretsForEvent(eventId);
+      // By the vault's own token ids, with no page size: this used to read the
+      // event's first 10,000 records by bib, and every entry past that in a big
+      // race was reported as missing from the index — a desk turning away
+      // runners who were indexed all along.
       const indexed = new Map(
-        (await store.listRecordsByEvent(pool, eventId, { limit: 10_000, offset: 0 })).map((r) => [
-          r.tokenId,
-          r,
-        ]),
+        (
+          await store.listRecordsByTokenIds(
+            pool,
+            secrets.map((s) => s.tokenId),
+          )
+        )
+          // A token from another event would be a vault bug; never serve it here.
+          .filter((r) => r.eventId === eventId)
+          .map((r) => [r.tokenId, r]),
       );
 
       const entries = [];

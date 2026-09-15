@@ -884,6 +884,25 @@ export async function listRecordsByEvent(
   return rows.map(toRecordRow);
 }
 
+/**
+ * The records for exactly these token ids, in token order.
+ *
+ * For the roster, which starts from the vault's confirmed tokens. Asking for
+ * "the event's records, up to N" instead silently dropped every entry past N
+ * in a big race and reported them as not indexed.
+ */
+export async function listRecordsByTokenIds(
+  db: Queryable,
+  tokenIds: readonly number[],
+): Promise<RecordRow[]> {
+  if (tokenIds.length === 0) return [];
+  const { rows } = await db.query<RawRecordRow>(
+    `SELECT ${RECORD_COLUMNS} FROM records WHERE token_id = ANY($1::int[]) ORDER BY token_id`,
+    [tokenIds],
+  );
+  return rows.map(toRecordRow);
+}
+
 export interface TransitionRow {
   tokenId: number;
   fromState: RecordState | null;

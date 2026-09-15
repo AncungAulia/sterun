@@ -73,6 +73,22 @@ const payoutResponse = {
   },
 } as const;
 
+/**
+ * Did Horizon reject the transaction, with result codes to say why?
+ *
+ * Only then is it known that nothing moved. The codes arrive on the Horizon
+ * error, which `StellarClient.submit` keeps as the `cause` of its own.
+ */
+export function horizonRejected(error: unknown): boolean {
+  for (let current: unknown = error, depth = 0; current && depth < 4; depth += 1) {
+    const codes = (current as { response?: { data?: { extras?: { result_codes?: unknown } } } })
+      .response?.data?.extras?.result_codes;
+    if (codes) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export const RESPONSE_SCHEMAS = { payoutResponse };
 
 export async function faucetRoutes(
@@ -145,7 +161,25 @@ export async function faucetRoutes(
       try {
         txHash = await payer.pay(address, config.faucetAmount);
       } catch (e) {
-        // Released, so a failed payout never costs the runner their window.
+        // Released only when Horizon says the transaction was REJECTED. A
+        // timeout or a 5xx says nothing about whether it reached a ledger —
+        // Horizon can answer 504 for a transaction that then closes — and
+        // releasing the window on one of those let a retry pay the same wallet
+        // twice. Left pending, it still counts against both limits.
+        if (!horizonRejected(e)) {
+          request.log.error(
+            { err: e, payoutId: claim.payoutId },
+            "faucet payout outcome unknown; left pending",
+          );
+          return reply.code(502).send({
+            error: "payout-unconfirmed",
+            message:
+              "the payment was sent but could not be confirmed; check your sUSD balance before " +
+              "asking again — this wallet will not be paid twice",
+          });
+        }
+        // Rejected outright, so nothing moved: release the window, so a failed
+        // payout never costs the runner it.
         await settlePayout(pool, claim.payoutId, { status: "failed" });
         const detail = e instanceof Error ? e.message : String(e);
         // The trustline can be removed between the check above and the payment.

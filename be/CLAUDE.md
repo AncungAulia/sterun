@@ -190,6 +190,10 @@ mechanisms, each guarding a different race, and each checked by breaking it on p
   reliable guard for the lock — do not rely on the same-address one alone.
 
 `failed` payouts do not count against either limit, so a runner whose payment failed can retry.
+A payout is only settled `failed` when Horizon **rejected** it with result codes; a timeout or a 5xx
+leaves it `pending` and answers 502 `payout-unconfirmed`, because Horizon can time out on a
+transaction that still closes, and releasing the window then paid the same wallet twice. Payments
+are also sent one at a time, since each loads the account's sequence number.
 `pending` rows do, including one left behind by a crash mid-payment: at worst an address waits out a
 window it should not have, and nobody is paid twice. Trustline and float are checked *before* the claim,
 so neither error costs a window.
@@ -434,7 +438,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-959 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+976 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that
@@ -620,6 +624,10 @@ Seven anomalies, and their `severity` matters more than their count:
 | --- | --- |
 | `reverts` | the chain rejects that row; the cost is one failed transaction (`unknown_bib`, `not_claimed`, `already_final`) |
 | `wrong` | the chain **accepts it** and the result is a lie forever (`ambiguous_bib`, `impossible_time`, `duplicate_bib`, `malformed_row`) |
+
+A duplicate bib marks **both** rows, not only the repeat: which of the two times is right is
+unknown, and publishing the first one by default is the same irreversible guess the review exists to
+prevent.
 
 The parser is lenient about **shape** and strict about **meaning**: `52:41`, `1:02:41`, `3161` and
 `3161.4` are all accepted, as are headers like `Bib No`/`chip_time` and `;` as a delimiter. Reading
@@ -871,9 +879,10 @@ reach a response body. The body is a fixed sentence plus `x-request-id` to quote
 to the log.
 
 **Rate limits** are per-endpoint, by cost: 240/minute globally, 30 for `/auth/challenge`, 10 for the
-results upload, 12 for the metadata file upload. The key is the first `x-forwarded-for` hop — behind
-a reverse proxy (STE-31) every request arrives from one socket, and without that one noisy client
-would lock out a whole event. **Disabled when `NODE_ENV=test`**, so the suite does not fail on its
+results upload, 12 for the metadata file upload. The key is the client's address **as the proxy saw it**: the header the deployment names in
+`STERUN_CLIENT_IP_HEADER` (production: `cf-connecting-ip`, which Cloudflare sets and overwrites), else
+the **last** `x-forwarded-for` hop, else the socket. It used to be the *first* hop — which is whatever
+the client wrote, so a random header per request bypassed every per-endpoint limit. **Disabled when `NODE_ENV=test`**, so the suite does not fail on its
 241st request for a reason unrelated to the assertion.
 
 **Logs redact** `x-sterun-signature` and `x-sterun-nonce`, and drop the query string (which can carry
@@ -886,6 +895,25 @@ serialise — so it cannot describe an endpoint that behaves differently.
 > registered **synchronously** mounts before a `register`ed plugin has installed its `onRoute` hook.
 > The effect was that `/health` and `/config` were invisible to swagger. Every route now goes through
 > `register`.
+
+## Fixed in the 2026-09-15 audit
+
+A read-only review of the whole package found these; each is fixed with a test that fails without
+the fix. Recorded because each is a shape of bug worth recognising next time.
+
+| What was wrong | Consequence | Now |
+| --- | --- | --- |
+| rate-limit key = first `x-forwarded-for` hop | any client bypassed every limit with a random header | the edge's header, else the last hop (see Hardening) |
+| faucet settled a Horizon timeout as `failed` | a retry could pay the same wallet twice | only a rejection with result codes releases the window |
+| two faucet payments at once | same sequence number, `tx_bad_seq`, a 500 | payments queued one at a time in the process |
+| results preview flagged only the *repeat* of a duplicate bib | the first row was publishable, and Finished is terminal | both rows are `duplicate_bib`, each naming the other's line |
+| file store total written as `total + bytes` after an await | concurrent uploads erased each other from the count; the ceiling drifted open | added to the cached total as it is after the write |
+| roster read the event's first 10,000 records | entries past that reported as not indexed in a big race | records looked up by the vault's own token ids |
+| `VAULT_UNCONFIRMED_TTL_HOURS=0`, `FAUCET_AMOUNT_STROOPS=""`, huge sweep interval | started fine, then failed silently or spun | refused at startup with the variable named |
+
+Not fixed here, and why: the check-then-write race on the file store **ceiling** itself (two uploads
+can both pass the check before either writes) needs a lock or a reservation, and the bound it breaks
+is a soft storage budget, not a safety property. Two concurrent uploads can overshoot by one file.
 
 ## Deployment (STE-31)
 

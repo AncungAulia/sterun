@@ -73,6 +73,33 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("values that fail quietly when wrong are refused at startup", () => {
+    it.each([
+      ["FAUCET_AMOUNT_STROOPS", ""],
+    ])("treats an empty %s as unset, not as zero", (name, value) => {
+      // BigInt("") is 0n: a faucet that starts and then fails every payout.
+      expect(loadConfig({ [name]: value }).faucetAmount).toBe(500_000_000n);
+    });
+
+    it.each([
+      ["FAUCET_AMOUNT_STROOPS", "0", /greater than 0/],
+      ["FAUCET_AMOUNT_STROOPS", "1.5", /whole number of stroops/],
+      ["FAUCET_DAILY_CAP_STROOPS", "0", /greater than 0/],
+      ["FAUCET_WINDOW_HOURS", "0", /between 1 and/],
+      ["VAULT_UNCONFIRMED_TTL_HOURS", "0", /between 1 and/],
+      ["VAULT_SWEEP_INTERVAL_MS", "0", /between 60000 and/],
+      ["VAULT_SWEEP_INTERVAL_MS", "2147483648", /between 60000 and 2147483647/],
+    ])("refuses %s=%s", (name, value, message) => {
+      expect(() => loadConfig({ [name]: value })).toThrow(message);
+    });
+
+    it("keeps the defaults when nothing is set", () => {
+      const c = loadConfig({});
+      expect(c.faucetDailyCapStroops).toBe(50_000_000_000n);
+      expect(c.retention).toEqual({ unconfirmedHours: 24, sweepIntervalMs: 3_600_000 });
+    });
+  });
+
   it("binds to loopback by default — deployment opts in to exposure", () => {
     expect(loadConfig({}).host).toBe("127.0.0.1");
     expect(loadConfig({ HOST: "0.0.0.0" }).host).toBe("0.0.0.0");

@@ -12,7 +12,8 @@ import type { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ChallengeStore } from "../src/auth.js";
 import { loadConfig } from "../src/config.js";
-import type { FaucetPayer } from "../src/faucet.js";
+import { StellarFaucetPayer, type FaucetPayer } from "../src/faucet.js";
+import { horizonRejected } from "../src/routes/faucet.js";
 import { buildServer } from "../src/server.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
 
@@ -25,6 +26,8 @@ class FakePayer implements FaucetPayer {
   status: "ready" | "no-account" | "no-trustline" = "ready";
   float = 10_000n * AMOUNT;
   failWith: string | null = null;
+  /** A failure Horizon did not classify — a timeout or a 5xx, outcome unknown. */
+  failUnconfirmed = false;
   /** Held open so two requests can overlap inside the payment. */
   delayMs = 0;
 
@@ -36,7 +39,20 @@ class FakePayer implements FaucetPayer {
   }
   async pay(to: string, stroops: bigint): Promise<string> {
     if (this.delayMs > 0) await new Promise((r) => setTimeout(r, this.delayMs));
-    if (this.failWith) throw new Error(`transaction failed: ${this.failWith}`);
+    if (this.failUnconfirmed) {
+      throw new Error("transaction failed: Request failed with status code 504");
+    }
+    if (this.failWith) {
+      // Shaped like StellarClient.submit's error: Horizon's, with result codes,
+      // kept as the cause.
+      throw new Error(`transaction failed: ${this.failWith}`, {
+        cause: {
+          response: {
+            data: { extras: { result_codes: { transaction: "tx_failed", operations: [this.failWith] } } },
+          },
+        },
+      });
+    }
     this.paid.push({ to, stroops });
     this.float -= stroops;
     return "ab".repeat(32);
@@ -220,6 +236,24 @@ describe.skipIf(!DATABASE_URL)(`faucet route (${DATABASE_URL ? "postgres" : SKIP
       expect(rows.map((r) => r.status)).toEqual(["failed", "paid"]);
     });
 
+    it("keeps the window when the payment's outcome is unknown, so a retry cannot pay twice", async () => {
+      // Horizon can answer 504 for a transaction that still closes. Releasing
+      // the window then let the runner ask again and be paid a second time.
+      const runner = Keypair.random();
+      payer.failUnconfirmed = true;
+      const unknown = await claim(runner);
+      expect(unknown.statusCode).toBe(502);
+      expect(unknown.json().error).toBe("payout-unconfirmed");
+      expect(unknown.json().message).toMatch(/check your sUSD balance/);
+
+      payer.failUnconfirmed = false;
+      const retry = await claim(runner);
+      expect(retry.statusCode).toBe(429);
+      expect(payer.paid).toHaveLength(0);
+      const { rows } = await pool.query("SELECT status FROM faucet_payouts ORDER BY id");
+      expect(rows.map((r) => r.status)).toEqual(["pending"]);
+    });
+
     it("maps an underfunded payment to faucet-empty", async () => {
       payer.failWith = '{"operations":["op_underfunded"]}';
       const res = await claim(Keypair.random());
@@ -278,5 +312,50 @@ describe.skipIf(!DATABASE_URL)(`faucet claim ledger (${DATABASE_URL ? "postgres"
       Array.from({ length: 25 }, () => claimPayout(pool, request(Keypair.random().publicKey(), 3n * AMOUNT))),
     );
     expect(outcomes.filter((o) => o.kind === "claimed")).toHaveLength(3);
+  });
+});
+
+describe("telling a rejected payment from an unknown one", () => {
+  it("treats Horizon result codes, on the error or its cause, as a rejection", () => {
+    const horizon = { response: { data: { extras: { result_codes: { transaction: "tx_failed" } } } } };
+    expect(horizonRejected(horizon)).toBe(true);
+    expect(horizonRejected(new Error("transaction failed", { cause: horizon }))).toBe(true);
+  });
+
+  it("treats a timeout, a 5xx or anything else as unknown", () => {
+    expect(horizonRejected(new Error("Request failed with status code 504"))).toBe(false);
+    expect(horizonRejected({ response: { status: 500, data: {} } })).toBe(false);
+    expect(horizonRejected(undefined)).toBe(false);
+  });
+});
+
+describe("StellarFaucetPayer", () => {
+  it("sends one payment at a time, so two runners never share a sequence number", async () => {
+    const payer = new StellarFaucetPayer(loadConfig({}), Keypair.random().secret());
+    let inFlight = 0;
+    let most = 0;
+    let n = 0;
+    // The network is replaced; the queue in front of it is what is under test.
+    (payer as unknown as { stellar: { payoutSusd: () => Promise<string> } }).stellar = {
+      payoutSusd: async () => {
+        inFlight += 1;
+        most = Math.max(most, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        inFlight -= 1;
+        n += 1;
+        if (n === 2) throw new Error("transaction failed: tx_bad_auth");
+        return `tx${n}`;
+      },
+    };
+
+    const results = await Promise.allSettled([
+      payer.pay(Keypair.random().publicKey(), 1n),
+      payer.pay(Keypair.random().publicKey(), 1n),
+      payer.pay(Keypair.random().publicKey(), 1n),
+    ]);
+
+    expect(most).toBe(1);
+    // A failed payment does not jam the queue for the ones behind it.
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
   });
 });

@@ -341,6 +341,25 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       expect(body.missing_from_index).toBe(1);
     });
 
+    it("finds an entry however large the race, instead of stopping at 10,000 records", async () => {
+      // The roster used to read the event's first 10,000 records by bib, so in a
+      // bigger race every later entry was reported missing from the index — a
+      // desk turning away runners who were indexed all along.
+      await pool.query(
+        `INSERT INTO records (token_id, event_id, category_id, bib_no, runner_address,
+                              participant_hash, state, entered_at, source, last_ledger, addon_ids)
+         SELECT g, 0, 0, g, $1, decode(repeat('00', 32), 'hex'), 'Entered', 1800000000, 'state', 1, '{}'
+           FROM generate_series(1000, 11049) g`,
+        [runnerKp.publicKey()],
+      );
+      await enrol(runnerKp, 0, 11_049);
+
+      const body = (await fetchRoster(scannerKp)).json();
+
+      expect(body.entries.map((e: { token_id: number }) => e.token_id)).toContain(11_049);
+      expect(body.missing_from_index).toBe(0);
+    });
+
     it("excludes an entry that was submitted but never confirmed on-chain", async () => {
       // No token id means it never entered, and a scanner cannot check in
       // something the chain has never heard of.
