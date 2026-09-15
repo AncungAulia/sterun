@@ -100,12 +100,24 @@ host-side pattern as the faucet key):
 ```bash
 cd /opt/sterun
 grep -c '^PII_INDEX_KEY=.' be/.env.production   # 0 means not set yet
-umask 077
-printf '\nPII_INDEX_KEY=%s\n' "$(openssl rand -hex 32)" >> be/.env.production
+( umask 077; printf '\nPII_INDEX_KEY=%s\n' "$(openssl rand -hex 32)" >> be/.env.production )
 grep -c '^PII_INDEX_KEY=[0-9a-f]\{64\}$' be/.env.production   # must print 1
 ```
 
 Do this **before** deploying a version that contains migration 011, or the API will not start.
+
+> **The `umask` stays inside the parentheses.** The first deploy of this took production down for
+> about fifteen minutes because it did not: `umask 077` was set in the deploy shell, the `git merge`
+> that followed rewrote every changed file as mode `600`, `docker build` copied those modes into
+> the image, and the container (uid 1000) crash-looped on
+> `Cannot read package config /app/package.json: permission denied` — API and poller both, public
+> URL 502. Nothing in the database changed, because the API never got far enough to migrate. The
+> fix was `chmod 644` on the 30 tracked files the merge had touched, then rebuild. If a deploy ever
+> fails that way again, check first:
+>
+> ```bash
+> git ls-files -z | xargs -0 stat -c '%a %n' | awk '$1 !~ /[4-7][4-7]$/'   # must print nothing
+> ```
 
 ## If the database leaks
 

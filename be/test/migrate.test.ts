@@ -162,6 +162,8 @@ describe("migrations already applied in production", () => {
     "009_entry_form_fields.sql": "36263a44121a68a35f0c64595eea54950329f0524470d0631f4e708fe9cf89e8",
     // Applied in production 2026-09-15, deploy of e5a1e7f.
     "010_faucet_payouts.sql": "d4bf5aa0796eea0e3b5acac909efff560046e5371cfcbe17de3488505831ab0f",
+    // Applied in production 2026-09-15, deploy of 698f9fa (STE-50/51/52).
+    "011_identity_index.sql": "26c5a650e19b7516b1ffe3d1384d6de5ae3e0cf13b0a790121badbf9fd356a53",
   };
 
   it.each(Object.entries(APPLIED))("%s is byte-for-byte what production ran", (name, sha256) => {

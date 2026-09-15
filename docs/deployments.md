@@ -2187,3 +2187,65 @@ The payout is read back through the SAC, which is the balance `RaceRecord.enter`
 Payout tx: [`df2a6887…`](https://stellar.expert/explorer/testnet/tx/df2a688765c73710fd2039974102e3de16fc997baea116e481adf07603bd1638).
 `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T00:39:26Z.
 
+---
+
+## STE-50 / STE-51 / STE-52 — entry rules and pass restore, live (2026-09-15)
+
+Deployed together at `698f9fa`. Backup first: `/opt/sterun/backups/pre-entry-rules-20260915T010222Z.sql.gz`.
+
+| Ticket | What went live |
+| --- | --- |
+| STE-51 | `POST /participants` → 409 `already-entered` for a second confirmed entry by the same identity number in one race. Migration `011_identity_index.sql` (sha256 `26c5a650e19b7516…`, pinned in `migrate.test.ts`) |
+| STE-50 | the API deletes entries never confirmed after 24h, at boot and hourly; `node dist/cli/vault.js sweep` on demand |
+| STE-52 | `GET /records/:tokenId/pass` → the check-in secret, to the wallet `owner_of` names |
+
+`PII_INDEX_KEY` was generated on the box with `openssl rand -hex 32` and appended to
+`be/.env.production` (still `root:root 600`); it never left the server. First boot log:
+`{"removed":0,"olderThanHours":24,"msg":"swept unconfirmed entries"}` — the vault held no rows.
+
+### An outage during this deploy, about 01:05–01:23 UTC
+
+The public URL answered **502** for roughly eighteen minutes. The deploy script set `umask 077` to
+write the key and never reset it, so the `git merge` that followed rewrote all 30 changed tracked
+files as mode `600`; `docker build` copied those modes, and the API and poller (uid 1000)
+crash-looped on `Cannot read package config /app/package.json: permission denied` (API restarted
+12 times, poller 8). The database was untouched: the API never started, so 011 had not run.
+
+Fixed by `chmod 644` on exactly the tracked files without group/other read, rebuild, recreate. After:
+API, poller and keeper running with 0 restarts, `/ready` ok, 011 applied. `OPERATIONS.md` now keeps
+the `umask` inside a subshell and gives the one-line check for this failure.
+
+### End to end, against the public URL
+
+`pnpm --filter be e2e:entry-rules https://api-sterun.jameshub.fun` — throwaway wallets, a free category,
+records really entered on testnet:
+
+```
+▸ An unauthenticated pass request is refused
+  401
+▸ A throwaway organiser, event and free category on testnet
+  event 16, category 0, organiser GD7JVQOFSREQU22Z2FU7K5QPEJK2LMPFQDLISC2O25MTIYYSN5XFUJCG
+▸ STE-51: a submit that is never paid does not lock the runner out
+  201 twice for the same person while neither is confirmed
+▸ The runner enters on chain and confirms
+  token 19 entered and confirmed
+▸ STE-52: on another device, the same wallet gets its pass back
+  200, same secret as at submit, bib "BUDI E2E", no PII
+▸ Another wallet cannot read that pass
+  403
+▸ STE-51: the same person entering again from that other wallet is refused
+  409 already-entered for "3201-789435 543745"
+▸ …and a different person from that wallet is not
+  201
+▸ STE-52: a record entered on chain but never confirmed has no pass
+  token 20: 404 no-pass
+▸ A token that does not exist on chain
+  404
+▸ The pass secret is the one the scanner roster carries (waiting for the poller)
+  roster and pass agree: the codes the phone shows are the codes the desk accepts
+✓ one entry per person per race, and a pass restored only to its owner
+```
+
+The e2e left throwaway entries in the vault: tokens 19 and 20, plus unconfirmed rows the STE-50 sweep
+removes after a day. `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T01:24:59Z.
+
