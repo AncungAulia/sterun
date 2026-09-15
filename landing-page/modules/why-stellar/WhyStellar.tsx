@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Why Stellar: the one section on the page that argues rather than describes.
+ * Why Stellar: the question, alone on a screen.
  *
  * THE TRANSITION IN. The blue panel above does not slide away to make room for
  * this one; it lifts off it. This section carries a matching -100svh so it
@@ -18,10 +18,9 @@
  * this section's own height. See SweepReveal for why that is GSAP rather than a
  * native scroll-driven animation.
  *
- * The claim itself is one sentence, which is what the ticket asks for: three
- * things in one breath rather than three cards in a row. Its numbers are the
- * part to watch. "fractions of a cent" has nothing behind it yet, so it is not
- * written here; see docs/landing-copy.md.
+ * The answer is not here yet. The sentence that answers it, and the treatment
+ * it gets, come next; this screen is only the question, at the size a question
+ * deserves when it is the only thing on it.
  */
 
 import { useRef } from "react";
@@ -44,7 +43,7 @@ export function WhyStellar() {
     >
       <div className="sticky top-0 flex h-[100svh] flex-col justify-center overflow-hidden px-5 sm:px-6 lg:px-4">
         <div className="mx-auto w-full max-w-[1500px]">
-          <h2 className="heading-hero tracking-[-0.015em] [--why-size:clamp(3rem,10vw,8.75rem)]">
+          <h2 className="heading-hero tracking-[-0.015em] [--why-size:clamp(3.5rem,13vw,12rem)]">
             <span className="block text-[length:var(--why-size)] leading-[0.86]">Why</span>
             <SweepReveal
               trigger={rootRef}
@@ -54,14 +53,6 @@ export function WhyStellar() {
             </SweepReveal>
           </h2>
 
-          <p className="mt-[clamp(2rem,4vw,3.5rem)] max-w-[62ch] text-[clamp(1rem,1.5vw,1.375rem)] leading-[1.5]">
-            Non-transferable records mean a bib can&apos;t be resold, organiser-signed finish results
-            mean a time can&apos;t be forged, and settlement reaches the organiser directly.
-          </p>
-
-          <p className="mt-4 text-sm italic text-n-600">
-            Live on Stellar testnet, settling in sUSD. Mainnet settles in USDC.
-          </p>
         </div>
       </div>
     </section>

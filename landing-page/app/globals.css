@@ -399,7 +399,6 @@ html::-webkit-scrollbar {
     color-mix(in srgb, var(--sweep-brand) 28%, transparent) 55%,
     color-mix(in srgb, var(--sweep-brand) 82%, transparent)
   );
-  box-shadow: 0 0 24px color-mix(in srgb, var(--sweep-brand) 40%, transparent);
   filter: blur(1px);
   opacity: var(--sweep-glow, 1);
   pointer-events: none;
