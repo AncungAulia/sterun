@@ -361,6 +361,37 @@ Errors: 401 (auth), 403 `forbidden` (another wallet), 404 `not-found` (no such t
 `no-pass` (no confirmed entry details for this record). Rate-limited at 20 per minute per client.
 Logged with the token id only.
 
+**A vault row is linked from the chain, not only by confirm (STE-59, migration 012).** Entering took
+three wallet approvals: the signed message for `POST /participants`, the `enter` transaction, and a third
+signature only to call confirm and tell this service what the chain already said. In testing it showed
+up as surprise wallet popups over the success page. Now the indexer links the row itself when it
+indexes `record_entered`, and the web app can go back to two approvals.
+
+A row is linked only when **all four** match the record: `participant_hash`, `runner_address` equal to
+the record's owner, `event_id` and `category_id`. Only an unconfirmed row, and never a token another
+row already holds. One statement (`store.linkParticipantsFromChain`), used two ways:
+
+| | Scope | `enter_tx_hash` |
+| --- | --- | --- |
+| the poller, on `record_entered` | that token | the event's transaction |
+| `rebuild` | every indexed record | from `chain_events` when the poller logged it, otherwise **NULL** |
+
+NULL is honest rather than a gap: contract state carries no transaction hash and `getEvents` keeps about a
+week. Migration 012 therefore lets a linked row lack the hash, while a token id still always arrives
+with a confirmation time. `linked_by` records `confirm` or `chain`; NULL means a row confirmed before 012.
+
+Details that are easy to get wrong:
+
+- **Confirm still works and stays idempotent**, so an older client is not broken: confirming the token
+  the indexer already linked is a success that changes nothing.
+- **The link runs under a savepoint inside the page's transaction.** A confirm can link the same token
+  in the same instant; the loser trips the unique index on `token_id`, and without the savepoint that
+  would roll back the whole page and stall the poller on it.
+- **STE-50's sweep deletes `token_id IS NULL` rows only**, so a row linked from the chain is safe even
+  if the runner closed the dialog before any confirm.
+- The linking reads `records`, so it is exactly as current as the index. A row whose record the index
+  has not reached yet is linked when it does.
+
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
 

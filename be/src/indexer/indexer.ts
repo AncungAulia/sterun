@@ -439,6 +439,9 @@ export class Indexer {
         });
         // One record per slot, so the category's count is its records.
         await store.recountCategory(db, hydrated.eventId, hydrated.categoryId);
+        // STE-59: link the vault row this record was entered for, so the runner
+        // does not have to sign a third time to say what the chain already says.
+        await this.linkVaultRow(db, event.tokenId, envelope.txHash);
         return 0;
       }
 
@@ -461,6 +464,25 @@ export class Indexer {
 
       case "record_dnf":
         return this.advance(db, envelope, event.tokenId, "Dnf", { resultAt: occurredAt });
+    }
+  }
+
+  /**
+   * Link one record's vault row inside the page's transaction, under a savepoint.
+   *
+   * The confirm route can link the same row at the same moment. Whichever
+   * commits first wins, and the loser trips the unique index on token_id; that
+   * must not roll back the whole page and stall the poller over a row that is,
+   * in the end, linked exactly as intended.
+   */
+  private async linkVaultRow(db: PoolClient, tokenId: number, enterTxHash: string): Promise<void> {
+    await db.query("SAVEPOINT link_vault_row");
+    try {
+      await store.linkParticipantsFromChain(db, { tokenId, enterTxHash });
+      await db.query("RELEASE SAVEPOINT link_vault_row");
+    } catch (e) {
+      await db.query("ROLLBACK TO SAVEPOINT link_vault_row");
+      if ((e as { code?: string }).code !== "23505") throw e;
     }
   }
 
@@ -634,6 +656,9 @@ export class Indexer {
           transitions += 1;
         }
       }
+      // STE-59: the same links the poller makes, from state. The vault is not
+      // truncated by a rebuild, so this only ever adds links that were missing.
+      await store.linkParticipantsFromChain(client);
       // The cursor is cleared and last_ledger pinned to where the walk started:
       // the next poll asks for `fromLedger + 1` onwards. Anything before that is
       // already in the state we just wrote.
