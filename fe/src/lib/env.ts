@@ -46,6 +46,22 @@ export const CONTRACTS = {
   susdSac: contractId("NEXT_PUBLIC_SUSD_SAC", process.env.NEXT_PUBLIC_SUSD_SAC),
 } as const;
 
+/**
+ * The account that issues sUSD (STE-21).
+ *
+ * A trustline names an asset by code and issuer, not by its contract, so the
+ * SAC address alone cannot open one. Read from the environment like every other
+ * address (docs/deployments.md, `sterun-susd-issuer`), and a test proves it
+ * derives the configured SAC, so the two cannot quietly name different assets.
+ *
+ * Optional rather than required: only the pay step needs it, and a missing
+ * issuer should cost the trustline button, not every page in the app.
+ */
+export const SUSD_ISSUER = (process.env.NEXT_PUBLIC_SUSD_ISSUER ?? "").trim();
+
+/** Test sUSD exists only here, so everything that hands it out checks this first. */
+export const IS_TESTNET = NETWORK.networkPassphrase === "Test SDF Network ; September 2015";
+
 /** Backend base URL (be/). Optional until the first ticket that calls it. */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
