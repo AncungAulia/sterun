@@ -2138,3 +2138,52 @@ local-format emergency contact. Validation runs before auth, so it is refused on
 ```
 
 `SELECT count(*) FROM participants` stayed at 0 afterwards.
+
+---
+
+## STE-49 — the web faucet, live (2026-09-15)
+
+`POST /faucet`, the web app's **Get test sUSD** button. Backup first:
+`/opt/sterun/backups/pre-faucet-20260915T002820Z.sql.gz`. Migration `010_faucet_payouts.sql` applied.
+
+### The faucet account
+
+Its own account, never the distributor, which stays off the public box. The secret was generated in
+the image and stored by the host, so it never left the server.
+
+| | |
+| --- | --- |
+| Faucet account | [`GACPHVSZQ5VIPSGMBSCQ4667OPW5K45HZ64HFX4JWEC6QOK6PE3NU4K3`](https://stellar.expert/explorer/testnet/account/GACPHVSZQ5VIPSGMBSCQ4667OPW5K45HZ64HFX4JWEC6QOK6PE3NU4K3) |
+| Float | 5,000 sUSD — [`79dacc75…`](https://stellar.expert/explorer/testnet/tx/79dacc75677916ad6bed297b4e63a235a52b18b514a1cb5c8e42ffc90abe9a9e) from the distributor |
+| Payout per claim | 50 sUSD |
+| Per-address window / daily cap | 24h / 5,000 sUSD |
+
+```
+/config faucet.route: {"available": true, "reason": null, "windowHours": 24, "dailyCapStroops": "50000000000"}
+```
+
+Two setup attempts failed before this one, both safely (nothing written, nothing paid): an append from
+inside the container hit the root-owned env file, and a `docker compose run` without `-T` swallowed
+the rest of a script fed over `ssh … bash -s`. `OPERATIONS.md` now has the commands that worked.
+
+### End to end, against the public URL
+
+`pnpm --filter be e2e:faucet https://api-sterun.jameshub.fun`, with a throwaway wallet:
+
+```
+▸ An unauthenticated call is refused
+  401
+▸ A fresh wallet with XLM and no trustline: GD6HLW6KHYK75X72RCRJFCQAXBQMNZ6B2O5ZWBCFGPUFTT5J3EVU43I4
+  409 no-trustline — "this wallet cannot hold sUSD yet: add the sUSD trustline in your wallet, then ask again"
+▸ The wallet opens its sUSD trustline, then asks
+  200 paid 500000000 stroops, tx df2a688765c73710fd2039974102e3de16fc997baea116e481adf07603bd1638
+  SAC balance 0 -> 500000000: the wallet can now pay an entry
+▸ A second claim inside the window is refused, with when to come back
+  429 rate-limited, retry at 2026-09-16T00:39:20.307Z
+✓ the web faucet pays a trustlined wallet once, and says why when it does not
+```
+
+The payout is read back through the SAC, which is the balance `RaceRecord.enter` charges.
+Payout tx: [`df2a6887…`](https://stellar.expert/explorer/testnet/tx/df2a688765c73710fd2039974102e3de16fc997baea116e481adf07603bd1638).
+`verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T00:39:26Z.
+

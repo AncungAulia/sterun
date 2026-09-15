@@ -836,43 +836,54 @@ than served.
 and written straight into its env file, so it never passes through a laptop, a clipboard, a terminal
 or a chat.
 
-**1. Generate the keypair on the box; print only the public key.**
+**1. Generate the keypair on the box, and let the HOST store it.**
+
+The key is generated inside the image (which has the SDK) but written by the host shell, because
+`be/.env.production` is `root:root 600` and the container runs as uid 1000 — an append from inside
+the container fails with `EACCES` before anything is printed. That happened on the first attempt, so
+this is not theoretical.
 
 ```bash
 ssh root@192.168.18.42
 cd /opt/sterun
 C="docker compose -f compose.prod.yml -f compose.homelab.yml"
-$C run --rm --no-deps -v /opt/sterun/be:/out api node -e '
-  const { Keypair } = require("@stellar/stellar-sdk");
-  const kp = Keypair.random();
-  require("fs").appendFileSync("/out/.env.production", "\nSTERUN_SUSD_FAUCET_SECRET=" + kp.secret() + "\n");
-  console.log(kp.publicKey());
-'
+umask 077
+$C run -T --rm --no-deps api node -e \
+  'console.log(require("@stellar/stellar-sdk").Keypair.random().secret())' </dev/null 2>/dev/null \
+  | grep -E '^S[A-Z2-7]{55}$' > /root/.faucet-secret.tmp
+test -s /root/.faucet-secret.tmp
+printf '\nSTERUN_SUSD_FAUCET_SECRET=%s\n' "$(cat /root/.faucet-secret.tmp)" >> be/.env.production
+rm -f /root/.faucet-secret.tmp
+# the public key, and only that
+$C run -T --rm --no-deps api node -e \
+  'console.log(require("@stellar/stellar-sdk").Keypair.fromSecret(process.env.STERUN_SUSD_FAUCET_SECRET).publicKey())' </dev/null
 ```
 
-**2. Create the account and open its trustline**, on the box. `--no-payout` needs no distributor key,
-and `--secret` prints nothing secret:
+> **Always `-T` and `</dev/null` on `docker compose run` in anything scripted.** Without them `run`
+> attaches stdin. Fed through `ssh … bash -s`, the remote script *is* stdin, so the first `run`
+> swallowed the rest of the script and nothing after it executed — silently. That was the second
+> attempt.
+
+**2. Create the account and open its trustline**, on the box. `compose` passes
+`be/.env.production` in as environment (`env_file`), so the secret from step 1 is already a variable
+inside the container. `--no-payout` needs no distributor key, and `--secret` prints nothing secret:
 
 ```bash
-$C run --rm --no-deps api sh -c \
-  'node dist/cli/faucet.js --secret "$(grep ^STERUN_SUSD_FAUCET_SECRET= /app/be/.env.production | cut -d= -f2)" --no-payout'
+$C run -T --rm --no-deps api \
+  sh -c 'node dist/cli/faucet.js --secret "$STERUN_SUSD_FAUCET_SECRET" --no-payout' </dev/null
 ```
-
-(If `.env.production` is not visible at that path inside the container, pass the file with the same
-`-v /opt/sterun/be:/out` mount and read `/out/.env.production` instead.)
 
 **3. Send the float from a machine that holds the distributor key** — never copy that key to the box.
-From a checkout whose `be/.env` has `STERUN_SUSD_DISTRIBUTOR_SECRET`, sending to the public key from
-step 1:
+From a checkout whose `be/.env` has `STERUN_SUSD_DISTRIBUTOR_SECRET`, to the public key from step 1:
 
 ```bash
-cd be && node --input-type=module -e '
-  import { loadEnvFile } from "./dist/env.js"; import { loadConfig } from "./dist/config.js";
-  import { StellarClient } from "./dist/stellar.js";
+cd be && pnpm exec tsx -e '
+  import { loadEnvFile } from "./src/env.ts"; import { loadConfig } from "./src/config.ts";
+  import { StellarClient } from "./src/stellar.ts";
   loadEnvFile(); const c = loadConfig();
-  const tx = await new StellarClient(c).payoutSusd(c.distributorSecret, process.argv[1], 50000000000n);
+  const tx = await new StellarClient(c).payoutSusd(c.distributorSecret!, process.env.FAUCET_PUBLIC!, 50000000000n);
   console.log("float sent, tx", tx);
-' <FAUCET_PUBLIC_KEY>
+' # with FAUCET_PUBLIC=<public key from step 1> in the environment
 ```
 
 `50000000000` stroops is 5,000 sUSD. **Size the float to what you are prepared to lose**: it is both
@@ -881,6 +892,16 @@ compromised.
 
 **4. Restart the API** so it reads the variable. `/config` then reports
 `faucet.route.available: true`, and the startup log names the faucet's public address.
+
+**5. Prove it end to end**, from anywhere:
+
+```bash
+pnpm --filter be e2e:faucet https://api-sterun.jameshub.fun
+```
+
+A throwaway wallet is refused without a signature, refused without a trustline, paid once it has one
+(checked through the SAC, the balance `enter` charges), and refused a second time. It spends one
+payout of the float per run.
 
 **Topping up** is step 3 again. When the float runs out the route answers `faucet-empty` and pays
 nothing — the intended failure, not an outage.
