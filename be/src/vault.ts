@@ -281,7 +281,7 @@ export class Vault {
     try {
       updated = await this.pool.query(
         `UPDATE participants
-            SET token_id = $2, enter_tx_hash = $3, confirmed_at = now()
+            SET token_id = $2, enter_tx_hash = $3, confirmed_at = now(), linked_by = 'confirm'
           WHERE id = $1 AND token_id IS NULL`,
         [participantId, tokenId, enterTxHash],
       );

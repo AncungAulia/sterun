@@ -282,6 +282,47 @@ export async function recountCategory(
   );
 }
 
+/**
+ * Link vault rows to the records they were entered for, from the chain (STE-59).
+ *
+ * A row is linked only when all four agree with the indexed record: the
+ * participant hash (its salt is that row's alone), the runner address as the
+ * record's owner, the event and the category. Only unconfirmed rows, and never a
+ * token another row already holds. Returns how many rows were linked.
+ *
+ * `tokenId` narrows it to one record (the poller); without it every indexed
+ * record is considered (a rebuild). The `enter` hash comes from the caller when
+ * the poller has it, otherwise from the raw event log, otherwise it stays NULL:
+ * contract state carries no transaction hash.
+ */
+export async function linkParticipantsFromChain(
+  db: Queryable,
+  opts: { tokenId?: number; enterTxHash?: string } = {},
+): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE participants p
+        SET token_id = r.token_id,
+            confirmed_at = now(),
+            enter_tx_hash = COALESCE(
+              $2::text,
+              (SELECT e.tx_hash FROM chain_events e
+                WHERE e.name = 'record_entered' AND (e.payload->>'tokenId')::int = r.token_id
+                ORDER BY e.ledger LIMIT 1)
+            ),
+            linked_by = 'chain'
+       FROM records r
+      WHERE p.token_id IS NULL
+        AND ($1::int IS NULL OR r.token_id = $1::int)
+        AND p.participant_hash = r.participant_hash
+        AND p.runner_address = r.runner_address
+        AND p.event_id = r.event_id
+        AND p.category_id = r.category_id
+        AND NOT EXISTS (SELECT 1 FROM participants q WHERE q.token_id = r.token_id)`,
+    [opts.tokenId ?? null, opts.enterTxHash ?? null],
+  );
+  return rowCount ?? 0;
+}
+
 /** v2.4 `quota_increased`: raise, never lower. False when the category is not indexed. */
 export async function raiseCategoryQuota(
   db: Queryable,

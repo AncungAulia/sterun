@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
 import { Big_Shoulders, Poppins } from "next/font/google";
+
+import { CursorFollower } from "@/components/elements/CursorFollower";
+import { SmoothScroll } from "@/components/elements/SmoothScroll";
+import { Navbar } from "@/components/layouts/Navbar";
+
+// Lenis's own stylesheet: height:auto on html/body while it runs, overflow:clip
+// while stopped, and overscroll containment inside [data-lenis-prevent].
+import "lenis/dist/lenis.css";
 import "./globals.css";
 
 // Attention type. The landing hero and nothing else — a condensed face at 700
@@ -23,7 +31,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Sterun — runs you can't fake",
+  title: "Sterun: runs you can't fake",
   description: "Non-transferable race records for running events, on Stellar.",
 };
 
@@ -33,7 +41,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${bigShoulders.variable} ${poppins.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SmoothScroll />
+        <Navbar />
+        {children}
+        <CursorFollower />
+      </body>
     </html>
   );
 }

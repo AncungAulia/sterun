@@ -2690,3 +2690,49 @@ status codes: 200 ×30, then 429 429      — 2026-09-15T09:09:18Z
 
 `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T09:08:47Z.
 
+---
+
+## STE-59 — a vault row linked from the chain, live (2026-09-15)
+
+Entering now needs two wallet approvals, not three: the indexer links a vault row to the record it
+was entered for, so the web app no longer has to ask the runner to sign confirm. Deployed at
+`261a32b`, backup first: `/opt/sterun/backups/pre-chain-link-20260915T122355Z.sql.gz`.
+
+```
+participants before (unconfirmed|confirmed): 3|4
+migrations: 011_identity_index.sql:26c5a650e19b7516 012_chain_linked_participants.sql:6d392f01c0d71870
+rebuilt in 60340ms: 22 events, 39 categories, 37 records, 59 transitions. Following resumes at ledger 4690403.
+doctor: index matches the chain
+participants after (unconfirmed|confirmed|linked by chain|by confirm|no enter hash): 2|5|1|0|0
+sterun-api-1 running restarts=0
+sterun-indexer-1 running restarts=0
+sterun-keeper-1 running restarts=0
+```
+
+The rebuild linked one existing row: token 20 from the entry-rules e2e, which was entered on chain and
+deliberately never confirmed. Its `enter` hash came from the raw event log (`no enter hash: 0`).
+Migration 012's checksum is pinned in `be/test/migrate.test.ts`.
+
+### Two approvals, end to end
+
+`pnpm --filter be e2e:chain-link https://api-sterun.jameshub.fun`:
+
+```
+▸ A throwaway organiser, event and free category on testnet
+  event 22, category 0
+▸ Approval 1: the runner submits their details
+  201, participant 37cb96b7-1f01-4722-b4b9-0e6d7593a2a7
+▸ Approval 2: the runner signs enter — and never calls confirm
+  token 37 entered on chain
+▸ The indexer links the row: the pass route starts answering (waiting for the poller)
+  200, same secret as at submit, bib "BUDI LINK" — linked with no third approval
+▸ The row reads as confirmed to its owner
+  token_id 37, confirmed_at 2026-09-15T12:36:40.603Z
+▸ An older client that still calls confirm gets a success
+  200
+✓ an entry is linked from the chain with two approvals, and confirm stays safe to call
+```
+
+The pass route serves confirmed rows only, so its 200 is the client-visible proof that the indexer
+linked the row. `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T12:36:58Z.
+

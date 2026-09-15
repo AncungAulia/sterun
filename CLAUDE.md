@@ -74,6 +74,8 @@ must **never** be edited by hand.
 | STE-13 | event directory + detail read from chain (C9) | done, live testnet e2e |
 | STE-17 | organiser console | in progress (Ancung) |
 | STE-18 | race-day design: QR pass + scanner (C13) | done — `docs/design/race-day/`, what STE-21 and STE-22 are built from |
+| STE-23 | runner profile design + polish pass (C13) | done — `docs/design/profile/` for STE-24, findings in `docs/design/polish/` |
+| STE-12 | landing page (C13) | **in progress, merged to `main`** — hero, Problem and How it works are live; Product preview, Why Stellar, Closing CTA and Footer are not built |
 | STE-35 | **contracts v2**: upgradeable + paid add-ons + `Cancelled` | done, **LIVE on testnet** |
 | STE-36 | **organiser allowlist** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED** |
 | STE-37 | add-on methods on `SterunClient` | done, live v2 e2e |
