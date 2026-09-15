@@ -20,6 +20,16 @@
  * all of them have answered, because a race pack that appears a second after
  * Continue was pressed is a jersey that was never reserved.
  *
+ * ## The gates decide once
+ *
+ * Before the form, not during it. An entry that lands refreshes this wallet's
+ * records and the race while the Sign and pay dialog still waits on the wallet
+ * to link it, and re-deciding then swapped the page for "You're already
+ * entered", unmounting the dialog before it could hand the runner their bib
+ * (Ancung, 2026-09-15). Anything that changes after the form opened, a place
+ * taken or an entry from another tab, is `enter`'s to refuse and the dialog's
+ * to explain.
+ *
  * ## What survives a reload
  *
  * The distance and the race pack and add-on choices, in sessionStorage, so an
@@ -165,6 +175,8 @@ function EntryForm({
   const onChain = useEventAddOns(eventId);
   const records = useRunnerRecords(address);
   const metadata = useEventMetadata(race.data?.event.uri ?? "", race.data?.event.metadataHash ?? "");
+  /** The distance the gates first opened on. Once set, the form stays: see the header. */
+  const [openedOn, setOpenedOn] = useState<number | null>(null);
 
   if (race.isError) {
     return (
@@ -203,7 +215,12 @@ function EntryForm({
 
   const summary = race.data;
   const gate = entryGate(summary, records.data, requestedCategory);
-  if (gate.kind !== "open") return <GateNotice gate={gate} summary={summary} />;
+  // Adjusted during render, React's pattern for state derived from props.
+  if (gate.kind === "open" && openedOn === null) setOpenedOn(gate.categoryId);
+  let openCategoryId: number;
+  if (gate.kind === "open") openCategoryId = gate.categoryId;
+  else if (openedOn !== null) openCategoryId = openedOn;
+  else return <GateNotice gate={gate} summary={summary} />;
 
   return (
     <EntryReady
@@ -211,7 +228,7 @@ function EntryForm({
       requestedCategory={requestedCategory}
       address={address}
       summary={summary}
-      openCategoryId={gate.categoryId}
+      openCategoryId={openCategoryId}
       raceDocument={metadata.data?.status === "verified" ? metadata.data.document : undefined}
       onChain={onChain.data ?? []}
     />

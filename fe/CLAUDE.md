@@ -575,7 +575,10 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   checked again. The dialog cannot be closed while either runs. Its third step links the vault row
   to the record (`POST /participants/:id/confirm`), a signed message asked for in the dialog so
   the wallet never prompts after the runner has left it; a link that fails still ends entered.
-  That step goes when the backend links rows from chain (STE-59).
+  That step goes when the backend links rows from chain (STE-59). **The gates (already entered,
+  closed, sold out) decide once, before the form** (`EntryForm`): the landed entry refreshes the
+  records while the dialog is still linking, and re-deciding then unmounted the dialog and stranded
+  the runner on "You're already entered" instead of their bib.
 - **A refused `enter` is explained from the ledger afterwards** (`enter-failure.ts`): closed, no
   places, an item out of units, a short balance. Never from the error code, which the sUSD token
   shares with EventRegistry. A decline or no answer is read from the error and costs no chain read.

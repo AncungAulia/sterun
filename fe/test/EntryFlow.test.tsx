@@ -4,7 +4,7 @@
  * seams EventDetail.test.tsx and OrganiserHome.test.tsx use.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -122,7 +122,7 @@ function renderFlow(requestedCategory: number | null = 0) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return render(<EntryFlow eventId={EVENT_ID} requestedCategory={requestedCategory} />, { wrapper });
+  return { client, ...render(<EntryFlow eventId={EVENT_ID} requestedCategory={requestedCategory} />, { wrapper }) };
 }
 
 beforeEach(() => {
@@ -179,6 +179,39 @@ describe("before the form", () => {
     getEventSummary.mockResolvedValue(summary("Open", [category(0, "10K", 0)]));
     renderFlow(null);
     expect(await screen.findByText("Every distance is full.")).toBeInTheDocument();
+  });
+
+  /*
+   * The gates decide before the form, not during it. An entry that lands
+   * refreshes this wallet's records while the dialog still waits on the wallet
+   * to link it; swapping the page for "You're already entered" there unmounted
+   * the dialog, and the runner never reached their bib (Ancung, 2026-09-15).
+   */
+  it("keeps the form once it is open, when this wallet's new entry is read back", async () => {
+    const { client } = renderFlow(0);
+    await screen.findByRole("region", { name: "Distance" });
+
+    recordsOfDetailed.mockResolvedValue([record(0, 1)]);
+    await act(() => client.refetchQueries());
+    await waitFor(() => expect(recordsOfDetailed).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+
+    expect(screen.queryByRole("heading", { name: "You're already entered" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Enter Borobudur Marathon" })).toBeInTheDocument();
+  });
+
+  it("keeps the form once it is open, when the last place is taken meanwhile", async () => {
+    const { client } = renderFlow(0);
+    await screen.findByRole("region", { name: "Distance" });
+
+    getEventSummary.mockResolvedValue(summary("Open", [category(0, "10K", 0)]));
+    await act(() => client.refetchQueries());
+    await waitFor(() => expect(getEventSummary).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+
+    expect(screen.queryByText("Every distance is full.")).not.toBeInTheDocument();
+    expect(screen.queryByText("This distance is sold out.")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Enter Borobudur Marathon" })).toBeInTheDocument();
   });
 
   it("says so when the race cannot be loaded, with a way to try again", async () => {
