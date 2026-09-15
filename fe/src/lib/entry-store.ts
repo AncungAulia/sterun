@@ -52,6 +52,11 @@ export interface StoredEntry {
   racePack?: string[];
   /** What `enter` charged, in stroops, as a decimal string. */
   paidStroops?: string;
+  /**
+   * The runner ticked "I've saved my receipt". Kept so a return visit through
+   * View my entry does not ask again or celebrate again (Ancung, 2026-09-15).
+   */
+  receiptSaved?: boolean;
 }
 
 let store: UseStore | null = null;
@@ -76,6 +81,11 @@ export async function readEntry(tokenId: number): Promise<StoredEntry | undefine
 export async function markConfirmed(tokenId: number): Promise<void> {
   const entry = await readEntry(tokenId);
   if (entry) await saveEntry({ ...entry, confirmed: true });
+}
+
+export async function markReceiptSaved(tokenId: number): Promise<void> {
+  const entry = await readEntry(tokenId);
+  if (entry) await saveEntry({ ...entry, receiptSaved: true });
 }
 
 export async function unconfirmedEntries(): Promise<StoredEntry[]> {

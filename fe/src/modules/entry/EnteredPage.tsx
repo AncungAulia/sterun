@@ -17,6 +17,12 @@
  * the receipt code shown here is shown nowhere else. In round 2 the same button
  * becomes the way to the pass.
  *
+ * Once. The tick is remembered on this device, so a runner coming back through
+ * View my entry is not asked again and is not celebrated again: the entry is
+ * old news, and a box they already ticked reads as the page forgetting them
+ * (Ancung, 2026-09-15). A runner who never ticked it is still asked. Confetti is
+ * likewise for this device's fresh entry only, not for another device.
+ *
  * ## Confirming a second time
  *
  * If linking the vault row to the token failed in the background, it is tried
@@ -36,7 +42,7 @@ import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
 import { useWallet } from "@/hooks/useWallet";
 import { fireConfetti } from "@/lib/confetti";
-import { markConfirmed, readEntry } from "@/lib/entry-store";
+import { markConfirmed, markReceiptSaved, readEntry } from "@/lib/entry-store";
 import { confirmParticipant } from "@/lib/participants";
 import { readClient } from "@/lib/sterun";
 import { formatEventDate } from "@/utils/format";
@@ -66,12 +72,15 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
   const belongs = record.data !== undefined && record.data.eventId === eventId;
   const entry = stored.data && stored.data.eventId === eventId ? stored.data : null;
 
+  // A fresh entry: made on this device, receipt not yet confirmed saved.
+  const fresh = entry !== null && entry.receiptSaved !== true;
+
   useEffect(() => {
     // Strict Mode mounts twice in development; the burst should not.
-    if (!belongs || !race.data || celebrated.current) return;
+    if (!belongs || !race.data || !fresh || celebrated.current) return;
     celebrated.current = true;
     fireConfetti();
-  }, [belongs, race.data]);
+  }, [belongs, race.data, fresh]);
 
   useEffect(() => {
     if (!entry || entry.confirmed || !entry.participantId || !entry.txHash) return;
@@ -159,25 +168,34 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
         {receiptEntry ? (
           <>
             <ReceiptBox code={receiptEntry.salt} onDownload={() => void downloadReceipt(receiptEntry)} />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="receipt-saved"
-                  checked={saved}
-                  onCheckedChange={(checked) => setSaved(checked === true)}
-                />
-                <Label htmlFor="receipt-saved" className="text-base font-normal">
-                  I&apos;ve saved my receipt
-                </Label>
+            {receiptEntry.receiptSaved ? (
+              <BackToRace eventId={eventId} />
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="receipt-saved"
+                    checked={saved}
+                    onCheckedChange={(checked) => {
+                      setSaved(checked === true);
+                      // Remembered, so the next visit does not ask again. A
+                      // device that will not store it simply asks next time.
+                      if (checked === true) void markReceiptSaved(tokenId).catch(() => {});
+                    }}
+                  />
+                  <Label htmlFor="receipt-saved" className="text-base font-normal">
+                    I&apos;ve saved my receipt
+                  </Label>
+                </div>
+                {saved ? (
+                  <Button asChild>
+                    <Link href={`/events/${eventId}`}>Back to the race</Link>
+                  </Button>
+                ) : (
+                  <Button disabled>Back to the race</Button>
+                )}
               </div>
-              {saved ? (
-                <Button asChild>
-                  <Link href={`/events/${eventId}`}>Back to the race</Link>
-                </Button>
-              ) : (
-                <Button disabled>Back to the race</Button>
-              )}
-            </div>
+            )}
           </>
         ) : (
           <>

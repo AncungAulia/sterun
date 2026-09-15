@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   markConfirmed,
+  markReceiptSaved,
   readEntry,
   saveEntry,
   unconfirmedEntries,
@@ -55,6 +56,21 @@ describe("entry store", () => {
 
     expect((await unconfirmedEntries()).map((e) => e.tokenId)).not.toContain(43);
     expect((await readEntry(43))?.confirmed).toBe(true);
+  });
+
+  it("remembers that the runner saved their receipt, and keeps the rest of the entry", async () => {
+    await saveEntry({ ...entry, tokenId: 45 });
+
+    await markReceiptSaved(45);
+
+    const saved = await readEntry(45);
+    expect(saved?.receiptSaved).toBe(true);
+    expect(saved?.salt).toBe(entry.salt);
+  });
+
+  it("does nothing when marking a receipt it does not hold", async () => {
+    await expect(markReceiptSaved(4321)).resolves.toBeUndefined();
+    expect(await readEntry(4321)).toBeUndefined();
   });
 
   it("does nothing when confirming a token it does not hold", async () => {

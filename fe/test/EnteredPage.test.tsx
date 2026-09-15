@@ -12,6 +12,7 @@ const recordOf = vi.hoisted(() => vi.fn());
 const getEventSummary = vi.hoisted(() => vi.fn());
 const readEntry = vi.hoisted(() => vi.fn());
 const markConfirmed = vi.hoisted(() => vi.fn(async () => {}));
+const markReceiptSaved = vi.hoisted(() => vi.fn(async () => {}));
 const confirmParticipant = vi.hoisted(() => vi.fn(async () => {}));
 const downloadReceipt = vi.hoisted(() => vi.fn(async () => {}));
 const confetti = vi.hoisted(() => vi.fn());
@@ -28,7 +29,7 @@ vi.mock("@/lib/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/events")>()),
   getEventSummary,
 }));
-vi.mock("@/lib/entry-store", () => ({ readEntry, markConfirmed }));
+vi.mock("@/lib/entry-store", () => ({ readEntry, markConfirmed, markReceiptSaved }));
 vi.mock("@/lib/participants", () => ({ confirmParticipant }));
 vi.mock("@/lib/wallet", () => ({
   initWallet: vi.fn(),
@@ -100,7 +101,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
-  for (const mock of [recordOf, getEventSummary, readEntry, markConfirmed, confirmParticipant, downloadReceipt, confetti]) {
+  for (const mock of [recordOf, getEventSummary, readEntry, markConfirmed, markReceiptSaved, confirmParticipant, downloadReceipt, confetti, fireConfetti]) {
     mock.mockClear();
   }
   recordOf.mockResolvedValue(record());
@@ -246,5 +247,45 @@ describe("EnteredPage", () => {
     await screen.findByRole("heading", { name: "You're in!" });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(confirmParticipant).not.toHaveBeenCalled();
+  });
+
+  describe("coming back (Ancung, 2026-09-15)", () => {
+    it("remembers on this device that the receipt was saved", async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole("checkbox", { name: "I've saved my receipt" }));
+
+      expect(markReceiptSaved).toHaveBeenCalledWith(TOKEN_ID);
+    });
+
+    it("asks nothing and throws no confetti once the receipt was saved", async () => {
+      readEntry.mockResolvedValue({ ...stored, receiptSaved: true });
+      renderPage();
+
+      expect(await screen.findByRole("link", { name: "Back to the race" })).toHaveAttribute(
+        "href",
+        `/events/${EVENT_ID}`,
+      );
+      expect(screen.queryByRole("checkbox", { name: "I've saved my receipt" })).not.toBeInTheDocument();
+      // The receipt itself is still here: that is why the runner came back.
+      expect(screen.getByRole("button", { name: "Download receipt" })).toBeInTheDocument();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(fireConfetti).not.toHaveBeenCalled();
+    });
+
+    it("still asks a runner who never confirmed saving it", async () => {
+      readEntry.mockResolvedValue({ ...stored, receiptSaved: false });
+      renderPage();
+      expect(await screen.findByRole("checkbox", { name: "I've saved my receipt" })).toBeInTheDocument();
+    });
+
+    it("throws no confetti on a device that did not enter", async () => {
+      readEntry.mockResolvedValue(undefined);
+      renderPage();
+      await screen.findByText("Your receipt is on the device you entered with.");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(fireConfetti).not.toHaveBeenCalled();
+    });
   });
 });

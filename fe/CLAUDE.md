@@ -583,7 +583,9 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
 - **The success page reads the bib, race and distance from chain; the bib name and receipt code from
   this device** (`lib/entry-store.ts`, IndexedDB), which is also what round 2's pass reads offline.
   Another device gets the bib and a sentence saying where the receipt is. "Back to the race" waits
-  for "I've saved my receipt". A failed background confirm is retried there once, and only for the
+  for "I've saved my receipt", once: the tick is remembered on the device (`receiptSaved`), so a
+  return visit through View my entry shows no box and no confetti, and confetti never fires on a
+  device that did not enter. A failed background confirm is retried there once, and only for the
   connected owning wallet, because it needs a signature. An entry found by the no-answer check has
   no transaction hash to confirm with; STE-50 sweeps it.
 - **The receipt carries no personal details and never the check-in secret** (`receipt.ts`, tested;
