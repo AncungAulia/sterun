@@ -5,7 +5,7 @@
  *
  * Every field STE-47 stores, in three cards: who the runner is, how the
  * organiser reaches them, and who is called on race day. All of them are
- * required, so none is starred: a star on every field says nothing.
+ * required, and each carries the red star (Ancung, 2026-09-15).
  *
  * ## When errors show
  *
@@ -82,6 +82,7 @@ export function StepRunner({
             <Field
               id="runner-name"
               label="Full name"
+              required
               autoComplete="name"
               value={details.name}
               onChange={(e) => set("name", e.target.value)}
@@ -90,7 +91,7 @@ export function StepRunner({
           </div>
 
           <div className="flex flex-col gap-2">
-            <LabelRow htmlFor="runner-id-type" label="Identity document" />
+            <LabelRow htmlFor="runner-id-type" label="Identity document" required />
             <Select value={details.idType} onValueChange={(value) => set("idType", value as IdType)}>
               <SelectTrigger
                 id="runner-id-type"
@@ -114,6 +115,7 @@ export function StepRunner({
           <Field
             id="runner-id-number"
             label="Document number"
+            required
             autoComplete="off"
             value={details.idNumber}
             onChange={(e) => set("idNumber", e.target.value)}
@@ -121,7 +123,7 @@ export function StepRunner({
           />
 
           <div className="flex flex-col gap-2">
-            <LabelRow htmlFor="runner-gender" label="Gender" />
+            <LabelRow htmlFor="runner-gender" label="Gender" required />
             <ToggleGroup
               id="runner-gender"
               type="single"
@@ -151,6 +153,7 @@ export function StepRunner({
           <DateTimeField
             id="runner-dob"
             label="Date of birth"
+            required
             dateOnly
             value={details.dateOfBirth}
             onChange={(value) => set("dateOfBirth", value)}
@@ -163,6 +166,7 @@ export function StepRunner({
             <Field
               id="runner-bib-name"
               label="Name on your bib"
+              required
               autoComplete="nickname"
               value={details.bibName}
               onChange={(e) => set("bibName", e.target.value)}
@@ -185,6 +189,7 @@ export function StepRunner({
           <Field
             id="runner-email"
             label="Email"
+            required
             type="email"
             inputMode="email"
             autoComplete="email"
@@ -195,6 +200,7 @@ export function StepRunner({
           <PhoneField
             id="runner-phone"
             label="Phone"
+            required
             value={details.phone}
             onChange={(value) => set("phone", value)}
             defaultCountry={defaultCountry}
@@ -212,6 +218,7 @@ export function StepRunner({
           <Field
             id="runner-emergency-name"
             label="Their name"
+            required
             autoComplete="off"
             value={details.emergencyName}
             onChange={(e) => set("emergencyName", e.target.value)}
@@ -220,6 +227,7 @@ export function StepRunner({
           <PhoneField
             id="runner-emergency-phone"
             label="Their phone"
+            required
             value={details.emergencyPhone}
             onChange={(value) => set("emergencyPhone", value)}
             defaultCountry={defaultCountry}

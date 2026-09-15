@@ -45,7 +45,7 @@ export function EntrySummary({
   }
 
   return (
-    <Card role="region" aria-labelledby="entry-summary-title" className="gap-0 p-5 lg:sticky lg:top-6">
+    <Card role="region" aria-labelledby="entry-summary-title" className="gap-0 p-5">
       <div className="border-b border-n-200 pb-4">
         <p className="text-base font-medium text-ink">{event.name}</p>
         <p className="numeric text-sm text-n-500">{formatEventDate(event.startsAt)}</p>
