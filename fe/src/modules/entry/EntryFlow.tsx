@@ -64,8 +64,8 @@ import { useRunnerRecords } from "@/hooks/useRunnerRecords";
 import { useWallet } from "@/hooks/useWallet";
 import type { EventSummary } from "@/lib/events";
 import type { EventMetadata } from "@/lib/metadata";
-import { joinAddOns } from "@/modules/event-detail/component/TabAddOns";
-import { focusField } from "@/modules/organiser/missing";
+import { joinAddOns } from "@/lib/event/add-ons";
+import { focusField } from "@/utils/missing-field";
 import { formatEventDate } from "@/utils/format";
 import type { SterunAddOn } from "@sterunxyz/sdk";
 

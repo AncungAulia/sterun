@@ -18,7 +18,7 @@
  * Pure, with no React, so step 1, the summary, the pay step and the attempt
  * all read the same answer.
  */
-import type { JoinedAddOn } from "@/modules/event-detail/component/TabAddOns";
+import type { JoinedAddOn } from "@/lib/event/add-ons";
 import type { SterunCategory } from "@sterunxyz/sdk";
 
 export interface PackOption {

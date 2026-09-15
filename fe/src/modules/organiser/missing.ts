@@ -24,16 +24,9 @@
  * it — is what Continue is judged against.
  */
 import { parseCoordinates } from "@/utils/geo";
+import type { Missing } from "@/utils/missing-field";
 
 import type { EventDetails } from "./component/StepDetails";
-
-export interface Missing {
-  /** The key the form uses to mark the field. */
-  field: string;
-  /** The element to focus. Date fields focus their date button. */
-  focusId: string;
-  message: string;
-}
 
 export function missingDetails(details: EventDetails): Missing[] {
   const missing: Missing[] = [];
@@ -154,12 +147,4 @@ function endOfDay(ms: number): number {
   const date = new Date(ms);
   date.setHours(23, 59, 59, 999);
   return date.getTime();
-}
-
-/** Sends the organiser to a field rather than making them hunt for it. */
-export function focusField(focusId: string): void {
-  const element = document.getElementById(focusId);
-  if (!element) return;
-  element.scrollIntoView({ behavior: "smooth", block: "center" });
-  element.focus({ preventScroll: true });
 }

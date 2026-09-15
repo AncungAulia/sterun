@@ -37,7 +37,7 @@ import { useMemo, useState } from "react";
 import { Stepper } from "@/components/elements/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { NotAllowlisted } from "./component/NotAllowlisted";
+import { NotAllowedScreen } from "./component/NotAllowed";
 import { useEventRun } from "@/hooks/useEventRun";
 import { useExistingEventNames } from "@/hooks/useExistingEventNames";
 import { useCanCreateEvents } from "@/hooks/useOrganiser";
@@ -64,7 +64,9 @@ import { StepDone } from "./component/StepDone";
 import { StepTerms } from "./component/StepTerms";
 import { StepDetails, EMPTY_DETAILS, type EventDetails } from "./component/StepDetails";
 import { StepReview } from "./component/StepReview";
-import { focusField, incoherentDates, missingDetails, type Missing } from "./missing";
+import { focusField, type Missing } from "@/utils/missing-field";
+
+import { incoherentDates, missingDetails } from "./missing";
 
 const STEPS = [
   { id: "details", label: "Details" },
@@ -117,7 +119,7 @@ function CreateGate() {
     Drawing a refusal over a node that failed to answer would lock out an
     organiser who is perfectly entitled to be here.
   */
-  if (allowed === false) return <NotAllowlisted address={address} />;
+  if (allowed === false) return <NotAllowedScreen address={address} />;
 
   return <Wizard />;
 }

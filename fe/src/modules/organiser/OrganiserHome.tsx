@@ -40,7 +40,7 @@ import { fillByDaysOut } from "./chart";
 import { ConsoleHeader } from "./component/ConsoleHeader";
 import { EntriesComparison, type ComparisonSeries } from "./component/EntriesComparison";
 import { useNeedsContext } from "./component/NeedsContext";
-import { NotAllowedNotice } from "./component/NotAllowedNotice";
+import { NotAllowedNotice } from "./component/NotAllowed";
 import { RacesTable, type RaceRow } from "./component/RacesTable";
 import { StatCard } from "./component/StatCard";
 import { TrendingEntries } from "./component/TrendingEntries";

@@ -30,30 +30,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { joinAddOns, type JoinedAddOn } from "@/lib/event/add-ons";
 import { formatPrice } from "@/utils/format";
 import type { MetadataAddOn } from "@/lib/metadata";
 import type { SterunAddOn } from "@sterunxyz/sdk";
-
-/** One item as the page shows it: the description, joined to its chain rows. */
-export interface JoinedAddOn {
-  item: MetadataAddOn;
-  /** Every row on chain this item covers. One per size, or one in total. */
-  rows: SterunAddOn[];
-}
-
-export function joinAddOns(items: MetadataAddOn[], onChain: SterunAddOn[]): JoinedAddOn[] {
-  const byCode = new Map(onChain.map((row) => [row.code, row]));
-
-  return items.map((item) => {
-    const codes = item.sizes?.length
-      ? item.sizes.map((size) => size.code)
-      : [item.code];
-    const rows = codes
-      .map((code) => (code ? byCode.get(code) : undefined))
-      .filter((row): row is SterunAddOn => row !== undefined);
-    return { item, rows };
-  });
-}
 
 /** The price to lead with. Sizes of one item are priced the same. */
 function priceOf(joined: JoinedAddOn): bigint | undefined {

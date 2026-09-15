@@ -16,7 +16,7 @@ import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
 
 import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import { formatEventDate } from "@/utils/format";
 import type { EventStatus } from "@sterunxyz/sdk";
 

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { JoinedAddOn } from "@/modules/event-detail/component/TabAddOns";
+import type { JoinedAddOn } from "@/lib/event/add-ons";
 import {
   EMPTY_SELECTION,
   addonIdsFor,

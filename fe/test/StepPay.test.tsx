@@ -15,7 +15,7 @@ vi.mock("@/modules/entry/component/GetTestSusd", () => ({
 
 import { useSusdBalance } from "@/hooks/useSusdBalance";
 import type { SusdBalance } from "@/lib/susd";
-import type { JoinedAddOn } from "@/modules/event-detail/component/TabAddOns";
+import type { JoinedAddOn } from "@/lib/event/add-ons";
 import { buildBasket } from "@/modules/entry/basket";
 import { PayPanel, StepPay } from "@/modules/entry/component/StepPay";
 import type { RunnerDetails } from "@/modules/entry/details";

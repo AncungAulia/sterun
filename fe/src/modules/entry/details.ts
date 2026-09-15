@@ -21,7 +21,7 @@
  * left in localStorage on a shared laptop is the one failure this flow must not
  * have (spec, step 3).
  */
-import type { Missing } from "@/modules/organiser/missing";
+import type { Missing } from "@/utils/missing-field";
 
 export type IdType = "national_id_card" | "passport" | "driving_licence" | "other";
 export type Gender = "female" | "male";
