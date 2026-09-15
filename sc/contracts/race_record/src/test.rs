@@ -284,7 +284,7 @@ fn enter_reserves_quota_moves_the_fee_and_mints_the_record() {
         RecordData {
             event_id,
             category_id,
-            bib_no: 0,
+            bib_no: 1,
             addon_ids: vec![&w.env],
             participant_hash: phash(&w.env, 1),
             state: RecordState::Entered,
@@ -361,17 +361,20 @@ fn enter_is_one_auth_tree_covering_the_fee_transfer() {
     assert_eq!(w.records().owner_of(&token_id), runner);
 }
 
-/// Bib numbers are the registry's category sequence, not a local counter.
+/// Bib numbers are the registry's event sequence, not a local counter — and
+/// they are not the token id either, which is why both are asserted: token ids
+/// are global to this contract and count from 0, bibs belong to one race and
+/// count from 1.
 #[test]
 fn bib_numbers_come_from_the_registry_sequence() {
     let w = World::new();
     let (event_id, category_id) = w.open_event(3, PRICE);
 
-    for expected in 0..3u32 {
+    for nth in 1..=3u32 {
         let runner = w.runner();
-        let token_id = w.enter(&runner, event_id, category_id, expected as u8);
-        assert_eq!(token_id, expected);
-        assert_eq!(w.records().record_of(&token_id).bib_no, expected);
+        let token_id = w.enter(&runner, event_id, category_id, nth as u8);
+        assert_eq!(token_id, nth - 1);
+        assert_eq!(w.records().record_of(&token_id).bib_no, nth);
     }
     assert_eq!(
         w.registry()
@@ -396,9 +399,10 @@ fn records_of_lists_every_token_across_events() {
     assert_eq!(records.balance(&runner), 2);
     assert_eq!(records.record_of(&a).event_id, first_event);
     assert_eq!(records.record_of(&b).event_id, second_event);
-    // Both are bib 0: the sequence is per category, not global.
-    assert_eq!(records.record_of(&a).bib_no, 0);
-    assert_eq!(records.record_of(&b).bib_no, 0);
+    // Both are bib 1: the sequence belongs to the event, not to the contract.
+    // One runner can wear 1 at two different races.
+    assert_eq!(records.record_of(&a).bib_no, 1);
+    assert_eq!(records.record_of(&b).bib_no, 1);
 }
 
 /// `enter` -> `claim_racepack` -> `record_finish`, with the organiser signing
@@ -443,7 +447,7 @@ fn full_lifecycle_entered_claimed_finished() {
         RecordData {
             event_id,
             category_id,
-            bib_no: 0,
+            bib_no: 1,
             addon_ids: vec![&w.env],
             participant_hash: phash(&w.env, 3),
             state: RecordState::Finished,
@@ -592,7 +596,7 @@ fn emits_record_entered() {
                 runner,
                 event_id,
                 token_id,
-                bib_no: 0,
+                bib_no: 1,
             }
             .to_xdr(&w.env, &w.contract),
         ]
@@ -968,10 +972,11 @@ fn a_failed_payment_rolls_back_quota_and_mint() {
         assert_eq!(w.token().balance(&broke), funding, "the fee was not taken");
         assert_eq!(w.token().balance(&w.organiser), 0);
 
-        // And the slot is still there for someone who can pay.
+        // And the slot is still there for someone who can pay — with bib 1,
+        // because the rolled-back entry consumed no number either.
         let solvent = w.runner();
         assert_eq!(w.enter(&solvent, event_id, category_id, 2), 0);
-        assert_eq!(w.records().record_of(&0).bib_no, 0);
+        assert_eq!(w.records().record_of(&0).bib_no, 1);
     }
 }
 
@@ -1461,7 +1466,7 @@ fn enter_charges_the_category_and_every_add_on_in_one_transfer() {
 
     let record = w.records().record_of(&token_id);
     assert_eq!(record.addon_ids, vec![&w.env, jersey, tumbler]);
-    assert_eq!(record.bib_no, 0);
+    assert_eq!(record.bib_no, 1);
     assert_eq!(record.state, RecordState::Entered);
 
     // Stock came off both add-ons, once each.
@@ -1959,7 +1964,7 @@ fn record_finish_untimed_finishes_with_no_time() {
         RecordData {
             event_id,
             category_id,
-            bib_no: 0,
+            bib_no: 1,
             addon_ids: vec![&w.env],
             participant_hash: phash(&w.env, 3),
             state: RecordState::Finished,

@@ -170,8 +170,10 @@ export function reviewResults(
 ): ResultsReview {
   const distanceOf = new Map(categories.map((c) => [c.categoryId, c.distanceM]));
 
-  // Bib numbers come from `reserve_slot`, which counts per category, so the
-  // key is the pair. A bib on its own may name several records.
+  // Before contracts v2.3 `reserve_slot` numbered bibs per category, so in
+  // those events a bib alone may name several records and the key is the pair.
+  // Since v2.3 (STE-54) a bib is unique in its event, which the pair still
+  // resolves correctly.
   const byPair = new Map<string, IndexedRecord>();
   const byBib = new Map<number, IndexedRecord[]>();
   for (const record of records) {
@@ -181,7 +183,8 @@ export function reviewResults(
     else byBib.set(record.bibNo, [record]);
   }
 
-  const seen = new Map<string, number>();
+  /** Where each resolved key first appeared: its line, and its index in `rows`. */
+  const seen = new Map<string, { line: number; index: number }>();
   const rows: ReviewedRow[] = [];
 
   for (const row of parsed) {
@@ -237,8 +240,9 @@ export function reviewResults(
           kind: "ambiguous_bib",
           reason:
             `bib ${row.bibNo} exists in categories ` +
-            `${candidates.map((c) => c.categoryId).join(", ")} — bib numbers restart at 0 in ` +
-            `each category, so this row needs a category_id column to say which runner it is`,
+            `${candidates.map((c) => c.categoryId).join(", ")} — this race numbered bibs per ` +
+            `category (before contracts v2.3), so this row needs a category_id column to say ` +
+            `which runner it is`,
           severity: "wrong",
         });
       } else {
@@ -252,11 +256,24 @@ export function reviewResults(
     if (firstSeen !== undefined) {
       anomalies.push({
         kind: "duplicate_bib",
-        reason: `bib ${row.bibNo} already appears on line ${firstSeen} of this file`,
+        reason: `bib ${row.bibNo} already appears on line ${firstSeen.line} of this file`,
         severity: "wrong",
       });
+      // The FIRST row is just as suspect. Flagging only the repeat left the
+      // first one publishable, so a file with bib 5 at 52:41 and again at 61:10
+      // would publish 52:41 — one of the two is wrong, nobody has said which,
+      // and a Finished result can never be corrected.
+      const first = rows[firstSeen.index];
+      if (first && !first.anomalies.some((a) => a.kind === "duplicate_bib")) {
+        first.anomalies.push({
+          kind: "duplicate_bib",
+          reason: `bib ${row.bibNo} appears again on line ${row.line} of this file`,
+          severity: "wrong",
+        });
+      }
     } else {
-      seen.set(key, row.line);
+      // This row is pushed at the end of this iteration, at index rows.length.
+      seen.set(key, { line: row.line, index: rows.length });
     }
 
     // 3. Lifecycle: what the contract will do with this record.

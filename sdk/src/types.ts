@@ -83,7 +83,12 @@ export interface SterunEvent {
   status: EventStatus;
 }
 
-/** One distance category. `enteredCount` doubles as the next bib number. */
+/**
+ * One distance category. `enteredCount` is the **quota counter** — how many of
+ * `quota` slots are gone. It is not the bib: since contracts v2.3 a bib is
+ * unique within the whole event and counts from 1, so two distances of one race
+ * never hand out the same number.
+ */
 export interface SterunCategory {
   eventId: number;
   categoryId: number;

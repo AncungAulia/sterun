@@ -116,6 +116,17 @@ export interface AddCategoryArgs {
   priceStroops: bigint;
 }
 
+/** Raise a category's quota: a second batch for a distance that sold out (v2.4). */
+export interface IncreaseQuotaArgs {
+  eventId: number;
+  categoryId: number;
+  /**
+   * The new total, not the number added. Must be strictly greater than the
+   * current quota, or the call reverts `QuotaNotIncreased(19)`.
+   */
+  newQuota: number;
+}
+
 /**
  * A paid extra sold alongside an entry.
  *
@@ -329,6 +340,25 @@ export class SterunClient {
           },
           this.callOptions(options),
         ),
+    );
+  }
+
+  /**
+   * Raise a category's quota (contracts v2.4, STE-55). Organiser-only, no status
+   * gate. The quota only ever goes up: a `newQuota` equal to or below the
+   * current one reverts `QuotaNotIncreased(19)`, because runners paid against
+   * the published number.
+   */
+  async increaseQuota(args: IncreaseQuotaArgs, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite("increaseQuota", () =>
+      this.registry.increase_quota(
+        {
+          event_id: args.eventId,
+          category_id: args.categoryId,
+          new_quota: args.newQuota,
+        },
+        this.callOptions(options),
+      ),
     );
   }
 

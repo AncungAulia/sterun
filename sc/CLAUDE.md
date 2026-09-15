@@ -16,7 +16,7 @@ writing code here.
 ```bash
 cd sc
 stellar contract build            # REQUIRED first — the tests read the wasm it produces
-cargo test                        # 66 (event_registry) + 72 (race_record)
+cargo test                        # 91 (event_registry) + 72 (race_record)
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 ./scripts/check-exports.sh        # non-transferable, proven from the wasm
@@ -61,7 +61,7 @@ versions that produced the wasm hashes are recorded in `README.md`; CI pins the 
 
 | Band | Owner | In use now |
 | --- | --- | --- |
-| `1..=99` | `event_registry` (C1) | `1..=18` |
+| `1..=99` | `event_registry` (C1) | `1..=19` |
 | `100..=199` | `race_record` (C2) | `100..=107` |
 | `200+` | OpenZeppelin `NonFungibleTokenError` (200–214 in stellar-tokens 0.7.2) | `200..=214` |
 | the next multiple of 100 | a new contract | — |
@@ -113,20 +113,33 @@ that is no longer the only way to change a live contract — see below.
 
 ## v2: the contracts are upgradeable, and storage keys are append-only FOREVER
 
-**Already used three times** to change a live contract without changing its address: RaceRecord
-v2.0.1 (an internal optimisation), EventRegistry v2.1.0 (the organiser allowlist, STE-36) and
-RaceRecord v2.2.0 (`record_finish_untimed`, STE-41). The second added a `DataKey` variant to a
-contract already holding other people's events, so the rules below stop being theory there. The
-evidence is more than procedure: the wasm that was live before each of the last two upgrades is
-committed in `contracts/<contract>/testdata/`, and
+**Already used five times** to change a live contract without changing its address: RaceRecord
+v2.0.1 (an internal optimisation), EventRegistry v2.1.0 (the organiser allowlist, STE-36),
+RaceRecord v2.2.0 (`record_finish_untimed`, STE-41), EventRegistry v2.3.0 (bibs unique within an
+event, STE-54) and EventRegistry v2.4.0 (`increase_quota`, STE-55). Two of those added a `DataKey`
+variant to a contract already holding other people's events, so the rules below stop being theory
+there — and the fifth added none at all, which is what an upgrade should look like when the change
+happens to fit the storage that is already there. The evidence is more than procedure: the wasm that
+was live before each of the last four upgrades is committed in `contracts/<contract>/testdata/`, and
 `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` /
-`records_written_by_the_live_wasm_survive_the_untimed_upgrade` deploy that code, write state with
-it, then replace it with the current build and read it all back. For any upgrade, copy that pattern:
+`records_written_by_the_live_wasm_survive_the_untimed_upgrade` /
+`bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` /
+`a_quota_can_be_raised_on_a_category_the_live_wasm_created` deploy that code, write state with it,
+then replace it with the current build and read it all back. For any upgrade, copy that pattern:
 fetch the live wasm with `stellar contract fetch` **before** you upgrade, and treat the fixture as
-the "before" of the **next** upgrade — never refresh it from a local build.
+the "before" of the **next** upgrade — never refresh it from a local build, and add a file rather
+than overwriting the last one.
+
+STE-54 added a fifth rule to that list, learned the expensive way: **a doc comment is part of the
+wasm.** `soroban-sdk` writes Rust doc comments into the contract spec, so editing one changes the
+sha256 and therefore demands an `upgrade` transaction. A stale sentence on a contract you are not
+otherwise rebuilding is cheaper left stale and recorded than corrected — which is why
+`RecordData.bib_no` still calls itself a category sequence. Check with a rebuild before assuming a
+comment-only edit is free.
 
 The upgrade itself is `scripts/upgrade-testnet.sh`; a change that adds behaviour gets its own
-asserted on-chain sanity script next to it (`allowlist-testnet.sh`, `untimed-testnet.sh`).
+asserted on-chain sanity script next to it (`allowlist-testnet.sh`, `untimed-testnet.sh`,
+`bib-testnet.sh`, `quota-testnet.sh`).
 
 Both contracts export an admin-gated `upgrade(new_wasm_hash)` that calls
 `env.deployer().update_current_contract_wasm`. This is Soroban's **native** mechanism: the bytecode is

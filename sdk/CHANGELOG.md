@@ -36,6 +36,11 @@ already in other people's hands.
 
 ### Added
 
+- `SterunClient.increaseQuota({ eventId, categoryId, newQuota })` — raise a
+  sold-out category's quota for a second batch (contracts v2.4, STE-55/STE-56).
+  `newQuota` is the new total; equal to or below the current quota reverts
+  `QuotaNotIncreased(19)`, since a published quota only ever rises. The error
+  map already names 19.
 - `SterunRecord.addonIds: number[]` — the add-ons an entry paid for, in the
   order they were reserved, read from `RecordData.addon_ids` (v2, STE-42). `[]`
   when it bought none, and `[]` rather than `undefined` for a v1-shaped record,

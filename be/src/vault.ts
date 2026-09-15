@@ -15,6 +15,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { identityIndex } from "./crypto/blind-index.js";
 import { aad, decrypt, encrypt } from "./crypto/envelope.js";
 import type { Keyring } from "./crypto/keyring.js";
 import { nameFragment } from "./roster/name-fragment.js";
@@ -156,10 +157,26 @@ export class AlreadyConfirmedError extends Error {
   }
 }
 
+/**
+ * The same identity number already has a confirmed entry in this race (STE-51).
+ * Says which race and nothing about the person or the other entry.
+ */
+export class AlreadyEnteredError extends Error {
+  constructor(readonly eventId: number) {
+    super(
+      "this identity number already has an entry in this race; one person can enter one " +
+        "category of a race",
+    );
+    this.name = "AlreadyEnteredError";
+  }
+}
+
 export class Vault {
   constructor(
     private readonly pool: Pool,
     private readonly keyring: Keyring,
+    /** PII_INDEX_KEY. See src/crypto/blind-index.ts. */
+    private readonly indexKey: Buffer,
   ) {}
 
   /**
@@ -181,13 +198,30 @@ export class Vault {
     // needs a "decrypt the name" path to build a roster (STE-16).
     const fragment = nameFragment(input.name);
 
+    // STE-51: one person, one entry per race. Only a CONFIRMED entry refuses:
+    // an unconfirmed row is a payment that has not happened yet, and a runner
+    // retrying after a declined payment must not be locked out by their own
+    // first attempt.
+    //
+    // Checked here, at submit, and not enforced at confirm: confirm runs after
+    // the runner has paid on chain, and refusing then would leave a paid record
+    // with no vault row and no pass. The cost is a narrow window — two entries
+    // whose payments overlap both get through — which only the contract could
+    // close, and the contract only ever sees a salted hash.
+    const identity = identityIndex(this.indexKey, input.eventId, input.nationalId);
+    const taken = await this.pool.query(
+      "SELECT 1 FROM participants WHERE identity_index = $1 AND token_id IS NOT NULL LIMIT 1",
+      [identity],
+    );
+    if ((taken.rowCount ?? 0) > 0) throw new AlreadyEnteredError(input.eventId);
+
     await this.pool.query(
       `INSERT INTO participants
          (id, name_enc, national_id_enc, emergency_contact_enc, name_fragment_enc,
           salt, totp_secret, participant_hash, event_id, category_id, runner_address,
           add_ons, id_type, bib_name, email_enc, phone_enc, gender_enc,
-          date_of_birth_enc, emergency_contact_name_enc)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+          date_of_birth_enc, emergency_contact_name_enc, identity_index)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [
         id,
         encrypt(this.keyring, input.name, aad("pii.name", id)),
@@ -213,6 +247,7 @@ export class Vault {
         encrypt(this.keyring, input.gender, aad("pii.gender", id)),
         encrypt(this.keyring, input.dateOfBirth, aad("pii.date_of_birth", id)),
         encrypt(this.keyring, input.emergencyContactName, aad("pii.emergency_contact_name", id)),
+        identity,
       ],
     );
 
@@ -233,22 +268,21 @@ export class Vault {
    * second entry quietly overwriting the first must not be a success.
    */
   async confirm(participantId: string, tokenId: number, enterTxHash: string): Promise<ConfirmResult> {
-    const existing = await this.pool.query<{ token_id: number | null }>(
-      "SELECT token_id FROM participants WHERE id = $1",
-      [participantId],
-    );
-    const row = existing.rows[0];
-    if (!row) throw new ParticipantNotFoundError(participantId);
-    if (row.token_id !== null) {
-      if (row.token_id !== tokenId) throw new AlreadyConfirmedError(row.token_id);
-      return { participantId, tokenId, enterTxHash };
-    }
-
+    // One conditional UPDATE first, and only then a look at why it did nothing.
+    //
+    // This used to SELECT and then UPDATE `WHERE id = $1`. Since STE-50 a sweep
+    // deletes old unconfirmed rows, and one landing between those two statements
+    // made the UPDATE touch zero rows while confirm still returned success: a
+    // runner told they were confirmed, with no row behind it. `AND token_id IS
+    // NULL` also stops two concurrent confirms re-pointing one row. Postgres
+    // re-checks both conditions after waiting on a row lock, so whichever of
+    // confirm and sweep commits first, the other sees the result.
+    let updated;
     try {
-      await this.pool.query(
+      updated = await this.pool.query(
         `UPDATE participants
             SET token_id = $2, enter_tx_hash = $3, confirmed_at = now()
-          WHERE id = $1`,
+          WHERE id = $1 AND token_id IS NULL`,
         [participantId, tokenId, enterTxHash],
       );
     } catch (e) {
@@ -257,8 +291,47 @@ export class Vault {
       if ((e as { code?: string }).code === "23505") throw new ParticipantExistsError(tokenId);
       throw e;
     }
+    if ((updated.rowCount ?? 0) === 1) return { participantId, tokenId, enterTxHash };
 
+    const existing = await this.pool.query<{ token_id: number | null }>(
+      "SELECT token_id FROM participants WHERE id = $1",
+      [participantId],
+    );
+    const row = existing.rows[0];
+    // Never submitted, or swept away as an unconfirmed entry older than the
+    // retention window (STE-50).
+    if (!row) throw new ParticipantNotFoundError(participantId);
+    // A retry after a dropped response is fine; a different token is not.
+    if (row.token_id !== tokenId) throw new AlreadyConfirmedError(row.token_id as number);
     return { participantId, tokenId, enterTxHash };
+  }
+
+  /**
+   * Delete entries that were submitted and never confirmed (STE-50).
+   *
+   * The entry flow stores the details BEFORE the runner signs `enter`, so a paid
+   * runner is never missing from the roster. When the payment never happens,
+   * that leaves personal data for an entry that does not exist, and we have no
+   * purpose for keeping it (UU PDP). Returns how many rows went, and nothing
+   * about them.
+   *
+   * One statement, so it cannot delete a row a confirm is writing: Postgres
+   * re-evaluates `token_id IS NULL` on a row whose lock it had to wait for, and
+   * a row confirmed in the meantime no longer matches.
+   */
+  async sweepUnconfirmed(olderThanHours: number): Promise<number> {
+    // Below an hour this would delete entries whose runner is still at the
+    // wallet prompt. A misconfigured 0 must not be able to do that.
+    if (!Number.isInteger(olderThanHours) || olderThanHours < 1) {
+      throw new RangeError(`olderThanHours must be a whole number of hours >= 1, got ${olderThanHours}`);
+    }
+    const result = await this.pool.query(
+      `DELETE FROM participants
+        WHERE token_id IS NULL
+          AND created_at < now() - make_interval(hours => $1)`,
+      [olderThanHours],
+    );
+    return result.rowCount ?? 0;
   }
 
   /** Row metadata with no PII in it. Safe to return over HTTP. */
@@ -305,6 +378,34 @@ export class Vault {
       [tokenId],
     );
     return rows[0]?.totp_secret ?? null;
+  }
+
+  /**
+   * What a runner's pass needs, for a confirmed record (STE-52): the check-in
+   * secret and the name printed on the bib. No PII.
+   *
+   * `runnerAddress` comes back so the route can check that this row was
+   * submitted by the wallet asking, on top of the chain saying that wallet owns
+   * the record. Confirmed rows only: an unconfirmed row has no token id.
+   */
+  async passForToken(
+    tokenId: number,
+  ): Promise<{ runnerAddress: string; totpSecretHex: string; bibName: string | null } | null> {
+    const { rows } = await this.pool.query<{
+      runner_address: string;
+      totp_secret: Buffer;
+      bib_name: string | null;
+    }>(
+      "SELECT runner_address, totp_secret, bib_name FROM participants WHERE token_id = $1",
+      [tokenId],
+    );
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      runnerAddress: r.runner_address,
+      totpSecretHex: r.totp_secret.toString("hex"),
+      bibName: r.bib_name,
+    };
   }
 
   /**

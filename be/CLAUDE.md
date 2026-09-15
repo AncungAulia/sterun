@@ -156,6 +156,52 @@ runner can pay.
 > Using it means changing RaceRecord, whose interface is **frozen** — that is a spec-change PR
 > (`docs/specs/CLAUDE.md`), not a backend decision. Recorded as a v2 simplification.
 
+## The HTTP faucet (STE-49)
+
+`POST /faucet` — the web app's **Get test sUSD** button. Wallet-signature auth; pays the
+authenticated address `config.faucetAmount` (50 sUSD by default). The browser opens the trustline
+first, because a trustline is signed by the account that holds it, and this service must never hold a
+runner's key.
+
+**It pays from its own account, never the distributor.** `STERUN_SUSD_FAUCET_SECRET` is a separate
+account holding a small float topped up by hand. The distributor holds the test supply and stays off
+the public box (`OPERATIONS.md`); this key sits on it, so the most a compromised API can give away is
+that float. A float that has run dry is simply `faucet-empty`.
+
+The limits, and where each lives:
+
+| Limit | Where | Why there |
+| --- | --- | --- |
+| testnet only | the route, against the network passphrase; reported in `/config` | a mainnet deployment can never pay even with a key configured by mistake |
+| one payout per address per window (24h) | Postgres, `faucet_payouts` | has to hold across instances |
+| total paid per rolling 24h (5,000 sUSD) | Postgres, `faucet_payouts` | keypairs are free; a per-address rule alone bounds nothing |
+| requests per client per minute | the IP limiter | defence in depth against a keypair-minting loop |
+
+**Two requests for one address are paid once, and that is the design, not luck.** Two separate
+mechanisms, each guarding a different race, and each checked by breaking it on purpose:
+
+- **The reservation comes before the payment.** A claim inserts a `pending` row and commits *before*
+  any money moves, so a request arriving while another is paying sees that row. The route test with two
+  overlapping requests guards this: count only `paid` rows instead of `pending` too, and both get paid.
+- **The claim itself is serialised.** A transaction-scoped advisory lock covers the window check and
+  the insert, so two claims cannot both pass the check in the gap before either inserts. With the lock
+  removed, the ledger test for the daily cap overshoots on **every** run (5, 9, 8 granted against a cap
+  of 3); the same-address ledger test fails only sometimes (1 run in 3). So the daily-cap test is the
+  reliable guard for the lock — do not rely on the same-address one alone.
+
+`failed` payouts do not count against either limit, so a runner whose payment failed can retry.
+A payout is only settled `failed` when Horizon **rejected** it with result codes; a timeout or a 5xx
+leaves it `pending` and answers 502 `payout-unconfirmed`, because Horizon can time out on a
+transaction that still closes, and releasing the window then paid the same wallet twice. Payments
+are also sent one at a time, since each loads the account's sequence number.
+`pending` rows do, including one left behind by a crash mid-payment: at worst an address waits out a
+window it should not have, and nobody is paid twice. Trustline and float are checked *before* the claim,
+so neither error costs a window.
+
+Errors a form can show: `no-trustline` (409, with "add the trustline" or "fund the account first"),
+`rate-limited` (429, `Retry-After` + `retry_at`), `faucet-empty` (503), `faucet-unavailable` (403 off
+testnet, 503 with no key).
+
 ## The PII vault (STE-11)
 
 The product rule: **PII goes in and never comes out.** No method on `Vault` returns a name, a
@@ -201,6 +247,119 @@ Three rules worth knowing before touching them:
 
 The columns are nullable because rows from before migration 009 have none of these values; the API
 requires all of them for every new submission.
+
+**One person, one entry per race (STE-51, migration 011).** `POST /participants` answers **409
+`already-entered`** when a **confirmed** entry in the same race has the same identity number after
+`norm_id`, even from another wallet — including a second entry from the same wallet, which the web app
+does not block on its own (its entry flow does not exist yet, and a client check is advisory anyway). The contract cannot: it sees only a salted hash, and
+two entries by one person look unrelated there.
+
+The number is encrypted with a fresh nonce, so ciphertexts never compare equal. The lookup is a
+**blind index** in `participants.identity_index`:
+
+```
+HMAC-SHA256(PII_INDEX_KEY, "sterun/identity-index/v1\0" || u32be(event_id) || norm_id(national_id))
+```
+
+- **An HMAC, never a hash.** An NIK is 16 structured digits; sha256 of one is reversed by enumeration.
+- **Its own key, not a PII key.** `PII_KEYS` rotate by re-encrypting under a new id; an index key that
+  moved with them would silently stop matching old rows. And a leaked index key opens no PII.
+- **The event id is inside the MAC**, so one person in two races has two unrelated values: the column
+  cannot be used to follow someone between races.
+- **`PII_INDEX_KEY` is required whenever the vault is on.** Optional would mean a deployment that
+  forgot a variable quietly accepts duplicates.
+
+Where the check sits, and the limit that follows from it:
+
+- **Only confirmed rows refuse.** An unconfirmed row is a payment that has not happened, and a runner
+  retrying after a declined payment must not be locked out by their own first attempt.
+- **Checked at submit, not enforced at confirm, and the index is not unique.** Confirm runs after the
+  runner has paid on chain; refusing then leaves a paid record with no vault row and no pass. The
+  cost is a narrow window: two entries whose payments overlap both get through. Only the contract
+  could close it, and the contract never sees the number.
+- **Rows from before 011 have no index** and block nobody. Computing one needs the decrypted number.
+
+Each of the four properties was checked by breaking it: letting unconfirmed rows count, removing the
+check, hashing the raw number instead of `norm_id`, and leaving the event id out of the MAC each
+fail the tests.
+
+**Entries that never happened are deleted after a day (STE-50).** The entry flow stores the details
+**before** the runner signs `enter`, so a paid runner is never missing from the roster. When the
+payment never happens, that leaves personal data for an entry that does not exist, and every
+resubmission adds a row. `Vault.sweepUnconfirmed(24)` deletes rows with `token_id IS NULL` older than
+`VAULT_UNCONFIRMED_TTL_HOURS` (24) in **one statement**, logging a count and nothing else.
+
+- **Where it runs: the API process**, at boot and then hourly (`src/retention.ts`). Not the keeper,
+  which is weekly by design: a 24-hour rule checked weekly keeps a row up to eight days. Several API
+  instances are fine; the DELETE is idempotent. `pnpm vault sweep` runs it on demand.
+- **It cannot delete a row a confirm is writing.** Postgres re-evaluates `token_id IS NULL` on a row
+  whose lock it waited for, so a confirm that commits first wins. A test holds that lock from a second
+  connection to prove it rather than assume it.
+- **`confirm` had to change for this, and the reason matters.** It used to SELECT the row and then
+  UPDATE `WHERE id = $1`. A sweep landing between the two made the UPDATE touch nothing while confirm
+  returned **success**: a runner told they were entered, with no row, no pass, and no roster line. It
+  is now one `UPDATE … WHERE id = $1 AND token_id IS NULL`, and only a zero row count leads to a look
+  at why: gone is `404 not-found`, another token is `409`, the same token is the idempotent retry.
+- **The consequence for a client:** a confirm more than 24 hours after its submit answers 404, even
+  if the runner paid. That should not happen in the entry flow, which confirms seconds after `enter`
+  lands; if it does, the fix is to submit again (a fresh row) and confirm that.
+- **An hour is the floor.** `sweepUnconfirmed` refuses anything less, so a misconfigured `0` cannot
+  delete entries whose runner is still at the wallet prompt.
+
+Checked by breaking each part: restoring the old SELECT-then-UPDATE confirm, dropping `token_id IS
+NULL`, dropping the window, and removing the one-sweep-at-a-time guard each fail the tests.
+
+**Restoring a pass: the second place a secret leaves the vault (STE-52).**
+`GET /records/:tokenId/pass` → `{ token_id, totp_secret, bib_name }`. A runner who entered on a
+laptop needs the pass on their phone; one who changes phone needs it again. They open the pass page,
+connect the same wallet, sign, and get the secret back.
+
+"PII goes in and never comes out" still holds: this returns a check-in secret and the name printed on
+the bib, and `test/response-schemas.test.ts` pins the full list of responses that may carry a
+`totp_secret` — submit, the roster, and this. A fourth has to be argued for the same way.
+
+| | Roster bundle (STE-16) | Pass (STE-52) |
+| --- | --- | --- |
+| Hands out | every secret in one event | one secret |
+| To | the organiser and allowlisted scanners | the wallet that owns the record |
+| Decided by | `get_organiser` / `is_scanner`, read from chain per request | `owner_of`, read from chain per request |
+
+Three gates, in this order, each checked by removing it (the tests fail without each):
+
+1. **Wallet signature**, before anything is read, so an anonymous caller learns nothing, not even
+   whether the token exists.
+2. **`owner_of(token_id)` must be the caller**, read from chain, never the index. Records are
+   non-transferable, so the owner is the runner who signed `enter`. A non-owner gets 403 without the
+   vault being read at all.
+3. **The vault row must have been submitted by that same wallet.** Otherwise 404 `no-pass`, and a
+   warning with the token id.
+
+Gate 3 is defence in depth now. It was the only guard when this route shipped, because confirm used
+to take `token_id` from the client unchecked; that is fixed (below), and gate 3 still covers any row
+linked before the fix.
+
+**Confirm checks the token on chain.** `POST /participants/:id/confirm` takes `token_id` from the
+client, and until this fix it only checked that the caller owned the vault row — so a runner could
+point their own row at **someone else's** token. The roster would then give the desk the attacker's
+check-in secret for the victim's record. Now, before linking:
+
+1. A row already linked to a different token answers 409 `conflict` without a chain read.
+2. `record_of(token_id)` is read from chain. "Does not exist" is re-read after 1s and 2s, because the
+   wallet may report `enter` from an RPC node a ledger ahead of the one this service asks; still
+   missing is **404 `record-not-found`**. Any other RPC failure is a 5xx at once, never "not found".
+3. The record's `participant_hash`, `event_id` and `category_id` must equal the row's, and
+   `owner_of(token_id)` must be the caller. Otherwise **409 `record-mismatch`** and nothing is linked.
+   The hash is the strong check (its salt belongs to this row alone); the rest makes a mismatch
+   explicit rather than lucky.
+4. With no chain reader mounted, confirm answers **503 `chain-unavailable`** instead of linking blind.
+
+`enter_tx_hash` is still the client's claim and is stored as such; nothing downstream trusts it. Each
+of the hash check, the owner check, the whole chain read and the re-read was removed once, and the
+tests fail without each.
+
+Errors: 401 (auth), 403 `forbidden` (another wallet), 404 `not-found` (no such token on chain), 404
+`no-pass` (no confirmed entry details for this record). Rate-limited at 20 per minute per client.
+Logged with the token id only.
 
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
@@ -279,7 +438,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-783 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+976 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that
@@ -404,6 +563,44 @@ The general lesson: **a spec change that adds an event name is not additive for 
 a test — but only once someone updates the spec here too. When `docs/specs/CHANGELOG.md` gains an
 event, the indexer needs a handler in the same week, not a follow-up ticket nobody owns.
 
+## Second batches and event-wide bibs (STE-54, STE-55, STE-56)
+
+Two contract upgrades changed what the indexer reads, and one of them made the index **wrong in
+production without an error**:
+
+- **v2.3 (STE-54): `slot_reserved.seq` is now the bib**, unique across the whole event and starting at
+  1. It used to be the category's count before the increment, and the indexer set
+  `entered_count = seq + 1`. After the upgrade, three 5K entries and then one 10K entry made the 10K
+  read **5** entrants. When found, 8 of 38 production categories showed more entrants than they had,
+  several above their own quota.
+- **v2.4 (STE-55): `increase_quota` and `quota_increased`.** The event was silently skipped (unknown
+  name), so a raised quota never reached the index. Worse, `category_added` required the published
+  quota to *equal* `get_category`'s, which reads the category as it is now, so any category raised
+  later stopped the poller for good.
+
+What the indexer does now:
+
+| | How | Why |
+| --- | --- | --- |
+| `entered_count` | recounted from `records` on each `record_entered` | `enter` is the only caller of `reserve_slot` and mints one record per slot, so they are one fact; a count is idempotent under replay and heals a bad row instead of preserving it |
+| `slot_reserved` | touches `last_ledger` only | its `seq` is a bib, not a count |
+| `category_added` | price must match; chain quota must be **≥** the published one | a quota only ever rises; lower still means the stream and state disagree |
+| `quota_increased` | `quota = GREATEST(quota, current)`; `current <= previous` stops the page | the contract refuses a non-increase, so seeing one means something is wrong |
+| quota history | `GET /events/:id` → each category's `quota_history: [{ previous, current, at, ledger, tx_hash }]` | a second batch is a dated fact ("2,000 → 3,000 on 15 Sep"), read from `chain_events`, which a rebuild keeps |
+| `doctor` | now compares every category's quota, `entered_count` and price with `get_category` | it compared events and records only, which is how the drift went unnoticed |
+
+A rise from before this index started polling is not in `quota_history`: contract state holds only
+today's quota. `rebuild` restores today's quota from state and the history from `chain_events`.
+
+The lesson from STE-41 held a second time: **a spec change is not additive for this indexer**, and a
+change to what an existing field *means* (v2.3) is worse than a new event name, because nothing even
+fails to decode. When `docs/specs/CHANGELOG.md` changes, read it against `src/chain/events.ts` and
+`src/indexer/` the same week.
+
+Guarded by tests, each checked by breaking the fix: removing the recount, restoring the equality
+check, making `quota_increased` a no-op, and dropping the category comparison from `doctor` each fail
+the suite.
+
 ## Results CSV (STE-20, C7)
 
 `POST /events/:eventId/results/preview` — the organiser uploads a CSV and gets a preview with
@@ -427,6 +624,10 @@ Seven anomalies, and their `severity` matters more than their count:
 | --- | --- |
 | `reverts` | the chain rejects that row; the cost is one failed transaction (`unknown_bib`, `not_claimed`, `already_final`) |
 | `wrong` | the chain **accepts it** and the result is a lie forever (`ambiguous_bib`, `impossible_time`, `duplicate_bib`, `malformed_row`) |
+
+A duplicate bib marks **both** rows, not only the repeat: which of the two times is right is
+unknown, and publishing the first one by default is the same irreversible guess the review exists to
+prevent.
 
 The parser is lenient about **shape** and strict about **meaning**: `52:41`, `1:02:41`, `3161` and
 `3161.4` are all accepted, as are headers like `Bib No`/`chip_time` and `;` as a delimiter. Reading
@@ -678,9 +879,10 @@ reach a response body. The body is a fixed sentence plus `x-request-id` to quote
 to the log.
 
 **Rate limits** are per-endpoint, by cost: 240/minute globally, 30 for `/auth/challenge`, 10 for the
-results upload, 12 for the metadata file upload. The key is the first `x-forwarded-for` hop — behind
-a reverse proxy (STE-31) every request arrives from one socket, and without that one noisy client
-would lock out a whole event. **Disabled when `NODE_ENV=test`**, so the suite does not fail on its
+results upload, 12 for the metadata file upload. The key is the client's address **as the proxy saw it**: the header the deployment names in
+`STERUN_CLIENT_IP_HEADER` (production: `cf-connecting-ip`, which Cloudflare sets and overwrites), else
+the **last** `x-forwarded-for` hop, else the socket. It used to be the *first* hop — which is whatever
+the client wrote, so a random header per request bypassed every per-endpoint limit. **Disabled when `NODE_ENV=test`**, so the suite does not fail on its
 241st request for a reason unrelated to the assertion.
 
 **Logs redact** `x-sterun-signature` and `x-sterun-nonce`, and drop the query string (which can carry
@@ -693,6 +895,25 @@ serialise — so it cannot describe an endpoint that behaves differently.
 > registered **synchronously** mounts before a `register`ed plugin has installed its `onRoute` hook.
 > The effect was that `/health` and `/config` were invisible to swagger. Every route now goes through
 > `register`.
+
+## Fixed in the 2026-09-15 audit
+
+A read-only review of the whole package found these; each is fixed with a test that fails without
+the fix. Recorded because each is a shape of bug worth recognising next time.
+
+| What was wrong | Consequence | Now |
+| --- | --- | --- |
+| rate-limit key = first `x-forwarded-for` hop | any client bypassed every limit with a random header | the edge's header, else the last hop (see Hardening) |
+| faucet settled a Horizon timeout as `failed` | a retry could pay the same wallet twice | only a rejection with result codes releases the window |
+| two faucet payments at once | same sequence number, `tx_bad_seq`, a 500 | payments queued one at a time in the process |
+| results preview flagged only the *repeat* of a duplicate bib | the first row was publishable, and Finished is terminal | both rows are `duplicate_bib`, each naming the other's line |
+| file store total written as `total + bytes` after an await | concurrent uploads erased each other from the count; the ceiling drifted open | added to the cached total as it is after the write |
+| roster read the event's first 10,000 records | entries past that reported as not indexed in a big race | records looked up by the vault's own token ids |
+| `VAULT_UNCONFIRMED_TTL_HOURS=0`, `FAUCET_AMOUNT_STROOPS=""`, huge sweep interval | started fine, then failed silently or spun | refused at startup with the variable named |
+
+Not fixed here, and why: the check-then-write race on the file store **ceiling** itself (two uploads
+can both pass the check before either writes) needs a lock or a reservation, and the bound it breaks
+is a soft storage budget, not a safety property. Two concurrent uploads can overshoot by one file.
 
 ## Deployment (STE-31)
 

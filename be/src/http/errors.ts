@@ -36,6 +36,7 @@ import { ContractRevertError } from "../chain/errors.js";
 import { NormalizationError } from "../spec/normalize.js";
 import {
   AlreadyConfirmedError,
+  AlreadyEnteredError,
   ParticipantExistsError,
   ParticipantNotFoundError,
 } from "../vault.js";
@@ -115,6 +116,12 @@ export function toErrorBody(error: FastifyError): { status: number; body: ErrorB
   }
   if (error instanceof ParticipantNotFoundError) {
     return { status: 404, body: { error: "not-found", message: error.message } };
+  }
+  if (error instanceof AlreadyEnteredError) {
+    // Its own code, not `conflict`: a form shows this one to a person, and
+    // "someone with this identity number has already entered" is what they
+    // need to read.
+    return { status: 409, body: { error: "already-entered", message: error.message } };
   }
   if (error instanceof AlreadyConfirmedError || error instanceof ParticipantExistsError) {
     return { status: 409, body: { error: "conflict", message: error.message } };

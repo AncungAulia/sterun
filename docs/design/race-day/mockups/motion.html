@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sterun race day: motion (STE-18)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Motion studies for STE-18. Durations and curves are the motion tokens, so a
+   change there moves these and the built screens together. Nothing here invents
+   a value. */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+body { background: var(--color-n-200); color: var(--color-ink); font-family: var(--font-sans); padding: 40px 24px 80px; }
+.board { max-width: 1760px; margin: 0 auto; }
+h1 { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-2xl); }
+p.lede { color: var(--color-n-600); font-size: var(--text-sm); margin-top: 6px; max-width: 76ch; }
+.controls { display: flex; gap: 12px; align-items: center; margin: 22px 0 8px; flex-wrap: wrap; }
+.control { height: 44px; padding: 0 18px; border-radius: var(--radius-md); border: 1px solid var(--color-n-300);
+  background: var(--color-paper); color: var(--color-ink); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.control--primary { background: var(--color-teal); color: var(--color-paper); border-color: var(--color-teal); }
+.control[aria-pressed="true"] { background: var(--color-ink); color: var(--color-paper); border-color: var(--color-ink); }
+.row { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 24px; }
+figure { width: 390px; }
+figcaption { margin-top: 10px; font-size: var(--text-sm); color: var(--color-n-600); }
+figcaption b { display: block; color: var(--color-ink); font-weight: 500; }
+figcaption em { font-style: normal; color: var(--color-n-500); font-size: var(--text-xs); }
+.device { width: 390px; height: 520px; border-radius: var(--radius-lg); overflow: hidden; position: relative;
+  background: var(--color-paper); box-shadow: var(--shadow-lifted); }
+.replay { position: absolute; right: 10px; bottom: 10px; z-index: 5; height: 34px; padding: 0 12px; border: 0;
+  border-radius: var(--radius-sm); background: var(--color-ink); color: var(--color-paper); font: inherit;
+  font-size: var(--text-xs); cursor: pointer; opacity: .85; }
+
+/* Reduced motion, both as the real media query and as a switch a reviewer can
+   flip, because the point is to check that every screen still tells the truth
+   when nothing moves. */
+.reduced, .reduced * { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+}
+
+/* --- shared scenery ------------------------------------------------------ */
+.camera { position: absolute; inset: 0; background:
+  repeating-linear-gradient(135deg, var(--color-n-900) 0 18px, var(--color-n-950) 18px 36px); }
+.reticle { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 190px; height: 190px;
+  border-radius: var(--radius-lg); box-shadow: 0 0 0 9999px color-mix(in srgb, var(--color-n-950) 55%, transparent); }
+.reticle i { position: absolute; width: 28px; height: 28px; border: 3px solid var(--color-paper); }
+.reticle i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.reticle i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.reticle i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.reticle i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+.chip { display: inline-flex; align-items: center; border-radius: var(--radius-sm); padding: 4px 10px;
+  font-size: var(--text-xs); font-weight: 500; background: var(--color-n-800); color: var(--color-n-100); }
+.numeric { font-variant-numeric: tabular-nums; }
+.btn { display: flex; align-items: center; justify-content: center; height: 52px; border-radius: var(--radius-md);
+  background: var(--color-n-100); color: var(--color-ink); font-size: var(--text-base); font-weight: 500; }
+
+/* --- M1 / M2 the verdict ------------------------------------------------- */
+.verdict { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; text-align: center; padding: 20px; }
+.verdict--ok { background: var(--color-success-strong); color: var(--color-ink); }
+.verdict--no { color: var(--color-paper); background:
+  repeating-linear-gradient(135deg, var(--color-danger-strong) 0 26px, var(--color-danger) 26px 52px); }
+.verdict__icon { width: 84px; height: 84px; border-radius: 999px; display: grid; place-items: center; }
+.verdict--ok .verdict__icon { background: var(--color-ink); color: var(--color-success-strong); }
+.verdict--no .verdict__icon { background: var(--color-paper); color: var(--color-danger); }
+.verdict__word { font-family: var(--font-hero); font-weight: 700; font-size: var(--text-4xl); line-height: 1; text-transform: uppercase; }
+.verdict__bib { font-size: var(--text-3xl); font-weight: 600; }
+.mask { overflow: hidden; }
+
+.play .verdict--enter { animation: panelUp var(--motion-base) var(--ease-out) both; }
+/* The delay is set per element rather than by position, because the icon is the
+   panel's first child and an nth-child count here silently starts the bib before
+   the word, which is the opposite of the order the eye should read them in. */
+.play .verdict--enter .lift > * { animation: liftUp var(--motion-base) var(--ease-out) var(--d, 0ms) both; }
+.play .verdict--enter .verdict__icon { animation: iconIn var(--motion-base) var(--ease-out) both; }
+/* M2 plays the whole cycle so the leave can be seen in context: the panel
+   arrives, holds while the volunteer reads it, then goes. The hold is the
+   volunteer's, not a timer's; the demo just has to stand in for one. */
+.play .verdict--cycle { animation: panelUp var(--motion-base) var(--ease-out) both,
+  panelDown var(--motion-fast) var(--ease-in) 1700ms both; }
+.ready { position: absolute; left: 0; right: 0; bottom: 34px; text-align: center; color: var(--color-n-300);
+  font-size: var(--text-sm); opacity: 0; }
+.play .ready { animation: fadeIn var(--motion-base) var(--ease-out) 1840ms both; }
+
+@keyframes panelUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes panelDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes liftUp { from { transform: translateY(105%); } to { transform: translateY(0); } }
+@keyframes iconIn { from { transform: scale(.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* --- M3 the code rolls over ---------------------------------------------- */
+.passWrap { position: absolute; inset: 0; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.qrBox { background: var(--color-paper); border-radius: var(--radius-lg); box-shadow: var(--shadow-lifted);
+  padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.qrBox img { width: 190px; height: 190px; }
+.track { height: 6px; border-radius: 999px; background: var(--color-n-200); overflow: hidden; width: 100%; }
+.track > i { display: block; height: 100%; width: 100%; background: var(--color-teal); transform-origin: left; }
+.play .track > i { animation: drain 3s linear both; }
+@keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.digits { display: flex; justify-content: center; gap: 2px; font-size: var(--text-3xl); font-weight: 600; letter-spacing: .18em; }
+.digit { height: 1.1em; overflow: hidden; }
+.digit > span { display: block; height: 1.1em; line-height: 1.1em; }
+.play .digit > span { animation: rollUp var(--motion-base) var(--ease-inout) both; animation-delay: calc(2.4s + var(--i) * 25ms); }
+@keyframes rollUp { from { transform: translateY(0); } to { transform: translateY(-1.1em); } }
+.swapNote { font-size: var(--text-xs); color: var(--color-n-500); text-align: center; }
+
+/* --- M4 the manual sheet -------------------------------------------------- */
+.sheet { position: absolute; inset: auto 0 0 0; background: var(--color-n-950); color: var(--color-paper);
+  border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg); display: flex;
+  flex-direction: column; gap: 12px; padding: 18px 18px 56px; /* room for the demo's Replay */ }
+.play .sheet { animation: sheetUp var(--motion-base) var(--ease-out) both; }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.field { height: 60px; border-radius: var(--radius-md); border: 1px solid var(--color-n-700); background: var(--color-n-900);
+  display: flex; align-items: center; padding: 0 16px; font-size: var(--text-2xl); letter-spacing: .16em; }
+.scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--color-n-950) 45%, transparent); }
+.play .scrim { animation: fadeIn var(--motion-base) var(--ease-out) both; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* --- M5 the banner -------------------------------------------------------- */
+.bannerMask { position: absolute; inset: 0 0 auto 0; overflow: hidden; }
+.banner { background: var(--color-warning-strong); color: var(--color-ink); padding: 12px 14px; display: flex; gap: 10px; }
+.banner b { font-size: var(--text-sm); }
+.banner div > span { display: block; font-size: var(--text-xs); }
+.play .banner { animation: bannerDown var(--motion-base) var(--ease-out) both; }
+@keyframes bannerDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+/* --- M6 the queue counter ------------------------------------------------- */
+.counter { position: absolute; right: 14px; top: 14px; }
+.counterRoll { height: 1.2em; overflow: hidden; display: inline-block; vertical-align: bottom; }
+.counterRoll > span { display: block; height: 1.2em; line-height: 1.2em; }
+.play .counterRoll > span { animation: rollUp2 var(--motion-instant) var(--ease-out) both; animation-delay: 500ms; }
+@keyframes rollUp2 { from { transform: translateY(0); } to { transform: translateY(-1.2em); } }
+
+/* --- M7 the claimed check ------------------------------------------------- */
+.claimed { position: absolute; inset: 0; display: grid; place-items: center; }
+.claimedCard { background: var(--color-success-surface); border-radius: var(--radius-lg); padding: 28px 34px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.claimedCard .label { font-family: var(--font-hero); font-size: var(--text-2xl); color: var(--color-success); }
+.tick { stroke-dasharray: 34; stroke-dashoffset: 0; }
+.play .tick { animation: draw var(--motion-slow) var(--ease-out) both; }
+@keyframes draw { from { stroke-dashoffset: 34; } to { stroke-dashoffset: 0; } }
+</style>
+</head>
+<body>
+<div class="board">
+  <h1>Race day: motion</h1>
+  <p class="lede">Seven studies for STE-18, at the durations and curves in the motion tokens. The rule they follow: movement may make a change legible, never delay it. A verdict is readable before its own animation has finished, and the QR itself never animates, because a code that is mid-fade is a code a camera can misread. Flip reduced motion to check that every screen still says the same thing with nothing moving.</p>
+
+  <div class="controls">
+    <button class="control control--primary" id="playAll">Play all</button>
+    <button class="control" id="reduce" aria-pressed="false">Reduced motion: off</button>
+    <span style="font-size:var(--text-sm);color:var(--color-n-600)">Each frame also has its own Replay.</span>
+  </div>
+
+  <div class="row">
+
+    <figure>
+      <div class="device" data-demo id="m1">
+        <div class="camera"><div class="reticle"><i></i><i></i><i></i><i></i></div></div>
+        <div class="verdict verdict--ok verdict--enter">
+          <div class="verdict__icon">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+          </div>
+          <div class="mask lift" style="--d:40ms"><div class="verdict__word">Hand over</div></div>
+          <div class="mask lift" style="--d:80ms"><div class="verdict__bib numeric">128</div></div>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M1 A verdict arrives</b>The panel comes up over the camera in <em>--motion-base, 200ms, ease-out</em>. The word and the bib follow from behind a mask, 40ms apart, so the eye lands on the word first. The icon only scales from 0.92, which reads as settling rather than popping.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" data-demo id="m2">
+        <div class="camera"><div class="reticle"><i></i><i></i><i></i><i></i></div></div>
+        <div class="ready">Ready for the next runner</div>
+        <div class="verdict verdict--ok verdict--cycle">
+          <div class="verdict__icon">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+          </div>
+          <div class="verdict__word">Hand over</div>
+          <div class="verdict__bib numeric">128</div>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M2 A verdict leaves</b>The full cycle: it arrives, it holds while the volunteer reads it, then it goes down and out in <em>--motion-fast, 140ms, ease-in</em>. Leaving is faster than arriving because nobody needs to read it on the way out, and in the real screen the hold lasts until the volunteer taps. Nothing dismisses itself.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" data-demo id="m3">
+        <div class="passWrap">
+          <div class="qrBox">
+            <img src="qr-sample-a.svg" alt="">
+            <div class="track"><i></i></div>
+          </div>
+          <div class="digits numeric">
+            <span class="digit" style="--i:0"><span>0<br>8</span></span>
+            <span class="digit" style="--i:1"><span>7<br>4</span></span>
+            <span class="digit" style="--i:2"><span>9<br>4</span></span>
+            <span class="digit" style="--i:3"><span>6<br>7</span></span>
+            <span class="digit" style="--i:4"><span>6<br>6</span></span>
+            <span class="digit" style="--i:5"><span>3<br>1</span></span>
+          </div>
+          <div class="swapNote">The QR is replaced on the same tick, with no fade: a half-drawn code is a code a camera can read wrong.</div>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M3 The code rolls over</b>The countdown drains, then the six digits roll up one at a time, <em>25ms apart, --motion-base, ease-inout</em>. The roll is what tells a runner mid-sentence that the number they are reading has changed. <em>Demo runs a 3s cycle; the real one is 30s. The countdown bar is a value read off the clock, not an animation, which is why it empties instantly here under reduced motion and would not in the built screen.</em></figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" data-demo id="m4">
+        <div class="camera"><div class="reticle"><i></i><i></i><i></i><i></i></div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div style="font-family:var(--font-display);font-style:italic;font-weight:600;font-size:var(--text-xl)">Type the code</div>
+          <div class="field numeric">079663</div>
+          <div class="field numeric" style="color:var(--color-n-500)">Bib number</div>
+          <div class="btn">Check</div>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M4 The manual fallback</b>A sheet from the bottom edge in <em>--motion-base, ease-out</em>, over a scrim that fades in with it. It covers the camera rather than replacing the screen, so the way back is obvious and the camera keeps running underneath.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" data-demo id="m5">
+        <div class="camera"><div class="reticle"><i></i><i></i><i></i><i></i></div></div>
+        <div class="bannerMask">
+          <div class="banner">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.4l3.2 2"/></svg>
+            <div><b>This phone's clock is 4 minutes fast</b><span>Every scan will fail until it is fixed.</span></div>
+          </div>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M5 A banner appears</b>Down from the top edge behind a mask, <em>--motion-base, ease-out</em>. It pushes nothing and covers nothing that was being read, and it stays until the condition clears. The offline banner on the pass uses the same movement.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" data-demo id="m6">
+        <div class="camera"><div class="reticle"><i></i><i></i><i></i><i></i></div></div>
+        <div class="counter">
+          <span class="chip numeric">
+            <span class="counterRoll"><span>3<br>4</span></span>
+            <span style="margin-left:.4em">queued</span>
+          </span>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M6 The queue ticks up</b>One digit rolls, <em>--motion-instant, 90ms</em>. Small enough to notice without looking, which is the whole job: a volunteer should never have to check whether the last scan was counted.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" data-demo id="m7">
+        <div class="claimed">
+          <div class="claimedCard">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path class="tick" d="M4 12.5 9.5 18 20 6.5"/></svg>
+            <div class="label">Racepack collected</div>
+          </div>
+        </div>
+        <button class="replay" type="button">Replay</button>
+      </div>
+      <figcaption><b>M7 The claim lands</b>The only decorative movement in the set: the check draws itself in <em>--motion-slow, 320ms</em>. It runs on the runner's pass, where nobody is waiting on a decision, and never on the scanner.</figcaption>
+    </figure>
+
+  </div>
+</div>
+
+<script>
+  const demos = [...document.querySelectorAll("[data-demo]")];
+  const play = (el) => {
+    el.classList.remove("play");
+    void el.offsetWidth; // restart the animations
+    el.classList.add("play");
+  };
+  demos.forEach((el) => {
+    el.querySelector(".replay").addEventListener("click", () => play(el));
+    play(el);
+  });
+  document.getElementById("playAll").addEventListener("click", () => demos.forEach(play));
+  const reduce = document.getElementById("reduce");
+  reduce.addEventListener("click", () => {
+    const on = reduce.getAttribute("aria-pressed") === "true";
+    reduce.setAttribute("aria-pressed", String(!on));
+    reduce.textContent = "Reduced motion: " + (on ? "off" : "on");
+    document.body.classList.toggle("reduced", !on);
+    demos.forEach(play);
+  });
+</script>
+</body>
+</html>

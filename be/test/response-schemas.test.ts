@@ -12,6 +12,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { RESPONSE_SCHEMAS as DIRECTORY_SCHEMAS } from "../src/routes/directory.js";
+import { RESPONSE_SCHEMAS as FAUCET_SCHEMAS } from "../src/routes/faucet.js";
+import { RESPONSE_SCHEMAS as PASS_SCHEMAS } from "../src/routes/pass.js";
 import { RESPONSE_SCHEMAS as VAULT_SCHEMAS } from "../src/routes/participants.js";
 import { RESPONSE_SCHEMAS as AUTH_SCHEMAS } from "../src/routes/auth.js";
 import { RESPONSE_SCHEMAS as RESULTS_SCHEMAS } from "../src/routes/results.js";
@@ -23,6 +25,8 @@ const ALL = {
   ...Object.fromEntries(Object.entries(ROSTER_SCHEMAS).map(([k, v]) => [`roster.${k}`, v])),
   ...Object.fromEntries(Object.entries(RESULTS_SCHEMAS).map(([k, v]) => [`results.${k}`, v])),
   ...Object.fromEntries(Object.entries(AUTH_SCHEMAS).map(([k, v]) => [`auth.${k}`, v])),
+  ...Object.fromEntries(Object.entries(FAUCET_SCHEMAS).map(([k, v]) => [`faucet.${k}`, v])),
+  ...Object.fromEntries(Object.entries(PASS_SCHEMAS).map(([k, v]) => [`pass.${k}`, v])),
 };
 
 /** Every property name the schema (or anything nested in it) can emit. */
@@ -84,12 +88,18 @@ describe("every response object is closed", () => {
   });
 });
 
-describe("secrets appear in exactly the two places they are meant to", () => {
-  it("only the submit response and the roster bundle can carry a totp_secret", () => {
+describe("secrets appear in exactly the places they are meant to", () => {
+  it("only the submit response, the roster bundle and the owner's pass can carry a totp_secret", () => {
+    // STE-52 added the third. Each one is argued for in be/CLAUDE.md; a fourth
+    // should have to be argued for too, which is what this list forces.
     const carriers = Object.entries(ALL)
       .filter(([, schema]) => propertyNames(schema).has("totp_secret"))
       .map(([name]) => name);
-    expect(carriers.sort()).toEqual(["participants.submitResponse", "roster.rosterResponse"]);
+    expect(carriers.sort()).toEqual([
+      "participants.submitResponse",
+      "pass.passResponse",
+      "roster.rosterResponse",
+    ]);
   });
 
   it("only the submit response can carry a salt", () => {

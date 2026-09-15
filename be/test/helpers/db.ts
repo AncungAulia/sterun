@@ -42,6 +42,8 @@ export const testKeyring = (): Keyring =>
 export interface TestDatabase {
   pool: Pool;
   keyring: Keyring;
+  /** A fresh PII_INDEX_KEY (STE-51) per database. */
+  indexKey: Buffer;
   schema: string;
   close: () => Promise<void>;
 }
@@ -71,6 +73,7 @@ export async function freshDatabase(): Promise<TestDatabase> {
   return {
     pool,
     keyring: testKeyring(),
+    indexKey: randomBytes(32),
     schema,
     close: async () => {
       await pool.end();

@@ -72,6 +72,53 @@ fails with `no key with id N in PII_KEYS`, and that is the only honest answer av
 When to rotate: a key is suspected leaked, somebody who held one leaves the team, or on a schedule
 (suggested: every 90 days if this ever became real production).
 
+### The blind-index key (`PII_INDEX_KEY`, STE-51)
+
+A third secret next to `PII_KEYS`, with a different job and different rules. It keys
+`participants.identity_index`, the HMAC that lets `POST /participants` refuse a second entry by the
+same identity number in one race without decrypting anything (`be/CLAUDE.md`, the vault section).
+
+```bash
+PII_INDEX_KEY="<64 hex>"   # no id prefix: there is exactly one
+```
+
+- **Required whenever the vault is on.** The API refuses to start without it.
+- **Held and stored exactly like `PII_KEYS`**: the same people, only in `be/.env` /
+  `be/.env.production`, never in a backup of the database.
+- **It decrypts nothing.** On its own it gives an attacker who also has the table the ability to test
+  a guessed identity number against a race's entries — which is why it is kept with the PII keys and
+  not treated as harmless.
+- **Do not rotate it with `PII_KEYS`, and do not change it casually.** A new value makes every
+  existing entry invisible to the check: nothing breaks and nothing warns, the check simply stops
+  refusing duplicates for races already running. If it must change (suspected leak), recompute every
+  row's value under the new key — decrypt `national_id_enc`, apply `identityIndex` — before the API
+  starts using it. That job does not exist yet, same as the re-encrypt job above.
+
+Setting it on a box for the first time, without the value passing through a terminal or a log (same
+host-side pattern as the faucet key):
+
+```bash
+cd /opt/sterun
+grep -c '^PII_INDEX_KEY=.' be/.env.production   # 0 means not set yet
+( umask 077; printf '\nPII_INDEX_KEY=%s\n' "$(openssl rand -hex 32)" >> be/.env.production )
+grep -c '^PII_INDEX_KEY=[0-9a-f]\{64\}$' be/.env.production   # must print 1
+```
+
+Do this **before** deploying a version that contains migration 011, or the API will not start.
+
+> **The `umask` stays inside the parentheses.** The first deploy of this took production down for
+> about fifteen minutes because it did not: `umask 077` was set in the deploy shell, the `git merge`
+> that followed rewrote every changed file as mode `600`, `docker build` copied those modes into
+> the image, and the container (uid 1000) crash-looped on
+> `Cannot read package config /app/package.json: permission denied` — API and poller both, public
+> URL 502. Nothing in the database changed, because the API never got far enough to migrate. The
+> fix was `chmod 644` on the 30 tracked files the merge had touched, then rebuild. If a deploy ever
+> fails that way again, check first:
+>
+> ```bash
+> git ls-files -z | xargs -0 stat -c '%a %n' | awk '$1 !~ /[4-7][4-7]$/'   # must print nothing
+> ```
+
 ## If the database leaks
 
 **What an attacker gets:**
@@ -87,6 +134,10 @@ When to rotate: a key is suspected leaked, somebody who held one leaves the team
     claiming somebody else's race pack — **if** they can also be there physically and the record is
     unclaimed. The contract's `AlreadyClaimed` guard still limits the damage to one pack.
 - `runner_address`, `event_id`, `token_id` — all already public on chain.
+- `identity_index` (STE-51) — 32 opaque bytes per row. Without `PII_INDEX_KEY` it cannot be linked to
+  a number, and because the event id is inside the HMAC, the same person's rows in two races do not
+  match each other either. Within one race, two equal values do show that two entries share an
+  identity number, which is exactly what the check refuses for confirmed entries.
 
 **What they do NOT get:** readable PII, as long as the keys did not leak with it. That is why the
 keys must not live on the same machine as a database dump, and must not be included in a database
@@ -100,6 +151,39 @@ the next leak does not add victims.
 **What nothing can fix:** `participant_hash` is permanently on chain. Anyone who knows a record's
 real PII can prove that link forever. This is a consequence the design accepts knowingly
 (`docs/SYSTEM_DESIGN.md` §11) and the reason what gets hashed is salted per record.
+
+## Unconfirmed entries are deleted after a day (STE-50)
+
+`POST /participants` stores a runner's details before they pay. If they never pay, the row is
+personal data kept for an entry that does not exist. The API deletes such rows (`token_id IS NULL`)
+once they are older than `VAULT_UNCONFIRMED_TTL_HOURS` (default 24): once when it starts, then every
+`VAULT_SWEEP_INTERVAL_MS` (default one hour). Confirmed entries are never touched.
+
+What to look for in the API log:
+
+```
+{"removed":3,"olderThanHours":24,"msg":"swept unconfirmed entries"}
+```
+
+A count and the window, never rows. `sweeping unconfirmed entries failed` means the database was
+unreachable at that tick; the next tick retries, and the API keeps serving.
+
+On demand, e.g. right after a deploy:
+
+```bash
+docker compose -f compose.prod.yml -f compose.homelab.yml run -T --rm --no-deps api \
+  node dist/cli/vault.js sweep </dev/null
+# removed 0 unconfirmed entries older than 24h
+```
+
+Things worth knowing before changing the window:
+
+- **Deleted is deleted.** There is no soft delete and nothing to restore; a database backup still
+  contains the rows until that backup ages out, which is the real retention bound.
+- **A confirm after the window answers 404**, even for a runner who paid, because their row is gone.
+  The entry flow confirms seconds after `enter`, so this needs a runner whose confirm failed and who
+  came back a day later. The recovery is to submit the details again and confirm the new row.
+- **Values under 1 hour are refused**, so a typo cannot delete entries whose runner is mid-payment.
 
 ## Starting the backend
 
@@ -828,6 +912,83 @@ nothing" — true for most records and false for any v2 entry that did buy add-o
 knows which, so run the same stop-poller / rebuild / restart sequence as for 007. `rebuild` then runs
 `doctor`, which compares `addon_ids` in order, so a record the default got wrong is reported rather
 than served.
+
+### The web faucet account (STE-49)
+
+`POST /faucet` pays from `STERUN_SUSD_FAUCET_SECRET`: its own account with a small sUSD float,
+**never** the distributor, which stays off this box. The secret is generated **on the production box**
+and written straight into its env file, so it never passes through a laptop, a clipboard, a terminal
+or a chat.
+
+**1. Generate the keypair on the box, and let the HOST store it.**
+
+The key is generated inside the image (which has the SDK) but written by the host shell, because
+`be/.env.production` is `root:root 600` and the container runs as uid 1000 — an append from inside
+the container fails with `EACCES` before anything is printed. That happened on the first attempt, so
+this is not theoretical.
+
+```bash
+ssh root@192.168.18.42
+cd /opt/sterun
+C="docker compose -f compose.prod.yml -f compose.homelab.yml"
+umask 077
+$C run -T --rm --no-deps api node -e \
+  'console.log(require("@stellar/stellar-sdk").Keypair.random().secret())' </dev/null 2>/dev/null \
+  | grep -E '^S[A-Z2-7]{55}$' > /root/.faucet-secret.tmp
+test -s /root/.faucet-secret.tmp
+printf '\nSTERUN_SUSD_FAUCET_SECRET=%s\n' "$(cat /root/.faucet-secret.tmp)" >> be/.env.production
+rm -f /root/.faucet-secret.tmp
+# the public key, and only that
+$C run -T --rm --no-deps api node -e \
+  'console.log(require("@stellar/stellar-sdk").Keypair.fromSecret(process.env.STERUN_SUSD_FAUCET_SECRET).publicKey())' </dev/null
+```
+
+> **Always `-T` and `</dev/null` on `docker compose run` in anything scripted.** Without them `run`
+> attaches stdin. Fed through `ssh … bash -s`, the remote script *is* stdin, so the first `run`
+> swallowed the rest of the script and nothing after it executed — silently. That was the second
+> attempt.
+
+**2. Create the account and open its trustline**, on the box. `compose` passes
+`be/.env.production` in as environment (`env_file`), so the secret from step 1 is already a variable
+inside the container. `--no-payout` needs no distributor key, and `--secret` prints nothing secret:
+
+```bash
+$C run -T --rm --no-deps api \
+  sh -c 'node dist/cli/faucet.js --secret "$STERUN_SUSD_FAUCET_SECRET" --no-payout' </dev/null
+```
+
+**3. Send the float from a machine that holds the distributor key** — never copy that key to the box.
+From a checkout whose `be/.env` has `STERUN_SUSD_DISTRIBUTOR_SECRET`, to the public key from step 1:
+
+```bash
+cd be && pnpm exec tsx -e '
+  import { loadEnvFile } from "./src/env.ts"; import { loadConfig } from "./src/config.ts";
+  import { StellarClient } from "./src/stellar.ts";
+  loadEnvFile(); const c = loadConfig();
+  const tx = await new StellarClient(c).payoutSusd(c.distributorSecret!, process.env.FAUCET_PUBLIC!, 50000000000n);
+  console.log("float sent, tx", tx);
+' # with FAUCET_PUBLIC=<public key from step 1> in the environment
+```
+
+`50000000000` stroops is 5,000 sUSD. **Size the float to what you are prepared to lose**: it is both
+how long the faucet lasts (the default daily cap is also 5,000 sUSD) and the worst case if this box is
+compromised.
+
+**4. Restart the API** so it reads the variable. `/config` then reports
+`faucet.route.available: true`, and the startup log names the faucet's public address.
+
+**5. Prove it end to end**, from anywhere:
+
+```bash
+pnpm --filter be e2e:faucet https://api-sterun.jameshub.fun
+```
+
+A throwaway wallet is refused without a signature, refused without a trustline, paid once it has one
+(checked through the SAC, the balance `enter` charges), and refused a second time. It spends one
+payout of the float per run.
+
+**Topping up** is step 3 again. When the float runs out the route answers `faucet-empty` and pays
+nothing — the intended failure, not an outage.
 
 ### Nonces now live in Postgres
 

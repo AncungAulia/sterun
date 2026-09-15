@@ -23,11 +23,11 @@ afterEach(async () => {
 });
 
 /** A server with the limiter on, and its logger silenced. */
-async function liveServer(): Promise<FastifyInstance> {
+async function liveServer(env: Record<string, string> = {}): Promise<FastifyInstance> {
   const previous = process.env.LOG_LEVEL;
   process.env.LOG_LEVEL = "silent";
   try {
-    const server = buildServer(loadConfig({ NODE_ENV: "production" }));
+    const server = buildServer(loadConfig({ NODE_ENV: "production", ...env }));
     await server.ready();
     return server;
   } finally {
@@ -72,15 +72,37 @@ describe("rate limiting", () => {
     expect((await from("203.0.113.2")).statusCode).toBe(200);
   });
 
-  it("reads only the first hop of a forwarded chain", async () => {
-    // `x-forwarded-for` accumulates: "client, proxy1, proxy2". Keying on the
-    // whole string would let a client rotate the tail and get a fresh bucket.
+  it("keys on the hop the proxy wrote, so a client cannot pick its own bucket", async () => {
+    // `x-forwarded-for` accumulates as "whatever the client sent, ..., what the
+    // proxy saw". Keying on the FIRST entry let a client send a new value per
+    // request and never be limited; the last entry is the proxy's.
     app = await liveServer();
     const from = (value: string) =>
       app!.inject({ method: "GET", url: "/health", headers: { "x-forwarded-for": value } });
 
-    for (let i = 0; i < RATE_LIMITS.global; i += 1) await from("203.0.113.9, 10.0.0.1");
-    expect((await from("203.0.113.9, 10.0.0.2")).statusCode).toBe(429);
+    for (let i = 0; i < RATE_LIMITS.global; i += 1) {
+      await from(`198.51.100.${i % 250}, 203.0.113.9`);
+    }
+    // A brand-new first entry does not buy a fresh bucket...
+    expect((await from("192.0.2.77, 203.0.113.9")).statusCode).toBe(429);
+    // ...and a different client, as the proxy saw it, is unaffected.
+    expect((await from("192.0.2.77, 203.0.113.10")).statusCode).toBe(200);
+  });
+
+  it("uses the edge's own client header when the deployment names one", async () => {
+    // Behind Cloudflare, cf-connecting-ip is set by the edge and overwritten if
+    // a client sends one, so it is the address to trust there.
+    app = await liveServer({ STERUN_CLIENT_IP_HEADER: "CF-Connecting-IP" });
+    const from = (cf: string, forwarded: string) =>
+      app!.inject({
+        method: "GET",
+        url: "/health",
+        headers: { "cf-connecting-ip": cf, "x-forwarded-for": forwarded },
+      });
+
+    for (let i = 0; i < RATE_LIMITS.global; i += 1) await from("203.0.113.50", `10.0.0.${i % 250}`);
+    expect((await from("203.0.113.50", "10.9.9.9")).statusCode).toBe(429);
+    expect((await from("203.0.113.51", "10.9.9.9")).statusCode).toBe(200);
   });
 
   it("gives the expensive endpoints a lower ceiling than the global one", () => {

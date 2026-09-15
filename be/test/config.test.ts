@@ -44,6 +44,62 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ PORT: "http" })).toThrow(/expected an integer/);
   });
 
+  describe("PII_INDEX_KEY (STE-51)", () => {
+    const VAULT = {
+      DATABASE_URL: "postgres://sterun:sterun@127.0.0.1:55432/sterun",
+      PII_KEYS: `1:${"cd".repeat(32)}`,
+      PII_ACTIVE_KEY_ID: "1",
+    };
+
+    it("is required whenever the vault is on", () => {
+      // Optional would mean a deployment that forgot one variable quietly
+      // accepts a second entry by the same person.
+      expect(() => loadConfig(VAULT)).toThrow(/PII_INDEX_KEY/);
+    });
+
+    it("is loaded as 32 bytes next to the keyring", () => {
+      const hex = "ef".repeat(32);
+      expect(loadConfig({ ...VAULT, PII_INDEX_KEY: hex }).vault?.indexKey.toString("hex")).toBe(hex);
+    });
+
+    it("refuses a malformed key without printing it", () => {
+      const bad = "not-a-key-but-could-have-been-one";
+      expect(() => loadConfig({ ...VAULT, PII_INDEX_KEY: bad })).toThrow(/64 lowercase hex/);
+      expect(() => loadConfig({ ...VAULT, PII_INDEX_KEY: bad })).not.toThrow(new RegExp(bad));
+    });
+
+    it("is not needed when the vault is off", () => {
+      expect(loadConfig({}).vault).toBeUndefined();
+    });
+  });
+
+  describe("values that fail quietly when wrong are refused at startup", () => {
+    it.each([
+      ["FAUCET_AMOUNT_STROOPS", ""],
+    ])("treats an empty %s as unset, not as zero", (name, value) => {
+      // BigInt("") is 0n: a faucet that starts and then fails every payout.
+      expect(loadConfig({ [name]: value }).faucetAmount).toBe(500_000_000n);
+    });
+
+    it.each([
+      ["FAUCET_AMOUNT_STROOPS", "0", /greater than 0/],
+      ["FAUCET_AMOUNT_STROOPS", "1.5", /whole number of stroops/],
+      ["FAUCET_DAILY_CAP_STROOPS", "0", /greater than 0/],
+      ["FAUCET_WINDOW_HOURS", "0", /between 1 and/],
+      ["VAULT_UNCONFIRMED_TTL_HOURS", "0", /between 1 and/],
+      ["VAULT_SWEEP_INTERVAL_MS", "0", /between 60000 and/],
+      ["VAULT_SWEEP_INTERVAL_MS", "2147483648", /between 60000 and 2147483647/],
+    ])("refuses %s=%s", (name, value, message) => {
+      expect(() => loadConfig({ [name]: value })).toThrow(message);
+    });
+
+    it("keeps the defaults when nothing is set", () => {
+      const c = loadConfig({});
+      expect(c.faucetDailyCapStroops).toBe(50_000_000_000n);
+      expect(c.retention).toEqual({ unconfirmedHours: 24, sweepIntervalMs: 3_600_000 });
+    });
+  });
+
   it("binds to loopback by default — deployment opts in to exposure", () => {
     expect(loadConfig({}).host).toBe("127.0.0.1");
     expect(loadConfig({ HOST: "0.0.0.0" }).host).toBe("0.0.0.0");

@@ -73,10 +73,13 @@ must **never** be edited by hand.
 | STE-8 | web app shell + wallet connect (C9) | done |
 | STE-13 | event directory + detail read from chain (C9) | done, live testnet e2e |
 | STE-17 | organiser console | in progress (Ancung) |
+| STE-18 | race-day design: QR pass + scanner (C13) | done — `docs/design/race-day/`, what STE-21 and STE-22 are built from |
 | STE-35 | **contracts v2**: upgradeable + paid add-ons + `Cancelled` | done, **LIVE on testnet** |
 | STE-36 | **organiser allowlist** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED** |
 | STE-37 | add-on methods on `SterunClient` | done, live v2 e2e |
 | STE-41 | **untimed finish** (`record_finish_untimed`) in RaceRecord (C2) + `recordFinishUntimed` in the SDK | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer/CSV + `fe/` profile follow-ups are teammates' tickets |
+| STE-54 | **bibs unique within an event, from 1** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` keeps its duplicate-bib guard and `fe/` renders the number as-is (teammates' tickets) |
+| STE-55 | **`increase_quota`** — a sold-out distance can open a second batch (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer handler for `QuotaIncreased` and the `fe/` console flow are teammates' tickets |
 | — | event metadata files (`POST /events/files`) | done, live e2e |
 | — | **R2** object storage (`sterun-files`, APAC) | done — the API is stateless, the replica blocker is gone |
 | — | migrate `be/` + `fe/` to the v2 addresses | done — index and vault truncated, v2 e2e passed |
@@ -85,8 +88,9 @@ Contracts are **live on testnet**, and there are now **two pairs**. Addresses an
 evidence live in [`docs/deployments.md`](docs/deployments.md):
 
 ```
-# v2 (STE-35 + STE-36 + STE-41) — paid add-ons, Cancelled, upgradeable, organiser
-# allowlist, untimed finish. Interface: docs/specs/INTERFACE.md v2.2.0
+# v2 (STE-35 + STE-36 + STE-41 + STE-54 + STE-55) — paid add-ons, Cancelled, upgradeable,
+# organiser allowlist, untimed finish, event-wide bibs, raisable quota.
+# Interface: docs/specs/INTERFACE.md v2.4.0
 EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
 RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 
@@ -131,6 +135,28 @@ key, same address, existing events intact. **STE-41 did it again on RaceRecord**
 `record_finish_untimed` + a new event, zero storage change, same address, all 14 existing records
 read back identical. Since then a `Finished` record may have `finish_time_s == None` — the marker for
 "finished, no official time"; never render it as `0`.
+
+**STE-54 did it a third time on EventRegistry**: `DataKey::EventEntryCount` appended, same address,
+all 18 events and 30 categories read back. A **bib is now unique within its event and counts from
+1** — it used to be the category's `entered_count`, which made the first 10K entrant and the first
+5K entrant of one race both bib `0`. The distance is **not** in the number (a `category × 1000`
+scheme overflows at a thousand runners; one distance here holds 8,100), so `fe/` renders the number
+as it comes and shows the distance as a label and a colour. Events created **before** that upgrade
+were not migrated: they keep their per-distance numbers, their counter starts at 0, and `be/` keeps
+its duplicate-bib guard for exactly them.
+
+**STE-55 did it a fourth time, and added no storage key at all**: same address, all 20 events and 35
+categories read back. An organiser can now **raise** a sold-out distance's quota
+(`increase_quota`), because selling out in hours is the ordinary case here — Merdeka Run 2026 filled
+8,100 slots in a day and opened a second batch the next morning. Until then the only workaround was
+a duplicate category under a confusing name, which splits one distance into two in the roster and
+the results. The number **only ever goes up**: equal or smaller is `QuotaNotIncreased(19)`, because
+runners paid against a published figure and a shrink would leave `entered_count` above its own
+quota. So `quota` is no longer constant for the life of an event — do not cache it — while
+`entered_count` and the bib counter are untouched, and a second batch continues the race's
+numbering. One rule the chain **cannot** enforce: raising a published quota is a real change to what
+a runner bought, so the console must pair it with a signed announcement (STE-34). Never write that
+up as though the contract checks it.
 
 The price is one rule no compiler can enforce: **storage keys are append-only, forever** — never
 delete, rename or retype a `DataKey` variant, and never add a required field to a struct that is

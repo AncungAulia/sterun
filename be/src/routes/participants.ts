@@ -14,6 +14,9 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ChallengeStore } from "../auth.js";
+import { ContractRevertError } from "../chain/errors.js";
+import type { ChainRecord } from "../chain/decode.js";
+import type { ChainReader } from "../chain/reader.js";
 import { ApiError } from "../http/errors.js";
 import type { Gender, IdType, Vault } from "../vault.js";
 
@@ -79,11 +82,24 @@ const summaryResponse = {
 export interface VaultRouteDeps {
   vault: Vault;
   challenges: ChallengeStore;
+  /**
+   * What confirm checks the claimed token against. Without it confirm cannot
+   * know whose record a token is, so it refuses (503) rather than linking blind.
+   */
+  reader?: ChainReader;
+  /**
+   * How long confirm waits between re-reads of a token the chain does not show
+   * yet. The runner's wallet reports `enter` as landed from one RPC node and
+   * this service may ask another, a ledger behind. Injectable for tests.
+   */
+  recordRetryDelaysMs?: readonly number[];
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function participantRoutes(
   app: FastifyInstance,
-  { vault, challenges }: VaultRouteDeps,
+  { vault, challenges, reader, recordRetryDelaysMs = [1_000, 2_000] }: VaultRouteDeps,
 ): Promise<void> {
   /** Prove control of a Stellar account before touching the vault. */
   const authenticate = (request: FastifyRequest): Promise<string> =>
@@ -300,11 +316,54 @@ export async function participantRoutes(
           .send({ error: "forbidden", message: "this record belongs to another account" });
       }
 
-      const result = await vault.confirm(
-        request.params.id,
-        request.body.token_id,
-        request.body.enter_tx_hash,
-      );
+      const tokenId = request.body.token_id;
+      // Already linked to a different token: say so without asking the chain
+      // about a token this row will never be linked to.
+      if (summary.tokenId !== null && summary.tokenId !== tokenId) {
+        return reply.code(409).send({
+          error: "conflict",
+          message: `already confirmed as token_id ${summary.tokenId}`,
+        });
+      }
+
+      // The token id comes from the client, so check it is THIS entry's record
+      // before linking. Without this, a runner could point their own row at
+      // someone else's token: the roster would then hand the desk the wrong
+      // check-in secret for that runner, and whoever submitted the row could
+      // check them in. The participant hash is the strong check (its salt is
+      // this row's alone); event, category and owner make a mismatch explicit.
+      if (!reader) {
+        throw new ApiError(
+          503,
+          "chain-unavailable",
+          "this deployment cannot read the chain, so it cannot check the record being confirmed",
+        );
+      }
+      const record = await readRecordPatiently(reader, tokenId, recordRetryDelaysMs);
+      if (!record) {
+        throw new ApiError(
+          404,
+          "record-not-found",
+          `token ${tokenId} is not on chain; if enter has just landed, retry in a few seconds`,
+        );
+      }
+      const owner = await reader.ownerOf(tokenId);
+      if (
+        record.participantHash !== summary.participantHash ||
+        record.eventId !== summary.eventId ||
+        record.categoryId !== summary.categoryId ||
+        owner !== caller
+      ) {
+        request.log.warn({ tokenId }, "confirm refused: the token is not this entry's record");
+        throw new ApiError(
+          409,
+          "record-mismatch",
+          `token ${tokenId} is not the record entered for this submission: confirm with the ` +
+            "token_id your own enter transaction returned",
+        );
+      }
+
+      const result = await vault.confirm(request.params.id, tokenId, request.body.enter_tx_hash);
       return {
         participant_id: result.participantId,
         token_id: result.tokenId,
@@ -350,6 +409,30 @@ export async function participantRoutes(
   );
 
   /** Every failure mode of this router, mapped once. */
+}
+
+/**
+ * `record_of`, re-read a few times when the token does not exist yet.
+ *
+ * Only "does not exist" is retried. Any other failure (RPC down, a decode
+ * error) is thrown at once: waiting would not change it, and the caller should
+ * see a 5xx rather than a misleading "not on chain".
+ */
+async function readRecordPatiently(
+  reader: ChainReader,
+  tokenId: number,
+  delaysMs: readonly number[],
+): Promise<ChainRecord | null> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await reader.recordOf(tokenId);
+    } catch (error) {
+      if (!(error instanceof ContractRevertError) || !error.isNotFound) throw error;
+      const delay = delaysMs[attempt];
+      if (delay === undefined) return null;
+      await sleep(delay);
+    }
+  }
 }
 
 /** Exported so a test can assert no schema can express a PII field. */

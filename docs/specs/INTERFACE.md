@@ -1,6 +1,6 @@
-# INTERFACE — the FROZEN Sterun contracts (v2.2.0)
+# INTERFACE — the FROZEN Sterun contracts (v2.4.0)
 
-> **Status: FROZEN 2026-09-11 (v2.2 — the untimed finish in RaceRecord).**
+> **Status: FROZEN 2026-09-15 (v2.4 — an organiser can raise a sold-out quota).**
 > This document is handoff contract number 1 in `docs/SYSTEM_DESIGN.md` §9: the function
 > signatures and `#[contractevent]` layouts that **James** (backend/indexer) and **Ancung**
 > (web app, QR pass, scanner PWA) hold, so they can work in parallel without waiting for
@@ -9,6 +9,89 @@
 > Any change to a signature, an event layout, or an error code after this PR is merged requires:
 > **a new PR + approval from Axel (PM) + fable**, an entry in `docs/specs/CHANGELOG.md`, and
 > **regenerated TS bindings** (STE-14). Error codes are public ABI — **never renumber them**.
+
+## What changed from v2.3.0 (MINOR, additive)
+
+STE-55. A distance that sold out could not take another entrant, ever. `add_category` only creates
+and there is no `update_category`, so an organiser whose 10K filled in an afternoon had one move
+left — a second category under a confusing name, which splits one distance into two and corrupts the
+roster and every result built from it. v2.4 adds a way to say "second batch" honestly.
+
+| Change | Impact on clients |
+| --- | --- |
+| `increase_quota(event_id, category_id, new_quota)` new in C1 | additive |
+| New event: `QuotaIncreased` | additive — an indexer that does not know it simply does not index second batches |
+| New error code: `QuotaNotIncreased(19)` | additive — nothing renumbered |
+| **A category's `quota` can now change after it is created** | **read this** — see below |
+| No changed signature, no changed event layout, no new storage key | — |
+| Installed by `upgrade` at the **same** address (`CAPB6NQP…`) | no new address; existing events intact |
+
+Three things you must read before using this version:
+
+- **The quota only ever goes up.** `new_quota` must be strictly greater than the category's current
+  quota; equal or smaller reverts with `QuotaNotIncreased(19)`. That is the rule, not input
+  validation around it: runners paid against a published number, and a shrinkable quota would let an
+  organiser strand entrants who are already on chain — `entered_count` would sit above its own
+  `quota`, and `reserve_slot` would report `QuotaFull(5)` for a race that had been rewritten
+  underneath its runners. Shutting registration is `Closed`, and that is reversible; this is not.
+- **`quota` is no longer a constant, so do not cache it for the life of an event.** `CategoryData`
+  did not change shape and `entered_count` is untouched — what moved is that a client rendering
+  "312 / 500" may find the denominator larger on the next read. `QuotaIncreased` carries **both**
+  `previous` and `current`, so a client can show the second batch as a dated fact rather than
+  inferring one from a number that quietly moved between two of its own reads.
+- **The chain cannot tell you whether anyone was told.** A published quota is part of what a runner
+  saw when they paid, so raising it is a real change to what they bought — a bigger field, a busier
+  start pen. The console must pair every increase with a signed announcement (the STE-34 pattern).
+  That is an **application-level** rule: nothing in this contract enforces it, and no client should
+  be written as though something does.
+
+**Quota enforcement itself is unchanged.** `reserve_slot` still compares `entered_count` against
+`quota` per distance and still reverts `QuotaFull(5)` from exactly that comparison. The bib sequence
+is untouched too: `increase_quota` never reads `EventEntryCount`, so the entrants of a second batch
+continue the race's numbering instead of restarting it.
+
+There is deliberately **no status gate**. Raising the quota of a `Closed` event is precisely the
+second-batch flow — lift the cap, then re-open — and on a `Cancelled` or `Completed` event the write
+sells nothing anyway, because `reserve_slot` demands `Open`. A gate would add an error every client
+must handle in exchange for refusing a write with no effect. `add_category` takes the same position.
+
+## What changed from v2.2.0 (MINOR)
+
+STE-54. `reserve_slot` returned the category's `entered_count`, so a bib was a position **within a
+distance**, counting from **0**. The first 10K entrant and the first 5K entrant of one race were
+therefore both bib `0`: two runners at the same event wearing the same number, and an entry pass
+drawing a physical bib with a zero on it. v2.3 makes the bib a position **within the event**,
+counting from **1**.
+
+| Change | Impact on clients |
+| --- | --- |
+| **`reserve_slot` returns an event-wide number starting at 1** | **read this** — the signature, the types and the error list are all unchanged; what moved is the value |
+| `SlotReserved.seq` carries that number | layout untouched — same topics, same field; an indexer needs no change |
+| `RecordData.bib_no` / `RecordEntered.bib_no` carry it too | no C2 code change; C2's wasm is **not** rebuilt |
+| New storage key `DataKey::EventEntryCount(event_id)` | invisible to clients — `DataKey` is not part of this surface |
+| No new function, no new event, no new error code, no changed signature | — |
+| Installed by `upgrade` at the **same** address (`CAPB6NQP…`) | no new address; existing events intact |
+
+Three things you must read before using this version:
+
+- **The distance is not encoded in the number.** A scheme like `category_id * 1000 + n` caps a
+  distance at a thousand runners, and one distance here can hold tens of thousands (Merdeka Run 2026
+  fills 8,100 slots in a single distance). Bib `7` says "the seventh person who entered this race",
+  and nothing about which distance they entered. Render the distance as a label and a colour beside
+  the number, never as arithmetic on it.
+- **Events created before v2.3 keep the numbers they issued**, and there is no migration. Their
+  counter therefore starts at 0, so the first entry taken on such an event *after* the upgrade is
+  bib 1 — which one of its existing per-distance bibs may also be. Seeding the counter would mean
+  summing every category of the event inside `enter`, and an unbounded read loop on the path that
+  takes a runner's money is the worse failure. **A client that shows bibs for a pre-upgrade event
+  must not assume they are unique**; `be/` keeps its duplicate-bib guard for exactly those events.
+  Events created from v2.3 onwards cannot produce the collision at all.
+- **The bib is not the token id.** Token ids are global to RaceRecord and count from 0; bibs belong
+  to one race and count from 1. They coincide only on the first event ever run, and only by accident.
+
+**Quota is unchanged.** `entered_count` is still incremented per distance and `QuotaFull(5)` still
+fires from exactly the comparison it fired from before. The event counter numbers entrants; it gates
+nothing.
 
 ## What changed from v2.1.0 (MINOR, additive)
 
@@ -110,11 +193,19 @@ The artefacts used for this freeze:
 
 | Contract | Wasm | Wasm hash (sha256) | Size |
 | --- | --- | --- | ---: |
-| EventRegistry (C1, v2.1) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
+| EventRegistry (C1, v2.4) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | 31,770 B |
 | RaceRecord (C2, v2.2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
 
-EventRegistry did **not** change in v2.2 — its hash is exactly the one frozen at v2.1, and its
-address was not `upgrade`d.
+Each version moves exactly one of the two. EventRegistry did **not** change in v2.2 (its v2.1 hash
+stood, and its address was not `upgrade`d); RaceRecord does **not** change in v2.3 — `bib_no` carries
+a different number, but no C2 code produced it, so its hash is exactly the one frozen at v2.2 — and
+it does not change in v2.4 either, which touches C1 alone.
+
+> RaceRecord's `bib_no` field still carries the doc comment "the category sequence handed out by
+> `EventRegistry::reserve_slot`", which v2.3 makes wrong. Doc comments travel in the contract spec
+> and therefore in the wasm hash, so correcting that sentence would mean an `upgrade` transaction
+> against a live contract whose behaviour did not change. The table in §2.2 below is right; the code
+> comment is corrected at C2's next real wasm change.
 
 Artefacts that have been **replaced at the same address** through `upgrade` (the full history and
 its transactions are in `docs/deployments.md`):
@@ -122,14 +213,19 @@ its transactions are in `docs/deployments.md`):
 | | sha256 | Size |
 | --- | --- | ---: |
 | EventRegistry v2.0.0/v2.0.1 | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22,952 B |
+| EventRegistry v2.1.0/v2.2.0 | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
+| EventRegistry v2.3.0 | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
 | RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21,795 B |
 | RaceRecord v2.0.1/v2.1.0 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
 
-Two of those artefacts are also **committed**, each as the "before" of an upgrade test that deploys
-the genuinely live code, writes state with it, then replaces it with the current build:
-`22bb432e…` in `sc/contracts/event_registry/testdata/` (proves `DataKey::Organiser` was added
-safely) and `27749180…` in `sc/contracts/race_record/testdata/` (proves every record state the old
-code could write still decodes, and that `record_finish_untimed` works on records it minted).
+Four of those artefacts are also **committed**, each as the "before" of an upgrade test that
+deploys the genuinely live code, writes state with it, then replaces it with the current build:
+`22bb432e…`, `cf009033…` and `c8b5e82a…` in `sc/contracts/event_registry/testdata/` (the first
+proves `DataKey::Organiser` was added safely, the second that the per-distance bibs already on chain
+still decode once bibs become event-wide, the third that a sold-out category written by the running
+code takes a larger quota and sells again) and `27749180…` in
+`sc/contracts/race_record/testdata/` (proves every record state the old code could write still
+decodes, and that `record_finish_untimed` works on records it minted).
 
 The previously frozen v1 artefacts (still live at the v1 addresses, see `docs/deployments.md`):
 `61d85dd567f65b7ed61ea8282880af6413104af3c8bbd2bbaec3e55f73578474` (C1, 14,964 B) and
@@ -140,7 +236,7 @@ Stellar CLI:
 
 ```bash
 shasum -a 256 sc/target/wasm32v1-none/release/event_registry.wasm
-# cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0
+# 33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890
 ```
 
 The toolchain that produced them: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`,
@@ -173,11 +269,12 @@ Every `Result<T, Error>` means: on success it returns `T`, on failure it **rever
 | `remove_organiser` | `organiser: Address` | `Result<(), Error>` | the stored **`Admin`** | `NotInitialized(1)`, `OrganiserNotFound(17)` |
 | `create_event` | `organiser: Address, name: String, metadata_hash: BytesN<32>, uri: String, starts_at: u64` | `Result<u32, Error>` (event_id) | the **`organiser`** (the argument), which must be on the admin's allowlist | `NotInitialized(1)`, `NotAllowlistedOrganiser(18)` |
 | `add_category` | `event_id: u32, code: Symbol, distance_m: u32, quota: u32, price_usdc: i128` | `Result<u32, Error>` (category_id) | **that event's organiser** (from storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)`, `InvalidDistance(10)` |
+| `increase_quota` | `event_id: u32, category_id: u32, new_quota: u32` | `Result<(), Error>` | **that event's organiser** (from storage) | `EventNotFound(2)`, `CategoryNotFound(3)`, `QuotaNotIncreased(19)` |
 | `add_addon` | `event_id: u32, code: Symbol, price_usdc: i128, quota: u32` | `Result<u32, Error>` (addon_id) | **that event's organiser** (from storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)` |
 | `set_event_status` | `event_id: u32, status: EventStatus` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `InvalidStatus(11)` |
 | `add_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `ScannerAlreadyAdded(12)` |
 | `remove_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `ScannerNotFound(13)` |
-| `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (bib seq) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
+| `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (the bib: unique in the event, from 1) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
 | `reserve_addon` | `event_id: u32, addon_id: u32` | `Result<i128, Error>` (the price charged) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `AddOnNotFound(14)`, `AddOnQuotaFull(15)` |
 | `get_admin` | — | `Result<Address, Error>` | — (view) | `NotInitialized(1)` |
 | `get_race_record` | — | `Result<Address, Error>` | — (view) | `RaceRecordNotSet(6)` |
@@ -206,6 +303,10 @@ Important notes for D2/D3:
 - The quota check and the increment happen **inside one invocation**, so two simultaneous entries
   cannot both take the last slot; the second reads the already-incremented `entered_count` and
   reverts with `QuotaFull(5)`. The same holds for `reserve_addon` and `AddOnQuotaFull(15)`.
+- **`reserve_slot` returns a bib that is unique within the event and starts at 1** (v2.3). Every
+  distance of an event draws from one sequence, so no two runners at a race share a number and
+  nobody is given `0`. The number says nothing about the distance — see "What changed from v2.2.0"
+  above for why, and for what a pre-v2.3 event does instead.
 - **`reserve_addon` returns the PRICE, not a sequence number.** Its caller (`RaceRecord.enter`)
   needs the price in order to charge, and reading it through a second call would mean the amount
   charged and the unit taken come from two different reads. The unit's sequence number is still
@@ -229,6 +330,25 @@ Important notes for D2/D3:
   "create event" form. A client that skips it still gets a revert, not an event.
 - **The allowlist starts empty after an upgrade** (see "What changed from v2.0.1"), and
   `remove_organiser` revokes nothing from events already created.
+- **`increase_quota` only ever raises the number** (v2.4). `new_quota` must be strictly greater
+  than the category's current `quota`; equal and smaller both revert with `QuotaNotIncreased(19)`,
+  under one code because they are one rule. A published quota is what runners paid against, and a
+  shrink would put `entered_count` above its own `quota` — `reserve_slot` would then report
+  `QuotaFull(5)` for a race that had been rewritten underneath entrants who are already on chain.
+  Stopping registration is `set_event_status(Closed)`, which is reversible; this is not. The
+  function reads and writes nothing else: `entered_count`, the event's bib counter, the price, the
+  code and the distance are all untouched, and no storage key was added for it.
+- **A client must not treat `quota` as fixed for the life of an event** (v2.4). It could not change
+  before; it can now. `QuotaIncreased` carries `previous` **and** `current` precisely so that a
+  second batch reads as a dated fact rather than as a denominator that moved between two of a
+  client's own reads.
+- **Raising a quota is an application-level promise as well as a write.** The contract cannot check
+  whether the organiser announced the second batch, and a bigger field is a real change to what a
+  runner bought. The console pairs the increase with a signed announcement (STE-34). Nothing here
+  enforces that, and no client should be written as though it does.
+- **`increase_quota` has no status gate**, on purpose. A `Closed` event is exactly where the
+  second-batch flow puts it — lift the cap, then re-open — and on a `Cancelled` or `Completed` event
+  the larger number sells nothing, because `reserve_slot` requires `Open`.
 - **`upgrade` replaces this contract's wasm in place.** The address, storage and balances do not
   change; only the code does. It takes effect **after** the invocation finishes, so a storage
   migration needs a second call. The hash must already be uploaded to the ledger. See §4.
@@ -248,9 +368,9 @@ EventData {
 CategoryData {
   code: Symbol,
   distance_m: u32,
-  entered_count: u32,   // also the next bib sequence number
+  entered_count: u32,   // slots taken in THIS distance; the quota counter, not the bib (v2.3)
   price_usdc: i128,     // 7-decimal representation
-  quota: u32,
+  quota: u32,           // raisable, never lowerable, via increase_quota (v2.4)
 }
 
 AddOnData {
@@ -297,13 +417,14 @@ alphabetically**, not in declaration order), and an **empty** `ScMap` when every
 | --- | --- | --- |
 | `EventCreated` | `"event_created"`, `event_id: u32`, `organiser: Address` | *(none)* |
 | `CategoryAdded` | `"category_added"`, `event_id: u32` | `category_id: u32`, `price: i128`, `quota: u32` |
+| `QuotaIncreased` | `"quota_increased"`, `event_id: u32`, `category_id: u32` | `current: u32`, `previous: u32` |
 | `AddOnAdded` | `"add_on_added"`, `event_id: u32` | `addon_id: u32`, `price: i128`, `quota: u32` |
 | `EventStatusChanged` | `"event_status_changed"`, `event_id: u32` | `status: EventStatus` |
 | `ScannerAdded` | `"scanner_added"`, `event_id: u32`, `scanner: Address` | *(none)* |
 | `ScannerRemoved` | `"scanner_removed"`, `event_id: u32`, `scanner: Address` | *(none)* |
 | `OrganiserAdded` | `"organiser_added"`, `organiser: Address` | *(none)* |
 | `OrganiserRemoved` | `"organiser_removed"`, `organiser: Address` | *(none)* |
-| `SlotReserved` | `"slot_reserved"`, `event_id: u32`, `category_id: u32` | `seq: u32` |
+| `SlotReserved` | `"slot_reserved"`, `event_id: u32`, `category_id: u32` | `seq: u32` (the bib — event-wide and from 1 since v2.3; layout unchanged) |
 | `AddOnReserved` | `"add_on_reserved"`, `event_id: u32`, `addon_id: u32` | `price: i128`, `seq: u32` |
 | `ContractUpgraded` | `"contract_upgraded"`, `new_wasm_hash: BytesN<32>` | *(none)* |
 
@@ -328,6 +449,13 @@ topic for a per-event page. `CategoryAdded` deliberately does **not** make `cate
 an event has few categories, so filtering per event is enough and a topic slot is saved. `AddOnAdded`
 follows the same pattern; `AddOnReserved` **does** make `addon_id` a topic, because the question
 there is "how many units of this add-on sold", not "what add-ons does this event have".
+
+`QuotaIncreased` **does** make `category_id` a topic, unlike `CategoryAdded`, because the question
+it answers is per distance — "did the 10K open a second batch" — and an indexer wants that page
+without decoding every category event of the race. Both numbers travel in the data: `current` alone
+would leave a consumer diffing against its own last read, which reports what the indexer saw rather
+than what the chain did. Note the alphabetical data order, `current` before `previous`, which is the
+`ScMap` wire order and not the declaration order.
 
 `OrganiserAdded` / `OrganiserRemoved` deliberately do **not** carry an `event_id`: the allowlist is
 contract-wide, and the grant happens before its recipient has an event to name. An indexer wanting to
@@ -360,6 +488,7 @@ that nobody has to guess.
 | 16 | `OrganiserAlreadyAdded` | `add_organiser` for an address already on the allowlist |
 | 17 | `OrganiserNotFound` | `remove_organiser` for an address that is not on the allowlist |
 | 18 | `NotAllowlistedOrganiser` | `create_event` from an address the admin has not allowlisted |
+| 19 | `QuotaNotIncreased` | `increase_quota` with a `new_quota` that is not strictly greater than the category's current `quota` |
 
 ---
 
@@ -437,7 +566,7 @@ Important notes for D2/D3:
 ```text
 RecordData {
   addon_ids: Vec<u32>,           // add-ons bought by this entry, in reservation order
-  bib_no: u32,                   // the category seq from reserve_slot
+  bib_no: u32,                   // the bib from reserve_slot: unique in the event, from 1 (v2.3)
   category_id: u32,
   claimed_at: Option<u64>,
   entered_at: u64,
@@ -655,6 +784,7 @@ changes, no regenerated bindings.
 | STE-33 | Testnet deploy | wasm hashes + constructor parameters (§0, §5) |
 | STE-35 | Paid add-ons (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
 | STE-41 | Untimed finish | `record_finish_untimed`, `RecordFinishedUntimed`, and `finish_time_s == None` on a `Finished` record — consumed by the `be/` indexer + CSV (James) and the `fe/` profile (Ancung) |
+| STE-55 | Raising a sold-out quota | `increase_quota`, `QuotaIncreased`, `QuotaNotIncreased(19)` — consumed by the `be/` indexer (James) and the `fe/` console's "add capacity" flow, which must pair it with a signed announcement (Ancung) |
 
 ---
 

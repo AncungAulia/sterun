@@ -202,7 +202,10 @@ export async function upsertCategory(
      ON CONFLICT (event_id, category_id) DO UPDATE
        SET code = EXCLUDED.code,
            distance_m = EXCLUDED.distance_m,
-           quota = EXCLUDED.quota,
+           -- A quota only ever rises on chain (v2.4), so the index never lowers
+           -- one either: a category_added replayed after a quota_increased must
+           -- not put the original number back.
+           quota = GREATEST(categories.quota, EXCLUDED.quota),
            price_stroops = EXCLUDED.price_stroops,
            -- Never goes backwards: a hydration that raced a fresh slot_reserved
            -- would otherwise hand a bib number out twice.
@@ -230,22 +233,124 @@ export async function upsertCategory(
  *
  * `GREATEST` again — replaying an old page must not lower a counter.
  */
-export async function applySlotReserved(
+/**
+ * Note that a slot was taken. Deliberately does NOT touch `entered_count`.
+ *
+ * It used to set `entered_count = seq + 1`, which was right while `seq` was the
+ * category's count before the increment. Since v2.3 (STE-54) `seq` is the bib,
+ * unique across the whole EVENT and starting at 1, so three 5K entries then one
+ * 10K entry made the 10K read as 5 entrants. Production showed categories above
+ * their own quota before this was found. The count now comes from
+ * {@link recountCategory}, which is right under both meanings.
+ */
+export async function touchCategory(
   db: Queryable,
   eventId: number,
   categoryId: number,
-  seq: number,
   at: Provenance,
 ): Promise<boolean> {
   const { rowCount } = await db.query(
     `UPDATE categories
-        SET entered_count = GREATEST(entered_count, $3),
+        SET last_ledger = GREATEST(last_ledger, $3),
+            updated_at = now()
+      WHERE event_id = $1 AND category_id = $2`,
+    [eventId, categoryId, at.ledger],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
+ * `entered_count` = the records the index holds for this category.
+ *
+ * Exact rather than a running total: `enter` is the only caller of
+ * `reserve_slot` and mints exactly one record per slot, atomically, so the two
+ * numbers are the same fact. Counting is idempotent under replay, and it heals a
+ * row a bug once inflated instead of preserving it with GREATEST.
+ */
+export async function recountCategory(
+  db: Queryable,
+  eventId: number,
+  categoryId: number,
+): Promise<void> {
+  await db.query(
+    `UPDATE categories c
+        SET entered_count = (SELECT count(*) FROM records r
+                              WHERE r.event_id = c.event_id AND r.category_id = c.category_id),
+            updated_at = now()
+      WHERE c.event_id = $1 AND c.category_id = $2`,
+    [eventId, categoryId],
+  );
+}
+
+/** v2.4 `quota_increased`: raise, never lower. False when the category is not indexed. */
+export async function raiseCategoryQuota(
+  db: Queryable,
+  eventId: number,
+  categoryId: number,
+  quota: number,
+  at: Provenance,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE categories
+        SET quota = GREATEST(quota, $3),
             last_ledger = GREATEST(last_ledger, $4),
             updated_at = now()
       WHERE event_id = $1 AND category_id = $2`,
-    [eventId, categoryId, seq + 1, at.ledger],
+    [eventId, categoryId, quota, at.ledger],
   );
   return (rowCount ?? 0) > 0;
+}
+
+/** One quota rise, as a dated fact (STE-56). */
+export interface QuotaIncreaseRow {
+  categoryId: number;
+  previous: number;
+  current: number;
+  /** Unix seconds of the ledger close. */
+  at: bigint;
+  ledger: number;
+  txHash: string;
+}
+
+/**
+ * Every quota rise in an event, oldest first.
+ *
+ * Read from `chain_events` at query time, the same choice as a scanner's
+ * `added_at`: that raw log is what a rebuild keeps, so the history survives a
+ * rebuild with no second copy to drift. Contract state holds only the current
+ * quota, so a rise from before this index started polling is not here.
+ */
+export async function listQuotaIncreases(
+  db: Queryable,
+  eventId: number,
+): Promise<QuotaIncreaseRow[]> {
+  const { rows } = await db.query<{
+    category_id: number;
+    previous: number;
+    current: number;
+    at: string;
+    ledger: number;
+    tx_hash: string;
+  }>(
+    `SELECT (payload->>'categoryId')::int AS category_id,
+            (payload->>'previous')::int AS previous,
+            (payload->>'current')::int AS current,
+            floor(extract(epoch FROM ledger_closed_at))::bigint::text AS at,
+            ledger,
+            tx_hash
+       FROM chain_events
+      WHERE name = 'quota_increased' AND (payload->>'eventId')::int = $1
+      ORDER BY ledger, id`,
+    [eventId],
+  );
+  return rows.map((r) => ({
+    categoryId: r.category_id,
+    previous: r.previous,
+    current: r.current,
+    at: BigInt(r.at),
+    ledger: r.ledger,
+    txHash: r.tx_hash,
+  }));
 }
 
 export interface RecordUpsert extends ChainRecord {
@@ -775,6 +880,25 @@ export async function listRecordsByEvent(
     `SELECT ${RECORD_COLUMNS} FROM records WHERE event_id = $1
       ORDER BY bib_no, token_id LIMIT $2 OFFSET $3`,
     [eventId, opts.limit, opts.offset],
+  );
+  return rows.map(toRecordRow);
+}
+
+/**
+ * The records for exactly these token ids, in token order.
+ *
+ * For the roster, which starts from the vault's confirmed tokens. Asking for
+ * "the event's records, up to N" instead silently dropped every entry past N
+ * in a big race and reported them as not indexed.
+ */
+export async function listRecordsByTokenIds(
+  db: Queryable,
+  tokenIds: readonly number[],
+): Promise<RecordRow[]> {
+  if (tokenIds.length === 0) return [];
+  const { rows } = await db.query<RawRecordRow>(
+    `SELECT ${RECORD_COLUMNS} FROM records WHERE token_id = ANY($1::int[]) ORDER BY token_id`,
+    [tokenIds],
   );
   return rows.map(toRecordRow);
 }
