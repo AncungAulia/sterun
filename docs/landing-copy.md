@@ -13,7 +13,7 @@ salah satunya salah dan harus disamakan di commit yang sama.
 | --- | --- | --- | --- | --- | --- |
 | 1 | [Hero](#hero) | `#top` | ✅ | final | ✅ |
 | 2 | [Problem](#problem) | `#problem` | ✅ | **draft** | ✅ |
-| 3 | [How it works](#how-it-works) | `#how-it-works` | ✅ | final | — |
+| 3 | [How it works](#how-it-works) | `#how-it-works` | ✅ | final | ✅ |
 | 4 | [Product preview](#product-preview) | `#product` | — | **draft** | — |
 | 5 | [Why Stellar](#why-stellar) | `#why-stellar` | ✅ | final, 1 angka kurang | — |
 | 6 | [Closing CTA](#closing-cta) | — | — | **draft** | — |
