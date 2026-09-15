@@ -152,7 +152,7 @@ const typeScale: [string, string, string][] = [
   ["text-2xl", "28px", "How it works"],
   ["text-xl", "22px", "Jakarta Night Run 10K"],
   ["text-lg", "18px", "A bib cannot be resold, because the record has no transfer function."],
-  ["text-base", "16px", "Enter, claim your racepack, finish, verify. Four steps, one record."],
+  ["text-base", "16px", "Enter, claim your race pack, finish, verify. Four steps, one record."],
   ["text-sm", "14px", "Updated 2 hours ago · testnet"],
   ["text-xs", "12px", "Personal data never touches the chain."],
 ];
@@ -166,7 +166,7 @@ const radii: [string, string, string][] = [
 
 const badges: [string, string][] = [
   ["Entered", "bg-teal-50 text-teal-700 border-teal-200"],
-  ["Racepack claimed", "bg-n-100 text-n-700 border-n-300"],
+  ["Race pack claimed", "bg-n-100 text-n-700 border-n-300"],
   ["Finished", "bg-success-surface text-success border-success-border"],
   ["DNF", "bg-warning-surface text-warning border-warning-border"],
 ];
@@ -380,7 +380,7 @@ export default function TokenPreview() {
             <div className="rounded-lg border border-n-200 bg-white p-4 shadow-card">
               <div className="text-xs font-semibold text-teal">font-sans</div>
               <div className="mt-1 text-xs text-n-500">Poppins roman 400 — body</div>
-              <div className="mt-3 text-xl text-ink">Claim your racepack</div>
+              <div className="mt-3 text-xl text-ink">Claim your race pack</div>
             </div>
             <div className="rounded-lg border border-n-200 bg-white p-4 shadow-card">
               <div className="text-xs font-semibold text-teal">.numeric</div>
@@ -580,7 +580,7 @@ export default function TokenPreview() {
               <div className="text-7xl leading-none text-white">✕</div>
               <div className="heading-hero mt-3 text-5xl uppercase text-white">DO NOT GIVE</div>
               <div className="numeric mt-4 text-2xl font-medium text-white">Bib 0118 · 5K</div>
-              <div className="mt-1 text-base text-white/90">Racepack already claimed 08:14</div>
+              <div className="mt-1 text-base text-white/90">Race pack already claimed 08:14</div>
             </div>
           </div>
 
