@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sterun runner profile (STE-23)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Mockups for STE-23, the public runner profile that STE-24 is built from.
+   Every colour, size, radius and duration here is a token from tokens.css,
+   which is generated from landing-page/app/tokens.css. Nothing in this file
+   invents a hex, a font name or a raw size. */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+body { background: var(--color-n-200); color: var(--color-ink); font-family: var(--font-sans); padding: 40px 24px 80px; }
+.board { max-width: 1900px; margin: 0 auto; }
+.board > header { margin-bottom: 32px; }
+.board h1 { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-2xl); }
+.board p.lede { color: var(--color-n-600); font-size: var(--text-sm); margin-top: 6px; max-width: 74ch; }
+h2.group { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-xl); margin: 44px 0 4px; }
+p.groupNote { color: var(--color-n-600); font-size: var(--text-sm); margin-bottom: 20px; max-width: 80ch; }
+.row { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+figure { width: 390px; }
+figure.wide { width: 1100px; }
+figure.tall { width: 820px; }
+figcaption { margin-top: 10px; font-size: var(--text-sm); color: var(--color-n-600); }
+figcaption b { display: block; color: var(--color-ink); font-weight: 500; }
+figcaption code { font-size: var(--text-xs); color: var(--color-n-500); }
+.device { width: 390px; height: 844px; border-radius: var(--radius-lg); overflow: hidden; position: relative;
+  background: var(--color-paper); box-shadow: var(--shadow-lifted); }
+.device--wide { width: 1100px; height: 800px; }
+.device--tall { width: 820px; height: 1300px; }
+
+/* --- shared furniture ---------------------------------------------------- */
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+.statusbar { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; font-size: var(--text-xs); color: var(--color-n-500); }
+.topbar { flex: none; height: 56px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; border-bottom: 1px solid var(--color-n-200); }
+.wordmark { font-family: var(--font-hero); font-weight: 700; font-size: var(--text-xl); letter-spacing: .02em; }
+.topbar__note { font-size: var(--text-xs); color: var(--color-n-600); }
+.body { flex: 1; overflow: hidden; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.numeric { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-n-600); font-size: var(--text-sm); }
+
+/* A label above its value, never two facts joined by a glyph. Same rule as the
+   race-day board: a reader looking for one of three things should be able to
+   land on it without reading the other two.
+
+   Columns of equal width spanning the whole card, with the last one aligned
+   right, so the row meets both edges instead of bunching at the left and
+   trailing off. The two rows are shared through subgrid, which means a long
+   label wrapping to two lines lifts the whole label row and leaves every value
+   still sitting on one line together. */
+.metaRow { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(max-content, 1fr);
+  grid-template-rows: auto auto; column-gap: 16px; row-gap: 3px; }
+.metaItem { display: grid; grid-template-rows: subgrid; grid-row: span 2; gap: 3px; min-width: 0; }
+.metaItem:last-child { text-align: right; }
+.metaLabel { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; color: var(--color-n-600); }
+.metaValue { font-size: var(--text-base); }
+.metaValue--lg { font-size: var(--text-xl); font-weight: 600; }
+.metaValue--none { color: var(--color-n-600); font-size: var(--text-sm); }
+/* The raw field is an annotation for whoever implements this, not something a
+   runner reads. At --text-base it carried the same weight as the finish time,
+   which put the footnote and the headline on one level. */
+.metaValue--code { font-size: var(--text-sm); color: var(--color-n-700); }
+
+/* State never rests on colour alone: a word, an icon shape, and only then a
+   tint. Measured on the race-day board, the green and the red in this palette
+   sit 1.26:1 apart, which is nothing to a volunteer in the sun or to anyone
+   colour blind. The same rule applies here even though nobody is in a hurry. */
+.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-sm);
+  padding: 4px 10px; font-size: var(--text-xs); font-weight: 500; white-space: nowrap; }
+.chip svg { flex: none; }
+.chip--entered { background: var(--color-teal-50); color: var(--color-teal-700); }
+.chip--claimed { background: var(--color-n-100); color: var(--color-n-700); }
+.chip--finished { background: var(--color-success-surface); color: var(--color-success); }
+.chip--dnf { background: var(--color-danger-surface); color: var(--color-danger); }
+.chip--cancelled { background: var(--color-warning-surface); color: var(--color-warning); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px;
+  border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 500; border: 0; font-family: inherit;
+  background: var(--color-teal); color: var(--color-paper); }
+.btn--ghost { background: transparent; color: var(--color-ink); border: 1px solid var(--color-n-300); }
+.btn--block { width: 100%; }
+.btn[disabled] { background: var(--color-n-200); color: var(--color-n-600); }
+
+/* --- the address head ---------------------------------------------------- */
+.who { display: flex; flex-direction: column; gap: 12px; }
+.who__kicker { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; color: var(--color-n-600); }
+.who__addr { display: flex; align-items: center; gap: 10px; }
+.who__addrText { font-family: var(--font-hero); font-weight: 700; font-size: var(--text-2xl); letter-spacing: .01em; }
+.iconBtn { width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--color-n-300);
+  background: transparent; display: grid; place-items: center; color: var(--color-n-600); }
+.who__what { font-size: var(--text-sm); color: var(--color-n-600); }
+
+/* --- a record card ------------------------------------------------------- */
+.rec { background: var(--color-paper); border: 1px solid var(--color-n-200); border-radius: var(--radius-lg);
+  padding: 16px; display: flex; flex-direction: column; gap: 14px; box-shadow: var(--shadow-card); }
+.rec--flat { box-shadow: none; }
+.rec__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.rec__event { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-lg); }
+.rec__where { font-size: var(--text-sm); color: var(--color-n-600); margin-top: 2px; }
+.rec__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-top: 1px solid var(--color-n-200); padding-top: 12px; }
+.rec__prove { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 0; padding: 0;
+  font: inherit; font-size: var(--text-sm); color: var(--color-teal); font-weight: 500; }
+.rec__src { font-size: var(--text-xs); color: var(--color-n-600); }
+.rec--cancelled { border-color: var(--color-warning-border); }
+
+/* --- the verify block ---------------------------------------------------- */
+.prove { border-top: 1px solid var(--color-n-200); padding-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.prove__title { font-size: var(--text-base); font-weight: 500; }
+/* The promise has to be visible, not just asserted. This panel holds the
+   sentence that explains why nothing typed here can leave the page, and it sits
+   above the first field rather than under the button. */
+.prove__pledge { background: var(--color-teal-50); border-radius: var(--radius-md); padding: 12px;
+  font-size: var(--text-sm); color: var(--color-teal-800); display: flex; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; color: var(--color-n-600); }
+.field .input { height: 48px; border: 1px solid var(--color-n-300); border-radius: var(--radius-md); background: var(--color-n-50);
+  display: flex; align-items: center; padding: 0 12px; font-size: var(--text-base); }
+.field .input--empty { color: var(--color-n-600); }
+.field .input--salt { font-size: var(--text-sm); letter-spacing: .02em; }
+.field .hint { font-size: var(--text-xs); color: var(--color-n-600); }
+.field .hint strong { color: var(--color-n-700); font-weight: 500; }
+.hashLine { background: var(--color-n-100); border-radius: var(--radius-md); padding: 10px 12px; display: flex;
+  flex-direction: column; gap: 2px; }
+.hashLine__label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; color: var(--color-n-600); }
+.hashLine__value { font-size: var(--text-sm); word-break: break-all; }
+.verdict { border-radius: var(--radius-md); padding: 14px; display: flex; gap: 12px; }
+.verdict--yes { background: var(--color-success-surface); border: 1px solid var(--color-success-border); color: var(--color-success); }
+.verdict--no { background: var(--color-danger-surface); border: 1px solid var(--color-danger-border); color: var(--color-danger); }
+.verdict b { display: block; font-size: var(--text-base); font-weight: 600; }
+.verdict p { font-size: var(--text-sm); color: var(--color-n-700); margin-top: 4px; }
+
+/* --- the nothing-to-show screens ----------------------------------------- */
+.blank { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  text-align: center; padding: 24px; }
+.blank__icon { width: 64px; height: 64px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--color-n-100); color: var(--color-n-500); }
+.blank__title { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-xl); }
+.blank__body { font-size: var(--text-sm); color: var(--color-n-600); max-width: 34ch; }
+.blank__body .addr { font-size: var(--text-xs); color: var(--color-n-700); word-break: break-all; }
+
+/* Skeletons carry the shape of what is coming, so the page does not jump when
+   it arrives. No shimmer: it is decoration on a screen nobody is waiting on. */
+.sk { background: var(--color-n-200); border-radius: var(--radius-sm); }
+.sk--line { height: 12px; }
+.sk--title { height: 20px; }
+
+/* --- the desktop view ---------------------------------------------------- */
+.wideScreen { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--color-n-100); }
+.wideBody { flex: 1; overflow: hidden; padding: 28px 40px; display: grid; grid-template-columns: 300px 1fr; gap: 40px; }
+.wideList { display: flex; flex-direction: column; gap: 16px; }
+.wideAside { display: flex; flex-direction: column; gap: 22px; }
+.asideBlock { display: flex; flex-direction: column; gap: 6px; }
+.asideBlock h4 { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; color: var(--color-n-600); font-weight: 500; }
+.asideBlock p { font-size: var(--text-sm); color: var(--color-n-600); }
+.asideBlock .big { font-family: var(--font-hero); font-weight: 700; font-size: var(--text-3xl); }
+
+/* --- the states board ---------------------------------------------------- */
+.statesWrap { position: absolute; inset: 0; padding: 24px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.stateNote { font-size: var(--text-sm); color: var(--color-n-600); }
+.stateNote b { color: var(--color-ink); font-weight: 500; }
+.stateNote .lit { color: var(--color-n-800); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="board">
+  <header>
+    <h1>Runner profile</h1>
+    <p class="lede">STE-23, the design STE-24 is built from. A public page at <code>/runner/&lt;address&gt;</code> that reads a runner's whole race history straight from the contract, with no wallet, no login and no account. Twelve artboards: the page, a record in every state it can be in, the block that proves a record belongs to a person, and the four screens where there is nothing to list.</p>
+  </header>
+
+  <h2 class="group">The page</h2>
+  <p class="groupNote">A record is a card, not a table row. A table at 390px either scrolls sideways or shrinks the finish time to nothing, and the finish time is the reason anybody opened this page. The address is the heading because that is what the URL is; a name would be a claim this page cannot check.</p>
+  <div class="row">
+
+    <figure>
+      <div class="device" id="p1">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="topbar">
+            <span class="wordmark">STERUN</span>
+            <span class="topbar__note">No account needed</span>
+          </div>
+          <div class="body">
+            <div class="who">
+              <span class="who__kicker">Race record</span>
+              <div class="who__addr">
+                <span class="who__addrText numeric">GA5CCS…EHNYP</span>
+                <button class="iconBtn" type="button" aria-label="Copy the full address">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                </button>
+              </div>
+              <p class="who__what">Every race this address has entered, read from the Stellar testnet.</p>
+            </div>
+
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Races</span><span class="metaValue metaValue--lg numeric">3</span></div>
+              <div class="metaItem"><span class="metaLabel">Finished</span><span class="metaValue metaValue--lg numeric">2</span></div>
+              <div class="metaItem"><span class="metaLabel">First race</span><span class="metaValue metaValue--lg">Jul 2026</span></div>
+            </div>
+
+            <article class="rec">
+              <div class="rec__head">
+                <div>
+                  <h3 class="rec__event">Merdeka Run 2026</h3>
+                  <p class="rec__where">Jakarta, 27 September 2026</p>
+                </div>
+                <span class="chip chip--finished">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                  Finished
+                </span>
+              </div>
+              <div class="metaRow">
+                <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+                <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">128</span></div>
+                <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue numeric">1:52:09</span></div>
+              </div>
+              <div class="rec__foot">
+                <button class="rec__prove" type="button">
+                  Prove this record is yours
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+                </button>
+                <span class="rec__src">Ledger 59,072,879</span>
+              </div>
+            </article>
+
+            <article class="rec">
+              <div class="rec__head">
+                <div>
+                  <h3 class="rec__event">Kupang Coastal Half</h3>
+                  <p class="rec__where">Kupang, 16 August 2026</p>
+                </div>
+                <span class="chip chip--finished">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                  Finished
+                </span>
+              </div>
+              <div class="metaRow">
+                <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">21K</span></div>
+                <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">41</span></div>
+                <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">No official time</span></div>
+              </div>
+              <div class="rec__foot">
+                <button class="rec__prove" type="button">
+                  Prove this record is yours
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+                </button>
+                <span class="rec__src">Ledger 58,914,220</span>
+              </div>
+            </article>
+
+            <article class="rec">
+              <div class="rec__head">
+                <div>
+                  <h3 class="rec__event">Sterun Demo Run 2026</h3>
+                  <p class="rec__where">Yogyakarta, 12 July 2026</p>
+                </div>
+                <span class="chip chip--claimed">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg>
+                  Race pack collected
+                </span>
+              </div>
+              <div class="metaRow">
+                <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">5K</span></div>
+                <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">7</span></div>
+                <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">Not yet</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>P1 The page on a phone</b>Three facts per card and no more: distance, bib, finish time. The second card is the case that breaks a naive build. Its state is <code>Finished</code> with <code>finish_time_s: None</code>, so the value slot reads <b>No official time</b> in the same position a time would sit. Rendering that as <code>0:00</code> would be a lie about somebody's race.</figcaption>
+    </figure>
+
+    <figure class="wide">
+      <div class="device device--wide" id="p2">
+        <div class="wideScreen">
+          <div class="topbar" style="background: var(--color-paper)">
+            <span class="wordmark">STERUN</span>
+            <span class="topbar__note">No account needed</span>
+          </div>
+          <div class="wideBody">
+            <div class="wideAside">
+              <div class="who">
+                <span class="who__kicker">Race record</span>
+                <div class="who__addr">
+                  <span class="who__addrText numeric">GA5CCS…EHNYP</span>
+                  <button class="iconBtn" type="button" aria-label="Copy the full address">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="asideBlock">
+                <h4>Races</h4>
+                <span class="big numeric">3</span>
+              </div>
+              <div class="asideBlock">
+                <h4>Finished</h4>
+                <span class="big numeric">2</span>
+              </div>
+              <div class="asideBlock">
+                <h4>Where this comes from</h4>
+                <p>Read live from RaceRecord on the Stellar testnet, contract <span class="numeric">CCVW7W…A6NW</span>. Nothing on this page is stored by Sterun.</p>
+              </div>
+            </div>
+
+            <div class="wideList">
+              <article class="rec rec--flat">
+                <div class="rec__head">
+                  <div>
+                    <h3 class="rec__event">Merdeka Run 2026</h3>
+                    <p class="rec__where">Jakarta, 27 September 2026</p>
+                  </div>
+                  <span class="chip chip--finished">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                    Finished
+                  </span>
+                </div>
+                <div class="metaRow">
+                  <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+                  <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">128</span></div>
+                  <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue numeric">1:52:09</span></div>
+                  <div class="metaItem"><span class="metaLabel">Entered</span><span class="metaValue numeric">14 Aug 2026</span></div>
+                  <div class="metaItem"><span class="metaLabel">Race pack collected</span><span class="metaValue numeric">26 Sep 2026</span></div>
+                </div>
+                <div class="rec__foot">
+                  <button class="rec__prove" type="button">
+                    Prove this record is yours
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+                  </button>
+                  <span class="rec__src">Ledger 59,072,879</span>
+                </div>
+              </article>
+
+              <article class="rec rec--flat">
+                <div class="rec__head">
+                  <div>
+                    <h3 class="rec__event">Kupang Coastal Half</h3>
+                    <p class="rec__where">Kupang, 16 August 2026</p>
+                  </div>
+                  <span class="chip chip--finished">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                    Finished
+                  </span>
+                </div>
+                <div class="metaRow">
+                  <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">21K</span></div>
+                  <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">41</span></div>
+                  <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">No official time</span></div>
+                  <div class="metaItem"><span class="metaLabel">Entered</span><span class="metaValue numeric">2 Jul 2026</span></div>
+                  <div class="metaItem"><span class="metaLabel">Race pack collected</span><span class="metaValue numeric">15 Aug 2026</span></div>
+                </div>
+                <div class="rec__foot">
+                  <button class="rec__prove" type="button">
+                    Prove this record is yours
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+                  </button>
+                  <span class="rec__src">Ledger 58,914,220</span>
+                </div>
+              </article>
+
+              <article class="rec rec--flat">
+                <div class="rec__head">
+                  <div>
+                    <h3 class="rec__event">Sterun Demo Run 2026</h3>
+                    <p class="rec__where">Yogyakarta, 12 July 2026</p>
+                  </div>
+                  <span class="chip chip--claimed">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg>
+                    Race pack collected
+                  </span>
+                </div>
+                <div class="metaRow">
+                  <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">5K</span></div>
+                  <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">7</span></div>
+                  <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">Not yet</span></div>
+                  <div class="metaItem"><span class="metaLabel">Entered</span><span class="metaValue numeric">28 Jun 2026</span></div>
+                  <div class="metaItem"><span class="metaLabel">Race pack collected</span><span class="metaValue numeric">11 Jul 2026</span></div>
+                </div>
+                <div class="rec__foot">
+                  <button class="rec__prove" type="button">
+                    Prove this record is yours
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+                  </button>
+                  <span class="rec__src">Ledger 58,102,004</span>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>P2 The page on a laptop</b>Same cards, wider, with the two timestamps the contract already carries (<code>entered_at</code>, <code>claimed_at</code>) folded in rather than hidden behind a disclosure. The left column answers the question this page exists for: where the data came from, named contract and all.</figcaption>
+    </figure>
+
+  </div>
+
+  <h2 class="group">One record, seven ways</h2>
+  <p class="groupNote">Four states live on the chain, but they read as seven different things to a runner. The two that matter most are the pairs that look identical in the data and mean opposite things to a person.</p>
+  <div class="row">
+    <figure class="tall">
+      <div class="device device--tall" id="p3">
+        <div class="statesWrap">
+
+          <article class="rec rec--flat">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Entered</h3><p class="rec__where">Registered and paid. The race has not happened yet.</p></div>
+              <span class="chip chip--entered">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>
+                Entered
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">Not yet</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">state: Entered</span></span></div>
+            </div>
+          </article>
+
+          <article class="rec rec--flat">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Race pack collected</h3><p class="rec__where">Checked in at the desk. Ready to run, or already running.</p></div>
+              <span class="chip chip--claimed">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg>
+                Race pack collected
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">Not yet</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">state: RacepackClaimed</span></span></div>
+            </div>
+          </article>
+
+          <article class="rec rec--flat">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Finished</h3><p class="rec__where">An official time, published by the organiser.</p></div>
+              <span class="chip chip--finished">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                Finished
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue numeric">1:52:09</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">Finished, finish_time_s: Some(6729)</span></span></div>
+            </div>
+          </article>
+
+          <article class="rec rec--flat">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Finished, no official time</h3><p class="rec__where">Crossed the line. The organiser published no time for this runner.</p></div>
+              <span class="chip chip--finished">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                Finished
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">No official time</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">Finished, finish_time_s: None</span></span></div>
+            </div>
+          </article>
+
+          <article class="rec rec--flat">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Did not finish</h3><p class="rec__where">Collected the race pack, did not complete the course.</p></div>
+              <span class="chip chip--dnf">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                Did not finish
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">None</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">Dnf, claimed_at: Some(…)</span></span></div>
+            </div>
+          </article>
+
+          <article class="rec rec--flat">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Did not start</h3><p class="rec__where">Entered, never collected the race pack. A no-show.</p></div>
+              <span class="chip chip--dnf">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                Did not start
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">None</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">Dnf, claimed_at: None</span></span></div>
+            </div>
+          </article>
+
+          <article class="rec rec--flat rec--cancelled">
+            <div class="rec__head">
+              <div><h3 class="rec__event">Race cancelled</h3><p class="rec__where">The runner entered. The organiser called the race off.</p></div>
+              <span class="chip chip--cancelled">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.2v.1"/></svg>
+                Race cancelled
+              </span>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue metaValue--none">The race did not take place</span></div>
+              <div class="metaItem"><span class="metaLabel">On chain</span><span class="metaValue metaValue--code"><span class="lit numeric">record Entered, event Cancelled</span></span></div>
+            </div>
+          </article>
+
+          <p class="stateNote"><b>The two pairs that decide whether this page is honest.</b> <span class="lit numeric">Finished</span> carries an optional time, and an absent one means finished with no official time, never zero. <span class="lit numeric">Dnf</span> reached from <span class="lit numeric">Entered</span> is a runner who never showed up; reached from <span class="lit numeric">RacepackClaimed</span> it is a runner who started and stopped. <span class="lit numeric">claimed_at</span> is what tells them apart, and calling a no-show a did-not-finish reads as an accusation about a race they were never at.</p>
+        </div>
+      </div>
+      <figcaption><b>P3 Every state a record can be in</b>The cancelled card is the one nothing on chain forces: the record still says <code>Entered</code> forever, because a cancelled race never claims or finishes anybody. The state has to be read off the event, and the card has to say the race did not happen rather than leave a runner looking like they failed to show.</figcaption>
+    </figure>
+  </div>
+
+  <h2 class="group">Proving a record belongs to a person</h2>
+  <p class="groupNote">This is the most dangerous block in the product, because a public page asking for a national ID is exactly what a phishing page looks like. Saying "nothing is sent anywhere" is not enough; people do not believe sentences. The design has to make it observable: the hash forms on screen as you type, the button says what it sends, and the only thing that ever leaves the page is 32 bytes that reveal nothing.</p>
+  <div class="row">
+
+    <figure>
+      <div class="device" id="p4">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="body">
+            <article class="rec">
+              <div class="rec__head">
+                <div>
+                  <h3 class="rec__event">Merdeka Run 2026</h3>
+                  <p class="rec__where">Jakarta, 27 September 2026</p>
+                </div>
+                <span class="chip chip--finished">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                  Finished
+                </span>
+              </div>
+              <div class="metaRow">
+                <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+                <div class="metaItem"><span class="metaLabel">Bib</span><span class="metaValue numeric">128</span></div>
+                <div class="metaItem"><span class="metaLabel">Finish time</span><span class="metaValue numeric">1:52:09</span></div>
+              </div>
+              <div class="rec__foot">
+                <button class="rec__prove" type="button">
+                  Prove this record is yours
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+                </button>
+                <span class="rec__src">Ledger 59,072,879</span>
+              </div>
+            </article>
+            <p class="muted">Closed is the default on every card. A page that opens with four empty fields asking for a national ID has already lost the reader, whatever it says underneath.</p>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>V1 Closed</b>One line, on the card it belongs to. The check is per record, not per page, because the contract call is <code>verify(token_id, hash)</code> and a token id is one race.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p5">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="body">
+            <article class="rec">
+              <div class="rec__head">
+                <div><h3 class="rec__event">Merdeka Run 2026</h3><p class="rec__where">10K, bib 128</p></div>
+              </div>
+              <div class="prove">
+                <span class="prove__title">Prove this record is yours</span>
+                <div class="prove__pledge">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                  <span>What you type stays in this browser. It is turned into one hash here, and only that hash is sent to the contract.</span>
+                </div>
+                <div class="field">
+                  <label>Full name</label>
+                  <div class="input input--empty">As written on the entry</div>
+                  <span class="hint"><strong>Capitals matter.</strong> Spacing does not.</span>
+                </div>
+                <div class="field">
+                  <label>National ID</label>
+                  <div class="input input--empty">Numbers</div>
+                  <span class="hint">Spaces and dashes are ignored.</span>
+                </div>
+                <div class="field">
+                  <label>Emergency contact</label>
+                  <div class="input input--empty">Phone number</div>
+                  <span class="hint">Spaces, dashes and brackets are ignored. A leading + is kept.</span>
+                </div>
+                <div class="field">
+                  <label>Salt</label>
+                  <div class="input input--empty input--salt">64 characters, shown once at entry</div>
+                </div>
+                <button class="btn btn--block" type="button" disabled>Check against the contract</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>V2 Open, empty</b>Four fields, each with the rule that actually decides the answer. The name hint is not decoration: <code>norm_name</code> does no case folding, so a runner typing their own name in lower case gets a refusal and concludes the record is fake.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p6">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="body">
+            <article class="rec">
+              <div class="rec__head">
+                <div><h3 class="rec__event">Merdeka Run 2026</h3><p class="rec__where">10K, bib 128</p></div>
+              </div>
+              <div class="prove">
+                <span class="prove__title">Prove this record is yours</span>
+                <div class="field">
+                  <label>Full name</label>
+                  <div class="input">Budi Santoso</div>
+                </div>
+                <div class="field">
+                  <label>National ID</label>
+                  <div class="input numeric">5371 0104 0590 0002</div>
+                </div>
+                <div class="field">
+                  <label>Emergency contact</label>
+                  <div class="input numeric">+62 812 3456 7890</div>
+                </div>
+                <div class="field">
+                  <label>Salt</label>
+                  <div class="input input--salt numeric">9f2c4b…e1d7a0</div>
+                </div>
+                <div class="hashLine">
+                  <span class="hashLine__label">The hash this page will send</span>
+                  <span class="hashLine__value numeric">8f3c7a21b4e09d55c6182af7d3b40e91a75c2f6e8d190b34cc7e5a2f018d4b6e</span>
+                </div>
+                <button class="btn btn--block" type="button">Check against the contract</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>V3 Filled in, hash forming</b>The hash updates on every keystroke, before anything is sent. It is the whole argument made visible: this is all that leaves, and it says nothing about the person. The button names its own action, so nobody has to guess what pressing it does.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p7">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="body">
+            <article class="rec">
+              <div class="rec__head">
+                <div><h3 class="rec__event">Merdeka Run 2026</h3><p class="rec__where">10K, bib 128</p></div>
+              </div>
+              <div class="prove">
+                <div class="verdict verdict--yes">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+                  <div>
+                    <b>This record belongs to that person</b>
+                    <p>The contract holds the same hash. Nobody without the salt could have produced it.</p>
+                  </div>
+                </div>
+                <div class="metaRow">
+                  <div class="metaItem"><span class="metaLabel">Checked</span><span class="metaValue numeric">Just now</span></div>
+                  <div class="metaItem"><span class="metaLabel">Against</span><span class="metaValue numeric">CCVW7W…A6NW</span></div>
+                </div>
+                <button class="btn btn--ghost btn--block" type="button">Clear what I typed</button>
+              </div>
+            </article>
+            <p class="muted">The fields are gone after a check, and a reload never brings them back. Nothing typed here is kept, including in the address bar.</p>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>V4 It matches</b>Says what was actually proven and no more. Not "verified runner", not a badge: one record, one person, one hash the contract already held.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p8">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="body">
+            <article class="rec">
+              <div class="rec__head">
+                <div><h3 class="rec__event">Merdeka Run 2026</h3><p class="rec__where">10K, bib 128</p></div>
+              </div>
+              <div class="prove">
+                <div class="verdict verdict--no">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                  <div>
+                    <b>No match</b>
+                    <p>The hash from what you typed is not the one on this record.</p>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="hint"><strong>Most likely the name.</strong> Capitals are part of it, so <span class="numeric">budi santoso</span> and <span class="numeric">Budi Santoso</span> give different hashes.</span>
+                  <span class="hint"><strong>Then the salt.</strong> All 64 characters, exactly as shown when the entry was made.</span>
+                  <span class="hint">A refusal here says the hashes differ. It does not say the record is fake, and it does not say anything about the person.</span>
+                </div>
+                <button class="btn btn--ghost btn--block" type="button">Try again</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>V5 It does not match</b>The failure copy carries the two causes in the order they actually happen. A bare "no match" turns a typo into an accusation, and the case-sensitive name is a trap the runner cannot see.</figcaption>
+    </figure>
+
+  </div>
+
+  <h2 class="group">When there is nothing to list</h2>
+  <p class="groupNote">Four different reasons for an empty page, and they are not interchangeable. Three of them are not the visitor's fault and one of them is a typo, so each gets its own sentence and its own way out.</p>
+  <div class="row">
+
+    <figure>
+      <div class="device" id="p9">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="topbar"><span class="wordmark">STERUN</span><span class="topbar__note">No account needed</span></div>
+          <div class="body">
+            <div class="who">
+              <span class="who__kicker">Race record</span>
+              <div class="who__addr"><span class="who__addrText numeric">GA5CCS…EHNYP</span></div>
+            </div>
+            <div class="blank">
+              <div class="blank__icon">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 6h13l-2.5 3.5L17 13H4"/></svg>
+              </div>
+              <div class="blank__title">No races yet</div>
+              <p class="blank__body">This address is real and the chain answered. It has simply never entered a race.</p>
+              <button class="btn" type="button">Browse open races</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>E1 No records</b>The address still heads the page, because "we found nothing" and "we could not look" must never share a screen. <code>records_of</code> never reverts and returns <code>[]</code>, so this state is a fact, not a guess.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p10">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="topbar"><span class="wordmark">STERUN</span><span class="topbar__note">No account needed</span></div>
+          <div class="body">
+            <div class="blank">
+              <div class="blank__icon">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              </div>
+              <div class="blank__title">That is not a Stellar address</div>
+              <p class="blank__body">A Stellar address starts with <span class="numeric">G</span> and is 56 characters long, like<br><span class="numeric addr">GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP</span></p>
+              <button class="btn btn--ghost" type="button">Paste an address</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>E2 Not an address</b>Caught in the browser before any call goes out. It shows the shape of the right answer instead of only naming the wrong one, because the usual cause is a truncated paste.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p11">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="topbar"><span class="wordmark">STERUN</span><span class="topbar__note">No account needed</span></div>
+          <div class="body">
+            <div class="who">
+              <span class="who__kicker">Race record</span>
+              <div class="who__addr"><span class="who__addrText numeric">GA5CCS…EHNYP</span></div>
+            </div>
+            <div class="blank">
+              <div class="blank__icon">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5a15 15 0 0 1 18 0"/><path d="M6.5 12.5a10 10 0 0 1 11 0"/><path d="M10 16.5a5 5 0 0 1 4 0"/><path d="M12 20v.1"/><path d="M3 3l18 18"/></svg>
+              </div>
+              <div class="blank__title">Could not reach the network</div>
+              <p class="blank__body">Sterun could not read the chain just now. The records are still there; this page could not fetch them.</p>
+              <button class="btn" type="button">Try again</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>E3 The chain is unreachable</b>The distinction this screen protects is the whole point of the product. "We cannot read it" must never be drawn as "there is nothing", or a network blip looks like a runner's history being erased.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="device" id="p12">
+        <div class="screen">
+          <div class="statusbar"><span class="numeric">09:41</span><span>Sterun</span></div>
+          <div class="topbar"><span class="wordmark">STERUN</span><span class="topbar__note">No account needed</span></div>
+          <div class="body">
+            <div class="who">
+              <span class="who__kicker">Race record</span>
+              <div class="who__addr"><span class="who__addrText numeric">GA5CCS…EHNYP</span></div>
+            </div>
+            <div class="metaRow">
+              <div class="metaItem"><span class="metaLabel">Races</span><div class="sk sk--title" style="width:34px"></div></div>
+              <div class="metaItem"><span class="metaLabel">Finished</span><div class="sk sk--title" style="width:34px"></div></div>
+              <div class="metaItem"><span class="metaLabel">First race</span><div class="sk sk--title" style="width:78px"></div></div>
+            </div>
+            <article class="rec">
+              <div class="sk sk--title" style="width:62%"></div>
+              <div class="sk sk--line" style="width:40%"></div>
+              <div class="metaRow">
+                <div class="metaItem"><span class="metaLabel">Distance</span><div class="sk sk--line" style="width:36px"></div></div>
+                <div class="metaItem"><span class="metaLabel">Bib</span><div class="sk sk--line" style="width:28px"></div></div>
+                <div class="metaItem"><span class="metaLabel">Finish time</span><div class="sk sk--line" style="width:66px"></div></div>
+              </div>
+            </article>
+            <article class="rec">
+              <div class="sk sk--title" style="width:54%"></div>
+              <div class="sk sk--line" style="width:44%"></div>
+              <div class="metaRow">
+                <div class="metaItem"><span class="metaLabel">Distance</span><div class="sk sk--line" style="width:36px"></div></div>
+                <div class="metaItem"><span class="metaLabel">Bib</span><div class="sk sk--line" style="width:28px"></div></div>
+                <div class="metaItem"><span class="metaLabel">Finish time</span><div class="sk sk--line" style="width:66px"></div></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>E4 Loading</b>The address and the labels are known before any call returns, so they are drawn immediately and only the values wait. Nothing moves and nothing shimmers: this page keeps nobody waiting at a finish line.</figcaption>
+    </figure>
+
+  </div>
+</div>
+</body>
+</html>

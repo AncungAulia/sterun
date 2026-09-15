@@ -53,3 +53,23 @@ export function useEvent(eventId: number) {
     staleTime: STALE_MS,
   });
 }
+
+/**
+ * The add-ons an event holds on chain: what each costs and how many are left.
+ *
+ * A separate read from the event itself because it fails separately and is
+ * worth showing separately: an older event has none at all, and a node that
+ * will not answer this one should not take the categories down with it.
+ *
+ * Kept fresher than the rest of the page. `unitsLeft` is the number that
+ * decides whether an entry is about to revert `AddOnQuotaFull`, and a stale
+ * one is the difference between a picker that offers a sold-out size and one
+ * that does not.
+ */
+export function useEventAddOns(eventId: number) {
+  return useQuery({
+    queryKey: [...eventKeys.one(eventId), "add-ons"],
+    queryFn: () => readClient.listAddOns(eventId),
+    staleTime: 10_000,
+  });
+}

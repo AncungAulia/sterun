@@ -1,7 +1,7 @@
 /**
  * STE-19 — copy the generated bindings into sdk/vendor/, byte for byte.
  *
- * Why a copy exists at all: `@sterun/sdk` is published to npm, and a `file:`
+ * Why a copy exists at all: `@sterunxyz/sdk` is published to npm, and a `file:`
  * dependency cannot be. The published tarball has to carry the binding code
  * itself, so it is vendored here rather than depended on.
  *

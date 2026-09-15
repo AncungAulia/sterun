@@ -41,6 +41,18 @@ export const RATE_LIMITS = {
    * three times in a minute never meets it.
    */
   files: 12,
+  /**
+   * STE-49, the test sUSD faucet. The real limits are per wallet address and per
+   * day, in Postgres. This per-client ceiling is defence in depth: it stops a
+   * loop minting fresh keypairs from one machine before it reaches the ledger.
+   */
+  faucet: 6,
+  /**
+   * STE-52, restoring a pass. Each request is a chain read and hands out a
+   * check-in secret, and a runner needs it a handful of times at most — a new
+   * phone, a cleared browser.
+   */
+  pass: 20,
 } as const;
 
 /**
@@ -91,6 +103,36 @@ export function loggerOptions(config: Config): Record<string, unknown> | false {
  * for a global hook. Both plugins wrap themselves with fastify-plugin, so they
  * break encapsulation and apply to the whole instance without a wrapper here.
  */
+/**
+ * Who a request is from, for rate limiting.
+ *
+ * This used to take the FIRST `x-forwarded-for` entry. Each proxy appends to
+ * that header, so the first entry is whatever the client wrote, and a random
+ * value per request got a fresh bucket every time — every per-endpoint limit
+ * (the faucet, the uploads, the nonce issuer) was optional. In order now:
+ *
+ * 1. the header the deployment names as its edge's own (`clientIpHeader`),
+ * 2. the LAST `x-forwarded-for` hop, which the proxy in front wrote about the
+ *    connection it received,
+ * 3. the socket address, for a direct connection.
+ */
+export function clientKey(
+  request: { headers: Record<string, string | string[] | undefined>; ip: string },
+  clientIpHeader: string | undefined,
+): string {
+  if (clientIpHeader) {
+    const named = request.headers[clientIpHeader];
+    const value = (Array.isArray(named) ? named[0] : named)?.trim();
+    if (value) return value;
+  }
+  const forwarded = request.headers["x-forwarded-for"];
+  const hops = (Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? ""))
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter((hop) => hop.length > 0);
+  return hops.at(-1) ?? request.ip;
+}
+
 export function registerHardening(app: FastifyInstance, config: Config): void {
   // Off in tests: a suite that shares a process would otherwise start failing
   // its 241st request for reasons that have nothing to do with the assertion,
@@ -100,14 +142,9 @@ export function registerHardening(app: FastifyInstance, config: Config): void {
       global: true,
       max: RATE_LIMITS.global,
       timeWindow: "1 minute",
-      // Behind a reverse proxy (STE-31) the socket address is the proxy's, so
-      // the forwarded address is what identifies a client. Falls back to the
-      // socket when the header is absent, which is the direct-connection case.
-      keyGenerator: (request) => {
-        const forwarded = request.headers["x-forwarded-for"];
-        const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-        return first?.split(",")[0]?.trim() ?? request.ip;
-      },
+      // Keyed on who the request is from as the proxy saw it, never on a value
+      // the client chose — see clientKey.
+      keyGenerator: (request) => clientKey(request, config.clientIpHeader),
       errorResponseBuilder: (_request, context) => ({
         statusCode: 429,
         error: "rate-limited",

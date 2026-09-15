@@ -5,7 +5,7 @@
  * are non-upgradeable, so a redeploy produces a *new pair* of addresses rather
  * than a new version of the old pair; a hardcoded address would keep talking to
  * the dead pair until somebody noticed. The same rule is enforced in
- * `@sterun/sdk` (see sdk/src/network.ts) and in the backend
+ * `@sterunxyz/sdk` (see sdk/src/network.ts) and in the backend
  * (be/src/deployments.ts). docs/deployments.md is the source of truth.
  *
  * Next.js inlines `process.env.NEXT_PUBLIC_*` at build time, so these must be
@@ -48,6 +48,15 @@ export const CONTRACTS = {
 
 /** Backend base URL (be/). Optional until the first ticket that calls it. */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/**
+ * Reown (WalletConnect) project id. Optional on purpose: the relay refuses
+ * pairings from an app it does not know, so without one WalletConnect is left
+ * out of the picker rather than offered as a button that can only fail.
+ */
+export const WALLET_CONNECT_PROJECT_ID = (
+  process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID ?? ""
+).trim();
 
 /**
  * Explorer base for the configured network. Only the testnet and the public

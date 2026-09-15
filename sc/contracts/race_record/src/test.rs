@@ -11,12 +11,14 @@ use soroban_sdk::{
     },
     token::{StellarAssetClient, TokenClient},
     vec, Address, BytesN, Env, Event as _, IntoVal, InvokeError, String, Symbol, TryFromVal, Val,
+    Vec,
 };
 use stellar_tokens::non_fungible::{Mint, NonFungibleTokenError};
 
 use crate::{
     DataKey, Error, RaceRecord, RaceRecordClient, RacepackClaimed, RecordData, RecordDnf,
-    RecordEntered, RecordFinished, RecordState, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
+    RecordEntered, RecordFinished, RecordFinishedUntimed, RecordState, BUMP_THRESHOLD, BUMP_TO,
+    DAY_IN_LEDGERS, MAX_ADDONS_PER_ENTRY,
 };
 
 // ---------------------------------------------------------------------------
@@ -32,6 +34,9 @@ const STARTS_AT: u64 = 1_772_000_000;
 const NOW: u64 = 1_772_100_000;
 /// 5.0 sUSD at the token's 7 decimals.
 const PRICE: i128 = 50_000_000;
+/// Add-on prices (v2, STE-35): a 5.0 sUSD jersey and a 3.0 sUSD tumbler.
+const JERSEY: i128 = 50_000_000;
+const TUMBLER: i128 = 30_000_000;
 const FUNDING: i128 = 500_000_000;
 const NAME: &str = "Sterun Race Record";
 const SYMBOL: &str = "STERUN";
@@ -77,7 +82,13 @@ impl World {
         );
 
         env.mock_all_auths();
-        RegistryClient::new(&env, &registry).set_race_record(&contract);
+        let registry_client = RegistryClient::new(&env, &registry);
+        registry_client.set_race_record(&contract);
+        // STE-36: the registry gates `create_event` on an admin allowlist, so
+        // a world whose organiser is not on it cannot create the event every
+        // test here starts from. This is the seeding step the deploy runbook
+        // does on testnet, done once at fixture setup.
+        registry_client.add_organiser(&organiser);
 
         World {
             env,
@@ -145,6 +156,39 @@ impl World {
         (event_id, category_id)
     }
 
+    /// Adds a paid add-on to `event_id` and returns its id.
+    fn add_addon(&self, event_id: u32, code: Symbol, price: i128, quota: u32) -> u32 {
+        self.env.mock_all_auths();
+        self.registry().add_addon(&event_id, &code, &price, &quota)
+    }
+
+    /// The usual add-on pair: a jersey with room for two and a one-off tumbler.
+    fn jersey_and_tumbler(&self, event_id: u32) -> (u32, u32) {
+        (
+            self.add_addon(event_id, symbol_short!("JERSEY"), JERSEY, 2),
+            self.add_addon(event_id, symbol_short!("TUMBLER"), TUMBLER, 1),
+        )
+    }
+
+    /// `enter` with add-ons, under `mock_all_auths`.
+    fn enter_with(
+        &self,
+        runner: &Address,
+        event_id: u32,
+        category_id: u32,
+        addon_ids: Vec<u32>,
+        seed: u8,
+    ) -> u32 {
+        self.env.mock_all_auths();
+        self.records().enter(
+            runner,
+            &event_id,
+            &category_id,
+            &addon_ids,
+            &phash(&self.env, seed),
+        )
+    }
+
     fn fund(&self, who: &Address, amount: i128) {
         self.env.mock_all_auths();
         StellarAssetClient::new(&self.env, &self.token).mint(who, &amount);
@@ -161,9 +205,32 @@ impl World {
     /// auth model.
     fn enter(&self, runner: &Address, event_id: u32, category_id: u32, seed: u8) -> u32 {
         self.env.mock_all_auths();
-        self.records()
-            .enter(runner, &event_id, &category_id, &phash(&self.env, seed))
+        self.records().enter(
+            runner,
+            &event_id,
+            &category_id,
+            &vec![&self.env],
+            &phash(&self.env, seed),
+        )
     }
+}
+
+/// Event names in emission order, read off topic 0 of each event.
+fn event_names(events: &[ContractEvent]) -> std::vec::Vec<std::string::String> {
+    events
+        .iter()
+        .map(|e| {
+            let ContractEventBody::V0(body) = &e.body;
+            match body
+                .topics
+                .first()
+                .expect("every event carries its name as topic 0")
+            {
+                ScVal::Symbol(s) => s.0.to_utf8_string_lossy(),
+                other => panic!("topic 0 is not a Symbol: {other:?}"),
+            }
+        })
+        .collect()
 }
 
 fn persistent_ttl(env: &Env, contract: &Address, key: DataKey) -> u32 {
@@ -217,7 +284,8 @@ fn enter_reserves_quota_moves_the_fee_and_mints_the_record() {
         RecordData {
             event_id,
             category_id,
-            bib_no: 0,
+            bib_no: 1,
+            addon_ids: vec![&w.env],
             participant_hash: phash(&w.env, 1),
             state: RecordState::Entered,
             entered_at: NOW,
@@ -242,7 +310,14 @@ fn enter_is_one_auth_tree_covering_the_fee_transfer() {
         invoke: &MockAuthInvoke {
             contract: &w.contract,
             fn_name: "enter",
-            args: (runner.clone(), event_id, category_id, hash.clone()).into_val(&w.env),
+            args: (
+                runner.clone(),
+                event_id,
+                category_id,
+                vec![&w.env] as Vec<u32>,
+                hash.clone(),
+            )
+                .into_val(&w.env),
             sub_invokes: &[MockAuthInvoke {
                 contract: &w.token,
                 fn_name: "transfer",
@@ -251,7 +326,9 @@ fn enter_is_one_auth_tree_covering_the_fee_transfer() {
             }],
         },
     }]);
-    let token_id = w.records().enter(&runner, &event_id, &category_id, &hash);
+    let token_id = w
+        .records()
+        .enter(&runner, &event_id, &category_id, &vec![&w.env], &hash);
 
     assert_eq!(
         w.env.auths(),
@@ -261,7 +338,14 @@ fn enter_is_one_auth_tree_covering_the_fee_transfer() {
                 function: soroban_sdk::testutils::AuthorizedFunction::Contract((
                     w.contract.clone(),
                     Symbol::new(&w.env, "enter"),
-                    (runner.clone(), event_id, category_id, hash).into_val(&w.env),
+                    (
+                        runner.clone(),
+                        event_id,
+                        category_id,
+                        vec![&w.env] as Vec<u32>,
+                        hash
+                    )
+                        .into_val(&w.env),
                 )),
                 sub_invocations: std::vec![soroban_sdk::testutils::AuthorizedInvocation {
                     function: soroban_sdk::testutils::AuthorizedFunction::Contract((
@@ -277,17 +361,20 @@ fn enter_is_one_auth_tree_covering_the_fee_transfer() {
     assert_eq!(w.records().owner_of(&token_id), runner);
 }
 
-/// Bib numbers are the registry's category sequence, not a local counter.
+/// Bib numbers are the registry's event sequence, not a local counter — and
+/// they are not the token id either, which is why both are asserted: token ids
+/// are global to this contract and count from 0, bibs belong to one race and
+/// count from 1.
 #[test]
 fn bib_numbers_come_from_the_registry_sequence() {
     let w = World::new();
     let (event_id, category_id) = w.open_event(3, PRICE);
 
-    for expected in 0..3u32 {
+    for nth in 1..=3u32 {
         let runner = w.runner();
-        let token_id = w.enter(&runner, event_id, category_id, expected as u8);
-        assert_eq!(token_id, expected);
-        assert_eq!(w.records().record_of(&token_id).bib_no, expected);
+        let token_id = w.enter(&runner, event_id, category_id, nth as u8);
+        assert_eq!(token_id, nth - 1);
+        assert_eq!(w.records().record_of(&token_id).bib_no, nth);
     }
     assert_eq!(
         w.registry()
@@ -312,9 +399,10 @@ fn records_of_lists_every_token_across_events() {
     assert_eq!(records.balance(&runner), 2);
     assert_eq!(records.record_of(&a).event_id, first_event);
     assert_eq!(records.record_of(&b).event_id, second_event);
-    // Both are bib 0: the sequence is per category, not global.
-    assert_eq!(records.record_of(&a).bib_no, 0);
-    assert_eq!(records.record_of(&b).bib_no, 0);
+    // Both are bib 1: the sequence belongs to the event, not to the contract.
+    // One runner can wear 1 at two different races.
+    assert_eq!(records.record_of(&a).bib_no, 1);
+    assert_eq!(records.record_of(&b).bib_no, 1);
 }
 
 /// `enter` -> `claim_racepack` -> `record_finish`, with the organiser signing
@@ -359,7 +447,8 @@ fn full_lifecycle_entered_claimed_finished() {
         RecordData {
             event_id,
             category_id,
-            bib_no: 0,
+            bib_no: 1,
+            addon_ids: vec![&w.env],
             participant_hash: phash(&w.env, 3),
             state: RecordState::Finished,
             entered_at: NOW,
@@ -507,7 +596,7 @@ fn emits_record_entered() {
                 runner,
                 event_id,
                 token_id,
-                bib_no: 0,
+                bib_no: 1,
             }
             .to_xdr(&w.env, &w.contract),
         ]
@@ -588,24 +677,6 @@ fn emits_record_dnf() {
 /// down.
 #[test]
 fn enter_emits_four_events_from_three_emitters_in_the_frozen_order() {
-    /// Event names in emission order, read off topic 0 of each event.
-    fn names(events: &[ContractEvent]) -> std::vec::Vec<std::string::String> {
-        events
-            .iter()
-            .map(|e| {
-                let ContractEventBody::V0(body) = &e.body;
-                match body
-                    .topics
-                    .first()
-                    .expect("every event carries its name as topic 0")
-                {
-                    ScVal::Symbol(s) => s.0.to_utf8_string_lossy(),
-                    other => panic!("topic 0 is not a Symbol: {other:?}"),
-                }
-            })
-            .collect()
-    }
-
     // -- paid category: the token sits in the middle of the sequence.
     let w = World::new();
     let (event_id, category_id) = w.open_event(5, PRICE);
@@ -615,7 +686,7 @@ fn enter_emits_four_events_from_three_emitters_in_the_frozen_order() {
     let seq = all.events();
 
     assert_eq!(
-        names(seq),
+        event_names(seq),
         std::vec!["slot_reserved", "transfer", "mint", "record_entered"],
         "frozen emission order of a paid `enter` (INTERFACE.md §2.3)"
     );
@@ -651,7 +722,7 @@ fn enter_emits_four_events_from_three_emitters_in_the_frozen_order() {
     let free_seq = free_all.events();
 
     assert_eq!(
-        names(free_seq),
+        event_names(free_seq),
         std::vec!["slot_reserved", "mint", "record_entered"],
         "a free entry emits no token event at all"
     );
@@ -679,8 +750,13 @@ fn enter_requires_the_runners_authorization() {
 
     w.env.mock_auths(&[]);
     assert_eq!(
-        w.records()
-            .try_enter(&runner, &event_id, &category_id, &phash(&w.env, 1)),
+        w.records().try_enter(
+            &runner,
+            &event_id,
+            &category_id,
+            &vec![&w.env],
+            &phash(&w.env, 1)
+        ),
         Err(Err(InvokeError::Abort))
     );
     assert_eq!(
@@ -722,6 +798,8 @@ fn error_codes_of_the_two_contracts_are_disjoint_bands() {
         event_registry::Error::InvalidStatus as u32,
         event_registry::Error::ScannerAlreadyAdded as u32,
         event_registry::Error::ScannerNotFound as u32,
+        event_registry::Error::AddOnNotFound as u32,
+        event_registry::Error::AddOnQuotaFull as u32,
     ];
     let record: std::vec::Vec<u32> = std::vec![
         Error::NotInitialized as u32,
@@ -730,6 +808,8 @@ fn error_codes_of_the_two_contracts_are_disjoint_bands() {
         Error::InvalidState as u32,
         Error::NotAuthorized as u32,
         Error::InvalidFinishTime as u32,
+        Error::TooManyAddOns as u32,
+        Error::DuplicateAddOn as u32,
     ];
 
     for code in &registry {
@@ -760,8 +840,8 @@ fn error_codes_of_the_two_contracts_are_disjoint_bands() {
     assert!(record.iter().all(|c| *c < 200));
 
     // The lists above must stay exhaustive for the checks to mean anything.
-    assert_eq!(registry.len(), 13, "EventRegistry gained an error variant");
-    assert_eq!(record.len(), 6, "RaceRecord gained an error variant");
+    assert_eq!(registry.len(), 15, "EventRegistry gained an error variant");
+    assert_eq!(record.len(), 8, "RaceRecord gained an error variant");
 }
 
 /// A `Draft` or `Closed` event reverts inside `reserve_slot` and that revert
@@ -783,8 +863,13 @@ fn enter_on_a_non_open_event_propagates_event_not_open() {
 
         w.env.mock_all_auths();
         assert_eq!(
-            w.records()
-                .try_enter(&runner, &event_id, &category_id, &phash(&w.env, 1)),
+            w.records().try_enter(
+                &runner,
+                &event_id,
+                &category_id,
+                &vec![&w.env],
+                &phash(&w.env, 1)
+            ),
             Err(Err(InvokeError::Contract(
                 event_registry::Error::EventNotOpen as u32
             )))
@@ -811,8 +896,13 @@ fn enter_when_the_category_is_full_propagates_quota_full() {
     let latecomer = w.runner();
     w.env.mock_all_auths();
     assert_eq!(
-        w.records()
-            .try_enter(&latecomer, &event_id, &category_id, &phash(&w.env, 2)),
+        w.records().try_enter(
+            &latecomer,
+            &event_id,
+            &category_id,
+            &vec![&w.env],
+            &phash(&w.env, 2)
+        ),
         Err(Err(InvokeError::Contract(
             event_registry::Error::QuotaFull as u32
         )))
@@ -847,9 +937,13 @@ fn a_failed_payment_rolls_back_quota_and_mint() {
         }
 
         w.env.mock_all_auths();
-        let result = w
-            .records()
-            .try_enter(&broke, &event_id, &category_id, &phash(&w.env, 1));
+        let result = w.records().try_enter(
+            &broke,
+            &event_id,
+            &category_id,
+            &vec![&w.env],
+            &phash(&w.env, 1),
+        );
         // The Stellar Asset Contract's own `BalanceError` (built-in contract
         // error 10), propagated out of the nested `transfer`. A classic `G...`
         // account with no trustline would raise `TrustlineMissingError` (13) at
@@ -878,10 +972,11 @@ fn a_failed_payment_rolls_back_quota_and_mint() {
         assert_eq!(w.token().balance(&broke), funding, "the fee was not taken");
         assert_eq!(w.token().balance(&w.organiser), 0);
 
-        // And the slot is still there for someone who can pay.
+        // And the slot is still there for someone who can pay — with bib 1,
+        // because the rolled-back entry consumed no number either.
         let solvent = w.runner();
         assert_eq!(w.enter(&solvent, event_id, category_id, 2), 0);
-        assert_eq!(w.records().record_of(&0).bib_no, 0);
+        assert_eq!(w.records().record_of(&0).bib_no, 1);
     }
 }
 
@@ -1143,6 +1238,7 @@ fn verify_requires_the_token_to_still_have_an_owner() {
         event_id,
         category_id,
         bib_no: 0,
+        addon_ids: vec![&w.env],
         participant_hash: phash(&w.env, 42),
         state: RecordState::Entered,
         entered_at: NOW,
@@ -1334,6 +1430,1093 @@ fn a_lifecycle_write_re_extends_a_decayed_ttl() {
 // Nothing here restates an expected hash. Every value comes out of the JSON, so
 // this can only pass by genuinely agreeing with the frozen artifact.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Paid add-ons (v2, STE-35)
+// ---------------------------------------------------------------------------
+
+/// The headline: one invocation charges the category price plus every add-on
+/// price as a SINGLE transfer, and the record says what was bought.
+#[test]
+fn enter_charges_the_category_and_every_add_on_in_one_transfer() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    let token_id = w.enter_with(
+        &runner,
+        event_id,
+        category_id,
+        vec![&w.env, jersey, tumbler],
+        1,
+    );
+
+    // Read the event log first: `env.events().all()` reports the most recent
+    // invocation, and a balance query is an invocation.
+    let all = w.env.events().all();
+    assert_eq!(
+        all.filter_by_contract(&w.token).events().len(),
+        1,
+        "the basket must move as one transfer, not one per line item"
+    );
+
+    let total = PRICE + JERSEY + TUMBLER;
+    assert_eq!(w.token().balance(&w.organiser), total);
+    assert_eq!(w.token().balance(&runner), FUNDING - total);
+
+    let record = w.records().record_of(&token_id);
+    assert_eq!(record.addon_ids, vec![&w.env, jersey, tumbler]);
+    assert_eq!(record.bib_no, 1);
+    assert_eq!(record.state, RecordState::Entered);
+
+    // Stock came off both add-ons, once each.
+    assert_eq!(w.registry().get_addon(&event_id, &jersey).reserved_count, 1);
+    assert_eq!(
+        w.registry().get_addon(&event_id, &tumbler).reserved_count,
+        1
+    );
+}
+
+/// The auth tree the runner signs covers the summed transfer, not a per-item
+/// one — the wallet shows a single amount and that amount is what moves.
+#[test]
+fn the_signed_auth_tree_covers_the_summed_transfer() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, _tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+    let hash = phash(&w.env, 2);
+    let addons: Vec<u32> = vec![&w.env, jersey];
+    let total = PRICE + JERSEY;
+
+    w.env.mock_auths(&[MockAuth {
+        address: &runner,
+        invoke: &MockAuthInvoke {
+            contract: &w.contract,
+            fn_name: "enter",
+            args: (
+                runner.clone(),
+                event_id,
+                category_id,
+                addons.clone(),
+                hash.clone(),
+            )
+                .into_val(&w.env),
+            sub_invokes: &[MockAuthInvoke {
+                contract: &w.token,
+                fn_name: "transfer",
+                args: (runner.clone(), w.organiser.clone(), total).into_val(&w.env),
+                sub_invokes: &[],
+            }],
+        },
+    }]);
+
+    let token_id = w
+        .records()
+        .enter(&runner, &event_id, &category_id, &addons, &hash);
+    assert_eq!(w.records().owner_of(&token_id), runner);
+    assert_eq!(w.token().balance(&w.organiser), total);
+}
+
+#[test]
+fn an_entry_without_add_ons_still_pays_only_the_category_price() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, _tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    let token_id = w.enter(&runner, event_id, category_id, 1);
+
+    assert_eq!(w.token().balance(&w.organiser), PRICE);
+    assert!(w.records().record_of(&token_id).addon_ids.is_empty());
+    assert_eq!(w.registry().get_addon(&event_id, &jersey).reserved_count, 0);
+}
+
+/// A free category plus a paid add-on still moves money — the skip is about the
+/// TOTAL being zero, not about the category being free.
+#[test]
+fn a_free_category_with_a_paid_add_on_still_charges_the_add_on() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, 0);
+    let (jersey, _tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    w.enter_with(&runner, event_id, category_id, vec![&w.env, jersey], 1);
+
+    assert_eq!(w.token().balance(&w.organiser), JERSEY);
+}
+
+/// ...and a free add-on on a free category still skips the token entirely, so a
+/// runner with no balance and no trustline can take one.
+#[test]
+fn a_free_basket_skips_the_transfer_entirely() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, 0);
+    let bib_belt = w.add_addon(event_id, symbol_short!("BIBBELT"), 0, 10);
+    let penniless = Address::generate(&w.env);
+
+    let token_id = w.enter_with(&penniless, event_id, category_id, vec![&w.env, bib_belt], 1);
+
+    assert_eq!(w.records().owner_of(&token_id), penniless);
+    assert_eq!(w.records().record_of(&token_id).addon_ids.len(), 1);
+    assert!(w
+        .env
+        .events()
+        .all()
+        .filter_by_contract(&w.token)
+        .events()
+        .is_empty());
+    // The quota still came off: free does not mean unlimited.
+    assert_eq!(
+        w.registry().get_addon(&event_id, &bib_belt).reserved_count,
+        1
+    );
+}
+
+// -- all-or-nothing ---------------------------------------------------------
+
+/// A sold-out add-on takes the WHOLE entry down with it. The runner asked for a
+/// place *and* a tumbler; giving them a place without the tumbler and keeping
+/// their money would be a different purchase from the one they signed.
+#[test]
+fn a_sold_out_add_on_rolls_back_the_slot_the_fee_and_the_mint() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+
+    // The single tumbler goes to the first runner.
+    let first = w.runner();
+    w.enter_with(&first, event_id, category_id, vec![&w.env, tumbler], 1);
+    let organiser_after_first = w.token().balance(&w.organiser);
+
+    let latecomer = w.runner();
+    w.env.mock_all_auths();
+    let result = w.records().try_enter(
+        &latecomer,
+        &event_id,
+        &category_id,
+        &vec![&w.env, jersey, tumbler],
+        &phash(&w.env, 2),
+    );
+
+    // EventRegistry's AddOnQuotaFull(15), propagated out of `enter` untouched —
+    // the band says the number came from C1.
+    assert_eq!(result, Err(Err(InvokeError::Contract(15))));
+
+    // Nothing of the second entry survived.
+    assert_eq!(
+        w.registry()
+            .get_category(&event_id, &category_id)
+            .entered_count,
+        1,
+        "the category slot must be released"
+    );
+    assert_eq!(
+        w.registry().get_addon(&event_id, &jersey).reserved_count,
+        0,
+        "the jersey reserved earlier in the same call must be released too"
+    );
+    assert_eq!(w.records().total_supply(), 1, "no second token may exist");
+    assert_eq!(w.records().balance(&latecomer), 0);
+    assert_eq!(w.token().balance(&latecomer), FUNDING, "no fee was taken");
+    assert_eq!(w.token().balance(&w.organiser), organiser_after_first);
+}
+
+/// The money leg fails *after* the add-on reservations, so the rollback has to
+/// reach back through them. A runner who cannot cover category + add-ons leaves
+/// no stock consumed anywhere.
+#[test]
+fn a_failed_payment_rolls_back_the_add_on_reservations_too() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+
+    // Enough for the entry, not enough for the entry plus both add-ons — so the
+    // failure is caused by the add-ons and lands in the SAC transfer.
+    let short = Address::generate(&w.env);
+    w.fund(&short, PRICE + JERSEY + TUMBLER - 1);
+
+    w.env.mock_all_auths();
+    let result = w.records().try_enter(
+        &short,
+        &event_id,
+        &category_id,
+        &vec![&w.env, jersey, tumbler],
+        &phash(&w.env, 1),
+    );
+
+    assert_eq!(
+        result,
+        Err(Err(InvokeError::Contract(10))),
+        "the SAC's BalanceError, raised inside the nested transfer"
+    );
+    assert_eq!(
+        w.registry()
+            .get_category(&event_id, &category_id)
+            .entered_count,
+        0
+    );
+    assert_eq!(w.registry().get_addon(&event_id, &jersey).reserved_count, 0);
+    assert_eq!(
+        w.registry().get_addon(&event_id, &tumbler).reserved_count,
+        0
+    );
+    assert_eq!(w.records().total_supply(), 0);
+    assert_eq!(w.token().balance(&short), PRICE + JERSEY + TUMBLER - 1);
+    assert_eq!(w.token().balance(&w.organiser), 0);
+
+    // And the stock is all still there for someone who can pay for it.
+    let solvent = w.runner();
+    let token_id = w.enter_with(
+        &solvent,
+        event_id,
+        category_id,
+        vec![&w.env, jersey, tumbler],
+        2,
+    );
+    assert_eq!(
+        w.records().record_of(&token_id).addon_ids,
+        vec![&w.env, jersey, tumbler]
+    );
+}
+
+// -- validation -------------------------------------------------------------
+
+#[test]
+fn enter_rejects_a_repeated_addon_id() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, _tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    w.env.mock_all_auths();
+    let result = w.records().try_enter(
+        &runner,
+        &event_id,
+        &category_id,
+        &vec![&w.env, jersey, jersey],
+        &phash(&w.env, 1),
+    );
+
+    assert_eq!(result, Err(Ok(Error::DuplicateAddOn)));
+    // Rejected before any state was touched: not the category, not the stock.
+    assert_eq!(
+        w.registry()
+            .get_category(&event_id, &category_id)
+            .entered_count,
+        0
+    );
+    assert_eq!(w.registry().get_addon(&event_id, &jersey).reserved_count, 0);
+    assert_eq!(w.token().balance(&runner), FUNDING);
+}
+
+#[test]
+fn enter_rejects_more_add_ons_than_the_event_has() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    // Two add-ons exist; three ids cannot be honest, whatever they name.
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_enter(
+            &runner,
+            &event_id,
+            &category_id,
+            &vec![&w.env, jersey, tumbler, 99],
+            &phash(&w.env, 1),
+        ),
+        Err(Ok(Error::TooManyAddOns))
+    );
+
+    // An event with no add-ons at all rejects even a single id.
+    let (bare_event, bare_category) = w.open_event(5, PRICE);
+    assert_eq!(
+        w.records().try_enter(
+            &runner,
+            &bare_event,
+            &bare_category,
+            &vec![&w.env, 0],
+            &phash(&w.env, 1),
+        ),
+        Err(Ok(Error::TooManyAddOns))
+    );
+}
+
+/// The bound that does not depend on registry state: even an organiser who
+/// publishes more than `MAX_ADDONS_PER_ENTRY` add-ons cannot make one entry
+/// loop past it.
+#[test]
+fn enter_rejects_more_add_ons_than_the_hard_ceiling() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, 0);
+    let mut ids: Vec<u32> = vec![&w.env];
+    for _ in 0..(MAX_ADDONS_PER_ENTRY + 1) {
+        ids.push_back(w.add_addon(event_id, symbol_short!("EXTRA"), 0, 100));
+    }
+    assert_eq!(
+        w.registry().addon_count(&event_id),
+        MAX_ADDONS_PER_ENTRY + 1
+    );
+    let runner = w.runner();
+
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records()
+            .try_enter(&runner, &event_id, &category_id, &ids, &phash(&w.env, 1)),
+        Err(Ok(Error::TooManyAddOns))
+    );
+
+    // One fewer is exactly at the ceiling and goes through.
+    ids.pop_back();
+    assert_eq!(ids.len(), MAX_ADDONS_PER_ENTRY);
+    let token_id = w
+        .records()
+        .enter(&runner, &event_id, &category_id, &ids, &phash(&w.env, 1));
+    assert_eq!(
+        w.records().record_of(&token_id).addon_ids.len(),
+        MAX_ADDONS_PER_ENTRY
+    );
+}
+
+#[test]
+fn enter_propagates_add_on_not_found_for_an_unknown_id() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (_jersey, _tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    // Within the length bound, but id 7 does not exist.
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_enter(
+            &runner,
+            &event_id,
+            &category_id,
+            &vec![&w.env, 7],
+            &phash(&w.env, 1),
+        ),
+        Err(Err(InvokeError::Contract(14))),
+        "EventRegistry's AddOnNotFound(14), propagated untouched"
+    );
+    assert_eq!(
+        w.registry()
+            .get_category(&event_id, &category_id)
+            .entered_count,
+        0
+    );
+    assert_eq!(w.records().total_supply(), 0);
+}
+
+/// Two runners can buy the same add-on while stock lasts, and each record says
+/// so on its own.
+#[test]
+fn two_runners_can_buy_the_same_add_on_while_stock_lasts() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, _tumbler) = w.jersey_and_tumbler(event_id);
+    let alice = w.runner();
+    let bob = w.runner();
+
+    let a = w.enter_with(&alice, event_id, category_id, vec![&w.env, jersey], 1);
+    let b = w.enter_with(&bob, event_id, category_id, vec![&w.env, jersey], 2);
+
+    assert_ne!(a, b);
+    assert_eq!(w.records().record_of(&a).addon_ids, vec![&w.env, jersey]);
+    assert_eq!(w.records().record_of(&b).addon_ids, vec![&w.env, jersey]);
+    assert_eq!(w.registry().get_addon(&event_id, &jersey).reserved_count, 2);
+    assert_eq!(w.token().balance(&w.organiser), 2 * (PRICE + JERSEY));
+
+    // Quota was 2, so the third buyer is refused — and refused entirely.
+    let carol = w.runner();
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_enter(
+            &carol,
+            &event_id,
+            &category_id,
+            &vec![&w.env, jersey],
+            &phash(&w.env, 3),
+        ),
+        Err(Err(InvokeError::Contract(15)))
+    );
+    assert_eq!(w.records().total_supply(), 2);
+}
+
+/// The add-on purchase survives the rest of the lifecycle: the merch desk can
+/// still read it after the race is finished.
+#[test]
+fn add_ons_stay_on_the_record_through_the_whole_lifecycle() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    let token_id = w.enter_with(
+        &runner,
+        event_id,
+        category_id,
+        vec![&w.env, jersey, tumbler],
+        1,
+    );
+
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+    w.records().record_finish(&token_id, &3_161);
+
+    let record = w.records().record_of(&token_id);
+    assert_eq!(record.state, RecordState::Finished);
+    assert_eq!(record.addon_ids, vec![&w.env, jersey, tumbler]);
+}
+
+/// The frozen emission order, with add-ons in it: the registry now also emits
+/// one `addon_reserved` per unit, before the single SAC transfer.
+#[test]
+fn an_entry_with_add_ons_emits_one_addon_reserved_per_unit_before_the_transfer() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+    let runner = w.runner();
+
+    w.enter_with(
+        &runner,
+        event_id,
+        category_id,
+        vec![&w.env, jersey, tumbler],
+        1,
+    );
+
+    let all = w.env.events().all();
+    let seq = all.events();
+    assert_eq!(
+        event_names(seq),
+        std::vec![
+            "slot_reserved",
+            "add_on_reserved",
+            "add_on_reserved",
+            "transfer",
+            "mint",
+            "record_entered"
+        ],
+    );
+
+    // Positions 0-2 are EventRegistry's, so an indexer that keys on contract id
+    // sees the add-on units without having to guess offsets.
+    assert_eq!(all.filter_by_contract(&w.registry).events(), &seq[0..3]);
+    assert_eq!(all.filter_by_contract(&w.token).events(), &seq[3..4]);
+    assert_eq!(all.filter_by_contract(&w.contract).events(), &seq[4..6]);
+}
+
+// ---------------------------------------------------------------------------
+// Untimed finish (v2.2, STE-41)
+//
+// `record_finish_untimed` is a twin of `record_finish` with no time: same
+// organiser gate, same `RacepackClaimed` guard, same terminal `Finished`. What
+// these tests hold down is that the twin really is a twin — and that the timed
+// path it sits beside did not move at all.
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// A runner entered and checked in, ready for a result.
+    fn claimed(&self, event_id: u32, category_id: u32, seed: u8) -> u32 {
+        let token_id = self.enter(&self.runner(), event_id, category_id, seed);
+        self.env.mock_all_auths();
+        self.records().claim_racepack(&token_id, &self.organiser);
+        token_id
+    }
+
+    /// The organiser signing exactly one `record_finish_untimed`, in enforcing
+    /// auth mode.
+    fn mock_organiser_untimed(&self, signer: &Address, token_id: u32) {
+        self.env.mock_auths(&[MockAuth {
+            address: signer,
+            invoke: &MockAuthInvoke {
+                contract: &self.contract,
+                fn_name: "record_finish_untimed",
+                args: (token_id,).into_val(&self.env),
+                sub_invokes: &[],
+            },
+        }]);
+    }
+}
+
+/// `enter` -> `claim_racepack` -> `record_finish_untimed`, organiser signing in
+/// enforcing mode. The result is `Finished` with `finish_time_s == None` —
+/// which is the on-chain marker for "finished, no official time".
+#[test]
+fn record_finish_untimed_finishes_with_no_time() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let runner = w.runner();
+    let token_id = w.enter(&runner, event_id, category_id, 3);
+
+    w.env.ledger().set_timestamp(NOW + 60);
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+
+    w.env.ledger().set_timestamp(NOW + 7_200);
+    w.mock_organiser_untimed(&w.organiser, token_id);
+    w.records().record_finish_untimed(&token_id);
+
+    assert_eq!(
+        w.records().record_of(&token_id),
+        RecordData {
+            event_id,
+            category_id,
+            bib_no: 1,
+            addon_ids: vec![&w.env],
+            participant_hash: phash(&w.env, 3),
+            state: RecordState::Finished,
+            entered_at: NOW,
+            claimed_at: Some(NOW + 60),
+            finish_time_s: None,
+            result_at: Some(NOW + 7_200),
+        }
+    );
+    // Ownership never moved, and the record still verifies.
+    assert_eq!(w.records().owner_of(&token_id), runner);
+    assert!(w.records().verify(&token_id, &phash(&w.env, 3)));
+}
+
+#[test]
+fn emits_record_finished_untimed_and_not_record_finished() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 10);
+
+    w.env.mock_all_auths();
+    w.records().record_finish_untimed(&token_id);
+
+    // Exactly one event, and it is the new one: an indexer that only knows
+    // `record_finished` must never see a `0` it would read as a time.
+    let events = w.env.events().all().filter_by_contract(&w.contract);
+    assert_eq!(
+        events,
+        std::vec![RecordFinishedUntimed { token_id, event_id }.to_xdr(&w.env, &w.contract)]
+    );
+    assert_eq!(event_names(events.events()), ["record_finished_untimed"]);
+    // All fields are topics, so the data map is empty — the `RecordDnf` shape.
+    let ContractEventBody::V0(body) = &events.events()[0].body;
+    assert_eq!(body.topics.len(), 3);
+    assert_eq!(
+        body.data,
+        ScVal::Map(Some(soroban_sdk::xdr::ScMap::default()))
+    );
+}
+
+/// A runner who never collected a race pack cannot finish, timed or not.
+#[test]
+fn record_finish_untimed_before_claim_reverts_invalid_state() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Ok(Error::InvalidState))
+    );
+    let record = w.records().record_of(&token_id);
+    assert_eq!(record.state, RecordState::Entered);
+    assert_eq!(record.result_at, None);
+}
+
+#[test]
+fn record_finish_untimed_rejects_a_non_organiser() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+    let impostor = Address::generate(&w.env);
+
+    w.mock_organiser_untimed(&impostor, token_id);
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+
+    // The runner cannot declare their own finish either.
+    let runner = w.records().owner_of(&token_id);
+    w.mock_organiser_untimed(&runner, token_id);
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+
+    assert_eq!(
+        w.records().record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+}
+
+/// An allowlisted scanner may check a runner in, but a result is the
+/// organiser's call — the same split as `record_finish`.
+#[test]
+fn record_finish_untimed_rejects_an_allowlisted_scanner() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+    let scanner = Address::generate(&w.env);
+    w.env.mock_all_auths();
+    w.registry().add_scanner(&event_id, &scanner);
+
+    w.mock_organiser_untimed(&scanner, token_id);
+    assert_eq!(
+        w.records().try_record_finish_untimed(&token_id),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(
+        w.records().record_of(&token_id).state,
+        RecordState::RacepackClaimed
+    );
+}
+
+/// `Finished` (timed or not) and `Dnf` are terminal, and an untimed finish is
+/// no way out of either.
+#[test]
+fn record_finish_untimed_rejects_terminal_states() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let timed = w.claimed(event_id, category_id, 1);
+    let dnf = w.claimed(event_id, category_id, 2);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.record_finish(&timed, &3_600);
+    records.record_dnf(&dnf);
+
+    assert_eq!(
+        records.try_record_finish_untimed(&timed),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_record_finish_untimed(&dnf),
+        Err(Ok(Error::InvalidState))
+    );
+    // A published time is never erased into "no time".
+    assert_eq!(records.record_of(&timed).finish_time_s, Some(3_600));
+    assert_eq!(records.record_of(&dnf).state, RecordState::Dnf);
+}
+
+/// Once untimed-finished, every result path is closed: no time can be added
+/// later, no DNF can replace it, and it cannot be finished twice.
+#[test]
+fn an_untimed_finish_is_terminal() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    records.record_finish_untimed(&token_id);
+    let finished = records.record_of(&token_id);
+
+    w.env.ledger().set_timestamp(NOW + 60);
+    assert_eq!(
+        records.try_record_finish(&token_id, &3_600),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_record_dnf(&token_id),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_record_finish_untimed(&token_id),
+        Err(Ok(Error::InvalidState))
+    );
+    assert_eq!(
+        records.try_claim_racepack(&token_id, &w.organiser),
+        Err(Ok(Error::AlreadyClaimed))
+    );
+    // Not one field moved, `result_at` included.
+    assert_eq!(records.record_of(&token_id), finished);
+}
+
+#[test]
+fn record_finish_untimed_on_an_unknown_token_reverts_record_not_found() {
+    let w = World::new();
+    w.open_event(5, PRICE);
+
+    w.env.mock_all_auths();
+    assert_eq!(
+        w.records().try_record_finish_untimed(&404),
+        Err(Ok(Error::RecordNotFound))
+    );
+}
+
+/// The two finish paths live side by side in one event without touching each
+/// other: the timed one still emits `RecordFinished` with its time and still
+/// refuses `0`, exactly as before v2.2.
+#[test]
+fn timed_and_untimed_finishes_coexist_and_the_timed_path_is_unchanged() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let timed = w.claimed(event_id, category_id, 1);
+    let untimed = w.claimed(event_id, category_id, 2);
+
+    w.env.mock_all_auths();
+    let records = w.records();
+    // Still refuses zero — `0` is not how "no time" is spelled.
+    assert_eq!(
+        records.try_record_finish(&timed, &0),
+        Err(Ok(Error::InvalidFinishTime))
+    );
+    assert_eq!(
+        records.record_of(&timed).state,
+        RecordState::RacepackClaimed
+    );
+
+    records.record_finish(&timed, &2_750);
+    assert_eq!(
+        w.env.events().all().filter_by_contract(&w.contract),
+        std::vec![RecordFinished {
+            token_id: timed,
+            event_id,
+            finish_time_s: 2_750,
+        }
+        .to_xdr(&w.env, &w.contract)]
+    );
+    records.record_finish_untimed(&untimed);
+
+    let timed_record = records.record_of(&timed);
+    let untimed_record = records.record_of(&untimed);
+    assert_eq!(timed_record.state, RecordState::Finished);
+    assert_eq!(timed_record.finish_time_s, Some(2_750));
+    assert_eq!(untimed_record.state, RecordState::Finished);
+    assert_eq!(untimed_record.finish_time_s, None);
+}
+
+/// Add-ons bought at entry survive an untimed finish, like any other.
+#[test]
+fn an_untimed_finish_keeps_the_add_ons_on_the_record() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+    let token_id = w.enter_with(
+        &w.runner(),
+        event_id,
+        category_id,
+        vec![&w.env, jersey, tumbler],
+        1,
+    );
+
+    w.env.mock_all_auths();
+    w.records().claim_racepack(&token_id, &w.organiser);
+    w.records().record_finish_untimed(&token_id);
+
+    let record = w.records().record_of(&token_id);
+    assert_eq!(record.addon_ids, vec![&w.env, jersey, tumbler]);
+    assert_eq!(record.state, RecordState::Finished);
+}
+
+/// The write re-extends the record's rent, like every other lifecycle write.
+#[test]
+fn record_finish_untimed_re_extends_a_decayed_ttl() {
+    let w = World::new();
+    let (event_id, category_id) = w.open_event(5, PRICE);
+    let token_id = w.claimed(event_id, category_id, 1);
+
+    // Let the entry decay below the bump threshold, then finish.
+    let seq = w.env.ledger().sequence();
+    w.env
+        .ledger()
+        .set_sequence_number(seq + BUMP_TO - BUMP_THRESHOLD + DAY_IN_LEDGERS);
+    let decayed = persistent_ttl(&w.env, &w.contract, DataKey::Record(token_id));
+    assert!(decayed < BUMP_THRESHOLD, "fixture did not decay: {decayed}");
+
+    w.env.mock_all_auths();
+    w.records().record_finish_untimed(&token_id);
+    assert_eq!(
+        persistent_ttl(&w.env, &w.contract, DataKey::Record(token_id)),
+        BUMP_TO
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade (v2)
+//
+// Deployed from the BUILT WASM, because that is the only form
+// `update_current_contract_wasm` can replace. Needs `stellar contract build`
+// to have run first.
+// ---------------------------------------------------------------------------
+mod upgrade {
+    use super::*;
+    use soroban_sdk::Bytes;
+    use std::path::PathBuf;
+
+    fn wasm_bytes(name: &str) -> std::vec::Vec<u8> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/wasm32v1-none/release")
+            .join(name);
+        std::fs::read(&path).unwrap_or_else(|e| {
+            panic!(
+                "cannot read {}: {e}\nRun `cd sc && stellar contract build` first — the upgrade \
+                 tests replace a real executable, so they need one.",
+                path.display()
+            )
+        })
+    }
+
+    fn upload(env: &Env, name: &str) -> BytesN<32> {
+        env.deployer()
+            .upload_contract_wasm(Bytes::from_slice(env, &wasm_bytes(name)))
+    }
+
+    /// A World whose RaceRecord is deployed from wasm rather than natively.
+    fn wasm_world() -> World {
+        let w = World::new();
+        // `set_race_record` is one-shot, so a RaceRecord deployed from wasm
+        // needs a registry of its own to be the trusted caller of. It has to
+        // exist BEFORE the contract, because the address is a constructor arg.
+        let registry = w.env.register(EventRegistry, (w.admin.clone(),));
+        let contract = w.env.register(
+            wasm_bytes("race_record.wasm").as_slice(),
+            (
+                w.admin.clone(),
+                registry.clone(),
+                w.token.clone(),
+                String::from_str(&w.env, NAME),
+                String::from_str(&w.env, SYMBOL),
+                String::from_str(&w.env, BASE_URI),
+            ),
+        );
+        w.env.mock_all_auths();
+        let registry_client = RegistryClient::new(&w.env, &registry);
+        registry_client.set_race_record(&contract);
+        // A second registry means a second allowlist (STE-36).
+        registry_client.add_organiser(&w.organiser);
+        World {
+            contract,
+            registry,
+            ..w
+        }
+    }
+
+    /// Records — including which add-ons they bought — read back unchanged
+    /// after the executable is replaced.
+    #[test]
+    fn records_written_before_an_upgrade_read_back_after_it() {
+        let w = wasm_world();
+        let (event_id, category_id) = w.open_event(5, PRICE);
+        let (jersey, tumbler) = w.jersey_and_tumbler(event_id);
+        let runner = w.runner();
+        let token_id = w.enter_with(
+            &runner,
+            event_id,
+            category_id,
+            vec![&w.env, jersey, tumbler],
+            1,
+        );
+        let before = w.records().record_of(&token_id);
+
+        w.env.mock_all_auths();
+        w.records().upgrade(&upload(&w.env, "race_record.wasm"));
+
+        assert_eq!(w.records().record_of(&token_id), before);
+        assert_eq!(before.addon_ids, vec![&w.env, jersey, tumbler]);
+        // The OpenZeppelin owner / balance / enumeration keys survive too.
+        assert_eq!(w.records().owner_of(&token_id), runner);
+        assert_eq!(w.records().balance(&runner), 1);
+        assert_eq!(w.records().records_of(&runner), vec![&w.env, token_id]);
+        assert_eq!(w.records().total_supply(), 1);
+        assert_eq!(w.records().name(), String::from_str(&w.env, NAME));
+        assert_eq!(w.records().get_token(), w.token);
+        assert!(w.records().verify(&token_id, &phash(&w.env, 1)));
+
+        // The lifecycle still works on a record minted by the old executable,
+        // and the new one is still upgradeable.
+        w.env.mock_all_auths();
+        w.records().claim_racepack(&token_id, &w.organiser);
+        assert_eq!(
+            w.records().record_of(&token_id).state,
+            RecordState::RacepackClaimed
+        );
+        w.records().upgrade(&upload(&w.env, "race_record.wasm"));
+    }
+
+    /// The same call against the NATIVELY registered contract the rest of this
+    /// file uses. The wasm tests above are the ones that mean something on a
+    /// real network, but they execute the contract as wasm, so the Rust source
+    /// is never instrumented and `upgrade` reads as dead code in the coverage
+    /// report. Running it natively too keeps the report honest.
+    #[test]
+    fn upgrade_runs_natively_too() {
+        let w = World::new();
+        w.env.mock_all_auths();
+        w.records().upgrade(&upload(&w.env, "race_record.wasm"));
+        assert_eq!(w.records().total_supply(), 0);
+    }
+
+    #[test]
+    fn upgrade_rejects_a_non_admin() {
+        let w = wasm_world();
+        let stranger = Address::generate(&w.env);
+        let hash = upload(&w.env, "race_record.wasm");
+
+        w.env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &w.contract,
+                fn_name: "upgrade",
+                args: (hash.clone(),).into_val(&w.env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert_eq!(w.records().try_upgrade(&hash), Err(Err(InvokeError::Abort)));
+    }
+
+    #[test]
+    fn emits_contract_upgraded() {
+        let w = wasm_world();
+        let hash = upload(&w.env, "race_record.wasm");
+
+        w.env.mock_all_auths();
+        w.records().upgrade(&hash);
+
+        assert_eq!(
+            w.env.events().all(),
+            std::vec![crate::ContractUpgraded {
+                new_wasm_hash: hash,
+            }
+            .to_xdr(&w.env, &w.contract)]
+        );
+    }
+
+    // -- STE-41: the upgrade from the wasm genuinely live on testnet --------
+    //
+    // The tests above upgrade today's build to today's build. That proves
+    // storage survives an executable swap, not that state written by the code
+    // RUNNING ON THE CHAIN reads back under the new code. For that the "before"
+    // has to be the live artifact, so it is committed: fetched from
+    // CCVW7WVC… with `stellar contract fetch`, provenance in
+    // `testdata/README.md`.
+
+    /// RaceRecord v2.0.1, the executable at CCVW7WVC… before STE-41.
+    const LIVE_PRE_UNTIMED_WASM: &[u8] =
+        include_bytes!("../testdata/race_record_live_pre_untimed.wasm");
+    /// What the ledger reports for that contract, and INTERFACE.md §0 freezes.
+    const LIVE_PRE_UNTIMED_HASH: &str =
+        "27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b";
+
+    fn hex32(bytes: &BytesN<32>) -> std::string::String {
+        bytes
+            .to_array()
+            .iter()
+            .map(|b| std::format!("{b:02x}"))
+            .collect()
+    }
+
+    /// A World whose RaceRecord runs the LIVE pre-STE-41 executable.
+    fn live_world() -> World {
+        let w = World::new();
+        let registry = w.env.register(EventRegistry, (w.admin.clone(),));
+        let contract = w.env.register(
+            LIVE_PRE_UNTIMED_WASM,
+            (
+                w.admin.clone(),
+                registry.clone(),
+                w.token.clone(),
+                String::from_str(&w.env, NAME),
+                String::from_str(&w.env, SYMBOL),
+                String::from_str(&w.env, BASE_URI),
+            ),
+        );
+        w.env.mock_all_auths();
+        let registry_client = RegistryClient::new(&w.env, &registry);
+        registry_client.set_race_record(&contract);
+        registry_client.add_organiser(&w.organiser);
+        World {
+            contract,
+            registry,
+            ..w
+        }
+    }
+
+    /// Every lifecycle state the live code can write — Entered, RacepackClaimed,
+    /// a timed Finished, Dnf — reads back identically after the upgrade, and
+    /// the new function then works on records the OLD code minted.
+    #[test]
+    fn records_written_by_the_live_wasm_survive_the_untimed_upgrade() {
+        let w = live_world();
+        let live_hash = w
+            .env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&w.env, LIVE_PRE_UNTIMED_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_UNTIMED_HASH);
+
+        // -- written by the OLD code ---------------------------------------
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let (jersey, _) = w.jersey_and_tumbler(event_id);
+        let runner = w.runner();
+        let entered = w.enter(&runner, event_id, category_id, 1);
+        let claimed = w.enter_with(&w.runner(), event_id, category_id, vec![&w.env, jersey], 2);
+        let timed = w.enter(&w.runner(), event_id, category_id, 3);
+        let dnf = w.enter(&w.runner(), event_id, category_id, 4);
+        w.env.mock_all_auths();
+        let records = w.records();
+        records.claim_racepack(&claimed, &w.organiser);
+        records.claim_racepack(&timed, &w.organiser);
+        records.record_finish(&timed, &3_161);
+        records.record_dnf(&dnf);
+
+        // The old code does not export the new function at all.
+        assert!(records.try_record_finish_untimed(&claimed).is_err());
+
+        let before: std::vec::Vec<RecordData> = [entered, claimed, timed, dnf]
+            .iter()
+            .map(|t| records.record_of(t))
+            .collect();
+
+        // -- the upgrade ----------------------------------------------------
+        w.env.mock_all_auths();
+        records.upgrade(&upload(&w.env, "race_record.wasm"));
+
+        // -- everything the old code wrote still decodes, unchanged --------
+        for (token_id, record) in [entered, claimed, timed, dnf].iter().zip(&before) {
+            assert_eq!(&records.record_of(token_id), record);
+        }
+        assert_eq!(before[2].finish_time_s, Some(3_161));
+        assert_eq!(before[1].addon_ids, vec![&w.env, jersey]);
+        assert_eq!(records.owner_of(&entered), runner);
+        assert_eq!(records.total_supply(), 4);
+        assert!(records.verify(&timed, &phash(&w.env, 3)));
+
+        // -- the new path, on records minted by the old code ---------------
+        w.env.mock_all_auths();
+        records.record_finish_untimed(&claimed);
+        let untimed = records.record_of(&claimed);
+        assert_eq!(untimed.state, RecordState::Finished);
+        assert_eq!(untimed.finish_time_s, None);
+        assert_eq!(untimed.addon_ids, vec![&w.env, jersey]);
+
+        records.claim_racepack(&entered, &w.organiser);
+        records.record_finish_untimed(&entered);
+        assert_eq!(records.record_of(&entered).finish_time_s, None);
+
+        // Terminal states written by the old code stay terminal.
+        assert_eq!(
+            records.try_record_finish_untimed(&timed),
+            Err(Ok(Error::InvalidState))
+        );
+        assert_eq!(
+            records.try_record_finish_untimed(&dnf),
+            Err(Ok(Error::InvalidState))
+        );
+
+        // -- and the timed path is untouched by the upgrade ----------------
+        let fresh = w.claimed(event_id, category_id, 5);
+        assert_eq!(fresh, 4, "token ids continue across the upgrade");
+        w.env.mock_all_auths();
+        assert_eq!(
+            records.try_record_finish(&fresh, &0),
+            Err(Ok(Error::InvalidFinishTime))
+        );
+        records.record_finish(&fresh, &2_900);
+        assert_eq!(records.record_of(&fresh).finish_time_s, Some(2_900));
+    }
+}
+
 mod spec_vectors {
     use super::*;
 
@@ -1471,7 +2654,9 @@ mod spec_vectors {
             );
 
             w.env.mock_all_auths();
-            let token_id = w.records().enter(&runner, &event_id, &category_id, &hash);
+            let token_id =
+                w.records()
+                    .enter(&runner, &event_id, &category_id, &vec![&w.env], &hash);
 
             assert!(
                 w.records().verify(&token_id, &hash),
@@ -1522,7 +2707,10 @@ mod exports {
 
     /// EventRegistry's surface. None of it may be re-exported here: RaceRecord
     /// talks to C1 as a client, it does not embed it.
-    const REGISTRY_ONLY: [&str; 12] = [
+    ///
+    /// `upgrade` is deliberately absent from this list — both contracts export
+    /// one of their own (v2), so finding it here is correct, not a leak.
+    const REGISTRY_ONLY: [&str; 19] = [
         "create_event",
         "add_category",
         "set_event_status",
@@ -1535,6 +2723,13 @@ mod exports {
         "get_organiser",
         "is_scanner",
         "event_count",
+        "add_addon",
+        "reserve_addon",
+        "get_addon",
+        "addon_count",
+        "add_organiser",
+        "remove_organiser",
+        "is_organiser",
     ];
 
     fn wasm_path() -> PathBuf {

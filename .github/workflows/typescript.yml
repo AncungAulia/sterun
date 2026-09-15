@@ -10,7 +10,7 @@
 # package builds, and the backend's and SDK's tests pass. Nothing here touches
 # the network, so it cannot go red because testnet had a bad afternoon — the
 # faucet's and the SDK's live behaviour is exercised by hand
-# (`pnpm --filter @sterun/sdk e2e`) and written up in docs/deployments.md
+# (`pnpm --filter @sterunxyz/sdk e2e`) and written up in docs/deployments.md
 # instead.
 name: typescript
 
@@ -116,15 +116,15 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # fe/ imports @sterun/sdk, whose package.json points `types` and `exports`
+      # fe/ imports @sterunxyz/sdk, whose package.json points `types` and `exports`
       # at dist/ — which is generated and gitignored. Without this step every
       # fe file that touches the SDK fails typecheck with TS2307 "cannot find
-      # module @sterun/sdk", which reads like a missing dependency and is
+      # module @sterunxyz/sdk", which reads like a missing dependency and is
       # really a missing build. `pnpm build` further down would produce it, but
       # it runs after Typecheck, and reordering the whole workflow to fix one
       # package's input is a bigger change than saying what fe needs.
-      - name: Build @sterun/sdk (fe typechecks against its dist)
-        run: pnpm --filter @sterun/sdk build
+      - name: Build @sterunxyz/sdk (fe typechecks against its dist)
+        run: pnpm --filter @sterunxyz/sdk build
 
       - name: Lint
         run: pnpm lint

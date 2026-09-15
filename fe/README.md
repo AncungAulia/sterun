@@ -1,24 +1,24 @@
-# Sterun web app (`fe/`)
+# The Sterun web app (`fe/`)
 
-Web app Sterun: directory event, flow pendaftaran, console panitia, QR pass, dan scanner
-volunteer. Next.js App Router + Tailwind v4, membaca kontrak Soroban di Stellar testnet.
+Sterun's web app: the event directory, the entry flow, the organiser console, the QR pass, and the
+volunteer scanner. Next.js App Router + Tailwind v4, reading Soroban contracts on Stellar testnet.
 
-Sebelum menulis kode, baca [`guides/ARCHITECTURE.md`](guides/ARCHITECTURE.md) (struktur folder dan
-aturannya) dan [`../docs/WEB_APP_IA.md`](../docs/WEB_APP_IA.md) (peta halaman).
+Before writing code, read [`guides/ARCHITECTURE.md`](guides/ARCHITECTURE.md) (the folder structure
+and its rules) and [`../docs/WEB_APP_IA.md`](../docs/WEB_APP_IA.md) (the page map).
 
-## Menjalankan
+## Running it
 
-Semua perintah dari **root repo**, bukan dari `fe/` — folder ini anggota pnpm workspace dan tidak
-punya lockfile sendiri.
+Every command from the **repository root**, not from `fe/` — this folder is a pnpm workspace member
+and has no lockfile of its own.
 
 ```bash
-pnpm install                     # sekali, dari root
+pnpm install                     # once, from the root
 pnpm --filter fe dev             # http://localhost:3000
 ```
 
-Tidak ada langkah konfigurasi: nilai testnet-nya sudah ter-commit di `fe/.env`.
+There is no configuration step: the testnet values are committed in `fe/.env`.
 
-Perintah lain:
+Other commands:
 
 ```bash
 pnpm --filter fe build
@@ -26,55 +26,56 @@ pnpm --filter fe typecheck       # next typegen && tsc --noEmit
 pnpm --filter fe lint
 ```
 
-`next typegen` di `typecheck` bukan hiasan: `app/layout.tsx` memakai `LayoutProps<"/">`, tipe global
-yang di-generate Next ke `.next/types/` dan tidak ikut ter-commit. Tanpa langkah itu, `tsc` di mesin
-yang belum pernah build akan gagal dengan `TS2304: Cannot find name 'LayoutProps'`.
+The `next typegen` in `typecheck` is not decoration: `app/layout.tsx` uses `LayoutProps<"/">`, a
+global type Next generates into `.next/types/` which is not committed. Without that step, `tsc` on a
+machine that has never built fails with `TS2304: Cannot find name 'LayoutProps'`.
 
-## Konfigurasi
+## Configuration
 
-Nilai default ada di `fe/.env` dan **ikut ter-commit**: semuanya publik, sama dengan yang ada di
-`docs/deployments.md`. Untuk mengubahnya di mesin sendiri, bikin `fe/.env.local` yang menimpanya
-(file itu tidak masuk git). Alamat kontrak **tidak** di-hardcode di kode — sumbernya
-[`../docs/deployments.md`](../docs/deployments.md), dan divalidasi saat boot di `src/lib/env.ts`.
+The default values live in `fe/.env` and **are committed**: all of them are public, the same as what
+is in `docs/deployments.md`. To change them on your own machine, create a `fe/.env.local` that
+overrides them (that file is not in git). Contract addresses are **not** hardcoded in the code —
+their source is [`../docs/deployments.md`](../docs/deployments.md), and they are validated at boot in
+`src/lib/env.ts`.
 
-| Variabel | Isi |
+| Variable | Contents |
 | --- | --- |
 | `NEXT_PUBLIC_RPC_URL` | `https://soroban-testnet.stellar.org` |
 | `NEXT_PUBLIC_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
-| `NEXT_PUBLIC_EVENT_REGISTRY` | contract id EventRegistry |
-| `NEXT_PUBLIC_RACE_RECORD` | contract id RaceRecord |
-| `NEXT_PUBLIC_SUSD_SAC` | contract id SAC sUSD |
-| `NEXT_PUBLIC_API_URL` | base URL backend `be/`, boleh kosong sampai dipakai |
+| `NEXT_PUBLIC_EVENT_REGISTRY` | the EventRegistry contract id |
+| `NEXT_PUBLIC_RACE_RECORD` | the RaceRecord contract id |
+| `NEXT_PUBLIC_SUSD_SAC` | the sUSD SAC contract id |
+| `NEXT_PUBLIC_API_URL` | the `be/` backend's base URL; may be empty until it is used |
 
-Salah satu variabel hilang atau bukan contract id yang sah → app gagal saat boot dengan pesan yang
-menyebut nama variabelnya, bukan error samar di tengah halaman.
+A missing variable, or one that is not a valid contract id, means the app fails at boot with a
+message naming the variable — rather than a vague error halfway down a page.
 
-## Wallet
+## Wallets
 
-Stellar Wallets Kit (`@creit.tech/stellar-wallets-kit`), dipasang lewat **npm** — dokumentasi
-resminya menyebut JSR dengan ejaan scope berbeda (`@creit-tech`, pakai tanda hubung), tapi paket npm
-`@creit.tech/...` adalah yang cocok dengan pnpm workspace ini dan menuntut
-`@stellar/stellar-sdk ^17.0.0`, sama dengan `pnpm.overrides` di root.
+Stellar Wallets Kit (`@creit.tech/stellar-wallets-kit`), installed from **npm** — its official
+documentation points at JSR with a differently spelled scope (`@creit-tech`, with a hyphen), but the
+npm package `@creit.tech/...` is the one that fits this pnpm workspace and requires
+`@stellar/stellar-sdk ^17.0.0`, matching `pnpm.overrides` at the root.
 
-Kit v2 memakai class **static**, bukan instance, dan menyimpan sendiri wallet terpilih plus address
-ke localStorage. Itu yang membuat refresh halaman tetap terhubung tanpa kita menyimpan apa pun.
-Semua pemakaiannya terkurung di `src/lib/wallet.ts`.
+Kit v2 uses a **static** class rather than an instance, and stores the chosen wallet and address in
+localStorage itself. That is what keeps a page refresh connected without us storing anything. All of
+its use is confined to `src/lib/wallet.ts`.
 
-Untuk menguji: pasang [Freighter](https://freighter.app), arahkan ke **testnet**, lalu klik
-`Connect wallet` di header.
+To test it: install [Freighter](https://freighter.app), point it at **testnet**, and click
+`Connect wallet` in the header.
 
-## Struktur
+## Structure
 
 ```
-app/                routing saja, tanpa logic
-  (browse)/         halaman publik, network-only
+app/                routing only, no logic
+  (browse)/         public pages, network-only
 src/
-  components/       elements/ (primitif) + layouts/ (struktur)
-  hooks/            semua hook
+  components/       elements/ (primitives) + layouts/ (structure)
+  hooks/            every hook
   lib/              chain, backend, storage
-  utils/            helper murni
+  utils/            pure helpers
 guides/             ARCHITECTURE.md
 ```
 
-Aturan lengkapnya di [`guides/ARCHITECTURE.md`](guides/ARCHITECTURE.md). Dua yang paling sering
-dilanggar: **teks UI wajib Bahasa Inggris**, dan **jangan pernah memakai em dash di teks UI**.
+The full rules are in [`guides/ARCHITECTURE.md`](guides/ARCHITECTURE.md). The two broken most often:
+**UI text must be in English**, and **never use an em dash in UI text**.

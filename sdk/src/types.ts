@@ -25,19 +25,30 @@
  * enough to make `enter` fail with an error the caller cannot act on. The names
  * carry the unit so nobody has to guess.
  */
-import type { EventData, CategoryData, EventStatus as BindingEventStatus } from "../vendor-dist/event-registry.js";
+import type {
+  AddOnData,
+  EventData,
+  CategoryData,
+  EventStatus as BindingEventStatus,
+} from "../vendor-dist/event-registry.js";
 import type { RecordData, RecordState as BindingRecordState } from "../vendor-dist/race-record.js";
 
 /**
  * Event lifecycle. Legal transitions (INTERFACE.md §1.2; anything else reverts
  * `InvalidStatus(11)`, including a transition to the current status):
  *
- *     Draft     -> Open | Closed
- *     Open      -> Closed | Completed
- *     Closed    -> Open | Completed
+ *     Draft     -> Open | Closed | Cancelled
+ *     Open      -> Closed | Completed | Cancelled
+ *     Closed    -> Open | Completed | Cancelled
  *     Completed -> (terminal)
+ *     Cancelled -> (terminal)
+ *
+ * `Cancelled` (contracts v2) is not a synonym for `Closed`. `Closed` means
+ * registration is shut but the race is still on and can be re-opened;
+ * `Cancelled` means the race is off, and there is no way back. Nothing on-chain
+ * refunds anyone — that stays an off-chain promise.
  */
-export type EventStatus = "Draft" | "Open" | "Closed" | "Completed";
+export type EventStatus = "Draft" | "Open" | "Closed" | "Completed" | "Cancelled";
 
 /**
  * Record lifecycle. `Finished` and `Dnf` are terminal — there is no exported
@@ -45,7 +56,13 @@ export type EventStatus = "Draft" | "Open" | "Closed" | "Completed";
  */
 export type RecordState = "Entered" | "RacepackClaimed" | "Finished" | "Dnf";
 
-export const EVENT_STATUSES: readonly EventStatus[] = ["Draft", "Open", "Closed", "Completed"];
+export const EVENT_STATUSES: readonly EventStatus[] = [
+  "Draft",
+  "Open",
+  "Closed",
+  "Completed",
+  "Cancelled",
+];
 export const RECORD_STATES: readonly RecordState[] = [
   "Entered",
   "RacepackClaimed",
@@ -66,7 +83,12 @@ export interface SterunEvent {
   status: EventStatus;
 }
 
-/** One distance category. `enteredCount` doubles as the next bib number. */
+/**
+ * One distance category. `enteredCount` is the **quota counter** — how many of
+ * `quota` slots are gone. It is not the bib: since contracts v2.3 a bib is
+ * unique within the whole event and counts from 1, so two distances of one race
+ * never hand out the same number.
+ */
 export interface SterunCategory {
   eventId: number;
   categoryId: number;
@@ -81,6 +103,30 @@ export interface SterunCategory {
   slotsLeft: number;
 }
 
+/**
+ * One paid extra a runner can buy with their entry — a jersey, a cap, a tumbler.
+ *
+ * Deliberately the same shape as {@link SterunCategory}: both are per-event,
+ * id-addressed, priced in stroops and stock-limited, so giving them different
+ * shapes would be inventing a second vocabulary for one idea.
+ *
+ * `unitsLeft` rather than `slotsLeft` is the one word that differs. A category
+ * sells a place in a race; an add-on sells a thing off a shelf, and calling a
+ * jersey a slot reads as a copy-paste rather than a decision.
+ */
+export interface SterunAddOn {
+  eventId: number;
+  addonId: number;
+  /** Soroban `Symbol`, e.g. `JERSEY_L`. */
+  code: string;
+  /** Price in token stroops (7 decimals). Never a float — see sdk/CLAUDE.md. */
+  priceStroops: bigint;
+  quota: number;
+  reservedCount: number;
+  /** `quota - reservedCount`, never negative. Convenience, not chain state. */
+  unitsLeft: number;
+}
+
 /** One race record. The verifiable thing this whole protocol exists to produce. */
 export interface SterunRecord {
   tokenId: number;
@@ -93,9 +139,20 @@ export interface SterunRecord {
   /** Unix seconds. */
   enteredAt: bigint;
   claimedAt: bigint | null;
-  /** Net finish time in seconds. `null` until `record_finish` lands. */
+  /**
+   * Net finish time in seconds. `null` until `record_finish` lands — and
+   * `null` for good on a `Finished` record that went through
+   * `record_finish_untimed`: `state === "Finished" && finishTimeS === null` is
+   * the marker for "finished, no official time". Never read it as `0`.
+   */
   finishTimeS: number | null;
   resultAt: bigint | null;
+  /**
+   * The add-ons this entry paid for, in the order they were reserved (v2).
+   * `[]` when it bought none. Ids only: resolve names and prices with
+   * `listAddOns(eventId)`.
+   */
+  addonIds: number[];
 }
 
 /** 7 decimals, like every classic Stellar asset exposed through a SAC. */
@@ -160,6 +217,18 @@ export function toSterunEvent(eventId: number, data: EventData): SterunEvent {
   };
 }
 
+export function toSterunAddOn(eventId: number, addonId: number, data: AddOnData): SterunAddOn {
+  return {
+    eventId,
+    addonId,
+    code: data.code,
+    priceStroops: data.price_usdc,
+    quota: data.quota,
+    reservedCount: data.reserved_count,
+    unitsLeft: Math.max(0, data.quota - data.reserved_count),
+  };
+}
+
 export function toSterunCategory(
   eventId: number,
   categoryId: number,
@@ -189,5 +258,6 @@ export function toSterunRecord(tokenId: number, data: RecordData): SterunRecord 
     claimedAt: data.claimed_at ?? null,
     finishTimeS: data.finish_time_s ?? null,
     resultAt: data.result_at ?? null,
+    addonIds: [...(data.addon_ids ?? [])],
   };
 }

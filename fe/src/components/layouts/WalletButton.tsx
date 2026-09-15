@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/elements/Button";
+import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
 import { shortAddress } from "@/utils/format";
 

@@ -179,7 +179,9 @@ export class R2FileStore implements FileStore {
       throw new R2Error(response.status, `PUT ${keyFor(sha256)}`, await response.text());
     }
 
-    this.#cachedTotal = total + bytes.length;
+    // The cached total as it is now, not the one read before the PUT — see the
+    // same line in store.ts for the race this avoids.
+    this.#cachedTotal = (this.#cachedTotal ?? total) + bytes.length;
     return { sha256, size: bytes.length, contentType, created: true };
   }
 

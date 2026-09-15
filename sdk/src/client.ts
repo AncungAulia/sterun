@@ -47,10 +47,12 @@ import type { RaceRecordDocument } from "./schema.js";
 import {
   fromEventStatus,
   fromHex32,
+  toSterunAddOn,
   toSterunCategory,
   toSterunEvent,
   toSterunRecord,
   type EventStatus,
+  type SterunAddOn,
   type SterunCategory,
   type SterunEvent,
   type SterunRecord,
@@ -114,10 +116,49 @@ export interface AddCategoryArgs {
   priceStroops: bigint;
 }
 
+/** Raise a category's quota: a second batch for a distance that sold out (v2.4). */
+export interface IncreaseQuotaArgs {
+  eventId: number;
+  categoryId: number;
+  /**
+   * The new total, not the number added. Must be strictly greater than the
+   * current quota, or the call reverts `QuotaNotIncreased(19)`.
+   */
+  newQuota: number;
+}
+
+/**
+ * A paid extra sold alongside an entry.
+ *
+ * Priced in **stroops**, like {@link AddCategoryArgs} and for the same reason:
+ * money never travels through a float in this codebase. A jersey at 50 sUSD is
+ * `500_000_000n`, and the round trip through a double that `50.0` would invite
+ * is off by a stroop often enough to make `enter` revert with no explanation.
+ */
+export interface AddAddonArgs {
+  eventId: number;
+  /** Soroban `Symbol`: letters, digits and `_`, e.g. `JERSEY_L`. */
+  code: string;
+  /** Price in stroops (7 decimals). `0n` makes the add-on free. */
+  priceStroops: bigint;
+  /** Units available. The contract enforces it; `enter` reverts `AddOnQuotaFull(15)`. */
+  quota: number;
+}
+
 export interface EnterArgs {
   runner: string;
   eventId: number;
   categoryId: number;
+  /**
+   * Paid add-ons to buy alongside the entry (contracts v2, STE-35). Omit it, or
+   * pass `[]`, for an entry with none — that is the pre-v2 behaviour exactly.
+   *
+   * At most 16 ids, no more than the event has add-ons, and no id twice; the
+   * contract rejects the rest with `TooManyAddOns(106)` / `DuplicateAddOn(107)`
+   * before it touches any quota. Wanting two of something is two add-ons, not
+   * one id listed twice.
+   */
+  addOnIds?: number[];
   /** `sha256(name || national_id || emergency_contact || salt)`, 64 hex chars. */
   participantHash: string;
 }
@@ -218,6 +259,43 @@ export class SterunClient {
   }
 
   // ---------------------------------------------------------------------------
+  // EventRegistry (C1) — admin side: the organiser allowlist (STE-36)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Put an address on the organiser allowlist. **The contract's admin
+   * authorizes**, not the organiser.
+   *
+   * `createEvent` needs this. `organiser.require_auth()` proves the caller
+   * holds the keypair and says nothing about `name`, which is a free string —
+   * so without the allowlist anyone can publish "Jakarta Marathon 2026". An
+   * address that is not on it gets `NotAllowlistedOrganiser(18)`.
+   *
+   * Reverts `OrganiserAlreadyAdded(16)` if the address is already on it.
+   */
+  async addOrganiser(organiser: string, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "addOrganiser",
+      () => this.registry.add_organiser({ organiser }, this.callOptions(options)),
+    );
+  }
+
+  /**
+   * Take an address off the allowlist. **Admin authorizes.** Reverts
+   * `OrganiserNotFound(17)` if it was not on it.
+   *
+   * Forward-looking only: events the address already created keep it as their
+   * organiser, with every per-event power intact. What it loses is the ability
+   * to create new ones.
+   */
+  async removeOrganiser(organiser: string, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "removeOrganiser",
+      () => this.registry.remove_organiser({ organiser }, this.callOptions(options)),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // EventRegistry (C1) — organiser side
   // ---------------------------------------------------------------------------
 
@@ -262,6 +340,25 @@ export class SterunClient {
           },
           this.callOptions(options),
         ),
+    );
+  }
+
+  /**
+   * Raise a category's quota (contracts v2.4, STE-55). Organiser-only, no status
+   * gate. The quota only ever goes up: a `newQuota` equal to or below the
+   * current one reverts `QuotaNotIncreased(19)`, because runners paid against
+   * the published number.
+   */
+  async increaseQuota(args: IncreaseQuotaArgs, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite("increaseQuota", () =>
+      this.registry.increase_quota(
+        {
+          event_id: args.eventId,
+          category_id: args.categoryId,
+          new_quota: args.newQuota,
+        },
+        this.callOptions(options),
+      ),
     );
   }
 
@@ -340,11 +437,71 @@ export class SterunClient {
     return categories;
   }
 
+  /**
+   * Put a paid extra on sale for an event. Organiser-signed, like `addCategory`.
+   *
+   * `reserve_addon` is deliberately NOT wrapped anywhere in this client. It
+   * calls `race_record.require_auth()` on chain, so it is a cross-contract step
+   * inside `enter` rather than something a client may call — wrapping it would
+   * only hand people a method that always reverts.
+   */
+  async addAddon(args: AddAddonArgs, options?: CallOptions): Promise<SentResult<number>> {
+    return runWrite("addAddon", () =>
+      this.registry.add_addon(
+        {
+          event_id: args.eventId,
+          code: args.code,
+          price_usdc: args.priceStroops,
+          quota: args.quota,
+        },
+        this.callOptions(options),
+      ),
+    );
+  }
+
+  /** Reverts `AddOnNotFound(14)` for an id this event never sold. */
+  async getAddon(eventId: number, addonId: number): Promise<SterunAddOn> {
+    const data = await runRead("getAddon", () =>
+      this.registry.get_addon({ event_id: eventId, addon_id: addonId }),
+    );
+    return toSterunAddOn(eventId, addonId, data);
+  }
+
+  async addonCount(eventId: number): Promise<number> {
+    return runRead("addonCount", () => this.registry.addon_count({ event_id: eventId }));
+  }
+
+  /**
+   * Every add-on of an event, in id order. `[]` for an event selling none.
+   *
+   * One call per add-on, the same fan-out `listCategories` performs, and for
+   * the same reason rather than by preference: EventRegistry exposes
+   * `addon_count` and `get_addon` and nothing that returns them together. A
+   * view handing back an unbounded vector gets more expensive as an event
+   * grows, which is why the contract does not offer one — so the cost belongs
+   * here, where a caller can see it, rather than in a helper that hides it.
+   */
+  async listAddOns(eventId: number): Promise<SterunAddOn[]> {
+    const count = await this.addonCount(eventId);
+    const addOns: SterunAddOn[] = [];
+    for (let id = 0; id < count; id += 1) addOns.push(await this.getAddon(eventId, id));
+    return addOns;
+  }
+
   async getOrganiser(eventId: number): Promise<string> {
     return runRead("getOrganiser", () => this.registry.get_organiser({ event_id: eventId }));
   }
 
   /** Never reverts: `false` for an unknown event or an address never added. */
+  /**
+   * Whether the address may call `createEvent` at all (STE-36). This is the
+   * read a console uses to decide whether to show the form; the contract is
+   * what enforces it, so skipping this check gets a revert, not an event.
+   */
+  async isOrganiser(address: string): Promise<boolean> {
+    return runRead("isOrganiser", () => this.registry.is_organiser({ addr: address }));
+  }
+
   async isScanner(eventId: number, address: string): Promise<boolean> {
     return runRead("isScanner", () => this.registry.is_scanner({ event_id: eventId, addr: address }));
   }
@@ -364,14 +521,19 @@ export class SterunClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * Enter a race: reserve a slot, pay the entry fee, mint the record — as **one
-   * transaction**.
+   * Enter a race: reserve a slot, buy any add-ons, pay for the lot, mint the
+   * record — as **one transaction**.
    *
    * The runner signs a single auth tree that also covers the nested SEP-41
    * `transfer` sub-invocation, so the fee cannot be paid without the entry
-   * being created and the entry cannot be created without the fee. A free
-   * category (`priceStroops === 0n`) skips the token call entirely, which means
-   * the runner needs neither a balance nor a trustline.
+   * being created and the entry cannot be created without the fee. The amount
+   * transferred is the category price plus every add-on price, once; a total of
+   * zero skips the token call entirely, which means the runner needs neither a
+   * balance nor a trustline.
+   *
+   * A sold-out add-on takes the whole entry down with it (`AddOnQuotaFull(15)`,
+   * from EventRegistry): the runner asked for a place *and* the add-on, and a
+   * place alone is a different purchase from the one they signed.
    *
    * Returns the new `token_id`.
    *
@@ -385,9 +547,10 @@ export class SterunClient {
       () =>
         this.record.enter(
           {
-            runner: args.runner,
+              runner: args.runner,
             event_id: args.eventId,
             category_id: args.categoryId,
+            addon_ids: args.addOnIds ?? [],
             participant_hash: fromHex32(args.participantHash, "participantHash"),
           },
           this.callOptions(options),
@@ -433,6 +596,26 @@ export class SterunClient {
           { token_id: tokenId, finish_time_s: finishTimeS },
           this.callOptions(options),
         ),
+    );
+  }
+
+  /**
+   * Mark a finish with **no official time**, for untimed events (fun runs,
+   * colour runs — anything without chip timing). Organiser only, only from
+   * `RacepackClaimed` (`InvalidState(103)` otherwise), and terminal like
+   * `recordFinish`.
+   *
+   * The resulting record is `Finished` with `finishTimeS === null`, and that
+   * pair is the marker for "finished, no official time". It is deliberately
+   * not `recordFinish(tokenId, 0)`: the contract refuses `0`
+   * (`InvalidFinishTime(105)`), and the `record_finished` event carries a
+   * plain number every consumer would read as a zero-second race. This one
+   * emits `record_finished_untimed` instead (INTERFACE.md v2.2.0).
+   */
+  async recordFinishUntimed(tokenId: number, options?: CallOptions): Promise<SentResult<void>> {
+    return runWrite(
+      "recordFinishUntimed",
+      () => this.record.record_finish_untimed({ token_id: tokenId }, this.callOptions(options)),
     );
   }
 

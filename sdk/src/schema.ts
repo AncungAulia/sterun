@@ -73,7 +73,13 @@ const bigintString = z.string().regex(/^\d+$/, "must be a non-negative integer a
 /** A 64-character transaction hash, lowercase hex. */
 const txHash = z.string().regex(/^[0-9a-f]{64}$/, "must be a transaction hash in lowercase hex");
 
-export const eventStatusSchema = z.enum(["Draft", "Open", "Closed", "Completed"]);
+export const eventStatusSchema = z.enum([
+  "Draft",
+  "Open",
+  "Closed",
+  "Completed",
+  "Cancelled",
+]);
 export const recordStateSchema = z.enum(["Entered", "RacepackClaimed", "Finished", "Dnf"]);
 
 /**

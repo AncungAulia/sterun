@@ -7,7 +7,7 @@
  * whatever host the organiser chose. That host is frequently a parked domain or
  * a dead link, and a failure there must not take the event page with it.
  */
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 
 import { fetchEventMetadata, type MetadataResult } from "@/lib/metadata";
 
@@ -17,8 +17,13 @@ import { fetchEventMetadata, type MetadataResult } from "@/lib/metadata";
  */
 const FOREVER = Number.POSITIVE_INFINITY;
 
-export function useEventMetadata(uri: string, metadataHash: string) {
-  return useQuery<MetadataResult>({
+/**
+ * The query for one document, shared by the event page and the directory. Both
+ * read the same cache entry, so a race opened from the directory already has
+ * its document verified.
+ */
+export function metadataQuery(uri: string, metadataHash: string) {
+  return queryOptions<MetadataResult>({
     // The hash is part of the key, not just the url. A url can be reused by a
     // later event with different content, and reading the previous document out
     // of cache would show one event's poster on another.
@@ -30,4 +35,8 @@ export function useEventMetadata(uri: string, metadataHash: string) {
     // a retry would only repeat a request that already answered.
     retry: false,
   });
+}
+
+export function useEventMetadata(uri: string, metadataHash: string) {
+  return useQuery(metadataQuery(uri, metadataHash));
 }

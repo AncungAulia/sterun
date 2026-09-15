@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Big_Shoulders, Poppins } from "next/font/google";
 
-import { Header } from "@/components/layouts/Header";
-
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -35,17 +33,37 @@ export const metadata: Metadata = {
     template: "%s · Sterun",
   },
   description:
-    "Verified race records on Stellar. Entries, race pack collection and finish results are recorded on-chain and bound to the runner.",
+    "Find races, enter them, and keep a trusted record of every finish.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`h-full antialiased ${poppins.variable} ${bigShoulders.variable}`}>
+    /**
+     * suppressHydrationWarning is on <html> for one specific reason: Stellar
+     * Wallets Kit writes its own --swk-* custom properties onto the document
+     * element when it initialises, and that only ever happens on the client.
+     * React then compares a server <html> with no style attribute against a
+     * client one with thirty custom properties and reports a mismatch nobody
+     * can act on.
+     *
+     * It suppresses the warning for this element's own attributes only, not for
+     * its children, so a real mismatch inside the page still surfaces.
+     */
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`h-full antialiased ${poppins.variable} ${bigShoulders.variable}`}
+    >
+      {/*
+        No header and no <main> here. Both used to live at this level, which
+        made them unconditional: the organiser console, which draws its own
+        wordmark and wallet chip in its rail, inherited a second copy of each.
+        A root layout can only say "every page", so the chrome moved down to the
+        route groups, which can disagree. `(browse)` and the wizard render
+        `SiteFrame`; the console renders its own.
+      */}
       <body className="flex min-h-full flex-col">
-        <Providers>
-          <Header />
-          <main className="flex flex-1 flex-col">{children}</main>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

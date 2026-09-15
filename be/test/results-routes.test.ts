@@ -180,8 +180,36 @@ describe.skipIf(!DATABASE_URL)(`results upload (${DATABASE_URL ? "postgres" : SK
       const body = res.json();
       expect(body.counts).toMatchObject({ total: 2, publishable: 1, not_claimed: 1 });
       expect(body.publishable).toEqual([
-        { token_id: 0, finish_time_s: 3161, bib_no: 1, category_id: 0 },
+        { token_id: 0, kind: "timed", finish_time_s: 3161, bib_no: 1, category_id: 0 },
       ]);
+    });
+
+    it("previews a mixed file of timed, untimed and DNF rows (STE-44)", async () => {
+      // A fun run next to a timed race: one chip time, one runner who did not
+      // finish (never collected a pack, which record_dnf allows), and one who
+      // finished with no official time.
+      const res = await upload(
+        "bib_no,category_id,finish_time,status\n1,0,52:41,\n2,0,,dnf\n1,1,,untimed\n",
+      );
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.counts).toMatchObject({ total: 3, publishable: 3, not_claimed: 0 });
+      expect(body.rows.map((r: { kind: string }) => r.kind)).toEqual(["timed", "dnf", "untimed"]);
+      expect(body.publishable).toEqual([
+        { token_id: 0, kind: "timed", finish_time_s: 3161, bib_no: 1, category_id: 0 },
+        // null, never 0: a zero is a zero-second race to anything that reads it.
+        { token_id: 1, kind: "dnf", finish_time_s: null, bib_no: 2, category_id: 0 },
+        { token_id: 2, kind: "untimed", finish_time_s: null, bib_no: 1, category_id: 1 },
+      ]);
+    });
+
+    it("flags an untimed finish for a runner who never collected a race pack", async () => {
+      const res = await upload("bib_no,category_id,status\n2,0,untimed\n");
+      const row = res.json().rows[0];
+      expect(row.kind).toBe("untimed");
+      expect(row.anomalies.map((a: { kind: string }) => a.kind)).toEqual(["not_claimed"]);
+      expect(row.anomalies[0].reason).toMatch(/record_finish_untimed/);
+      expect(res.json().publishable).toEqual([]);
     });
 
     it("flags the ambiguous bib rather than guessing a category", async () => {

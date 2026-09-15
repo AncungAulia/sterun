@@ -114,6 +114,23 @@
   --text-bib: 4.5rem; /* 72px — the bib number on the QR pass, nothing else */
   --text-bib--line-height: 1;
 
+  /* --- Motion ----------------------------------------------------------- */
+  /* Four durations and three curves, added for the race-day screens (STE-18).
+     Motion here has one job: make a change legible, never announce itself. A
+     verdict a volunteer is waiting for must be readable before the movement
+     that carried it has finished, so nothing that carries meaning runs longer
+     than --motion-base. --motion-slow is for decoration only (a check drawing
+     itself), and every one of these is dropped to 0 under
+     prefers-reduced-motion. */
+  --motion-instant: 90ms; /* chips, counters, anything already in place */
+  --motion-fast: 140ms; /* leaving: a verdict dismissed, a sheet closing */
+  --motion-base: 200ms; /* arriving: a verdict, a banner, a sheet */
+  --motion-slow: 320ms; /* decorative only, never blocks a decision */
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* things arriving */
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45); /* things leaving */
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1); /* things moving within a screen */
+
   /* --- Radius ----------------------------------------------------------- */
   --radius-sm: 4px; /* badges, tags */
   --radius-md: 8px; /* inputs, buttons */

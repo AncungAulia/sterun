@@ -21,6 +21,9 @@ import { RESPONSE_SCHEMAS } from "../src/routes/participants.js";
 import { buildServer } from "../src/server.js";
 import { participantHash, saltFromHex } from "../src/spec/participant-hash.js";
 import { Vault } from "../src/vault.js";
+import { ChainReader } from "../src/chain/reader.js";
+import { ADDRESSES } from "./helpers/addresses.js";
+import { FakeChain } from "./helpers/fake-chain.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
 
 const PERSON = {
@@ -28,7 +31,25 @@ const PERSON = {
   national_id: "3174012509900001",
   emergency_contact: "+6281234567890",
 };
-const PII_VALUES = [PERSON.name, PERSON.national_id, PERSON.emergency_contact];
+/** STE-47: the entry form's fields, none of them hashed. */
+const FORM = {
+  id_type: "national_id_card",
+  bib_name: "BUDI S",
+  email: "budi.santoso@example.com",
+  phone: "+6281398765432",
+  gender: "male",
+  date_of_birth: "1990-05-17",
+  emergency_contact_name: "Siti Rahayu",
+};
+const PII_VALUES = [
+  PERSON.name,
+  PERSON.national_id,
+  PERSON.emergency_contact,
+  FORM.email,
+  FORM.phone,
+  FORM.date_of_birth,
+  FORM.emergency_contact_name,
+];
 
 describe("response schemas cannot express PII", () => {
   // This test needs no database: it reads the schemas Fastify serialises from.
@@ -37,7 +58,16 @@ describe("response schemas cannot express PII", () => {
   // reading the contract rather than grepping the code.
   it.each(Object.entries(RESPONSE_SCHEMAS))("%s names no PII field", (_name, schema) => {
     const json = JSON.stringify(schema);
-    for (const forbidden of ["name", "national_id", "emergency_contact"]) {
+    for (const forbidden of [
+      "name",
+      "national_id",
+      "emergency_contact",
+      "email",
+      "phone",
+      "gender",
+      "date_of_birth",
+      "emergency_contact_name",
+    ]) {
       // `participant_id` etc. contain "id"; match whole property keys only.
       expect(json).not.toMatch(new RegExp(`"${forbidden}"\\s*:`));
     }
@@ -57,6 +87,7 @@ describe("response schemas cannot express PII", () => {
 describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
   let keyring: Keyring;
+  let indexKey: Buffer;
   let close: () => Promise<void>;
   let app: FastifyInstance;
   let challenges: ChallengeStore;
@@ -80,20 +111,68 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     };
   }
 
+  // The chain confirm checks a claimed token against. `onChain` puts there the
+  // record `enter` would have minted for a submission: its hash, race, owner.
+  const chain = new FakeChain(ADDRESSES);
+  const onChain = (
+    tokenId: number,
+    submitted: { participant_hash: string },
+    owner: Keypair,
+    where: { event_id?: number; category_id?: number } = {},
+  ) =>
+    chain.addRecord({
+      tokenId,
+      eventId: where.event_id ?? 0,
+      categoryId: where.category_id ?? 0,
+      owner: owner.publicKey(),
+      participantHash: submitted.participant_hash,
+    });
+  const confirm = async (participantId: string, tokenId: number, kp: Keypair, target = app) => {
+    const challenge = await target.inject({
+      method: "POST",
+      url: "/auth/challenge",
+      payload: { address: kp.publicKey() },
+    });
+    const { nonce } = challenge.json();
+    return target.inject({
+      method: "POST",
+      url: `/participants/${participantId}/confirm`,
+      headers: {
+        "x-sterun-address": kp.publicKey(),
+        "x-sterun-nonce": nonce,
+        "x-sterun-signature": Buffer.from(kp.sign(Buffer.from(nonce, "utf8"))).toString("base64"),
+      },
+      payload: { token_id: tokenId, enter_tx_hash: "a".repeat(64) },
+    });
+  };
+
+  // A new identity number per submission unless a test names one. Since STE-51
+  // a confirmed entry refuses the same person in the same race, so a shared
+  // number would make every test depend on which ones confirmed before it.
+  let nextNationalId = 0;
   const submit = async (kp: Keypair, overrides: Record<string, unknown> = {}) =>
     app.inject({
       method: "POST",
       url: "/participants",
       headers: await credentials(kp),
-      payload: { ...PERSON, event_id: 0, category_id: 0, runner_address: kp.publicKey(), ...overrides },
+      payload: {
+        ...PERSON,
+        national_id: `99${String(nextNationalId++).padStart(14, "0")}`,
+        ...FORM,
+        event_id: 0,
+        category_id: 0,
+        runner_address: kp.publicKey(),
+        ...overrides,
+      },
     });
 
   beforeAll(async () => {
-    ({ pool, keyring, close } = await freshDatabase());
+    ({ pool, keyring, indexKey, close } = await freshDatabase());
     challenges = new ChallengeStore();
     app = buildServer(loadConfig({ NODE_ENV: "test" }), {
-      vault: new Vault(pool, keyring),
+      vault: new Vault(pool, keyring, indexKey),
       challenges,
+      reader: new ChainReader(chain, ADDRESSES),
     });
     await app.ready();
   });
@@ -104,7 +183,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
 
   describe("POST /participants", () => {
     it("stores the entry and returns hash, salt and secret exactly once", async () => {
-      const res = await submit(runner);
+      const res = await submit(runner, { national_id: PERSON.national_id });
       expect(res.statusCode).toBe(201);
       const body = res.json();
       expect(body.participant_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -124,8 +203,149 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     });
 
     it("never echoes the submitted PII back", async () => {
-      const res = await submit(runner);
+      const res = await submit(runner, { national_id: PERSON.national_id });
       for (const value of PII_VALUES) expect(res.body).not.toContain(value);
+    });
+
+    describe("the entry form's fields (STE-47)", () => {
+      it("stores every field, encrypted where it is PII, and echoes none of it", async () => {
+        const res = await submit(runner, { national_id: PERSON.national_id });
+        expect(res.statusCode).toBe(201);
+        for (const value of PII_VALUES) expect(res.body).not.toContain(value);
+
+        const stored = await new Vault(pool, keyring, indexKey).decryptForAudit(res.json().participant_id);
+        expect(stored).toEqual({
+          name: PERSON.name,
+          nationalId: PERSON.national_id,
+          emergencyContact: PERSON.emergency_contact,
+          idType: FORM.id_type,
+          bibName: FORM.bib_name,
+          email: FORM.email,
+          phone: FORM.phone,
+          gender: FORM.gender,
+          dateOfBirth: FORM.date_of_birth,
+          emergencyContactName: FORM.emergency_contact_name,
+        });
+      });
+
+      it("hashes an E.164 emergency contact exactly as the frozen vectors do", async () => {
+        // +6281234567890 is the contact in docs/specs/vectors/participant_hash.json.
+        // E.164 is already what norm_contact produces, so requiring it changes
+        // no hash — it only stops a second spelling of the same number.
+        const res = await submit(runner, { national_id: PERSON.national_id });
+        const body = res.json();
+        expect(
+          participantHash(
+            {
+              name: PERSON.name,
+              nationalId: PERSON.national_id,
+              emergencyContact: "+6281234567890",
+            },
+            saltFromHex(body.salt),
+          ),
+        ).toBe(body.participant_hash);
+      });
+
+      const refusal = async (overrides: Record<string, unknown>) => {
+        const res = await submit(runner, overrides);
+        expect(res.statusCode).toBe(400);
+        return res.json();
+      };
+
+      it.each([
+        ["a local number without a country code", "0812 3456 7890"],
+        ["spaces inside an international number", "+62 812 3456 7890"],
+        ["a leading zero after the plus", "+0812345678"],
+      ])("refuses an emergency contact written as %s, and says how to fix it", async (_l, value) => {
+        const body = await refusal({ emergency_contact: value });
+        expect(body.details).toContainEqual({
+          path: "/emergency_contact",
+          problem: expect.stringMatching(/E\.164.*\+6281234567890/),
+        });
+      });
+
+      it("refuses a phone that is not E.164 the same way", async () => {
+        const body = await refusal({ phone: "081398765432" });
+        expect(body.details[0]).toMatchObject({ path: "/phone", problem: expect.stringMatching(/E\.164/) });
+      });
+
+      it("refuses a malformed email", async () => {
+        const body = await refusal({ email: "budi at example" });
+        expect(body.details).toContainEqual({
+          path: "/email",
+          problem: expect.stringMatching(/email address/),
+        });
+      });
+
+      it.each([
+        ["an age as a string", "34"],
+        ["an age as a number", 34],
+        ["a date that does not exist", "1990-02-30"],
+      ])("refuses %s instead of a date of birth", async (_l, value) => {
+        const body = await refusal({ date_of_birth: value });
+        expect(body.details[0]).toMatchObject({
+          path: "/date_of_birth",
+          problem: expect.stringMatching(/YYYY-MM-DD.*not an age/),
+        });
+      });
+
+      it("refuses a date of birth in the future", async () => {
+        const body = await refusal({ date_of_birth: "2999-01-01" });
+        expect(body.error).toBe("invalid-date-of-birth");
+      });
+
+      it("refuses an id_type it does not know", async () => {
+        const body = await refusal({ id_type: "student_card" });
+        expect(body.details[0]).toMatchObject({
+          path: "/id_type",
+          problem: expect.stringMatching(/national_id_card, passport, driving_licence, other/),
+        });
+      });
+
+      it("refuses a bib name that would not fit on a bib", async () => {
+        await refusal({ bib_name: "SEVENTEEN LETTERS" });
+      });
+
+      it.each(Object.keys(FORM))("refuses a submission missing %s", async (field) => {
+        const res = await app.inject({
+          method: "POST",
+          url: "/participants",
+          headers: await credentials(runner),
+          payload: {
+            ...PERSON,
+            ...Object.fromEntries(Object.entries(FORM).filter(([k]) => k !== field)),
+            event_id: 0,
+            category_id: 0,
+            runner_address: runner.publicKey(),
+          },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+    });
+
+    it("409s `already-entered` when the same person enters a race twice from another wallet", async () => {
+      // STE-51. Event 5151 and its own identity number, so no other test's
+      // confirmed entry is involved.
+      const person = { national_id: "34-04 0125 5151", event_id: 5151 };
+      const first = (await submit(runner, person)).json();
+      onChain(5151, first, runner, { event_id: 5151 });
+      const confirmed = await app.inject({
+        method: "POST",
+        url: `/participants/${first.participant_id}/confirm`,
+        headers: await credentials(runner),
+        payload: { token_id: 5151, enter_tx_hash: "e".repeat(64) },
+      });
+      expect(confirmed.statusCode).toBe(200);
+
+      // Formatted differently, from a different wallet: still the same person.
+      const res = await submit(stranger, { ...person, national_id: "340401255151" });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toBe("already-entered");
+      expect(res.json().message).toMatch(/already has an entry in this race/);
+      // The answer names nobody and echoes nothing that was submitted.
+      expect(res.body).not.toContain("340401255151");
+      expect(res.body).not.toContain(PERSON.name);
     });
 
     it("refuses to store one account's documents under another's address", async () => {
@@ -154,7 +374,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
         method: "POST",
         url: "/participants",
         headers: headers as Record<string, string>,
-        payload: { ...PERSON, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
+        payload: { ...PERSON, ...FORM, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
       });
       expect(res.statusCode).toBe(401);
     });
@@ -170,7 +390,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
             stranger.sign(Buffer.from(creds["x-sterun-nonce"] as string, "utf8")),
           ).toString("base64"),
         },
-        payload: { ...PERSON, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
+        payload: { ...PERSON, ...FORM, event_id: 0, category_id: 0, runner_address: runner.publicKey() },
       });
       expect(res.statusCode).toBe(401);
       expect(res.json().error).toBe("bad-signature");
@@ -178,7 +398,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
 
     it("refuses to accept the same nonce twice", async () => {
       const creds = await credentials(runner);
-      const payload = { ...PERSON, event_id: 0, category_id: 0, runner_address: runner.publicKey() };
+      const payload = { ...PERSON, ...FORM, event_id: 0, category_id: 0, runner_address: runner.publicKey() };
       const first = await app.inject({ method: "POST", url: "/participants", headers: creds, payload });
       expect(first.statusCode).toBe(201);
       // Replay: a captured signature must be worth nothing.
@@ -190,7 +410,9 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
 
   describe("POST /participants/:id/confirm", () => {
     it("links the row to the on-chain record", async () => {
-      const { participant_id } = (await submit(runner)).json();
+      const submitted = (await submit(runner)).json();
+      const { participant_id } = submitted;
+      onChain(7, submitted, runner);
       const res = await app.inject({
         method: "POST",
         url: `/participants/${participant_id}/confirm`,
@@ -213,7 +435,9 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     });
 
     it("409s when the row is already confirmed as a different token", async () => {
-      const { participant_id } = (await submit(runner)).json();
+      const submitted = (await submit(runner)).json();
+      const { participant_id } = submitted;
+      onChain(9, submitted, runner);
       const url = `/participants/${participant_id}/confirm`;
       await app.inject({
         method: "POST",
@@ -228,6 +452,130 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
         payload: { token_id: 10, enter_tx_hash: "d".repeat(64) },
       });
       expect(res.statusCode).toBe(409);
+    });
+
+    describe("the claimed token must be this entry's record on chain", () => {
+      const tokenOf = async (participantId: string) =>
+        (await pool.query<{ token_id: number | null }>(
+          "SELECT token_id FROM participants WHERE id = $1",
+          [participantId],
+        )).rows[0]?.token_id;
+
+      it("409s `record-mismatch` when the token is another entry's record, and links nothing", async () => {
+        // The hole this closes: pointing your own row at someone else's token
+        // would put your check-in secret on the desk's roster for them.
+        const mine = (await submit(runner)).json();
+        const theirs = (await submit(stranger, { runner_address: stranger.publicKey() })).json();
+        onChain(20, theirs, stranger);
+
+        const res = await confirm(mine.participant_id, 20, runner);
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json().error).toBe("record-mismatch");
+        expect(await tokenOf(mine.participant_id)).toBeNull();
+      });
+
+      it("409s when only the participant hash differs: the runner's own other entry", async () => {
+        // Same wallet, same race, same category, a real record the runner owns —
+        // just not the one entered for THIS submission. Only the hash can tell.
+        const first = (await submit(runner)).json();
+        const second = (await submit(runner)).json();
+        onChain(29, second, runner);
+
+        const res = await confirm(first.participant_id, 29, runner);
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json().error).toBe("record-mismatch");
+        expect(await tokenOf(first.participant_id)).toBeNull();
+      });
+
+      it("409s when the hash matches but the chain says another wallet owns the record", async () => {
+        const mine = (await submit(runner)).json();
+        onChain(21, mine, stranger);
+        const res = await confirm(mine.participant_id, 21, runner);
+        expect(res.statusCode).toBe(409);
+        expect(await tokenOf(mine.participant_id)).toBeNull();
+      });
+
+      it("409s when the record is in a different category or race than the entry", async () => {
+        const mine = (await submit(runner)).json();
+        onChain(22, mine, runner, { category_id: 1 });
+        expect((await confirm(mine.participant_id, 22, runner)).statusCode).toBe(409);
+
+        const other = (await submit(runner)).json();
+        onChain(25, other, runner, { event_id: 9 });
+        expect((await confirm(other.participant_id, 25, runner)).statusCode).toBe(409);
+      });
+
+      it("404s `record-not-found` for a token not on chain, after re-reading it", async () => {
+        const mine = (await submit(runner)).json();
+        const started = Date.now();
+
+        const res = await confirm(mine.participant_id, 23, runner);
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().error).toBe("record-not-found");
+        // The default re-reads (1s, then 2s) really happened before giving up.
+        expect(Date.now() - started).toBeGreaterThanOrEqual(2_900);
+        expect(await tokenOf(mine.participant_id)).toBeNull();
+      }, 10_000);
+
+      it("waits for a record an RPC node has not seen yet, instead of failing the runner", async () => {
+        const mine = (await submit(runner)).json();
+        setTimeout(() => onChain(24, mine, runner), 300);
+
+        const res = await confirm(mine.participant_id, 24, runner);
+
+        expect(res.statusCode).toBe(200);
+        expect(await tokenOf(mine.participant_id)).toBe(24);
+      }, 10_000);
+
+      it("still treats a retried confirm of the same token as success", async () => {
+        const mine = (await submit(runner)).json();
+        onChain(26, mine, runner);
+        expect((await confirm(mine.participant_id, 26, runner)).statusCode).toBe(200);
+        expect((await confirm(mine.participant_id, 26, runner)).statusCode).toBe(200);
+      });
+
+      it("answers 503 rather than linking blind when there is no chain reader", async () => {
+        const blind = buildServer(loadConfig({ NODE_ENV: "test" }), {
+          vault: new Vault(pool, keyring, indexKey),
+          challenges: new ChallengeStore(),
+        });
+        await blind.ready();
+        try {
+          const mine = (await submit(runner)).json();
+          onChain(27, mine, runner);
+          const res = await confirm(mine.participant_id, 27, runner, blind);
+          expect(res.statusCode).toBe(503);
+          expect(res.json().error).toBe("chain-unavailable");
+          expect(await tokenOf(mine.participant_id)).toBeNull();
+        } finally {
+          await blind.close();
+        }
+      });
+
+      it("answers an RPC failure as a 5xx, never as `record-not-found`", async () => {
+        const broken = buildServer(loadConfig({ NODE_ENV: "test" }), {
+          vault: new Vault(pool, keyring, indexKey),
+          challenges: new ChallengeStore(),
+          reader: {
+            recordOf: async () => {
+              throw new Error("socket hang up");
+            },
+          } as unknown as ChainReader,
+        });
+        await broken.ready();
+        try {
+          const mine = (await submit(runner)).json();
+          const res = await confirm(mine.participant_id, 28, runner, broken);
+          expect(res.statusCode).toBe(500);
+          expect(res.body).not.toContain("socket hang up");
+          expect(await tokenOf(mine.participant_id)).toBeNull();
+        } finally {
+          await broken.close();
+        }
+      });
     });
 
     it("rejects a transaction hash that is not one", async () => {
@@ -295,9 +643,12 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       });
       bodies.push(challenge.body);
 
-      const created = await submit(runner);
+      // Its own race, and the fixture's own identity number so the PII check
+      // below covers the number that was actually sent.
+      const created = await submit(runner, { national_id: PERSON.national_id, event_id: 4242 });
       bodies.push(created.body);
       const { participant_id, participant_hash, totp_secret } = created.json();
+      onChain(4242, created.json(), runner, { event_id: 4242 });
 
       const confirmed = await app.inject({
         method: "POST",
@@ -321,7 +672,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       }
 
       // And the roster path (STE-16) can still mint the runner's codes.
-      const vaultSecret = await new Vault(pool, keyring).totpSecretForToken(4242);
+      const vaultSecret = await new Vault(pool, keyring, indexKey).totpSecretForToken(4242);
       expect(vaultSecret?.toString("hex")).toBe(totp_secret);
     });
   });

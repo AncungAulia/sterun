@@ -4,7 +4,7 @@
  * The ticket names four anomalies. There are seven here, and the two extra ones
  * are the interesting part:
  *
- *   ambiguous_bib   bib numbers restart at 0 in every category, because
+ *   ambiguous_bib   before contracts v2.3 bib numbers restart in every category, because
  *                   `reserve_slot` returns the *category's* entered_count. A
  *                   file of (bib, time) is therefore ambiguous the moment an
  *                   event has two categories, and guessing would publish one
@@ -82,13 +82,24 @@ describe("the four anomalies the ticket names", () => {
     expect(result.rows[0]?.anomalies[0]?.severity).toBe("reverts");
   });
 
-  it("duplicate_bib — the same runner twice in one file", () => {
+  it("duplicate_bib — the same runner twice in one file, and NEITHER row is publishable", () => {
     const result = review("bib_no,category_id,finish_time\n0,0,3161\n0,0,3200\n");
-    expect(kinds(result, 2)).toEqual([]);
+    // Both rows, not just the repeat: which time is right is unknown, and a
+    // Finished result is terminal. The first row used to be published.
+    expect(kinds(result, 2)).toEqual(["duplicate_bib"]);
     expect(kinds(result, 3)).toEqual(["duplicate_bib"]);
-    // Points at the first occurrence, so the organiser can compare the two.
+    // Each points at the other, so the organiser can compare the two.
+    expect(result.rows[0]?.anomalies[0]?.reason).toMatch(/again on line 3/);
     expect(result.rows[1]?.anomalies[0]?.reason).toMatch(/line 2/);
-    expect(result.counts.publishable).toBe(1);
+    expect(result.counts.publishable).toBe(0);
+    expect(result.publishable).toEqual([]);
+  });
+
+  it("flags the first row once, however many times the bib repeats", () => {
+    const result = review("bib_no,category_id,finish_time\n0,0,3161\n0,0,3200\n0,0,3300\n");
+    expect(kinds(result, 2)).toEqual(["duplicate_bib"]);
+    expect(result.counts.duplicate_bib).toBe(3);
+    expect(result.counts.publishable).toBe(0);
   });
 
   it("impossible_time — a duration read as a plain number", () => {
@@ -181,8 +192,9 @@ describe("rows can fail in more than one way at once", () => {
     );
     expect(result.counts).toMatchObject({
       total: 4,
-      publishable: 1,
-      duplicate_bib: 1,
+      // Lines 2 and 3 are the same bib twice, so neither is publishable.
+      publishable: 0,
+      duplicate_bib: 2,
       unknown_bib: 1,
       not_claimed: 1,
     });
@@ -220,5 +232,76 @@ describe("what reaches `publishable`", () => {
     const result = review("bib_no,finish_time\n99,3161\n");
     expect(result.publishable).toEqual([]);
     expect(result.counts.publishable).toBe(0);
+  });
+});
+
+/**
+ * STE-44 — untimed finishes and DNFs.
+ *
+ * They share the checks about the record and differ where the contract does:
+ * record_finish_untimed refuses an unclaimed record like record_finish, while
+ * record_dnf is allowed straight from Entered (a no-show is exactly the runner
+ * who never came for a race pack).
+ */
+describe("untimed finishes and DNFs", () => {
+  const MIXED =
+    "bib_no,category_id,finish_time,status\n" +
+    "0,0,52:41,finished\n" + // token 10, RacepackClaimed
+    "1,0,,untimed\n" + // token 11, RacepackClaimed
+    "2,0,,dnf\n"; // token 12, Entered — a no-show
+
+  it("previews a mixed file with each row's kind, and publishes all three", () => {
+    const result = review(MIXED);
+    expect(result.rows.map((r) => [r.tokenId, r.kind, r.anomalies.length])).toEqual([
+      [10, "timed", 0],
+      [11, "untimed", 0],
+      [12, "dnf", 0],
+    ]);
+    expect(result.publishable.map((r) => [r.tokenId, r.kind, r.finishTimeS])).toEqual([
+      [10, "timed", 3161],
+      [11, "untimed", null],
+      [12, "dnf", null],
+    ]);
+  });
+
+  it("flags an untimed row for a runner who never collected a race pack", () => {
+    const result = review("bib_no,category_id,status\n2,0,untimed\n");
+    expect(kinds(result, 2)).toEqual(["not_claimed"]);
+    expect(result.rows[0]?.anomalies[0]?.reason).toMatch(/record_finish_untimed reverts/);
+    expect(result.rows[0]?.anomalies[0]?.severity).toBe("reverts");
+  });
+
+  it("does NOT flag a DNF for a runner who never collected a race pack", () => {
+    expect(kinds(review("bib_no,category_id,status\n2,0,dnf\n"), 2)).toEqual([]);
+  });
+
+  it.each(["untimed", "dnf"])("refuses a %s row over a result that is already final", (status) => {
+    // tokens 13 (Finished) and 14 (Dnf) are terminal on chain.
+    const result = review(`bib_no,category_id,status\n3,0,${status}\n4,0,${status}\n`);
+    expect(kinds(result, 2)).toEqual(["already_final"]);
+    expect(kinds(result, 3)).toEqual(["already_final"]);
+  });
+
+  it("never judges the time of a row that has none", () => {
+    // impossible_time is about a measured time; running it on an untimed row
+    // would either crash or invent a zero-second finish.
+    const result = review("bib_no,category_id,status\n1,0,untimed\n0,1,dnf\n");
+    expect(result.counts.impossible_time).toBe(0);
+  });
+
+  it("counts the same runner twice as a duplicate even when the two rows disagree on kind", () => {
+    // A finish time and a DNF for one runner: at most one is true, and nothing
+    // says which, so neither row may be published.
+    const result = review("bib_no,category_id,finish_time,status\n0,0,3161,\n0,0,,dnf\n");
+    expect(kinds(result, 2)).toEqual(["duplicate_bib"]);
+    expect(kinds(result, 3)).toEqual(["duplicate_bib"]);
+    expect(result.publishable).toEqual([]);
+  });
+
+  it("keeps a contradictory row out of publishable as malformed", () => {
+    const result = review("bib_no,category_id,finish_time,status\n1,0,52:41,untimed\n");
+    expect(kinds(result, 2)).toEqual(["malformed_row"]);
+    expect(result.rows[0]?.kind).toBeNull();
+    expect(result.publishable).toEqual([]);
   });
 });

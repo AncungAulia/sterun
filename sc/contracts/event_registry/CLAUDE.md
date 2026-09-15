@@ -1,63 +1,167 @@
 # `event_registry` — C1 (CLAUDE.md)
 
-Registry organiser-facing untuk event lari. **Satu instance melayani semua event.** Desain
-otoritatif: `docs/SYSTEM_DESIGN.md` §3.1. Interface beku: `docs/specs/INTERFACE.md` §1.
+The organiser-facing registry for running events. **One instance serves every event.** The
+authoritative design: `docs/SYSTEM_DESIGN.md` §3.1. The frozen interface: `docs/specs/INTERFACE.md`
+§1.
 
-## Yang disimpan (`DataKey`)
+## What is stored (`DataKey`)
 
-| Key | Storage | Isi |
+| Key | Storage | Contents |
 | --- | --- | --- |
 | `Admin` | instance | `Address` |
-| `RaceRecordAddr` | instance | `Address` — **one-shot**, lihat di bawah |
+| `RaceRecordAddr` | instance | `Address` — **one-shot**, see below |
 | `EventCount` | instance | `u32` |
 | `Event(event_id)` | persistent | `EventData` |
 | `Category(event_id, category_id)` | persistent | `CategoryData` |
 | `CategoryCount(event_id)` | persistent | `u32` |
 | `Scanner(event_id, scanner)` | persistent | `bool` |
+| `AddOn(event_id, addon_id)` | persistent | `AddOnData` (v2) |
+| `AddOnCount(event_id)` | persistent | `u32` (v2) |
+| `Organiser(organiser)` | persistent | `bool` (v2.1) — the admin's allowlist, **contract-wide** |
+| `EventEntryCount(event_id)` | persistent | `u32` (v2.3) — entries taken across ALL distances; the bib sequence |
 
-`DataKey` **tidak** didokumentasikan di `INTERFACE.md`: dia skema storage, bukan surface yang
-dipanggil client. `check-interface.mjs` menuliskannya sebagai `internalTypes`, jadi
-`#[contracttype]` **baru** apa pun yang muncul akan bikin gate merah — sengaja, supaya tipe publik
-baru memaksa PR spec.
+`DataKey` is **not** documented in `INTERFACE.md`: it is a storage schema, not a surface clients
+call. `check-interface.mjs` records it as `internalTypes`, so any **new** `#[contracttype]` that
+appears turns the gate red — deliberately, so that a new public type forces a spec PR.
 
-## Empat hal yang gampang dirusak
+**Since v2 this table is APPEND-ONLY forever.** The contract is upgradeable, so new code will read
+entries written by old code. A `DataKey` variant is transmitted as its **name**, so appending a
+variant at the end is safe; deleting one, renaming one, or changing its value type orphans the old
+entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`.
 
-1. **`set_race_record` one-shot.** Panggilan kedua ditolak (`RaceRecordAlreadySet = 7`). Alasan:
-   alamat itu satu-satunya caller tepercaya `reserve_slot`. Kalau bisa di-swap, admin yang
-   ter-kompromi bisa menunjuk kontrak lain dan mencetak slot tanpa bayar. Wiring-nya urusan
-   STE-33.
-2. **`reserve_slot` cuma boleh dipanggil RaceRecord.** Gate-nya invoker-contract di root frame.
-   **`mock_all_auths()` tidak bisa membuktikan gate ini** (recording mode memenuhi `require_auth`
-   untuk address apa pun, termasuk contract address) — pakai `env.mock_auths(&[...])`.
-3. **`entered_count` merangkap nomor bib.** `reserve_slot` menaikkannya dan mengembalikan nilainya
-   sebagai `seq`. Jadi menyentuh cara counter itu naik = mengubah nomor bib yang sudah tercetak di
-   record on-chain. Bukan refactor, itu perubahan data.
-4. **Transisi `EventStatus`.** `Draft → Open → Closed → Completed`, dengan `Closed ↔ Open` boleh
-   (organiser bisa buka lagi pendaftaran) dan `Completed` **terminal**. Transisi ilegal =
-   `InvalidStatus = 11`.
+## Eight things that are easy to break
 
-## Kode error — band `1..=99`, jangan di-renumber
+1. **`set_race_record` is one-shot.** A second call is refused (`RaceRecordAlreadySet = 7`). The
+   reason: that address is the only trusted caller of `reserve_slot`. If it could be swapped, a
+   compromised admin could point it at another contract and mint slots without paying. Its wiring is
+   STE-33's business.
+2. **`reserve_slot` may only be called by RaceRecord.** Its gate is invoker-contract auth on the root
+   frame. **`mock_all_auths()` cannot prove this gate** (recording mode satisfies `require_auth` for
+   any address, contract addresses included) — use `env.mock_auths(&[...])`.
+3. **`entered_count` is the QUOTA counter; the bib comes from `EventEntryCount`.** (v2.3, STE-54)
+   They count different things and must not be merged back together. `reserve_slot` increments both:
+   `entered_count` for the distance the entrant chose, which is what `QuotaFull = 5` is measured
+   against, and `EventEntryCount(event_id)` for the event, whose new value **is** the bib. So the
+   first entrant of a race wears `1` whichever distance they picked, and the 10K and the 5K never
+   issue the same number.
+
+   Until v2.3 the bib *was* `entered_count`, read before the increment — per distance and 0-based,
+   which put two runners in one `0`. Three things follow that are easy to get wrong:
+   - **The distance is not in the number.** `category_id * 1000 + n` was rejected: one distance here
+     can hold tens of thousands of entrants (Merdeka Run 2026 takes 8,100 in one), so the scheme
+     overflows its own field. Distance is a label and a colour in `fe/`, never arithmetic.
+   - **Events created before the upgrade were not migrated.** Their counter starts at 0, so an entry
+     taken after the upgrade is bib 1, which one of their old per-distance bibs may be too. Seeding
+     it would mean summing every category inside the `enter` path — an unbounded read loop on the
+     call that takes a runner's money. `be/` keeps its duplicate-bib guard for those events.
+   - **Touching how either counter advances changes numbers already printed into on-chain records.**
+     That is not a refactor, it is a data change.
+4. **`increase_quota` only ever raises the number.** (v2.4, STE-55) `new_quota` must be strictly
+   greater than the category's current `quota`; equal and smaller are both `QuotaNotIncreased = 19`,
+   under one code because they are one rule. This is the feature, not validation around it: runners
+   paid against a published number, and a shrink would put `entered_count` above its own `quota`, so
+   `reserve_slot` would answer `QuotaFull = 5` for a race that had been rewritten underneath
+   entrants who are already on chain. Stopping registration is `Closed`, and that is reversible.
+   Four things to hold when touching it:
+   - **it adds no storage key and changes no struct.** `quota` is a `CategoryData` field from v1;
+     this writes a bigger value into it. That is what made the upgrade that shipped it the dullest
+     one yet from the storage side, which is the best thing an in-place upgrade can be;
+   - **`entered_count` and `EventEntryCount` are neither read nor written**, so a second batch
+     continues the race's bib numbering rather than restarting it. Do not "helpfully" reconcile
+     either counter here;
+   - **there is no status gate, on purpose.** A `Closed` event is exactly where the second-batch
+     flow puts it — lift the cap, then re-open — and on a terminal event the larger number sells
+     nothing anyway, because `reserve_slot` demands `Open`;
+   - **the contract cannot check that anyone was told.** Raising a published quota is a real change
+     to what a runner bought, so the console pairs it with a signed announcement (STE-34). That is
+     an application-level rule. Do not write a comment, a doc or a UI string implying the chain
+     enforces it.
+
+5. **`EventStatus` transitions.** `Draft → Open → Closed → Completed`, with `Closed ↔ Open` allowed
+   (an organiser can reopen entries) and `Completed` **terminal**. An illegal transition is
+   `InvalidStatus = 11`. **v2** adds `Cancelled`: allowed from `Draft`/`Open`/`Closed`, terminal, and
+   **not** allowed from `Completed` — a race that was run and whose results were published did
+   happen. `Cancelled` ≠ `Closed`: `Closed` means "entries shut, the race goes ahead, can be
+   reopened". There are no on-chain refunds; the value is that "cancelled" is recorded on the chain.
+6. **`reserve_addon` returns the PRICE, not a `seq`.** (v2) Its caller is `RaceRecord.enter`, which
+   needs the number in order to charge. Reading it through a second call would mean the amount
+   charged and the unit taken come from two different reads. The unit's `seq` is still emitted in the
+   `AddOnReserved` event for fulfilment. Changing its return value changes how `enter` charges.
+7. **`create_event` has TWO gates.** (v2.1, STE-36) `organiser.require_auth()` answers "does the
+   caller hold this keypair"; `is_organiser` answers "has the admin vetted this keypair". `name` is a
+   free-form `String`, so without the second gate anyone could publish "Jakarta Marathon 2026". What
+   to remember when touching it:
+   - the allowlist is **contract-wide**, not per-event, and **admin-gated**, not organiser-gated.
+     What it grants is the thing an organiser needs *before* they have an event. Per-event authority
+     stays in `EventData.organiser`;
+   - `remove_organiser` is **forward-only**: events already created stay with their organiser, along
+     with every power they have here and in C2. Cancelling a race whose entries have sold is not the
+     work of one storage write;
+   - after an `upgrade`, the allowlist is **empty**. There is no migration. Until the admin calls
+     `add_organiser`, no `create_event` succeeds — that is a deploy step, not an afterthought.
+
+8. **`reserved_count` never decreases.** Cancelling an event does not "return" jerseys already sold,
+   because the refund is off-chain. If that ever changes, it is a new feature with a new function —
+   not a counter quietly decremented.
+
+## Error codes — band `1..=99`, never renumbered
 
 `NotInitialized=1`, `EventNotFound=2`, `CategoryNotFound=3`, `EventNotOpen=4`, `QuotaFull=5`,
 `RaceRecordNotSet=6`, `RaceRecordAlreadySet=7`, `InvalidQuota=8`, `InvalidPrice=9`,
-`InvalidDistance=10`, `InvalidStatus=11`, `ScannerAlreadyAdded=12`, `ScannerNotFound=13`.
+`InvalidDistance=10`, `InvalidStatus=11`, `ScannerAlreadyAdded=12`, `ScannerNotFound=13`,
+`AddOnNotFound=14`, `AddOnQuotaFull=15`, `OrganiserAlreadyAdded=16`, `OrganiserNotFound=17`,
+`NotAllowlistedOrganiser=18`, `QuotaNotIncreased=19`. The next free code is **20**.
 
-Angka 4 dan 5 adalah yang paling sering dilihat client, karena `RaceRecord.enter` cross-call ke
-sini dan revert-nya merambat apa adanya: `Error(Contract, #4)` dari `enter` itu `EventNotOpen`
-**milik C1**, bukan error C2. Itulah gunanya band.
+`add_addon` **reuses** `InvalidQuota=8` and `InvalidPrice=9` — its conditions are exactly
+`add_category`'s (`quota == 0`, `price < 0`), and a new code would only force clients to distinguish
+the same thing twice.
 
-## Event yang dipancarkan
+The numbers 4 and 5 are the ones clients see most, because `RaceRecord.enter` cross-calls here and
+its reverts propagate unchanged: an `Error(Contract, #4)` out of `enter` is **C1's** `EventNotOpen`,
+not a C2 error. That is what the bands are for.
+
+## The events emitted
 
 `EventCreated`, `CategoryAdded`, `EventStatusChanged`, `ScannerAdded`, `ScannerRemoved`,
-`SlotReserved`. Layout topic-vs-data-nya **beku** di `INTERFACE.md` §1.3 dan itu yang di-filter
-indexer STE-16. Ingat: field `data` adalah `ScMap` berkunci nama field, jadi urutan wire-nya
-**alfabetis**, bukan urutan deklarasi. `#[topic]` yang tetap berurutan deklarasi.
+`SlotReserved` (its `seq` is the bib — event-wide and 1-based since v2.3, **same layout**), plus in
+v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`, plus in v2.1:
+`OrganiserAdded`, `OrganiserRemoved` (their topics carry **no** `event_id` — the allowlist is
+contract-wide), plus in v2.4: `QuotaIncreased`.
 
-## Test
+`QuotaIncreased` makes `category_id` a **topic**, which `CategoryAdded` deliberately does not: the
+question it answers is per distance ("did the 10K open a second batch"), not per event. It carries
+`previous` and `current` both, so a consumer never has to diff against its own last read.
 
-`src/test.rs`, 33 test, coverage `lib.rs` 98%. Tiap revert path punya test-nya sendiri. Kalau
-kamu menambah `pub fn` atau varian error, tambahkan **positive + negative + edge** sekaligus —
-`cargo test` bukan tempat menaruh happy path saja.
+Topic names derive from struct names, and `AddOn` breaks into two words:
+`AddOnReserved` → `"add_on_reserved"`, **not** `"addon_reserved"`. Function arguments stay
+`addon_id`. Inconsistent, yes — do not guess, check `INTERFACE.md` §1.3.
+
+The topic-versus-data layout is **frozen** in `INTERFACE.md` §1.3, and that is what the STE-16
+indexer filters on. Remember: the `data` field is an `ScMap` keyed by field name, so its wire order
+is **alphabetical**, not declaration order. It is `#[topic]` that keeps declaration order.
+
+## Tests
+
+`src/test.rs`, 91 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
+`pub fn` or an error variant, add **positive + negative + edge** with it — `cargo test` is not a
+place for happy paths alone.
+
+`mod upgrade` deploys the registry **from wasm** (`env.register(bytes, args)`), because
+`update_current_contract_wasm` can only replace an executable that genuinely exists. So
+`stellar contract build` is not merely advice here: stale wasm means the upgrade tests are testing
+yesterday's code.
+
+Two tests there do not use the local build as their "old code". Each deploys the wasm that was
+**genuinely live** before one upgrade, writes state with it, then upgrades to the current build —
+the only pair that can prove the storage change in question was safe:
+
+| Test | Fixture | Proves |
+| --- | --- | --- |
+| `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` | `event_registry_live_pre_allowlist.wasm`, `22bb432e…` | `DataKey::Organiser` was appended safely (STE-36) |
+| `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` | `event_registry_live_pre_bib.wasm`, `cf009033…` | the per-distance bibs on chain still decode once bibs go event-wide (STE-54) |
+| `a_quota_can_be_raised_on_a_category_the_live_wasm_created` | `event_registry_live_pre_quota.wasm`, `c8b5e82a…` | a sold-out category written by the running code takes a larger quota and sells again (STE-55) |
+
+The rules for adding the next fixture — add, never overwrite — are in `testdata/README.md`.
 
 ```bash
 cd sc && stellar contract build && cargo test -p event_registry

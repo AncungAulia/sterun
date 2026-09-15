@@ -24,7 +24,13 @@
  * that event's only category has one slot left, and spending it here would take
  * it from STE-25's mock race.
  *
- * ## The one leg that needs a secret
+ * ## The secrets it needs
+ *
+ * **STERUN_ADMIN_SECRET is now required** (STE-36). `create_event` is gated on
+ * an admin-held organiser allowlist, so a throwaway organiser has to be put on
+ * it before it can create anything. There is no way around that from the
+ * organiser's side — being able to grant yourself the right would be the same
+ * as there being no gate.
  *
  * A *paid* entry moves sUSD, and sUSD comes from the distributor. Without
  * SUSD_DISTRIBUTOR_SECRET the script runs everything else and says clearly that
@@ -33,7 +39,7 @@
  * balance rose by exactly the entry fee, which is what proves the SEP-41
  * transfer really happened inside the same atomic invocation.
  *
- *     pnpm --filter @sterun/sdk e2e
+ *     STERUN_ADMIN_SECRET=S… pnpm --filter @sterunxyz/sdk e2e
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -64,6 +70,9 @@ const HORIZON_URL = process.env.STELLAR_HORIZON_URL ?? "https://horizon-testnet.
 const FRIENDBOT = process.env.STELLAR_FRIENDBOT_URL ?? "https://friendbot.stellar.org";
 const PASSPHRASE = process.env.STELLAR_NETWORK_PASSPHRASE ?? Networks.TESTNET;
 const ENTRY_FEE = 50_000_000n; // 5 sUSD, the rehearsal event's own price
+const ADDON_FEE = 20_000_000n; // 2 sUSD for the jersey — enough to prove `enter`
+//                                charges category + add-ons in ONE transfer, which is
+//                                invisible if the add-on happens to be free.
 
 const log = (message: string) => console.log(message);
 const step = (message: string) => console.log(`\n▸ ${message}`);
@@ -102,6 +111,24 @@ async function friendbot(address: string): Promise<void> {
     const body = await res.text();
     throw new Error(`friendbot failed for ${address}: ${res.status} ${body.slice(0, 200)}`);
   }
+}
+
+/**
+ * The contract admin, which since STE-36 is the only account that can let a
+ * fresh organiser create anything. Fails loudly rather than running a weaker
+ * script: without it there is no event, and every step after this one is about
+ * an event.
+ */
+function adminKeypair(): Keypair {
+  const secret = process.env.STERUN_ADMIN_SECRET;
+  if (!secret) {
+    throw new Error(
+      "STERUN_ADMIN_SECRET is not set. Since STE-36 `create_event` is gated on the " +
+        "admin's organiser allowlist, so this script cannot create an event without it. " +
+        "It is the sterun-admin secret from the repo root .env (testnet only).",
+    );
+  }
+  return Keypair.fromSecret(secret);
 }
 
 async function newAccount(label: string): Promise<Keypair> {
@@ -154,6 +181,34 @@ async function main(): Promise<void> {
   const asRunner = SterunClient.as(runner);
   const asScanner = SterunClient.as(scanner);
 
+  step("Allowlisting the throwaway organiser (admin, STE-36)");
+  const admin = adminKeypair();
+  await sterun.addOrganiser(organiser.publicKey(), SterunClient.as(admin));
+  assert(
+    await sterun.isOrganiser(organiser.publicKey()),
+    "the organiser is still not on the allowlist after add_organiser",
+  );
+  log(`  ✓ ${organiser.publicKey()} may create events; admin ${admin.publicKey()}`);
+
+  step("Negative: an address the admin never allowlisted cannot create an event");
+  const impersonator = await newAccount("outsider");
+  await expectRevert(
+    "createEvent by a non-allowlisted address",
+    "NotAllowlistedOrganiser",
+    "event-registry",
+    () =>
+      sterun.createEvent(
+        {
+          organiser: impersonator.publicKey(),
+          name: "Jakarta Marathon 2026",
+          metadataHash: randomBytes(32).toString("hex"),
+          uri: "https://sterun.xyz/events/impersonation.json",
+          startsAt: BigInt(Math.floor(Date.now() / 1000) + 86_400),
+        },
+        SterunClient.as(impersonator),
+      ),
+  );
+
   step("Sanity: the RaceRecord we are about to use is wired to this registry");
   const wired = await sterun.wiredRegistry();
   assert(
@@ -192,6 +247,40 @@ async function main(): Promise<void> {
     )
   ).value;
   log(`  ✓ category ${freeCategory} free, category ${paidCategory} at ${formatStroops(ENTRY_FEE)} sUSD`);
+
+  step("addAddon ×2, and read them back (STE-37)");
+  /**
+   * Quota 1 on the jersey on purpose: it is the only way to reach
+   * AddOnQuotaFull without buying a hundred of them, and the sold-out path is
+   * the one an organiser actually meets on race week.
+   */
+  const jersey = (
+    await sterun.addAddon(
+      { eventId, code: "JERSEY_L", priceStroops: ADDON_FEE, quota: 1 },
+      asOrganiser,
+    )
+  ).value;
+  const cap = (
+    await sterun.addAddon({ eventId, code: "CAP", priceStroops: 0n, quota: 5 }, asOrganiser)
+  ).value;
+
+  assert((await sterun.addonCount(eventId)) === 2, "addonCount did not see both add-ons");
+  const addOns = await sterun.listAddOns(eventId);
+  assert(addOns.length === 2, `listAddOns returned ${addOns.length}, expected 2`);
+  assert(
+    addOns.map((a) => a.addonId).join(",") === `${jersey},${cap}`,
+    "listAddOns did not return them in id order",
+  );
+  const jerseyData = addOns[0];
+  assert(jerseyData?.code === "JERSEY_L", `add-on 0 is ${jerseyData?.code}, expected JERSEY_L`);
+  assert(jerseyData?.priceStroops === ADDON_FEE, "jersey price did not round-trip");
+  assert(jerseyData?.unitsLeft === 1, "a fresh add-on should have its whole quota left");
+  log(`  ✓ add-on ${jersey} ${formatStroops(ADDON_FEE)} sUSD (quota 1), add-on ${cap} free (quota 5)`);
+
+  step("Negative: an add-on id this event never sold");
+  await expectRevert("getAddon(99)", "AddOnNotFound", "event-registry", () =>
+    sterun.getAddon(eventId, 99),
+  );
 
   const participant = {
     name: "Sri Wahyuni",
@@ -295,6 +384,8 @@ async function main(): Promise<void> {
     sterun.recordDnf(tokenId, asOrganiser),
   );
 
+  const untimed = await untimedLeg({ sterun, eventId, organiser, asOrganiser });
+
   step("verify — the whole point of the protocol");
   assert(await sterun.verify(tokenId, hash), "verify rejected the correct hash");
   assert(
@@ -334,6 +425,8 @@ async function main(): Promise<void> {
   log(`enter               ${entered.txHash}`);
   log(`claimRacepack       ${claimed.txHash}`);
   log(`recordFinish        ${finished.txHash}`);
+  log(`token_id (untimed)  ${untimed.tokenId}  Finished, finish_time_s null`);
+  log(`recordFinishUntimed ${untimed.txHash}`);
   if (paid) {
     log(`token_id (paid)     ${paid.tokenId}`);
     log(`enter (5 sUSD)      ${paid.txHash}`);
@@ -342,6 +435,68 @@ async function main(): Promise<void> {
   log("```");
 
   log(`\n✅ SDK e2e passed${paid ? "" : " — WITHOUT the paid-entry leg (see above)"}`);
+}
+
+/**
+ * The untimed finish (STE-41, INTERFACE.md v2.2.0) — a fun run with no chip.
+ *
+ * Its own free category and its own runner, because the free category above
+ * has one slot and it is spent. What this proves that the unit tests cannot:
+ * that the live contract really leaves `finish_time_s` EMPTY rather than 0,
+ * that the SDK decodes that as `null`, and that the new function inherits the
+ * guards of `recordFinish` on a real network.
+ */
+async function untimedLeg(ctx: {
+  sterun: SterunClient;
+  eventId: number;
+  organiser: Keypair;
+  asOrganiser: ReturnType<typeof SterunClient.as>;
+}): Promise<{ tokenId: number; txHash: string }> {
+  const { sterun, eventId, organiser, asOrganiser } = ctx;
+
+  step("Untimed finish (STE-41): a category with no chip timing");
+  const category = (
+    await sterun.addCategory(
+      { eventId, code: "COLOR5K", distanceM: 5_000, quota: 1, priceStroops: 0n },
+      asOrganiser,
+    )
+  ).value;
+  const runner = await newAccount("runner-u");
+  const entered = await sterun.enter(
+    {
+      runner: runner.publicKey(),
+      eventId,
+      categoryId: category,
+      participantHash: randomBytes(32).toString("hex"),
+    },
+    SterunClient.as(runner),
+  );
+  const tokenId = entered.value;
+  log(`  ✓ category ${category} COLOR5K, token_id ${tokenId} — tx ${entered.txHash}`);
+
+  await expectRevert("recordFinishUntimed before claim", "InvalidState", "race-record", () =>
+    sterun.recordFinishUntimed(tokenId, asOrganiser),
+  );
+
+  await sterun.claimRacepack(tokenId, organiser.publicKey(), asOrganiser);
+  const finished = await sterun.recordFinishUntimed(tokenId, asOrganiser);
+  const record = await sterun.recordOf(tokenId);
+  assert(record.state === "Finished", `expected Finished, got ${record.state}`);
+  assert(record.finishTimeS === null, `expected no time, got ${record.finishTimeS}`);
+  assert(record.resultAt !== null, "result_at missing on an untimed finish");
+  log(`  ✓ Finished with finishTimeS null — tx ${finished.txHash}`);
+
+  step("Negative: an untimed finish is terminal");
+  await expectRevert("recordFinish after untimed", "InvalidState", "race-record", () =>
+    sterun.recordFinish(tokenId, 3161, asOrganiser),
+  );
+  await expectRevert("recordFinishUntimed twice", "InvalidState", "race-record", () =>
+    sterun.recordFinishUntimed(tokenId, asOrganiser),
+  );
+  await expectRevert("recordDnf after untimed", "InvalidState", "race-record", () =>
+    sterun.recordDnf(tokenId, asOrganiser),
+  );
+  return { tokenId, txHash: finished.txHash };
 }
 
 /**

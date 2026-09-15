@@ -66,6 +66,8 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       claimedAt: 1_800_000_600n,
       finishTimeS: 3_600,
       resultAt: 1_800_000_700n,
+      // Reservation order, deliberately not sorted.
+      addonIds: [1, 0],
     });
     chain.addRecord({ tokenId: 1, eventId: 0, owner: RUNNER_B, bibNo: 2 });
 
@@ -120,8 +122,14 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect((await app.inject({ url: "/events?status=Draft" })).json().count).toBe(0);
     });
 
-    it("rejects a status that is not one of the four", async () => {
-      const res = await app.inject({ url: "/events?status=Cancelled" });
+    it("accepts Cancelled, which the v2 registry can emit", async () => {
+      // Was the negative example until STE-35 made it a real status. Kept as a
+      // positive so the filter is proven to know about it.
+      expect((await app.inject({ url: "/events?status=Cancelled" })).statusCode).toBe(200);
+    });
+
+    it("rejects a status no contract defines", async () => {
+      const res = await app.inject({ url: "/events?status=Postponed" });
       expect(res.statusCode).toBe(400);
     });
 
@@ -150,7 +158,17 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
     it("lists the scanners still on the allowlist", async () => {
       const body = (await app.inject({ url: "/events/0/scanners" })).json();
 
-      expect(body.scanners).toEqual([{ address: SCANNER, added_ledger: 150 }]);
+      expect(body.scanners).toEqual([
+        {
+          address: SCANNER,
+          added_ledger: 150,
+          // STE-43: ledger 150 closes at 1_800_000_000 + 150 * 5, as a string.
+          added_at: "1800000750",
+          // The only check-in in this seed was made by the organiser, which
+          // must not be counted against this scanner.
+          scans: 0,
+        },
+      ]);
     });
 
     it("leaves out a scanner that was removed", async () => {
@@ -218,6 +236,8 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
           // A price is money: string on the wire, always.
           price_stroops: "50000000",
           entered_count: 2,
+          // Never raised (v2.4 increase_quota), so no dated rises to show.
+          quota_history: [],
         },
       ]);
     });
@@ -249,6 +269,11 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect(page.records[0].bib_no).toBe(2);
     });
 
+    it("carries each entry's add-on ids, [] rather than null for none (STE-42)", async () => {
+      const body = (await app.inject({ url: "/events/0/records" })).json();
+      expect(body.records.map((r: { addon_ids: number[] }) => r.addon_ids)).toEqual([[1, 0], []]);
+    });
+
     it("returns an empty list for an event with no records", async () => {
       const body = (await app.inject({ url: "/events/99/records" })).json();
       expect(body).toEqual({ records: [], count: 0 });
@@ -276,8 +301,14 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect(body.transitions[0].tx_hash).toMatch(/^[0-9a-f]{64}$/);
     });
 
+    it("serves add-on ids in the order the runner reserved them", async () => {
+      expect((await app.inject({ url: "/records/0" })).json().record.addon_ids).toEqual([1, 0]);
+    });
+
     it("keeps nulls as nulls rather than dropping the field", async () => {
       const body = (await app.inject({ url: "/records/1" })).json();
+      // An entry that bought nothing is [], never null or missing.
+      expect(body.record.addon_ids).toEqual([]);
       expect(body.record.claimed_at).toBeNull();
       expect(body.record.finish_time_s).toBeNull();
       expect(body.record.result_at).toBeNull();
@@ -292,6 +323,7 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
     it("returns one runner's history", async () => {
       const body = (await app.inject({ url: `/runners/${RUNNER}/records` })).json();
       expect(body.count).toBe(1);
+      expect(body.records[0].addon_ids).toEqual([1, 0]);
       expect(body.records[0]).toMatchObject({ token_id: 0, runner_address: RUNNER });
     });
 

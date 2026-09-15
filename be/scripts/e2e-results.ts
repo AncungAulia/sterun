@@ -4,7 +4,7 @@
  * The ticket's acceptance scenario: upload a CSV mixing valid rows with every
  * anomaly, and check the response flags each one with a reason while the valid
  * rows pass. This runs it for real — a fresh event created on testnet through
- * `@sterun/sdk`, indexed by the STE-16 indexer from contract state, then read
+ * `@sterunxyz/sdk`, indexed by the STE-16 indexer from contract state, then read
  * back through the actual route.
  *
  * Nothing here is faked except the socket: the chain is testnet, the database is
@@ -23,7 +23,7 @@
 import { randomBytes } from "node:crypto";
 import { Keypair } from "@stellar/stellar-sdk";
 import { Pool } from "pg";
-import { SterunClient, TESTNET } from "@sterun/sdk";
+import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 import { ChallengeStore } from "../src/auth.js";
 import { ChainReader, RpcContractCaller } from "../src/chain/reader.js";
 import { loadConfig } from "../src/config.js";
@@ -43,6 +43,24 @@ function assert(condition: unknown, message: string): asserts condition {
 async function friendbot(address: string, url: string): Promise<void> {
   const res = await fetch(`${url}?addr=${encodeURIComponent(address)}`);
   if (!res.ok) throw new Error(`friendbot failed for ${address}: ${res.status}`);
+}
+
+/**
+ * The contract admin. Since STE-36 `create_event` is gated on the admin's
+ * organiser allowlist, so a throwaway organiser has to be granted access
+ * before it can create anything — an organiser cannot grant it to itself,
+ * which is the point of the gate.
+ */
+function adminKeypair(): Keypair {
+  const secret = process.env.STERUN_ADMIN_SECRET;
+  if (!secret) {
+    throw new Error(
+      "STERUN_ADMIN_SECRET is not set. Since STE-36 `create_event` needs the admin's " +
+        "organiser allowlist, so this script cannot create an event without it. It is the " +
+        "sterun-admin secret from the repo root .env (testnet only).",
+    );
+  }
+  return Keypair.fromSecret(secret);
 }
 
 async function main(): Promise<void> {
@@ -70,6 +88,13 @@ async function main(): Promise<void> {
 
   const sterun = new SterunClient({ ...TESTNET, contracts });
   const asOrganiser = SterunClient.as(organiser);
+
+  step("Allowlisting the throwaway organiser (admin, STE-36)");
+  await sterun.addOrganiser(organiser.publicKey(), SterunClient.as(adminKeypair()));
+  assert(
+    await sterun.isOrganiser(organiser.publicKey()),
+    "the organiser is still not on the allowlist after add_organiser",
+  );
 
   step("Creating an event with TWO free categories, both numbering bibs from 0");
   const { value: eventId } = await sterun.createEvent(

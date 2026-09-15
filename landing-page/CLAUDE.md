@@ -1,46 +1,52 @@
 @AGENTS.md
 
-# `landing-page/` — landing (CLAUDE.md)
+# `landing-page/` — the landing page (CLAUDE.md)
 
-Blok `@AGENTS.md` di atas ditulis ulang oleh `next dev` — biarkan, dan commit bersama kerjaanmu.
-Isi di bawah ini punya Sterun.
+The `@AGENTS.md` block above is rewritten by `next dev` — leave it, and commit it with your work.
+What follows belongs to Sterun.
 
 Owner: **Nabil**. Komponen C13 (landing + design system).
 
-Stack terpasang: **Next.js 16.3.3**, React 19.2.8, Tailwind v4, TypeScript 5, ESLint 9. Dua
-lockfile hidup berbarengan (`package-lock.json` + `pnpm-lock.yaml`) — pilih satu, hapus yang lain.
+The stack: **Next.js 16.3.3**, React 19.2.8, Tailwind v4, TypeScript 5, ESLint 9.
+
+**This folder is a pnpm workspace member** (`pnpm-workspace.yaml` at the root), so the only lockfile
+that applies is the root `pnpm-lock.yaml`:
 
 ```bash
-cd landing-page
-npm install
-npm run dev
-npm run build
-npm run lint
+pnpm install                       # from the repository ROOT
+pnpm --filter landing-page dev
+pnpm --filter landing-page build
+pnpm --filter landing-page lint
 ```
 
-## Ini app terpisah dari `fe/`, dan memang disengaja
+> **There is a stray `landing-page/pnpm-lock.yaml` in the repo, and it should be deleted.** It is
+> what a `pnpm install` run from inside this folder leaves behind: nothing reads it (CI installs the
+> root lockfile with `--frozen-lockfile`), but it gets committed and it drifts. Do not run an install
+> from inside this folder.
 
-`landing-page/` dan `fe/` berdiri sendiri: lockfile sendiri, `node_modules` sendiri, deploy
-sendiri. Jangan menyatukan keduanya jadi satu workspace tanpa keputusan eksplisit — itu merombak
-cara ketiga app di repo ini di-install, dan bukan porsi tiket landing.
+## What is already here
 
-Yang **boleh** dibagi: token design system (warna, tipografi, spacing) dan aset. Cara membaginya
-diputuskan bersama Ancung waktu C13 jalan; sampai itu, duplikasi yang jujur lebih baik daripada
-abstraksi yang salah.
+The design system landed with STE-7: `app/tokens.css` holds the brand, greyscale and status tokens,
+and the `app/tokens` route renders every one of them in the situation it was chosen for. The usage
+rules — asset files, minimum sizes, the type ladder, the contrast reasoning — are in
+[`../docs/brand.md`](../docs/brand.md).
 
-## Batas isi
+`app/tokens.css` is duplicated into `fe/`, deliberately: the two apps deploy separately. Change one,
+change the other in the same commit. That duplication is the agreed answer until a shared package is
+worth its cost; an honest duplicate beats a wrong abstraction.
 
-Landing menjual protokolnya, jadi klaim di halaman ini harus benar:
+## The limits of what the copy may claim
 
-- **Non-transferable** boleh disebut sebagai fakta — dibuktikan dari export surface wasm
-  (`sc/contracts/race_record/CLAUDE.md`), bukan janji.
-- **"Live on Stellar testnet" sekarang benar** — EventRegistry `CDL6A734…GTA64` dan RaceRecord
-  `CDWFNF42…XNB4` sudah hidup sejak STE-33. Tetap ambil alamat dan link explorer dari
-  `docs/deployments.md`, jangan diketik ulang; itu satu-satunya sumber yang diperbarui saat
-  alamatnya berubah.
-- Testnet memakai **sUSD**, bukan USDC. USDC baru di mainnet.
+The landing page sells the protocol, so a claim on it has to be true:
 
-## Konvensi
+- **Non-transferable** may be stated as fact — it is proven from the wasm export surface
+  (`sc/contracts/race_record/CLAUDE.md`), not promised. Since v2 that claim has a boundary worth
+  keeping: it is about the deployed wasm plus the admin key, not about an address forever
+  (`docs/specs/INTERFACE.md` §4).
+- **"Live on Stellar testnet" is true.** Take the addresses and explorer links from
+  `docs/deployments.md` rather than retyping them; that is the only source updated when an address
+  changes, and the addresses did change when v2 landed.
+- Testnet uses **sUSD**, not USDC. USDC only applies on mainnet.
 
 - Copy landing: **English** (keputusan Nabil, STE-12). Pembacanya reviewer Instawards dan
   ekosistem Stellar global; versi Indonesia untuk organiser lokal adalah percakapan lain, bukan

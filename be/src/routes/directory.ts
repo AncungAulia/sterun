@@ -35,14 +35,45 @@ const DEFAULT_PAGE = 50;
 const categorySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["category_id", "code", "distance_m", "quota", "price_stroops", "entered_count"],
+  required: [
+    "category_id",
+    "code",
+    "distance_m",
+    "quota",
+    "price_stroops",
+    "entered_count",
+    "quota_history",
+  ],
   properties: {
     category_id: { type: "integer" },
     code: { type: "string" },
     distance_m: { type: "integer" },
+    /** Today's quota. It only ever rises (v2.4); `quota_history` says when. */
     quota: { type: "integer" },
     price_stroops: { type: "string", pattern: DIGITS },
     entered_count: { type: "integer" },
+    /**
+     * Every rise of this category's quota the index has seen, oldest first, so a
+     * second batch reads as a dated fact ("2,000 → 3,000 on 15 Sep") instead of a
+     * number that moved (STE-56). `[]` when it was never raised — or was raised
+     * before this index started polling, which contract state cannot tell apart.
+     */
+    quota_history: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["previous", "current", "at", "ledger", "tx_hash"],
+        properties: {
+          previous: { type: "integer" },
+          current: { type: "integer" },
+          /** Unix seconds of the ledger that raised it, as a string like every u64 here. */
+          at: { type: "string", pattern: DIGITS },
+          ledger: { type: "integer" },
+          tx_hash: { type: "string" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -57,7 +88,7 @@ const eventSchema = {
     metadata_hash: { type: "string", pattern: HEX_64 },
     uri: { type: "string" },
     starts_at: { type: "string", pattern: DIGITS },
-    status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed"] },
+    status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed", "Cancelled"] },
     source: { type: "string", enum: ["event", "state"] },
     last_ledger: { type: "integer" },
   },
@@ -76,6 +107,7 @@ const recordSchema = {
     "state",
     "entered_at",
     "last_ledger",
+    "addon_ids",
   ],
   properties: {
     token_id: { type: "integer" },
@@ -94,6 +126,10 @@ const recordSchema = {
     result_at: { type: ["string", "null"], pattern: DIGITS },
     source: { type: "string", enum: ["event", "state"] },
     last_ledger: { type: "integer" },
+    // STE-42. Ids, not names or prices: those live on the event's add-ons, and
+    // copying them here would be a second place for them to go stale. `[]`,
+    // never null, for an entry that bought nothing.
+    addon_ids: { type: "array", items: { type: "integer", minimum: 0 } },
   },
 } as const;
 
@@ -158,10 +194,17 @@ const scannerListResponse = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["address", "added_ledger"],
+          required: ["address", "added_ledger", "added_at", "scans"],
           properties: {
             address: { type: "string" },
             added_ledger: { type: "integer" },
+            // STE-43. A ledger number is not a date an organiser can read.
+            // Unix seconds as a decimal string (rule 5b). null only if the raw
+            // log lost the add event, which a normal index cannot do.
+            added_at: { type: ["string", "null"], pattern: DIGITS },
+            // Race packs this address checked in for this event. 0, never
+            // missing, for a scanner that has not scanned anyone.
+            scans: { type: "integer", minimum: 0 },
           },
         },
       },
@@ -237,6 +280,7 @@ const toRecordJson = (r: store.RecordRow) => ({
   result_at: r.resultAt?.toString() ?? null,
   source: r.source,
   last_ledger: r.lastLedger,
+  addon_ids: r.addonIds,
 });
 
 const pageQuery = {
@@ -263,7 +307,7 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
           additionalProperties: false,
           properties: {
             ...pageQuery.properties,
-            status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed"] },
+            status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed", "Cancelled"] },
           },
         },
         response: eventListResponse,
@@ -303,6 +347,7 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
         });
       }
       const categories = await store.listCategories(pool, request.params.eventId);
+      const increases = await store.listQuotaIncreases(pool, request.params.eventId);
       return {
         event: toEventJson(event),
         categories: categories.map((c) => ({
@@ -312,6 +357,15 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
           quota: c.quota,
           price_stroops: c.priceStroops.toString(),
           entered_count: c.enteredCount,
+          quota_history: increases
+            .filter((i) => i.categoryId === c.categoryId)
+            .map((i) => ({
+              previous: i.previous,
+              current: i.current,
+              at: i.at.toString(),
+              ledger: i.ledger,
+              tx_hash: i.txHash,
+            })),
         })),
       };
     },
@@ -359,7 +413,12 @@ export async function directoryRoutes(app: FastifyInstance, pool: Pool): Promise
       const scanners = await store.listScanners(pool, request.params.eventId);
       const cursor = await store.getCursor(pool);
       return {
-        scanners: scanners.map((s) => ({ address: s.address, added_ledger: s.addedLedger })),
+        scanners: scanners.map((s) => ({
+          address: s.address,
+          added_ledger: s.addedLedger,
+          added_at: s.addedAt?.toString() ?? null,
+          scans: s.scans,
+        })),
         last_ledger: cursor?.lastLedger ?? 0,
       };
     },

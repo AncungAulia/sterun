@@ -140,3 +140,81 @@ describe("the file as a whole", () => {
     expect(() => parseResultsCsv("runner,time\nA,1\n")).toThrow(/bib_no\/bib\/number/);
   });
 });
+
+/**
+ * STE-44 — rows that are not a timed finish.
+ *
+ * A fun run has finishers with no official time, and every race has runners
+ * who did not finish. All three outcomes are terminal on chain, so the rule
+ * throughout is: a row says what it is, and anything contradictory or unknown
+ * is refused rather than resolved.
+ */
+describe("the status column", () => {
+  it("reads finished, untimed and dnf as three kinds", () => {
+    const rows = parseResultsCsv("bib_no,finish_time,status\n0,52:41,finished\n1,,untimed\n2,,dnf\n")
+      .rows;
+    expect(rows.map((r) => [r.kind, r.finishTimeS, r.problem])).toEqual([
+      ["timed", 3161, null],
+      ["untimed", null, null],
+      ["dnf", null, null],
+    ]);
+  });
+
+  it("treats a row with a time and no status as timed, so old files mean what they meant", () => {
+    expect(parseResultsCsv("bib_no,finish_time\n0,3161\n").rows[0]).toMatchObject({
+      kind: "timed",
+      finishTimeS: 3161,
+    });
+  });
+
+  it.each([
+    ["Finished", "timed", "3161"],
+    ["no time", "untimed", ""],
+    ["No-Official-Time", "untimed", ""],
+    ["DNF", "dnf", ""],
+    ["did not finish", "dnf", ""],
+    ["DNS", "dnf", ""],
+    ["no show", "dnf", ""],
+  ])("accepts the status %o as %s", (status, kind, time) => {
+    expect(parseResultsCsv(`bib,time,result\n7,${time},${status}\n`).rows[0]).toMatchObject({
+      kind,
+      problem: null,
+    });
+  });
+
+  it("accepts a fun run file with a status column and no time column at all", () => {
+    const parsed = parseResultsCsv("bib_no,status\n0,untimed\n1,dnf\n");
+    expect(parsed.rows.map((r) => r.kind)).toEqual(["untimed", "dnf"]);
+  });
+
+  it.each(["untimed", "dnf"])("refuses a %s row that still carries a time", (status) => {
+    // Keeping the time contradicts the status; dropping it throws away a time
+    // someone measured. Neither is a decision the parser gets to make.
+    const row = parseResultsCsv(`bib_no,finish_time,status\n0,52:41,${status}\n`).rows[0];
+    expect(row).toMatchObject({ kind: null, finishTimeS: null, bibNo: null });
+    expect(row?.problem).toMatch(/must leave the finish time empty/);
+  });
+
+  it("refuses a status it does not know, rather than reading it as a finish", () => {
+    const row = parseResultsCsv("bib_no,finish_time,status\n0,3161,DQ\n").rows[0];
+    expect(row?.kind).toBeNull();
+    expect(row?.problem).toMatch(/status "DQ" is not one of finished, untimed or dnf/);
+  });
+
+  it("points a finished row with no time at the untimed status", () => {
+    const row = parseResultsCsv("bib_no,finish_time,status\n0,,finished\n").rows[0];
+    expect(row?.problem).toMatch(/write untimed in the status column/);
+  });
+
+  it("does not infer untimed from an empty time with no status", () => {
+    // A blank cell is far likelier a missed keystroke than a declared untimed
+    // finish, and both are permanent.
+    const row = parseResultsCsv("bib_no,finish_time,status\n0,,\n").rows[0];
+    expect(row?.kind).toBeNull();
+    expect(row?.problem).toMatch(/finish time "" is not a number of seconds/);
+  });
+
+  it("still refuses a file that names neither a time nor a status column", () => {
+    expect(() => parseResultsCsv("bib_no,category_id\n0,1\n")).toThrow(/time or status column/);
+  });
+});

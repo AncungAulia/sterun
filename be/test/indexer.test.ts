@@ -30,11 +30,13 @@ import {
   mint,
   racepackClaimed,
   recordDnf,
+  recordFinishedUntimed,
   recordEntered,
   recordFinished,
   scannerAdded,
   scannerRemoved,
   slotReserved,
+  quotaIncreased,
   toidCursor,
 } from "./helpers/fake-events.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
@@ -82,7 +84,9 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
    * indexer cross-checks them, and a fixture where they disagree would be
    * testing the cross-check rather than the flow.
    */
-  function seedFullRace(): { events: ReturnType<typeof eventCreated>[] } {
+  function seedFullRace(
+    { untimed = false }: { untimed?: boolean } = {},
+  ): { events: ReturnType<typeof eventCreated>[] } {
     chain.addEvent({
       eventId: 0,
       organiser: ORGANISER,
@@ -111,8 +115,11 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       state: "Finished",
       enteredAt: 1_800_000_500n,
       claimedAt: 1_800_000_600n,
-      finishTimeS: 3_600,
+      // v2.2: record_finish_untimed leaves the time None on chain.
+      finishTimeS: untimed ? null : 3_600,
       resultAt: 1_800_000_700n,
+      // v2 add-ons, in reservation order (STE-42).
+      addonIds: [2, 0],
     });
     chain.addRecord({
       tokenId: 1,
@@ -137,7 +144,9 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
         mint({ ...raceRecord, ledger: 103 }, RUNNER_B, 1),
         recordEntered({ ...raceRecord, ledger: 103 }, RUNNER_B, 0, 1, 2),
         racepackClaimed({ ...raceRecord, ledger: 120 }, 0, 0, SCANNER),
-        recordFinished({ ...raceRecord, ledger: 140 }, 0, 0, 3_600),
+        untimed
+          ? recordFinishedUntimed({ ...raceRecord, ledger: 140 }, 0, 0)
+          : recordFinished({ ...raceRecord, ledger: 140 }, 0, 0, 3_600),
         recordDnf({ ...raceRecord, ledger: 141 }, 1, 0),
       ],
     };
@@ -357,14 +366,39 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       );
     });
 
-    it("refuses a category_added whose quota disagrees with the contract", async () => {
+    it("refuses a category_added whose quota is LOWER on chain than published", async () => {
+      // A quota only ever rises (v2.4), so a lower one means the chain and the
+      // stream disagree about something real.
       chain.addEvent({ eventId: 0, organiser: ORGANISER });
-      chain.addCategory({ eventId: 0, categoryId: 0, quota: 100, priceStroops: 50_000_000n });
+      chain.addCategory({ eventId: 0, categoryId: 0, quota: 40, priceStroops: 50_000_000n });
       const page = [
         eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
         categoryAdded({ ...registry, ledger: 100 }, 0, 0, 50, 50_000_000n),
       ];
       await expect(build(new FakeEventSource([page])).pollOnce()).rejects.toThrow(/quota=50/);
+    });
+
+    it("accepts a category_added whose quota was raised since, and applies the rise when it replays", async () => {
+      // This used to throw and stop the poller for good: hydration reads the
+      // category as it is NOW, after an increase_quota further down the stream.
+      chain.addEvent({ eventId: 0, organiser: ORGANISER });
+      chain.addCategory({ eventId: 0, categoryId: 0, quota: 100, priceStroops: 50_000_000n });
+      const indexer = build(
+        new FakeEventSource([
+          [
+            eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+            categoryAdded({ ...registry, ledger: 100 }, 0, 0, 50, 50_000_000n),
+          ],
+          [quotaIncreased({ ...registry, ledger: 150 }, 0, 0, 50, 100)],
+        ]),
+      );
+
+      await indexer.pollOnce();
+      // The published number until the rise is reached, not today's.
+      expect((await store.listCategories(pool, 0))[0]?.quota).toBe(50);
+
+      await indexer.pollOnce();
+      expect((await store.listCategories(pool, 0))[0]?.quota).toBe(100);
     });
   });
 
@@ -419,6 +453,386 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
         new FakeEventSource([[slotReserved({ ...registry, ledger: 100 }, 0, 0, 0)]]),
       ).pollOnce();
       expect(result.orphans).toBe(1);
+    });
+  });
+
+  describe("the Cancelled status v2 can emit", () => {
+    /**
+     * `Cancelled` is a v2-only variant (STE-35). Nothing points at a v2 address
+     * yet, so these prove the path is ready rather than that it is used — and
+     * they are worth having early precisely because the alternative is finding
+     * out from a poller that stopped.
+     *
+     * Three layers have to agree and each fails differently: the decoder throws
+     * on a variant it does not know, Postgres rejects one its CHECK constraint
+     * does not list, and the route schema silently omits a field it cannot
+     * express. The database was the one INTERFACE.md §8 did not mention.
+     */
+    it("decodes, stores and serves an event whose status is Cancelled", async () => {
+      // Event 0: `rebuild` walks 0..eventCount-1, so a gap would fail for a
+      // reason that has nothing to do with the status being tested.
+      chain.addEvent({
+        eventId: 0,
+        organiser: ORGANISER,
+        name: "Cancelled Run",
+        status: "Cancelled",
+      });
+      await build(new FakeEventSource([])).rebuild();
+
+      const stored = await store.getEvent(pool, 0);
+      expect(stored).toMatchObject({ status: "Cancelled" });
+    });
+
+    it("is accepted by the database constraint, not only by the decoder", async () => {
+      // The layer §8 missed. Asserted directly so a future migration that
+      // rewrites the constraint cannot quietly drop the variant again.
+      await expect(
+        pool.query(
+          `INSERT INTO events (event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger)
+           VALUES (99, $1, 'x', '\\x00', 'u', 0, 'Cancelled', 'state', 1)`,
+          [ORGANISER],
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it("still refuses a status no contract can emit", async () => {
+      await expect(
+        pool.query(
+          `INSERT INTO events (event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger)
+           VALUES (98, $1, 'x', '\\x00', 'u', 0, 'Postponed', 'state', 1)`,
+          [ORGANISER],
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe("the untimed finish v2.2 can emit (STE-41)", () => {
+    it("moves the record to Finished and leaves the time empty, never 0", async () => {
+      const { events } = seedFullRace({ untimed: true });
+      const result = await build(new FakeEventSource([events])).pollOnce();
+      expect(result.applied).toBe(events.length);
+      expect(result.ignored).toBe(0);
+
+      const finished = await store.getRecord(pool, 0);
+      expect(finished).toMatchObject({ state: "Finished", finishTimeS: null, source: "event" });
+      expect(finished?.claimedAt).toBe(1_800_000_600n);
+      expect(finished?.resultAt).toBe(1_800_000_700n);
+    });
+
+    it("records the same three transitions a timed finish does", async () => {
+      const { events } = seedFullRace({ untimed: true });
+      await build(new FakeEventSource([events])).pollOnce();
+      expect((await store.listTransitions(pool, 0)).map((t) => [t.fromState, t.toState])).toEqual([
+        [null, "Entered"],
+        ["Entered", "RacepackClaimed"],
+        ["RacepackClaimed", "Finished"],
+      ]);
+    });
+
+    it("survives a rebuild from state, which the old constraint aborted", async () => {
+      // The production failure this migration fixes: before 007 the whole
+      // rebuild transaction rolled back on the first untimed record it read.
+      seedFullRace({ untimed: true });
+      const indexer = build(new FakeEventSource([]));
+      await indexer.rebuild();
+      expect(await store.getRecord(pool, 0)).toMatchObject({
+        state: "Finished",
+        finishTimeS: null,
+        source: "state",
+      });
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("still refuses a Finished row that never claimed a race pack", async () => {
+      // Only the time half of the constraint was dropped. Both finish functions
+      // refuse a record that is not RacepackClaimed, so this row is invented.
+      seedFullRace({ untimed: true });
+      await build(new FakeEventSource([])).rebuild();
+      await expect(
+        pool.query("UPDATE records SET claimed_at = NULL WHERE token_id = 0"),
+      ).rejects.toThrow(/finished_records_were_claimed/);
+    });
+
+    it("still refuses a finish time of 0", async () => {
+      // NULL means untimed; 0 is what record_finish refuses, so it is a bug.
+      seedFullRace();
+      await build(new FakeEventSource([])).rebuild();
+      await expect(
+        pool.query("UPDATE records SET finish_time_s = 0 WHERE token_id = 0"),
+      ).rejects.toThrow(/check constraint/);
+    });
+  });
+
+  describe("the add-ons each entry bought (STE-42)", () => {
+    it("stores them in reservation order from the poller, and [] for none", async () => {
+      const { events } = seedFullRace();
+      await build(new FakeEventSource([events])).pollOnce();
+      expect((await store.getRecord(pool, 0))?.addonIds).toEqual([2, 0]);
+      expect((await store.getRecord(pool, 1))?.addonIds).toEqual([]);
+    });
+
+    it("rebuild reproduces exactly what the poller stored", async () => {
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      const polled = [(await store.getRecord(pool, 0))?.addonIds, (await store.getRecord(pool, 1))?.addonIds];
+
+      await indexer.rebuild();
+      expect([(await store.getRecord(pool, 0))?.addonIds, (await store.getRecord(pool, 1))?.addonIds]).toEqual(
+        polled,
+      );
+    });
+
+    it("lets doctor report add-ons that drifted, including a changed order", async () => {
+      // Migration 008 backfills [] on existing rows, which is wrong for any v2
+      // entry that bought something. doctor is what makes that visible.
+      seedFullRace();
+      const indexer = build(new FakeEventSource([]));
+      await indexer.rebuild();
+      await pool.query("UPDATE records SET addon_ids = '{0,2}' WHERE token_id = 0");
+
+      const report = await indexer.doctor();
+      expect(report.ok).toBe(false);
+      expect(report.findings).toContainEqual({
+        kind: "record-differs",
+        detail: "record 0: addon_ids [0,2] != [2,0]",
+      });
+    });
+
+    it("refuses a negative id at the database, not only in the decoder", async () => {
+      seedFullRace();
+      await build(new FakeEventSource([])).rebuild();
+      await expect(
+        pool.query("UPDATE records SET addon_ids = '{-1}' WHERE token_id = 0"),
+      ).rejects.toThrow(/check constraint/);
+    });
+  });
+
+  describe("the scanner list the console shows (STE-43)", () => {
+    // FakeEventSource closes ledger N at 1_800_000_000 + N * 5.
+    const closedAt = (ledger: number): bigint => 1_800_000_000n + BigInt(ledger) * 5n;
+
+    it("dates a scanner by the close of the ledger that added it, and counts its check-ins", async () => {
+      const { events } = seedFullRace();
+      await build(new FakeEventSource([events])).pollOnce();
+
+      // seedFullRace adds SCANNER at ledger 101 and it claims token 0 at 120.
+      expect(await store.listScanners(pool, 0)).toEqual([
+        { eventId: 0, address: SCANNER, addedLedger: 101, addedAt: closedAt(101), scans: 1 },
+      ]);
+    });
+
+    it("counts two check-ins by one scanner as 2", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([racepackClaimed({ ...raceRecord, ledger: 150 }, 1, 0, SCANNER)]);
+      await indexer.pollOnce();
+
+      expect((await store.listScanners(pool, 0))[0]?.scans).toBe(2);
+    });
+
+    it("does not count a check-in by the organiser against any scanner", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([racepackClaimed({ ...raceRecord, ledger: 150 }, 1, 0, ORGANISER)]);
+      await indexer.pollOnce();
+
+      expect((await store.listScanners(pool, 0))[0]?.scans).toBe(1);
+    });
+
+    it("gives a scanner that never scanned 0, not a missing value", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([scannerAdded({ ...registry, ledger: 160 }, 0, RUNNER_B)]);
+      await indexer.pollOnce();
+
+      const idle = (await store.listScanners(pool, 0)).find((s) => s.address === RUNNER_B);
+      expect(idle).toEqual({
+        eventId: 0,
+        address: RUNNER_B,
+        addedLedger: 160,
+        addedAt: closedAt(160),
+        scans: 0,
+      });
+    });
+
+    it("dates a removed-then-re-added scanner by its latest add", async () => {
+      const { events } = seedFullRace();
+      const source = new FakeEventSource([events]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+
+      source.push([
+        scannerRemoved({ ...registry, ledger: 200 }, 0, SCANNER),
+        scannerAdded({ ...registry, ledger: 210 }, 0, SCANNER),
+      ]);
+      await indexer.pollOnce();
+
+      const [row] = await store.listScanners(pool, 0);
+      expect(row).toMatchObject({ addedLedger: 210, addedAt: closedAt(210) });
+      // Check-ins made before the removal still happened; they are not reset.
+      expect(row?.scans).toBe(1);
+    });
+
+    it("keeps the date and the count for a scanner a rebuild recovered", async () => {
+      // Both come from chain_events at query time, and that raw log is exactly
+      // what a rebuild keeps — so there is nothing to backfill.
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+
+      await indexer.rebuild();
+      expect(await store.listScanners(pool, 0)).toEqual([
+        { eventId: 0, address: SCANNER, addedLedger: 101, addedAt: closedAt(101), scans: 1 },
+      ]);
+    });
+  });
+
+  describe("entry counts and second batches (STE-54, STE-55, STE-56)", () => {
+    /**
+     * One event, a 5K and a 10K. Three 5K entries take bibs 1-3, then one 10K
+     * entry takes bib 4: since v2.3 a bib runs across the whole event, and
+     * `slot_reserved.seq` is that bib.
+     */
+    function seedTwoDistances() {
+      chain.addEvent({ eventId: 0, organiser: ORGANISER });
+      const fiveK = chain.addCategory({ eventId: 0, categoryId: 0, code: "5K", quota: 100, enteredCount: 3 });
+      chain.addCategory({ eventId: 0, categoryId: 1, code: "10K", quota: 100, enteredCount: 1 });
+      const page: ReturnType<typeof eventCreated>[] = [
+        eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+        categoryAdded({ ...registry, ledger: 100 }, 0, 0, 100, 50_000_000n),
+        categoryAdded({ ...registry, ledger: 100 }, 0, 1, 100, 50_000_000n),
+      ];
+      const entries: Array<[tokenId: number, categoryId: number, bib: number, runner: string]> = [
+        [0, 0, 1, RUNNER],
+        [1, 0, 2, RUNNER_B],
+        [2, 0, 3, SCANNER],
+        [3, 1, 4, ORGANISER],
+      ];
+      for (const [tokenId, categoryId, bib, runner] of entries) {
+        chain.addRecord({ tokenId, eventId: 0, categoryId, owner: runner, bibNo: bib });
+        const ctx = { ledger: 110 + tokenId };
+        page.push(
+          slotReserved({ ...registry, ...ctx }, 0, categoryId, bib),
+          mint({ ...raceRecord, ...ctx }, runner, tokenId),
+          recordEntered({ ...raceRecord, ...ctx }, runner, 0, tokenId, bib),
+        );
+      }
+      return { page, fiveK };
+    }
+
+    const counts = async () =>
+      (await store.listCategories(pool, 0)).map((c) => [c.categoryId, c.enteredCount, c.quota]);
+
+    it("counts each distance's entrants when bibs run across the whole event (v2.3)", async () => {
+      // Before the fix: the 5K read 4 and the 10K read 5, because seq + 1 was
+      // taken as a count. Production had categories above their own quota.
+      const { page } = seedTwoDistances();
+      await build(new FakeEventSource([page])).pollOnce();
+      expect(await counts()).toEqual([
+        [0, 3, 100],
+        [1, 1, 100],
+      ]);
+    });
+
+    it("does not count an entry twice when its page is replayed", async () => {
+      const { page } = seedTwoDistances();
+      const source = new FakeEventSource([page]);
+      const indexer = build(source);
+      await indexer.pollOnce();
+      source.replayLast();
+      await indexer.pollOnce();
+      expect(await counts()).toEqual([
+        [0, 3, 100],
+        [1, 1, 100],
+      ]);
+    });
+
+    it("raises the quota on quota_increased and keeps every rise as a dated fact", async () => {
+      const { page, fiveK } = seedTwoDistances();
+      fiveK.quota = 200;
+      const source = new FakeEventSource([
+        page,
+        [
+          quotaIncreased({ ...registry, ledger: 200, txHash: "aa".repeat(32) }, 0, 0, 100, 150),
+          quotaIncreased({ ...registry, ledger: 210, txHash: "bb".repeat(32) }, 0, 0, 150, 200),
+        ],
+      ]);
+      const follower = build(source);
+      await follower.pollOnce();
+      await follower.pollOnce();
+
+      expect(await counts()).toEqual([
+        [0, 3, 200],
+        [1, 1, 100],
+      ]);
+      // The fake closes ledger N at 1_800_000_000 + 5N seconds.
+      expect(await store.listQuotaIncreases(pool, 0)).toEqual([
+        { categoryId: 0, previous: 100, current: 150, at: 1_800_001_000n, ledger: 200, txHash: "aa".repeat(32) },
+        { categoryId: 0, previous: 150, current: 200, at: 1_800_001_050n, ledger: 210, txHash: "bb".repeat(32) },
+      ]);
+    });
+
+    it("stops the page on a quota_increased that is not an increase", async () => {
+      const { page } = seedTwoDistances();
+      const indexer = build(
+        new FakeEventSource([page, [quotaIncreased({ ...registry, ledger: 200 }, 0, 0, 100, 100)]]),
+      );
+      await indexer.pollOnce();
+      await expect(indexer.pollOnce()).rejects.toBeInstanceOf(IndexerConsistencyError);
+    });
+
+    it("counts a quota_increased for a category that is not indexed as an orphan", async () => {
+      const result = await build(
+        new FakeEventSource([[quotaIncreased({ ...registry, ledger: 200 }, 7, 0, 10, 20)]]),
+      ).pollOnce();
+      expect(result.orphans).toBe(1);
+      expect(warnings).toContain("quota increase for a category that is not indexed");
+    });
+
+    it("rebuilds today's quota from state and keeps the history, and doctor agrees", async () => {
+      const { page, fiveK } = seedTwoDistances();
+      fiveK.quota = 150;
+      const indexer = build(
+        new FakeEventSource([page, [quotaIncreased({ ...registry, ledger: 200 }, 0, 0, 100, 150)]]),
+      );
+      await indexer.pollOnce();
+      await indexer.pollOnce();
+
+      await indexer.rebuild();
+
+      expect(await counts()).toEqual([
+        [0, 3, 150],
+        [1, 1, 100],
+      ]);
+      // chain_events survives a rebuild, and the history is read from it.
+      expect(await store.listQuotaIncreases(pool, 0)).toHaveLength(1);
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("has doctor report a category whose count disagrees with the chain", async () => {
+      // The check that would have caught the production drift.
+      const { page } = seedTwoDistances();
+      const indexer = build(new FakeEventSource([page]));
+      await indexer.pollOnce();
+      await pool.query("UPDATE categories SET entered_count = 4 WHERE event_id = 0 AND category_id = 0");
+
+      const report = await indexer.doctor();
+
+      expect(report.ok).toBe(false);
+      expect(report.findings).toContainEqual({
+        kind: "category-differs",
+        detail: "category 0/0: entered_count 4 != 3",
+      });
     });
   });
 
@@ -677,6 +1091,7 @@ describe("reconstructTransitions", () => {
     claimedAt: null,
     finishTimeS: null,
     resultAt: null,
+    addonIds: [],
   };
 
   it("gives an entered record one step", () => {
@@ -706,6 +1121,26 @@ describe("reconstructTransitions", () => {
       { tokenId: 5, fromState: null, toState: "Entered", occurredAt: 100n },
       { tokenId: 5, fromState: "Entered", toState: "RacepackClaimed", occurredAt: 200n },
       { tokenId: 5, fromState: "RacepackClaimed", toState: "Finished", occurredAt: 300n },
+    ]);
+  });
+
+  it("gives an untimed finish the same three steps as a timed one", () => {
+    // record_finish_untimed (v2.2) leaves finish_time_s None. The history comes
+    // from the timestamps, not the time, so a missing time must not drop the
+    // Finished step — that would show a runner who finished as still holding
+    // their race pack.
+    expect(
+      reconstructTransitions({
+        ...base,
+        state: "Finished",
+        claimedAt: 200n,
+        finishTimeS: null,
+        resultAt: 300n,
+      }).map((t) => [t.fromState, t.toState]),
+    ).toEqual([
+      [null, "Entered"],
+      ["Entered", "RacepackClaimed"],
+      ["RacepackClaimed", "Finished"],
     ]);
   });
 

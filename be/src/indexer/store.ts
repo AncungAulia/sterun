@@ -202,7 +202,10 @@ export async function upsertCategory(
      ON CONFLICT (event_id, category_id) DO UPDATE
        SET code = EXCLUDED.code,
            distance_m = EXCLUDED.distance_m,
-           quota = EXCLUDED.quota,
+           -- A quota only ever rises on chain (v2.4), so the index never lowers
+           -- one either: a category_added replayed after a quota_increased must
+           -- not put the original number back.
+           quota = GREATEST(categories.quota, EXCLUDED.quota),
            price_stroops = EXCLUDED.price_stroops,
            -- Never goes backwards: a hydration that raced a fresh slot_reserved
            -- would otherwise hand a bib number out twice.
@@ -230,22 +233,124 @@ export async function upsertCategory(
  *
  * `GREATEST` again — replaying an old page must not lower a counter.
  */
-export async function applySlotReserved(
+/**
+ * Note that a slot was taken. Deliberately does NOT touch `entered_count`.
+ *
+ * It used to set `entered_count = seq + 1`, which was right while `seq` was the
+ * category's count before the increment. Since v2.3 (STE-54) `seq` is the bib,
+ * unique across the whole EVENT and starting at 1, so three 5K entries then one
+ * 10K entry made the 10K read as 5 entrants. Production showed categories above
+ * their own quota before this was found. The count now comes from
+ * {@link recountCategory}, which is right under both meanings.
+ */
+export async function touchCategory(
   db: Queryable,
   eventId: number,
   categoryId: number,
-  seq: number,
   at: Provenance,
 ): Promise<boolean> {
   const { rowCount } = await db.query(
     `UPDATE categories
-        SET entered_count = GREATEST(entered_count, $3),
+        SET last_ledger = GREATEST(last_ledger, $3),
+            updated_at = now()
+      WHERE event_id = $1 AND category_id = $2`,
+    [eventId, categoryId, at.ledger],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
+ * `entered_count` = the records the index holds for this category.
+ *
+ * Exact rather than a running total: `enter` is the only caller of
+ * `reserve_slot` and mints exactly one record per slot, atomically, so the two
+ * numbers are the same fact. Counting is idempotent under replay, and it heals a
+ * row a bug once inflated instead of preserving it with GREATEST.
+ */
+export async function recountCategory(
+  db: Queryable,
+  eventId: number,
+  categoryId: number,
+): Promise<void> {
+  await db.query(
+    `UPDATE categories c
+        SET entered_count = (SELECT count(*) FROM records r
+                              WHERE r.event_id = c.event_id AND r.category_id = c.category_id),
+            updated_at = now()
+      WHERE c.event_id = $1 AND c.category_id = $2`,
+    [eventId, categoryId],
+  );
+}
+
+/** v2.4 `quota_increased`: raise, never lower. False when the category is not indexed. */
+export async function raiseCategoryQuota(
+  db: Queryable,
+  eventId: number,
+  categoryId: number,
+  quota: number,
+  at: Provenance,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE categories
+        SET quota = GREATEST(quota, $3),
             last_ledger = GREATEST(last_ledger, $4),
             updated_at = now()
       WHERE event_id = $1 AND category_id = $2`,
-    [eventId, categoryId, seq + 1, at.ledger],
+    [eventId, categoryId, quota, at.ledger],
   );
   return (rowCount ?? 0) > 0;
+}
+
+/** One quota rise, as a dated fact (STE-56). */
+export interface QuotaIncreaseRow {
+  categoryId: number;
+  previous: number;
+  current: number;
+  /** Unix seconds of the ledger close. */
+  at: bigint;
+  ledger: number;
+  txHash: string;
+}
+
+/**
+ * Every quota rise in an event, oldest first.
+ *
+ * Read from `chain_events` at query time, the same choice as a scanner's
+ * `added_at`: that raw log is what a rebuild keeps, so the history survives a
+ * rebuild with no second copy to drift. Contract state holds only the current
+ * quota, so a rise from before this index started polling is not here.
+ */
+export async function listQuotaIncreases(
+  db: Queryable,
+  eventId: number,
+): Promise<QuotaIncreaseRow[]> {
+  const { rows } = await db.query<{
+    category_id: number;
+    previous: number;
+    current: number;
+    at: string;
+    ledger: number;
+    tx_hash: string;
+  }>(
+    `SELECT (payload->>'categoryId')::int AS category_id,
+            (payload->>'previous')::int AS previous,
+            (payload->>'current')::int AS current,
+            floor(extract(epoch FROM ledger_closed_at))::bigint::text AS at,
+            ledger,
+            tx_hash
+       FROM chain_events
+      WHERE name = 'quota_increased' AND (payload->>'eventId')::int = $1
+      ORDER BY ledger, id`,
+    [eventId],
+  );
+  return rows.map((r) => ({
+    categoryId: r.category_id,
+    previous: r.previous,
+    current: r.current,
+    at: BigInt(r.at),
+    ledger: r.ledger,
+    txHash: r.tx_hash,
+  }));
 }
 
 export interface RecordUpsert extends ChainRecord {
@@ -260,8 +365,8 @@ export async function upsertRecord(
   await db.query(
     `INSERT INTO records (token_id, event_id, category_id, bib_no, runner_address,
                           participant_hash, state, entered_at, claimed_at, finish_time_s,
-                          result_at, source, last_ledger, updated_at)
-     VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, $9, $10, $11, $12, $13, now())
+                          result_at, source, last_ledger, addon_ids, updated_at)
+     VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, $9, $10, $11, $12, $13, $14, now())
      ON CONFLICT (token_id) DO UPDATE
        SET event_id = EXCLUDED.event_id,
            category_id = EXCLUDED.category_id,
@@ -275,6 +380,7 @@ export async function upsertRecord(
            result_at = EXCLUDED.result_at,
            source = EXCLUDED.source,
            last_ledger = GREATEST(records.last_ledger, EXCLUDED.last_ledger),
+           addon_ids = EXCLUDED.addon_ids,
            updated_at = now()`,
     [
       rec.tokenId,
@@ -290,6 +396,7 @@ export async function upsertRecord(
       rec.resultAt?.toString() ?? null,
       at.source,
       at.ledger,
+      rec.addonIds,
     ],
   );
 }
@@ -470,6 +577,8 @@ export interface RecordRow {
   resultAt: bigint | null;
   source: RowSource;
   lastLedger: number;
+  /** RecordData.addon_ids, in reservation order. `[]` when none. */
+  addonIds: number[];
 }
 
 interface RawEventRow {
@@ -498,13 +607,14 @@ interface RawRecordRow {
   result_at: string | null;
   source: RowSource;
   last_ledger: number;
+  addon_ids: number[];
 }
 
 const EVENT_COLUMNS =
   "event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger";
 const RECORD_COLUMNS =
   "token_id, event_id, category_id, bib_no, runner_address, participant_hash, state, " +
-  "entered_at, claimed_at, finish_time_s, result_at, source, last_ledger";
+  "entered_at, claimed_at, finish_time_s, result_at, source, last_ledger, addon_ids";
 
 /**
  * `bigint` columns come back from `pg` as strings, which is correct and easy to
@@ -537,6 +647,7 @@ const toRecordRow = (r: RawRecordRow): RecordRow => ({
   resultAt: r.result_at === null ? null : BigInt(r.result_at),
   source: r.source,
   lastLedger: r.last_ledger,
+  addonIds: r.addon_ids,
 });
 
 export async function listEvents(
@@ -594,20 +705,6 @@ export interface ScannerRow {
   addedLedger: number;
 }
 
-/**
- * The scanners an event currently allows.
- *
- * `removed_ledger IS NULL` rather than deleting the row: the table is the
- * replay of scanner_added / scanner_removed events, and a removal is a fact
- * worth keeping. It also makes a re-add cheap, since addScanner clears the
- * column rather than inserting a second row.
- *
- * This is the only place a *list* of scanners can come from. EventRegistry
- * exposes `is_scanner(event_id, addr)` and nothing that enumerates, so a caller
- * that needs the set has to reconstruct it from events. Callers who need to act
- * on the answer should still check each address against the chain: this is an
- * index, and an index can lag.
- */
 /**
  * Every scanner a rebuild should consider re-inserting.
  *
@@ -680,22 +777,80 @@ export async function listScannerCandidates(db: Queryable): Promise<ScannerRow[]
   );
 }
 
-export async function listScanners(db: Queryable, eventId: number): Promise<ScannerRow[]> {
+/**
+ * The scanners an event currently allows.
+ *
+ * `removed_ledger IS NULL` rather than deleting the row: the table is the
+ * replay of scanner_added / scanner_removed events, and a removal is a fact
+ * worth keeping. It also makes a re-add cheap, since addScanner clears the
+ * column rather than inserting a second row.
+ *
+ * This is the only place a *list* of scanners can come from. EventRegistry
+ * exposes `is_scanner(event_id, addr)` and nothing that enumerates, so a caller
+ * that needs the set has to reconstruct it from events. Callers who need to act
+ * on the answer should still check each address against the chain: this is an
+ * index, and an index can lag.
+ */
+/** A scanner as the organiser console lists it (STE-43). */
+export interface ScannerListRow extends ScannerRow {
+  /**
+   * Unix seconds when the current allowlisting landed: the close time of the
+   * `scanner_added` at `addedLedger`. `null` only when the raw log has no such
+   * event, which a normal index cannot produce — see listScanners.
+   */
+  addedAt: bigint | null;
+  /** `racepack_claimed` events for this event whose operator is this address. */
+  scans: number;
+}
+
+export async function listScanners(db: Queryable, eventId: number): Promise<ScannerListRow[]> {
+  // Both columns come from chain_events at query time rather than being stored
+  // on event_scanners, for one reason: that raw log is the thing a rebuild
+  // keeps. A scanner recovered by rebuild therefore keeps its date and count
+  // with no backfill, and there is no second copy to drift.
+  //
+  // added_at joins on the ledger addScanner recorded, not "the latest add":
+  // after a remove and re-add, added_ledger already IS the latest add, and
+  // matching on it keeps an earlier add in the same log from answering.
+  //
+  // scans counts claims by operator, so a claim made by the organiser counts
+  // against no scanner — unless the organiser allowlisted their own address,
+  // in which case those claims genuinely were made by that scanner.
   const { rows } = await db.query<{
     event_id: number;
     scanner_address: string;
     added_ledger: number;
+    added_at: string | null;
+    scans: string;
   }>(
-    `SELECT event_id, scanner_address, added_ledger
-       FROM event_scanners
-      WHERE event_id = $1 AND removed_ledger IS NULL
-      ORDER BY added_ledger, scanner_address`,
+    `SELECT s.event_id,
+            s.scanner_address,
+            s.added_ledger,
+            (SELECT floor(extract(epoch FROM e.ledger_closed_at))::bigint::text
+               FROM chain_events e
+              WHERE e.name = 'scanner_added'
+                AND e.ledger = s.added_ledger
+                AND e.payload->>'scanner' = s.scanner_address
+                AND (e.payload->>'eventId')::int = s.event_id
+              ORDER BY e.id DESC
+              LIMIT 1) AS added_at,
+            (SELECT count(*)
+               FROM chain_events c
+              WHERE c.name = 'racepack_claimed'
+                AND c.payload->>'operator' = s.scanner_address
+                AND (c.payload->>'eventId')::int = s.event_id) AS scans
+       FROM event_scanners s
+      WHERE s.event_id = $1 AND s.removed_ledger IS NULL
+      ORDER BY s.added_ledger, s.scanner_address`,
     [eventId],
   );
   return rows.map((r) => ({
     eventId: r.event_id,
     address: r.scanner_address,
     addedLedger: r.added_ledger,
+    addedAt: r.added_at === null ? null : BigInt(r.added_at),
+    // count(*) is bigint in Postgres and arrives as a string.
+    scans: Number(r.scans),
   }));
 }
 
@@ -725,6 +880,25 @@ export async function listRecordsByEvent(
     `SELECT ${RECORD_COLUMNS} FROM records WHERE event_id = $1
       ORDER BY bib_no, token_id LIMIT $2 OFFSET $3`,
     [eventId, opts.limit, opts.offset],
+  );
+  return rows.map(toRecordRow);
+}
+
+/**
+ * The records for exactly these token ids, in token order.
+ *
+ * For the roster, which starts from the vault's confirmed tokens. Asking for
+ * "the event's records, up to N" instead silently dropped every entry past N
+ * in a big race and reported them as not indexed.
+ */
+export async function listRecordsByTokenIds(
+  db: Queryable,
+  tokenIds: readonly number[],
+): Promise<RecordRow[]> {
+  if (tokenIds.length === 0) return [];
+  const { rows } = await db.query<RawRecordRow>(
+    `SELECT ${RECORD_COLUMNS} FROM records WHERE token_id = ANY($1::int[]) ORDER BY token_id`,
+    [tokenIds],
   );
   return rows.map(toRecordRow);
 }

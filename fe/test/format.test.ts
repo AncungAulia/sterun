@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { formatEventDate, formatEventDateTime, formatPrice, shortAddress } from "@/utils/format";
+import {
+  formatEventDate,
+  formatEventDateTime,
+  formatEventDateTimeLong,
+  formatPrice,
+  formatAmount,
+  parseStroops,
+  shortAddress,
+} from "@/utils/format";
 
 const ADDRESS = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 
@@ -39,6 +47,31 @@ describe("shortAddress", () => {
       // addresses rendered with tabular figures.
       expect(shortAddress(ADDRESS)).toContain("…");
       expect(shortAddress(ADDRESS)).not.toContain("...");
+    });
+  });
+});
+
+describe("formatAmount", () => {
+  describe("positive", () => {
+    it("groups a running total so it stays readable", () => {
+      expect(formatAmount(70_000_000_000n)).toBe("7,000");
+    });
+
+    it("keeps the fractional part when there is one", () => {
+      expect(formatAmount(155_000_000n)).toBe("15.5");
+    });
+  });
+
+  describe("edge", () => {
+    it("says 0 rather than Free, because a total is not an offer", () => {
+      // `formatPrice` answers "what does entry cost", and for zero the honest
+      // word there is Free. "Received, all races: Free" is a different claim
+      // and a wrong one, which is why these are two functions over one rule.
+      expect(formatAmount(0n)).toBe("0");
+    });
+
+    it("carries no currency word of its own", () => {
+      expect(formatAmount(10_000_000n)).toBe("1");
     });
   });
 });
@@ -122,6 +155,66 @@ describe("formatEventDateTime", () => {
   describe("edge", () => {
     it("does not crash on a timestamp outside the range a Date can hold", () => {
       expect(formatEventDateTime(99_999_999_999_999n, "UTC")).toBe("Unknown date");
+    });
+  });
+});
+
+describe("parseStroops", () => {
+  describe("positive", () => {
+    it("reads a whole number of sUSD", () => {
+      expect(parseStroops("25")).toBe(250_000_000n);
+    });
+
+    it("reads a decimal without going through a float", () => {
+      // 0.1 + 0.2 arithmetic here would be off by a stroop, and a price that is
+      // off by a stroop is a transfer the runner did not agree to.
+      expect(parseStroops("15.5")).toBe(155_000_000n);
+      expect(parseStroops("0.1")).toBe(1_000_000n);
+    });
+
+    it("reads the smallest expressible amount", () => {
+      expect(parseStroops("0.0000001")).toBe(1n);
+    });
+
+    it("treats a free category as free", () => {
+      expect(parseStroops("0")).toBe(0n);
+      expect(parseStroops("")).toBe(0n);
+    });
+
+    it("survives an amount larger than a JS number can hold exactly", () => {
+      expect(parseStroops("9007199254740993.1234567")).toBe(90_071_992_547_409_931_234_567n);
+    });
+  });
+
+  describe("negative", () => {
+    it("refuses more precision than the asset has", () => {
+      // Silently rounding would take a price the organiser typed and charge a
+      // different one.
+      expect(() => parseStroops("1.12345678")).toThrow(/7 digits/i);
+    });
+
+    it("refuses anything that is not a number", () => {
+      expect(() => parseStroops("ten")).toThrow();
+      expect(() => parseStroops("1,5")).toThrow();
+      expect(() => parseStroops("-5")).toThrow();
+    });
+  });
+});
+
+describe("formatEventDateTimeLong", () => {
+  describe("positive", () => {
+    it("names the weekday, because that is what a wrong month looks like", () => {
+      // A date typed one month off still looks plausible as digits. It stops
+      // looking plausible the moment it says the wrong day of the week.
+      expect(formatEventDateTimeLong(GUN_START, "Asia/Jakarta")).toBe(
+        "Monday, September 28, 2026 at 05:30 GMT+7",
+      );
+    });
+  });
+
+  describe("edge", () => {
+    it("does not crash on a timestamp outside the range a Date can hold", () => {
+      expect(formatEventDateTimeLong(99_999_999_999_999n, "UTC")).toBe("Unknown date");
     });
   });
 });

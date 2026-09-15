@@ -1,8 +1,15 @@
-# Changelog — `@sterun/sdk`
+# Changelog — `@sterunxyz/sdk`
+
+> **Renamed from `@sterunxyz/sdk` before the first publish (2026-09-10).** No
+> version of this package was ever published under the old name, so nothing to
+> migrate — but the old name appears in tickets, in `docs/`, and in commit
+> history from before the rename, which is why it is recorded here rather than
+> quietly dropped. The scope moved because the `sterun` npm org already belonged
+> to another account of the same owner and an org name cannot be changed.
 
 Two things are versioned here and they move independently:
 
-- **the package**, `@sterun/sdk`, following semver;
+- **the package**, `@sterunxyz/sdk`, following semver;
 - **RaceRecord JSON Schema**, whose version is written inside every document it
   describes and inside `schema/race-record-v*.json`.
 
@@ -22,6 +29,42 @@ re-read them later, and a format that keeps moving is not a format.
 A MAJOR schema version ships as a new file (`schema/race-record-v2.0.json`) and
 a new `$id`. The old file stays where it is — documents that reference it are
 already in other people's hands.
+
+---
+
+## [Unreleased]
+
+### Added
+
+- `SterunClient.increaseQuota({ eventId, categoryId, newQuota })` — raise a
+  sold-out category's quota for a second batch (contracts v2.4, STE-55/STE-56).
+  `newQuota` is the new total; equal to or below the current quota reverts
+  `QuotaNotIncreased(19)`, since a published quota only ever rises. The error
+  map already names 19.
+- `SterunRecord.addonIds: number[]` — the add-ons an entry paid for, in the
+  order they were reserved, read from `RecordData.addon_ids` (v2, STE-42). `[]`
+  when it bought none, and `[]` rather than `undefined` for a v1-shaped record,
+  so `record.addonIds.length` is always safe. Ids only; resolve names and prices
+  with `listAddOns(eventId)`. A new **required** field on a returned type, so a
+  consumer constructing `SterunRecord` literals must add it — which is why this
+  is a MINOR bump at release rather than a patch.
+- `recordFinishUntimed(tokenId, options?)` — marks a finish with **no official
+  time**, for events without chip timing (STE-41, `docs/specs/INTERFACE.md`
+  v2.2.0). Organiser only, from `RacepackClaimed` only, terminal. The record
+  comes back as `state: "Finished"` with `finishTimeS: null`, and that pair is
+  the marker for "finished, no official time". It is **not**
+  `recordFinish(tokenId, 0)`, which the contract still refuses
+  (`InvalidFinishTime`, 105).
+- The vendored race-record bindings carry `record_finish_untimed` and the
+  `RecordFinishedUntimed` event.
+
+### Behaviour to be aware of
+
+- A `Finished` `SterunRecord` may now have `finishTimeS === null`. Code that
+  formatted every finished record's time must handle that case and must never
+  render it as `0`.
+- Not published yet: needs the live contract upgraded to v2.2 (done at the same
+  address — see `docs/deployments.md`) and a version bump by the package owner.
 
 ---
 

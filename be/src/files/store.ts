@@ -160,7 +160,11 @@ export class LocalFileStore implements FileStore {
     // whoever lost has exactly the bytes they wanted already on disk.
     try {
       await writeFile(path, bytes, { flag: "wx" });
-      this.#cachedTotal = total + bytes.length;
+      // Added to the cached total as it is NOW, not to the `total` read before
+      // the await: two uploads racing both read the same `total`, and writing
+      // `total + bytes` let the second erase the first from the count, so the
+      // ceiling slowly stopped holding.
+      this.#cachedTotal = (this.#cachedTotal ?? total) + bytes.length;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
       return { sha256, size: bytes.length, contentType, created: false };

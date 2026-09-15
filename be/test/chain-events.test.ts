@@ -21,8 +21,10 @@ import {
   eventCreated,
   eventStatusChanged,
   mint,
+  quotaIncreased,
   racepackClaimed,
   recordDnf,
+  recordFinishedUntimed,
   recordEntered,
   recordFinished,
   scannerAdded,
@@ -79,7 +81,21 @@ describe("EventRegistry events (INTERFACE.md §1.3)", () => {
     });
   });
 
-  it("decodes slot_reserved, whose seq is the count BEFORE the increment", () => {
+  it("decodes quota_increased with both the old and the new quota (v2.4)", () => {
+    expect(decode(quotaIncreased(registry, 3, 1, 2_000, 3_000))?.event).toEqual({
+      name: "quota_increased",
+      eventId: 3,
+      categoryId: 1,
+      previous: 2_000,
+      current: 3_000,
+    });
+  });
+
+  it("drops quota_increased emitted by RaceRecord", () => {
+    expect(decode(quotaIncreased(raceRecord, 3, 1, 2_000, 3_000))).toBeNull();
+  });
+
+  it("decodes slot_reserved, whose seq is the bib (event-wide since v2.3)", () => {
     expect(decode(slotReserved(registry, 1, 0, 4))?.event).toEqual({
       name: "slot_reserved",
       eventId: 1,
@@ -124,6 +140,19 @@ describe("RaceRecord events (INTERFACE.md §2.3)", () => {
       eventId: 1,
       finishTimeS: 3_600,
     });
+  });
+
+  it("decodes record_finished_untimed without inventing a time", () => {
+    // v2.2. The decoded event must not carry finishTimeS at all: a 0 here is
+    // exactly the zero-second race that option B was rejected for.
+    const event = decode(recordFinishedUntimed(raceRecord, 7, 1))?.event;
+    expect(event).toEqual({ name: "record_finished_untimed", tokenId: 7, eventId: 1 });
+    expect(event).not.toHaveProperty("finishTimeS");
+  });
+
+  it("drops record_finished_untimed emitted by EventRegistry", () => {
+    // Only RaceRecord may finish a record. The name alone proves nothing.
+    expect(decode(recordFinishedUntimed(registry, 7, 1))).toBeNull();
   });
 
   it("decodes record_dnf, which has no data fields at all", () => {
@@ -236,7 +265,10 @@ describe("what is refused", () => {
   });
 
   it("throws when an enum carries a variant the spec does not define", () => {
-    expect(() => decode(eventStatusChanged(registry, 1, "Cancelled"))).toThrow(/unknown variant/);
+    // "Cancelled" WAS the example here and is now a real v2 status (STE-35).
+    // Replaced with one no contract defines, so the test keeps asserting what
+    // it was written to assert rather than passing by accident.
+    expect(() => decode(eventStatusChanged(registry, 1, "Postponed"))).toThrow(/unknown variant/);
   });
 });
 
@@ -248,10 +280,12 @@ describe("coverage of the frozen surface", () => {
       "event_created",
       "event_status_changed",
       "mint",
+      "quota_increased",
       "racepack_claimed",
       "record_dnf",
       "record_entered",
       "record_finished",
+      "record_finished_untimed",
       "scanner_added",
       "scanner_removed",
       "slot_reserved",

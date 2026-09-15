@@ -60,11 +60,21 @@ export type DecodedEvent =
   | { name: "event_status_changed"; eventId: number; status: EventStatus }
   | { name: "scanner_added"; eventId: number; scanner: string }
   | { name: "scanner_removed"; eventId: number; scanner: string }
+  // `seq` is the bib the slot was given. Since v2.3 (STE-54) that is unique in
+  // the EVENT and starts at 1; before, it was the category's count before the
+  // increment. Neither is a count the indexer may rely on — see indexer.ts.
   | { name: "slot_reserved"; eventId: number; categoryId: number; seq: number }
+  // v2.4 (STE-55). A quota only ever rises; `previous` is kept so the rise can
+  // be shown as a dated fact rather than a number that silently moved.
+  | { name: "quota_increased"; eventId: number; categoryId: number; previous: number; current: number }
   | { name: "mint"; to: string; tokenId: number }
   | { name: "record_entered"; runner: string; eventId: number; bibNo: number; tokenId: number }
   | { name: "racepack_claimed"; tokenId: number; eventId: number; operator: string }
   | { name: "record_finished"; tokenId: number; eventId: number; finishTimeS: number }
+  // v2.2 (STE-41). A new name rather than record_finished with a 0, so nothing
+  // that already decodes record_finished can read a missing time as a
+  // zero-second race.
+  | { name: "record_finished_untimed"; tokenId: number; eventId: number }
   | { name: "record_dnf"; tokenId: number; eventId: number };
 
 export type DecodedEventName = DecodedEvent["name"];
@@ -92,10 +102,12 @@ const EMITTER: Readonly<Record<DecodedEventName, keyof KnownContracts>> = {
   scanner_added: "eventRegistry",
   scanner_removed: "eventRegistry",
   slot_reserved: "eventRegistry",
+  quota_increased: "eventRegistry",
   mint: "raceRecord",
   record_entered: "raceRecord",
   racepack_claimed: "raceRecord",
   record_finished: "raceRecord",
+  record_finished_untimed: "raceRecord",
   record_dnf: "raceRecord",
 };
 
@@ -203,6 +215,14 @@ function decodePayload(name: DecodedEventName, raw: RawChainEvent, at: string): 
         categoryId: u32(topic(raw, 2, at), `${at}.category_id`),
         seq: u32(dataField(raw, "seq", at), `${at}.seq`),
       };
+    case "quota_increased":
+      return {
+        name,
+        eventId: u32(topic(raw, 1, at), `${at}.event_id`),
+        categoryId: u32(topic(raw, 2, at), `${at}.category_id`),
+        previous: u32(dataField(raw, "previous", at), `${at}.previous`),
+        current: u32(dataField(raw, "current", at), `${at}.current`),
+      };
     case "mint":
       return {
         name,
@@ -230,6 +250,14 @@ function decodePayload(name: DecodedEventName, raw: RawChainEvent, at: string): 
         tokenId: u32(topic(raw, 1, at), `${at}.token_id`),
         eventId: u32(topic(raw, 2, at), `${at}.event_id`),
         finishTimeS: u32(dataField(raw, "finish_time_s", at), `${at}.finish_time_s`),
+      };
+    // Same shape as record_dnf: both facts live in the topics and the data map
+    // is empty (INTERFACE.md §2.3).
+    case "record_finished_untimed":
+      return {
+        name,
+        tokenId: u32(topic(raw, 1, at), `${at}.token_id`),
+        eventId: u32(topic(raw, 2, at), `${at}.event_id`),
       };
     case "record_dnf":
       return {

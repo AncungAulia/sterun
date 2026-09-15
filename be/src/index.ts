@@ -12,11 +12,13 @@ import { PostgresNonces } from "./auth-postgres.js";
 import { loadEnvFile } from "./env.js";
 import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
+import { StellarFaucetPayer } from "./faucet.js";
 import { createPool } from "./db/pool.js";
 import { R2FileStore } from "./files/r2.js";
 import { LocalFileStore } from "./files/store.js";
 import { migrate } from "./db/migrate.js";
 import { buildServer } from "./server.js";
+import { startUnconfirmedSweep } from "./retention.js";
 import { Vault } from "./vault.js";
 
 // The documented setup is "copy .env.example to be/.env"; config reads
@@ -83,17 +85,32 @@ const fileStore = config.files.r2
       maxTotalBytes: config.files.maxTotalBytes,
     });
 
+/**
+ * STE-49. Only when a faucet account is configured, and never the distributor:
+ * the route pays from its own float so a compromised box can give away at most
+ * that. Without it the route still mounts and says `faucet-unavailable`.
+ */
+const faucetPayer = config.faucetSecret
+  ? new StellarFaucetPayer(config, config.faucetSecret)
+  : undefined;
+
+const vault = pool && config.vault ? new Vault(pool, config.vault.keyring, config.vault.indexKey) : undefined;
+/** STE-50. Set once the server is listening; cleared on shutdown. */
+let stopSweep: (() => void) | undefined;
+
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
   fileStore,
-  ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
+  ...(vault ? { vault } : {}),
   challenges,
   reader,
+  ...(faucetPayer ? { faucetPayer } : {}),
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     app.log.info({ signal }, "shutting down");
+    stopSweep?.();
     void app
       .close()
       .then(() => pool?.end())
@@ -103,6 +120,14 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 try {
   await app.listen({ host: config.host, port: config.port });
+  if (vault) {
+    // STE-50: entries that were submitted and never paid for are personal data
+    // with no purpose. Swept from here, the process that owns the vault.
+    stopSweep = startUnconfirmedSweep(vault, app.log, {
+      olderThanHours: config.retention.unconfirmedHours,
+      intervalMs: config.retention.sweepIntervalMs,
+    });
+  }
   app.log.info(
     {
       network: config.network.name,
@@ -110,6 +135,8 @@ try {
       vault: config.vault ? { activeKeyId: config.vault.keyring.activeKeyId } : "disabled",
       nonces: pool ? "postgres" : "in-memory (single process only)",
       files: config.files.r2 ? `r2:${config.files.r2.bucket}` : `disk:${config.files.root}`,
+      // A public address, never the secret.
+      faucet: faucetPayer ? faucetPayer.address : "not configured",
     },
     "sterun backend ready",
   );

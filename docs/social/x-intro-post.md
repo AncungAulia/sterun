@@ -1,27 +1,26 @@
-# Post perkenalan pertama — akun X Sterun
+# The first introduction post — the Sterun X account
 
-Tiket: **STE-7**. Owner: Nabil. Reviewer sebelum tayang: **Axel (PM)**.
+Ticket: **STE-7**. Owner: Nabil. Reviewer before it goes out: **Axel (PM)**.
 
-Handle akun: **[@sterunxyz](https://x.com/sterunxyz)**
+Account handle: **[@sterunxyz](https://x.com/sterunxyz)**
 
-Status: **copy disetujui Axel, tayang ditunda.**
+Status: **copy approved by Axel, posting deferred.**
 
-Axel memutuskan post ini baru tayang **setelah web app ter-deploy dan domainnya ada**,
-supaya post pertama akun ini punya sesuatu yang bisa diklik orang. Karena itu STE-7
-ditutup tanpa post yang tayang, meski daftar requirement-nya menyebut sebaliknya —
-keputusan PM mengubah syarat itu, bukan kelalaian.
+Axel decided this post should only go out **once the web app is deployed and has a domain**, so
+that the account's first post has something people can click. STE-7 was therefore closed without a
+published post even though its requirements list said otherwise — a PM decision changed that
+condition; it was not an oversight.
 
-Pemicunya: **[STE-32](https://linear.app/sterun/issue/STE-32)** (deploy web + landing ke
-Vercel, owner Ancung, target 2026-10-01). Begitu URL-nya hidup, posting copy di bawah,
-lalu isi [Setelah tayang](#setelah-tayang).
+The trigger: **[STE-32](https://linear.app/sterun/issue/STE-32)** (deploy the web app and landing
+page to Vercel, owner Ancung, target 2026-10-01). As soon as that URL is live, post the copy below
+and then fill in [After it goes out](#after-it-goes-out).
 
-Peringatan untuk siapa pun yang membaca ini nanti: STE-7 sudah Done, jadi **tidak ada
-tiket yang memiliki pekerjaan ini lagi.** Kalau STE-32 mundur, post ini ikut mundur tanpa
-ada yang mengingatkan.
+A warning to whoever reads this later: STE-7 is already Done, so **no ticket owns this work any
+more.** If STE-32 slips, this post slips with it and nothing will raise a flag.
 
 ---
 
-## Copy final
+## The final copy
 
 ```
 You ran a 10k in 2019. Prove it. The results page is gone and your certificate
@@ -33,84 +32,85 @@ and can't be resold.
 Live on Stellar testnet.
 ```
 
-**239 karakter.** Akun belum punya X Premium, jadi batasnya 280 dan copy ini harus
-muat sebagai satu post tunggal — bukan thread. Kalau nanti diedit, hitung ulang.
+**239 characters.** The account has no X Premium, so the limit is 280 and this copy has to fit as a
+single post — not a thread. If it is ever edited, count again.
 
-**Kenapa versi ini.** Hook-nya rasa kehilangan, bukan bahaya: "Prove it." memaksa
-pembaca ikut memikirkan lombanya sendiri sebelum sadar ini soal blockchain. Versi
-sebelumnya membuka dengan pelari tumbang di kilometer 8 dan bib yang dijual ulang —
-argumennya lebih kuat, tapi nadanya gelap untuk post pertama sebuah akun.
+**Why this version.** Its hook is loss rather than danger: "Prove it." makes the reader think about
+their own race before they realise this is about a blockchain. An earlier version opened with a
+runner going down at kilometre 8 and a resold bib — a stronger argument, but too dark a tone for an
+account's first post.
 
-Yang tetap dibawa versi ini: keawetan catatan (`outlives the organiser`) dan
-anti-jual-ulang (`can't be resold`), plus satu klaim yang bisa dicek orang lain
+What this version still carries: the record's durability (`outlives the organiser`) and the
+resistance to resale (`can't be resold`), plus one claim other people can check
 (`live on Stellar testnet`).
 
 ### Visual
 
-Banner X yang sudah terpasang, atau `sterun-lockup-black.svg` diekspor ke PNG di atas
-latar `paper` (`#F8F8F8`). Aturan pakai di [`docs/brand.md`](../brand.md).
+The X banner already in place, or `sterun-lockup-black.svg` exported to PNG on a `paper` background
+(`#F8F8F8`). The usage rules are in [`docs/brand.md`](../brand.md).
 
-Setelah tayang, **pin post-nya** — akun ini dikunjungi lewat link dari landing dan dari
-laporan grant, dan post pertama yang mereka lihat sebaiknya yang menjelaskan produknya.
+Once it is out, **pin the post** — this account is reached by links from the landing page and from
+the grant report, and the first post those visitors see should be the one that explains the product.
 
 ---
 
-## Verifikasi klaim
+## Verifying the claims
 
-### Sumber internal
+### Internal sources
 
-| Klaim | Sumber |
+| Claim | Source |
 | --- | --- |
-| Kontrak hidup di **Stellar testnet** | [`docs/deployments.md`](../deployments.md), STE-33 |
-| Race record **non-transferable** | export surface wasm — tidak ada `transfer`/`approve`/`burn` ([`sc/contracts/race_record/CLAUDE.md`](../../sc/contracts/race_record/CLAUDE.md)) |
+| The contracts are live on **Stellar testnet** | [`docs/deployments.md`](../deployments.md), STE-33 |
+| Race records are **non-transferable** | the wasm export surface — no `transfer`/`approve`/`burn` ([`sc/contracts/race_record/CLAUDE.md`](../../sc/contracts/race_record/CLAUDE.md)) |
 
 ### MCP Stellar Raven — 2026-09-03
 
-Empat hal yang diperiksa sebelum copy ini disetujui:
+Four things checked before this copy was approved:
 
-**1. "participation record" memang wilayah orang lain, dan lebih dalam dari sekadar wording.**
-Stellar Passport ada di direktori ekosistem (slug `stellar-passport`). Deskripsinya:
-*"…transforms event attendance and community activity… With a single QR scan at a booth,
-workshop, meetup, or online event… curated challenges, workshops, or learning tracks that
+**1. "participation record" really is someone else's territory, and more deeply than just the
+wording.** Stellar Passport is in the ecosystem directory (slug `stellar-passport`). Its
+description: *"…transforms event attendance and community activity… With a single QR scan at a
+booth, workshop, meetup, or online event… curated challenges, workshops, or learning tracks that
 **verify their participation** and track their progress."*
 
-Jadi mereka memegang frasa "verify participation" **dan** mekanisme scan-QR-di-event
-sekaligus. Konsekuensinya bukan cuma menghindari istilahnya: **copy Sterun tidak boleh
-membuka dengan "scan QR di event"**, karena itu kalimat pembuka mereka. Pembeda kita adalah
-catatan yang menempel ke pelari dan tidak bisa dijual ulang.
+So they hold the phrase "verify participation" **and** the scan-a-QR-at-an-event mechanic at once.
+The consequence is not merely avoiding their term: **Sterun's copy must not open with "scan a QR at
+an event"**, because that is their opening line. Our differentiator is a record that sticks to the
+runner and cannot be resold.
 
-**2. "race record" aman.** Nol hit di seluruh korpus dokumentasi resmi Stellar (Raven
-menandai nol pada indeks itu sebagai negatif yang bisa dipercaya). Pencarian semantik ke
-artikel, tweet, dan riset ekosistem juga tidak menemukan pemakaian lain. Batasnya: *tidak
-ditemukan di sumber-sumber ini*, bukan *tidak ada di mana pun*.
+**2. "race record" is clear.** Zero hits across the whole corpus of official Stellar documentation
+(Raven flags a zero on that index as a trustworthy negative). Semantic searches across ecosystem
+articles, tweets and research found no other use either. The limit of that claim: *not found in
+these sources*, not *does not exist anywhere*.
 
-**3. Tidak ada proyek lari/balapan di ekosistem Stellar.** Terdekat: `stride` (fitness
-tracking + reward token) dan `fewticket` (ticketing + kontrol akses event). Ceruk Sterun
-kosong — pakai ini untuk positioning di STE-27, jangan diklaim sebagai "pertama di dunia".
+**3. There is no running or racing project in the Stellar ecosystem.** The closest: `stride`
+(fitness tracking + a reward token) and `fewticket` (ticketing + event access control). Sterun's
+niche is empty — use this for positioning in STE-27, but do not claim to be "the first in the
+world".
 
-**4. "Non-transferable" adalah kosakata yang tepat.** SEP-41 mendefinisikan `transfer`
-sebagai fungsi **wajib** dari token interface, dan OpenZeppelin Stellar menyediakan modul
-Non-Fungible Token beserta extension-nya. Justru karena transfer adalah default yang
-diharapkan, menyebut "non-transferable" itu bermakna, bukan klaim kosong.
-
----
-
-## Batas klaim (berlaku untuk semua konten publik)
-
-Yang **tidak** boleh disebut sampai benar-benar ada:
-
-- **Mainnet.** Belum ada.
-- **USDC.** Testnet memakai sUSD; USDC baru relevan di mainnet.
-- Tanggal rilis, jumlah pengguna, atau nama event partner yang belum memberi izin.
-- **"participation record"** — selalu **"race record"**. Lihat temuan 1 di atas.
+**4. "Non-transferable" is the right vocabulary.** SEP-41 defines `transfer` as a **required**
+function of the token interface, and OpenZeppelin Stellar ships a Non-Fungible Token module with its
+extensions. It is precisely because transfer is the expected default that saying "non-transferable"
+means something rather than being an empty claim.
 
 ---
 
-## Opsi yang tidak dipakai
+## The limits of what may be claimed (applies to all public content)
 
-Disimpan supaya alasannya tidak hilang, dan supaya STE-27 tidak mengulang pekerjaan ini.
+What must **not** be mentioned until it genuinely exists:
 
-**Sudut medis** (265 kar.) — argumen terkuat, nada paling gelap:
+- **Mainnet.** It does not exist yet.
+- **USDC.** Testnet uses sUSD; USDC only becomes relevant on mainnet.
+- Release dates, user counts, or the name of a partner event that has not given permission.
+- **"participation record"** — always **"race record"**. See finding 1 above.
+
+---
+
+## The options not taken
+
+Kept so the reasoning is not lost, and so STE-27 does not repeat this work.
+
+**The medical angle** (265 chars) — the strongest argument, the darkest tone:
 
 ```
 Someone goes down at kilometre 8 and the medics pull up the wrong blood type,
@@ -122,21 +122,21 @@ function, so the bib can't be resold.
 Live on Stellar testnet.
 ```
 
-**Sudut resale, netral** (280 kar.) — ditolak karena baris *"that matters long before the
-data does"* menggantung: menjanjikan ada yang gawat tanpa mengatakan apa, dan pembaca yang
-sedang scroll tidak memecahkan teka-teki.
+**The resale angle, neutral** (280 chars) — rejected because the line *"that matters long before the
+data does"* dangles: it promises that something is at stake without saying what, and a reader
+mid-scroll does not solve riddles.
 
-Versi Bahasa Indonesia juga dibuat lalu ditinggalkan. Pembaca akun ini reviewer Instawards
-dan ekosistem Stellar global; Bahasa Indonesia lebih pas saat mendekati panitia lomba lokal,
-dan itu percakapan yang berbeda.
+An Indonesian-language version was also written and then abandoned. This account's readers are
+Instawards reviewers and the global Stellar ecosystem; Indonesian fits better when approaching local
+race organisers, and that is a different conversation.
 
 ---
 
-## Setelah tayang
+## After it goes out
 
-| Yang dicatat | Isi |
+| To record | Value |
 | --- | --- |
-| URL post | _(isi)_ |
-| Tanggal tayang | _(isi)_ |
-| Sudah di-pin | _(ya/tidak)_ |
-| Diubah dari draft? | _(kalau ya, tulis copy final + hitung ulang karakternya)_ |
+| Post URL | _(fill in)_ |
+| Date posted | _(fill in)_ |
+| Pinned | _(yes/no)_ |
+| Changed from the draft? | _(if yes, write the final copy and recount its characters)_ |

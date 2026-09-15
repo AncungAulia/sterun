@@ -25,6 +25,7 @@ import type { Keyring } from "../src/crypto/keyring.js";
 import { Indexer } from "../src/indexer/indexer.js";
 import { buildServer } from "../src/server.js";
 import { codeAt, secretFromHex } from "../src/spec/totp.js";
+import { MAX_FRAGMENT_LENGTH } from "../src/roster/name-fragment.js";
 import { Vault } from "../src/vault.js";
 import { ADDRESSES, keypairFor } from "./helpers/addresses.js";
 import { FakeChain } from "./helpers/fake-chain.js";
@@ -38,6 +39,15 @@ const runnerKp = keypairFor("runner-a");
 const runnerBKp = keypairFor("runner-b");
 
 const PERSON = {
+  // STE-47: required on every submission since migration 009. None of it is
+  // hashed or carried by the roster.
+  idType: "national_id_card" as const,
+  bibName: "BUDI",
+  email: "runner@example.com",
+  phone: "+6281398765432",
+  gender: "male" as const,
+  dateOfBirth: "1990-05-17",
+  emergencyContactName: "Siti Rahayu",
   name: "Budi Santoso",
   nationalId: "3174012509900001",
   emergencyContact: "+6281234567890",
@@ -46,16 +56,17 @@ const PERSON = {
 describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
   let keyring: Keyring;
+  let indexKey: Buffer;
   let close: () => Promise<void>;
   let app: FastifyInstance;
   let vault: Vault;
   let chain: FakeChain;
 
   beforeEach(async () => {
-    ({ pool, keyring, close } = await freshDatabase());
+    ({ pool, keyring, indexKey, close } = await freshDatabase());
     chain = new FakeChain(ADDRESSES);
     const reader = new ChainReader(chain, ADDRESSES);
-    vault = new Vault(pool, keyring);
+    vault = new Vault(pool, keyring, indexKey);
 
     chain.addEvent({
       eventId: 0,
@@ -103,6 +114,9 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
     const submitted = await vault.submit({
       ...PERSON,
       name,
+      // One token, one person: since STE-51 one identity number cannot hold two
+      // confirmed entries in a race, and these fixtures are different runners.
+      nationalId: `31740125${String(tokenId).padStart(8, "0")}`,
       eventId,
       categoryId: 0,
       runnerAddress: kp.publicKey(),
@@ -243,12 +257,16 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
         missing_from_index: 0,
         totp: { digits: 6, step_seconds: 30, tolerance_steps: 1 },
       });
+      // `toEqual`, not `toMatchObject`: the point of this test is that nothing
+      // else can appear here. A new field has to be added deliberately, which
+      // is how `add_ons` arrived (STE-17).
       expect(body.entries[0]).toEqual({
         token_id: 0,
         bib_no: 1,
         category_id: 0,
         state: "Entered",
         name_fragment: "Budi S.",
+        add_ons: [],
         totp_secret: totpSecretHex,
       });
     });
@@ -310,6 +328,8 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       await enrol(runnerKp, 0, 0);
       const submitted = await vault.submit({
         ...PERSON,
+        // Runner B is another person than the runner enrolled above.
+        nationalId: "3174012509900002",
         eventId: 0,
         categoryId: 0,
         runnerAddress: runnerBKp.publicKey(),
@@ -319,6 +339,25 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       const body = (await fetchRoster(scannerKp)).json();
       expect(body.count).toBe(1);
       expect(body.missing_from_index).toBe(1);
+    });
+
+    it("finds an entry however large the race, instead of stopping at 10,000 records", async () => {
+      // The roster used to read the event's first 10,000 records by bib, so in a
+      // bigger race every later entry was reported missing from the index — a
+      // desk turning away runners who were indexed all along.
+      await pool.query(
+        `INSERT INTO records (token_id, event_id, category_id, bib_no, runner_address,
+                              participant_hash, state, entered_at, source, last_ledger, addon_ids)
+         SELECT g, 0, 0, g, $1, decode(repeat('00', 32), 'hex'), 'Entered', 1800000000, 'state', 1, '{}'
+           FROM generate_series(1000, 11049) g`,
+        [runnerKp.publicKey()],
+      );
+      await enrol(runnerKp, 0, 11_049);
+
+      const body = (await fetchRoster(scannerKp)).json();
+
+      expect(body.entries.map((e: { token_id: number }) => e.token_id)).toContain(11_049);
+      expect(body.missing_from_index).toBe(0);
     });
 
     it("excludes an entry that was submitted but never confirmed on-chain", async () => {
@@ -358,4 +397,89 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       expect((await app.inject({ url: "/config" })).json().roster).toEqual({ enabled: true });
     });
   });
+
+  describe("length bounds are enforced, not merely declared", () => {
+    /**
+     * This exists because a comment in `roster.ts` claimed the response schema
+     * bounded `name_fragment` — that a bug which skipped the reduction "still
+     * could not put a long legal name on the wire, because Fastify serialises
+     * from this schema". Checked rather than believed, and false:
+     * fast-json-stringify ignores `maxLength` on output and emits what it is
+     * given.
+     *
+     * The roster goes to volunteers' phones and works offline, so a full legal
+     * name arriving there is exactly the leak the fragment exists to prevent.
+     * A control that is believed and absent is worse than one known to be
+     * missing, because nobody looks for the real one.
+     */
+    it("truncates a name fragment that is longer than the bound", async () => {
+      await enrol(runnerKp, 0, 0);
+
+      // Overwritten directly: the producer would never emit this, and that is
+      // precisely the bug being guarded against, so it has to be simulated.
+      const longFragment = "B".repeat(400);
+      const { rows } = await pool.query<{ id: string }>(
+        "SELECT id FROM participants WHERE token_id = 0",
+      );
+      const id = rows[0]?.id as string;
+      // `aad()` rather than a hand-built string: the AAD binds a ciphertext to
+      // its row and its column, so building it by hand here would be writing a
+      // second definition of the thing the vault relies on being one.
+      const { aad, encrypt } = await import("../src/crypto/envelope.js");
+      await pool.query("UPDATE participants SET name_fragment_enc = $1 WHERE id = $2", [
+        encrypt(keyring, longFragment, aad("pii.name_fragment", id)),
+        id,
+      ]);
+      // The vault really does hand it over at full length — so the bound has
+      // to be applied after the vault, not inside it.
+      const secrets = await vault.rosterSecretsForEvent(0);
+      expect(secrets.find((s) => s.tokenId === 0)?.nameFragment).toHaveLength(400);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/events/0/roster",
+        headers: await credentials(organiserKp),
+      });
+
+      const entry = response.json().entries.find((e: { token_id: number }) => e.token_id === 0);
+      expect(entry.name_fragment.length).toBeLessThanOrEqual(MAX_FRAGMENT_LENGTH);
+      expect(response.body).not.toContain(longFragment);
+    });
+
+    it("truncates an add-on that is longer than the bound", async () => {
+      // The submit schema caps these at 128, which protects rows written
+      // through the route. This protects the response from every other way a
+      // row can arrive.
+      await enrol(runnerKp, 0, 0);
+      await pool.query(
+        `UPDATE participants SET add_ons = $1::jsonb WHERE token_id = 0`,
+        [JSON.stringify([{ item: "J".repeat(300), choice: "L".repeat(300) }])],
+      );
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/events/0/roster",
+        headers: await credentials(organiserKp),
+      });
+
+      const entry = response.json().entries.find((e: { token_id: number }) => e.token_id === 0);
+      expect(entry.add_ons[0].item.length).toBeLessThanOrEqual(128);
+      expect(entry.add_ons[0].choice.length).toBeLessThanOrEqual(128);
+    });
+
+    it("leaves a value that is already within the bound exactly as it is", async () => {
+      // Truncation must be a backstop, not a transformation applied to normal
+      // data — a fragment quietly shortened by one character would be worse
+      // than the bug, because nothing would look wrong.
+      await enrol(runnerKp, 0, 0, "Budi Santoso");
+      const response = await app.inject({
+        method: "GET",
+        url: "/events/0/roster",
+        headers: await credentials(organiserKp),
+      });
+      const entry = response.json().entries.find((e: { token_id: number }) => e.token_id === 0);
+      expect(entry.name_fragment).toBe("Budi S.");
+    });
+  });
 });
+

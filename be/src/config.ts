@@ -10,6 +10,7 @@
  * talk to the wrong contract.
  */
 import { Networks } from "@stellar/stellar-sdk";
+import { parseIndexKey } from "./crypto/blind-index.js";
 import { parseKeyring, type Keyring } from "./crypto/keyring.js";
 import { loadDeployments, type Deployments } from "./deployments.js";
 import { DEFAULT_PAGE_LIMIT } from "./indexer/indexer.js";
@@ -36,6 +37,21 @@ export interface Config {
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
   /**
+   * STE-49. Secret of the account the HTTP faucet pays from — deliberately NOT
+   * the distributor. The distributor holds the test supply and stays off any
+   * public host (OPERATIONS.md); this account holds a small float topped up by
+   * hand, so the most a compromised API box can give away is that float.
+   * Absent means the route answers `faucet-unavailable`.
+   */
+  readonly faucetSecret: string | undefined;
+  /** One payout per address per this many hours (rolling). */
+  readonly faucetWindowHours: number;
+  /**
+   * Most the route may pay out in any rolling 24 hours, across all addresses.
+   * Keypairs are free, so a per-address limit alone bounds nothing.
+   */
+  readonly faucetDailyCapStroops: bigint;
+  /**
    * Browser origins allowed to call this API.
    *
    * An allow-list, never `*`. Authenticated requests carry a wallet signature
@@ -45,6 +61,13 @@ export interface Config {
    * app yet.
    */
   readonly webOrigins: readonly string[];
+  /**
+   * The header this deployment's edge sets to the client's address and
+   * overwrites when a client sends its own — `cf-connecting-ip` behind
+   * Cloudflare. Unset: the last `x-forwarded-for` hop. Name only a header the
+   * edge really controls: one a client can set is a rate-limit bypass.
+   */
+  readonly clientIpHeader: string | undefined;
   /**
    * STE-16. The indexer and the TTL keeper. Always present — running them is
    * decided by which process you start, not by whether they are configured,
@@ -116,6 +139,14 @@ export interface Config {
       | undefined;
   };
   /**
+   * STE-50. Entries submitted and never confirmed are deleted after
+   * `unconfirmedHours`; the API checks every `sweepIntervalMs`.
+   */
+  readonly retention: {
+    readonly unconfirmedHours: number;
+    readonly sweepIntervalMs: number;
+  };
+  /**
    * The PII vault, or `undefined` when this process is not running one.
    *
    * Absent is a legitimate state — `pnpm dev` with no setup should still start
@@ -127,6 +158,12 @@ export interface Config {
     | {
         readonly databaseUrl: string;
         readonly keyring: Keyring;
+        /**
+         * PII_INDEX_KEY (STE-51). Keys the blind index that finds a second entry
+         * by the same identity number in one race. Not a PII key: it decrypts
+         * nothing, and it must not rotate with them — see src/crypto/blind-index.ts.
+         */
+        readonly indexKey: Buffer;
       }
     | undefined;
 }
@@ -135,6 +172,41 @@ const num = (v: string | undefined, fallback: number): number => {
   if (v === undefined || v === "") return fallback;
   const n = Number(v);
   if (!Number.isInteger(n)) throw new Error(`expected an integer, got ${JSON.stringify(v)}`);
+  return n;
+};
+
+/**
+ * A whole number in a range, refused at startup otherwise.
+ *
+ * For values whose wrong setting does not fail loudly on its own: a sweep
+ * window of 0 throws inside a timer and only logs, and an interval above
+ * 2^31-1 ms makes Node fire every millisecond.
+ */
+const ranged = (
+  name: string,
+  v: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number => {
+  const n = num(v, fallback);
+  if (n < min || n > max) {
+    throw new Error(`${name} must be between ${min} and ${max}, got ${n}`);
+  }
+  return n;
+};
+
+/**
+ * A positive amount of stroops. An empty string used to become `BigInt("") =
+ * 0n`, which starts fine and then fails every payout with a 500.
+ */
+const positiveStroops = (name: string, v: string | undefined, fallback: bigint): bigint => {
+  if (v === undefined || v.trim() === "") return fallback;
+  if (!/^[0-9]+$/.test(v.trim())) {
+    throw new Error(`${name} must be a whole number of stroops, got ${JSON.stringify(v)}`);
+  }
+  const n = BigInt(v.trim());
+  if (n <= 0n) throw new Error(`${name} must be greater than 0`);
   return n;
 };
 
@@ -168,7 +240,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // else in the environment. Rather than making that file wrong, both work;
     // the prefixed one wins where both are set.
     distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
-    faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    faucetAmount: positiveStroops("FAUCET_AMOUNT_STROOPS", env.FAUCET_AMOUNT_STROOPS, 500_000_000n), // 50 sUSD
+    faucetSecret: env.STERUN_SUSD_FAUCET_SECRET,
+    faucetWindowHours: ranged("FAUCET_WINDOW_HOURS", env.FAUCET_WINDOW_HOURS, 24, 1, 24 * 365),
+    faucetDailyCapStroops: positiveStroops(
+      "FAUCET_DAILY_CAP_STROOPS",
+      env.FAUCET_DAILY_CAP_STROOPS,
+      50_000_000_000n,
+    ), // 5,000 sUSD
+    clientIpHeader: env.STERUN_CLIENT_IP_HEADER?.trim().toLowerCase() || undefined,
     webOrigins: (env.STERUN_WEB_ORIGIN ?? "")
       .split(",")
       .map((origin) => origin.trim())
@@ -190,6 +270,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       maxTotalBytes: num(env.STERUN_FILES_MAX_BYTES, 512 * 1024 * 1024),
       publicBaseUrl: normaliseBaseUrl(env.STERUN_PUBLIC_BASE_URL),
       r2: loadR2Config(env),
+    },
+    retention: {
+      unconfirmedHours: ranged("VAULT_UNCONFIRMED_TTL_HOURS", env.VAULT_UNCONFIRMED_TTL_HOURS, 24, 1, 24 * 365),
+      sweepIntervalMs: ranged(
+        "VAULT_SWEEP_INTERVAL_MS",
+        env.VAULT_SWEEP_INTERVAL_MS,
+        60 * 60 * 1000,
+        60_000,
+        2_147_483_647,
+      ),
     },
     vault: loadVaultConfig(env),
   };
@@ -274,7 +364,14 @@ function loadVaultConfig(env: NodeJS.ProcessEnv): Config["vault"] {
         "See be/OPERATIONS.md.",
     );
   }
-  return { databaseUrl, keyring: parseKeyring(keys, env.PII_ACTIVE_KEY_ID ?? "") };
+  // Required with the vault, not optional: without it the vault would accept a
+  // second entry by the same person, and a rule that is only enforced where
+  // someone remembered a variable is not a rule.
+  return {
+    databaseUrl,
+    keyring: parseKeyring(keys, env.PII_ACTIVE_KEY_ID ?? ""),
+    indexKey: parseIndexKey(env.PII_INDEX_KEY),
+  };
 }
 
 /** sUSD has 7 decimals, like every classic Stellar asset. */

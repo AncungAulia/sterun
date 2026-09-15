@@ -31,7 +31,7 @@ graph TB
         PG[("Postgres<br/>PII encrypted at rest")]
     end
 
-    subgraph SDKL["D2 - @sterun/sdk (TypeScript)"]
+    subgraph SDKL["D2 - @sterunxyz/sdk (TypeScript)"]
         BIND["Generated contract bindings"]
         CLIENT["SterunClient<br/>createEvent · addCategory · enter ·<br/>claimRacepack · recordFinish ·<br/>verify · recordsOf"]
         SCHEMA["RaceRecord JSON Schema v1.0"]
@@ -71,7 +71,7 @@ Data-flow rules:
 
 - **Chain is authoritative** for: entry existence, ownership, lifecycle state, quota, payment, result values, timestamps. The indexer is a cache, never a source of truth; the web app can always fall back to direct RPC reads.
 - **Backend is authoritative** for: participant PII (name, national ID, emergency contact), per-record salts, per-record QR secrets. None of this ever goes on-chain; the chain stores only `participant_hash`.
-- **Clients never talk to contracts raw**: everything goes through `@sterun/sdk` so organisers can integrate without writing Rust (the D2 promise).
+- **Clients never talk to contracts raw**: everything goes through `@sterunxyz/sdk` so organisers can integrate without writing Rust (the D2 promise).
 
 ---
 
@@ -347,7 +347,7 @@ sequenceDiagram
     actor O as Organiser
     participant W as Web app (organiser console)
     participant K as Wallets Kit
-    participant S as @sterun/sdk
+    participant S as @sterunxyz/sdk
     participant R as Stellar RPC
     participant ER as EventRegistry
 
@@ -378,7 +378,7 @@ sequenceDiagram
     participant W as Web app
     participant B as Backend (James)
     participant K as Wallets Kit
-    participant S as @sterun/sdk
+    participant S as @sterunxyz/sdk
     participant RR as RaceRecord
     participant ER as EventRegistry
     participant U as USDC SAC
@@ -409,7 +409,7 @@ sequenceDiagram
     participant P as Scanner PWA
     participant B as Backend (James)
     actor RU as Runner (device)
-    participant S as @sterun/sdk
+    participant S as @sterunxyz/sdk
     participant RR as RaceRecord
 
     Note over P: BEFORE the venue (with connectivity)
@@ -450,7 +450,7 @@ sequenceDiagram
     actor O as Organiser
     participant W as Web app (organiser console)
     participant B as Backend
-    participant S as @sterun/sdk
+    participant S as @sterunxyz/sdk
     participant RR as RaceRecord
 
     O->>W: Upload results CSV (bib_no, finish time) from manual timing
@@ -475,7 +475,7 @@ sequenceDiagram
 sequenceDiagram
     actor A as Anyone (organiser, insurer, another race)
     participant W as Web app (public profile)
-    participant S as @sterun/sdk
+    participant S as @sterunxyz/sdk
     participant RR as RaceRecord
     participant ER as EventRegistry
 
