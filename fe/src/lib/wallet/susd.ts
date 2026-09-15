@@ -54,7 +54,7 @@ export interface BalanceReader {
 const NO_TRUSTLINE = /^Trustline for .+ not found for /;
 
 /** sUSD, named the way a trustline names it: code and issuer. */
-export function susdAsset(): Asset {
+function susdAsset(): Asset {
   return new Asset("sUSD", SUSD_ISSUER);
 }
 

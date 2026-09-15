@@ -102,7 +102,7 @@ interface Moment {
   iso: string;
 }
 
-export function timelineMoments(document: EventMetadata, startsAt: bigint): Moment[] {
+function timelineMoments(document: EventMetadata, startsAt: bigint): Moment[] {
   const moments: Moment[] = [];
 
   for (const phase of document.schedule ?? []) {
@@ -151,7 +151,7 @@ interface MomentDetail {
  * is a frozen record of what the organiser promised, and a gap in it is more
  * honest than a sentence it never said.
  */
-export function momentDetail(
+function momentDetail(
   key: string,
   document: EventMetadata,
   categoryCodes: readonly string[],

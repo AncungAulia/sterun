@@ -16,7 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchCities, hasCities, type CitiesByProvince } from "@/lib/place/places";
 
-export const cityKeys = {
+const cityKeys = {
   one: (iso2: string) => ["cities", iso2] as const,
 };
 

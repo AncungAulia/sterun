@@ -24,7 +24,7 @@ export interface DirectoryEntry {
 export type DateOrder = "soonest" | "latest";
 
 /** One large card and two beside it. */
-export const FEATURED_LIMIT = 3;
+const FEATURED_LIMIT = 3;
 
 function normalise(text: string | undefined): string {
   return (text ?? "").trim().toLowerCase();

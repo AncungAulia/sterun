@@ -88,9 +88,9 @@ import { StepRunner } from "./components/StepRunner";
 import { EMPTY_DETAILS, missingRunnerDetails, participantBody, type RunnerDetails } from "./lib/details";
 import { entryGate } from "./lib/gate";
 
-export type EntryStep = "distance" | "details" | "pay";
+type EntryStep = "distance" | "details" | "pay";
 
-export const ENTRY_STEPS = [
+const ENTRY_STEPS = [
   { id: "distance", label: "Distance & race pack" },
   { id: "details", label: "Your details" },
   { id: "pay", label: "Review & pay" },
