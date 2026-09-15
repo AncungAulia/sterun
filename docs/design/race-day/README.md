@@ -86,6 +86,7 @@ a volunteer who cannot tell green from red. Three rules carry that:
 | paper on `danger-strong` | 4.05:1 | Passes AA for large text; RED text is never below `--text-2xl`. |
 | ink on `warning-strong` | 5.39:1 | The clock banner, ink on amber as the tokens require. |
 | paper on `warning-strong` | 2.76:1 | **Fails.** Never put paper text on amber. |
+| `n-500` on `paper` | 4.22:1 | **Fails.** Measured while designing the profile screens and fixed here too: every quiet label, caption and empty-field placeholder on a light ground uses `n-600` (6.58:1). |
 
 So every verdict differs in **three** ways before colour is considered: the **word** (`HAND OVER`,
 `CODE EXPIRED`, `ALREADY CLAIMED`, `NOT ON ROSTER`), the **icon shape** (check, cross, triangle,
