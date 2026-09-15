@@ -36,13 +36,22 @@ export type SusdBalance =
 
 /** Exactly the part of `rpc.Server` a balance read uses, so a test can supply it. */
 export interface BalanceReader {
-  getSACBalance(
+  getAssetBalance(
     address: string,
     asset: Asset,
     networkPassphrase?: string,
   ): Promise<{ balanceEntry?: { amount: string } }>;
   getAccount(address: string): Promise<unknown>;
 }
+
+/**
+ * What `getAssetBalance` throws when the account holds no trustline for the
+ * asset, including an account that does not exist at all (checked on testnet,
+ * 2026-09-15). Matched narrowly on purpose: every other failure is a failure,
+ * and reading a slow node as "no trustline" would ask a runner to set up a
+ * wallet that is already set up.
+ */
+const NO_TRUSTLINE = /^Trustline for .+ not found for /;
 
 /** sUSD, named the way a trustline names it: code and issuer. */
 export function susdAsset(): Asset {
@@ -53,13 +62,25 @@ function rpcServer(): rpc.Server {
   return new rpc.Server(NETWORK.rpcUrl);
 }
 
+/**
+ * The wallet's sUSD, read through RPC.
+ *
+ * `getAssetBalance`, not `getSACBalance`: the latter only takes a contract
+ * (`C...`) and throws for every wallet address, so the first version of this
+ * read failed for every runner while its mocked tests passed (2026-09-15).
+ */
 export async function readSusdBalance(
   address: string,
   server: BalanceReader = rpcServer(),
 ): Promise<SusdBalance> {
-  const { balanceEntry } = await server.getSACBalance(address, susdAsset(), NETWORK.networkPassphrase);
-  if (balanceEntry) return { kind: "balance", stroops: BigInt(balanceEntry.amount) };
+  try {
+    const { balanceEntry } = await server.getAssetBalance(address, susdAsset(), NETWORK.networkPassphrase);
+    return { kind: "balance", stroops: balanceEntry ? BigInt(balanceEntry.amount) : 0n };
+  } catch (error) {
+    if (!(error instanceof Error) || !NO_TRUSTLINE.test(error.message)) throw error;
+  }
 
+  // No trustline. Whether the account exists decides what setting it up takes.
   try {
     await server.getAccount(address);
     return { kind: "no-trustline" };

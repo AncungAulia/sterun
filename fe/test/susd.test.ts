@@ -17,11 +17,23 @@ import { readSusdBalance, requestTestSusd, shortfall, type BalanceReader } from 
 const ADDRESS = "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR";
 const CHALLENGE = { nonce: "n", expires_at: "x" };
 
+/**
+ * Behaves as `rpc.Server` does on testnet, checked 2026-09-15: `getAssetBalance`
+ * answers a trustline holder with its balance and THROWS for an account with no
+ * trustline. The old fake returned `{}` there, copying a wrong assumption about
+ * `getSACBalance` (which throws for every G address), so every test passed
+ * while the real read failed for every runner.
+ */
 function server(options: { balance: string | null; accountExists?: boolean }): BalanceReader {
   return {
-    getSACBalance: vi.fn(async () =>
-      options.balance === null ? {} : { balanceEntry: { amount: options.balance } },
-    ),
+    getAssetBalance: vi.fn(async (address: string) => {
+      if (options.balance === null) {
+        throw new Error(
+          `Trustline for sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW not found for ${address}`,
+        );
+      }
+      return { balanceEntry: { amount: options.balance } };
+    }),
     getAccount: vi.fn(async () => {
       if (options.accountExists === false) throw new Error("Account not found: " + ADDRESS);
       return {};
@@ -51,10 +63,22 @@ describe("readSusdBalance", () => {
     });
   });
 
+  it("does not read a failed request as a missing trustline", async () => {
+    // A runner told "set up your wallet" because the node was slow would sign a
+    // trustline they already have. A failure is a failure.
+    const reader: BalanceReader = {
+      getAssetBalance: vi.fn(async () => {
+        throw new Error("fetch failed");
+      }),
+      getAccount: vi.fn(async () => ({})),
+    };
+    await expect(readSusdBalance(ADDRESS, reader)).rejects.toThrow("fetch failed");
+  });
+
   it("asks for sUSD by its issuer on the configured network", async () => {
     const reader = server({ balance: "1" });
     await readSusdBalance(ADDRESS, reader);
-    const [address, asset, passphrase] = vi.mocked(reader.getSACBalance).mock.calls[0];
+    const [address, asset, passphrase] = vi.mocked(reader.getAssetBalance).mock.calls[0];
     expect(address).toBe(ADDRESS);
     expect(asset.getCode()).toBe("sUSD");
     expect(asset.getIssuer()).toBe("GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW");
