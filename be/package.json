@@ -21,7 +21,8 @@
     "e2e:addons": "tsx scripts/e2e-addons.ts",
     "e2e:faucet": "tsx scripts/e2e-faucet.ts",
     "e2e:entry-rules": "tsx scripts/e2e-entry-rules.ts",
-    "e2e:quota": "tsx scripts/e2e-quota.ts"
+    "e2e:quota": "tsx scripts/e2e-quota.ts",
+    "e2e:chain-link": "tsx scripts/e2e-chain-link.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
