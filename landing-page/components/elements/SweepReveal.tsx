@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * A word revealed by a glowing bar sweeping across it, scrubbed to scroll.
+ * Anything revealed by a glowing bar sweeping across it, scrubbed to scroll.
  *
  * Everything is driven by one number, `--sweep-p` (0 to 100), which this
  * component scrubs and the CSS in globals.css reads. The text is clipped to the
@@ -19,14 +19,14 @@
  * does not care how tall the section is or whether it is pinned.
  */
 
-import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
 interface SweepRevealProps {
-  children: string;
+  children: ReactNode;
   /** The element whose scroll range drives the sweep. */
   trigger: RefObject<HTMLElement | null>;
   /** Where in that range the sweep starts and finishes, 0 to 1. */
@@ -36,6 +36,10 @@ interface SweepRevealProps {
   brand?: string;
   /** How much of the word the trail may cover, as a percentage. */
   cap?: number;
+  /** How far the glow spills past the top and bottom edges. Behind glyphs it
+      shows through the letters and needs almost none; behind a solid plate it
+      only exists outside the plate. */
+  bleed?: string;
   /** Leave the edge line in place at the end instead of fading it out. */
   keepEdge?: boolean;
   className?: string;
@@ -48,6 +52,7 @@ export function SweepReveal({
   to = 0.75,
   brand = "var(--color-teal)",
   cap = 40,
+  bleed = "6%",
   keepEdge = false,
   className,
 }: SweepRevealProps) {
@@ -90,7 +95,7 @@ export function SweepReveal({
     <span
       ref={ref}
       className={`sweep ${className ?? ""}`}
-      style={{ "--sweep-brand": brand, "--sweep-cap": cap } as CSSProperties}
+      style={{ "--sweep-brand": brand, "--sweep-cap": cap, "--sweep-bleed": bleed } as CSSProperties}
     >
       <span className="sweep__text">{children}</span>
       <span aria-hidden className="sweep__trail" />

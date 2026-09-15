@@ -131,7 +131,7 @@ export function ProductPreview() {
           className="flex items-start justify-between gap-6"
           style={{ paddingTop: "var(--pp-pt)" }}
         >
-          <h2 className="heading-hero tracking-[-0.015em] [--pp-title:clamp(4rem,11.5vw,11rem)]">
+          <h2 className="heading-hero uppercase tracking-[-0.015em] [--pp-title:clamp(4rem,11.5vw,11rem)]">
             <span data-pp="title" className="block text-[length:var(--pp-title)] leading-[0.82]">
               Open it.
             </span>

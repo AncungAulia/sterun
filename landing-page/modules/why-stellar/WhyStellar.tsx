@@ -13,16 +13,21 @@
  * rose over the held old one, and the pair reads as one gesture: something
  * arrives over you, then it is taken off you.
  *
- * THE HEADING. "Why" is simply there when the panel lifts. "Stellar?" is
- * revealed by a glowing bar sweeping across it, scrubbed to the scroll through
- * this section's own height. See SweepReveal for why that is GSAP rather than a
- * native scroll-driven animation.
+ * THE LINE. "WHY" is set in our own display face; the second half is Stellar's
+ * own mark on a white plate, because naming a network in someone else's
+ * lettering is a claim about them and their mark is the only accurate way to
+ * write it. No question mark: the plate ends the line.
+ *
+ * Proportions measured from the layout Nabil drew, in units of WHY's cap
+ * height: the plate is 1.70 tall, sits 0.41 away, is 2.88 times as wide as it
+ * is tall, and is centred on the same line. The plate is what the bar sweeps
+ * open.
  *
  * The answer is not here yet. The sentence that answers it, and the treatment
- * it gets, come next; this screen is only the question, at the size a question
- * deserves when it is the only thing on it.
+ * it gets, come next.
  */
 
+import Image from "next/image";
 import { useRef } from "react";
 import { SweepReveal } from "@/components/elements/SweepReveal";
 
@@ -33,27 +38,44 @@ export function WhyStellar() {
     <section
       ref={rootRef}
       id="why-stellar"
-      /* Deliberately unmarked. An unmarked section counts as light, and marking
-         it would hand the header a light band occupying exactly the same scroll
-         range as the blue panel's dark one, which is how the logo ended up ink
-         on blue. The blue panel's own rect is the only band here. */
-      /* Starts under the blue panel and outlives it. The extra height beyond
-         the first screen is the scroll the sweep is scrubbed to. */
-      className="relative z-0 -mt-[100svh] h-[280svh] bg-paper text-ink"
+      /* Deliberately unmarked for the header. An unmarked section counts as
+         light, and marking it would hand the header a light band occupying
+         exactly the same scroll range as the blue panel's dark one, which is
+         how the logo ended up ink on blue. The blue panel's rect is the only
+         band here. */
+      /* Starts under the blue panel and outlives it. The height beyond the
+         first screen is the scroll the sweep is scrubbed to. */
+      className="relative z-0 -mt-[100svh] h-[280svh] bg-n-200 text-ink"
     >
-      <div className="sticky top-0 flex h-[100svh] flex-col justify-center overflow-hidden px-5 sm:px-6 lg:px-4">
-        <div className="mx-auto w-full max-w-[1500px]">
-          <h2 className="heading-hero tracking-[-0.015em] [--why-size:clamp(3.5rem,13vw,12rem)]">
-            <span className="block text-[length:var(--why-size)] leading-[0.86]">Why</span>
-            <SweepReveal
-              trigger={rootRef}
-              className="mt-[calc(var(--why-size)*0.06)] text-[length:var(--why-size)] leading-[0.86]"
-            >
-              Stellar?
-            </SweepReveal>
-          </h2>
+      <div className="sticky top-0 grid h-[100svh] place-items-center overflow-hidden px-5 sm:px-6">
+        {/* One line, and every size on it derives from --why. Cap height in this
+            face is about 0.72em, which is what the measured ratios apply to. */}
+        <h2
+          className="flex items-center justify-center [--cap:calc(var(--why)*0.72)] [--why:clamp(2.6rem,14vw,10rem)]"
+          style={{ gap: "calc(var(--cap) * 0.41)" }}
+        >
+          <span className="heading-hero text-[length:var(--why)] uppercase leading-[0.8] tracking-[-0.015em]">
+            Why
+          </span>
 
-        </div>
+          <SweepReveal trigger={rootRef} from={0.12} to={0.7} bleed="26%">
+            <span
+              className="flex items-center justify-center bg-paper"
+              style={{
+                height: "calc(var(--cap) * 1.7)",
+                width: "calc(var(--cap) * 1.7 * 2.88)",
+              }}
+            >
+              <Image
+                src="/third-party/stellar-logo.svg"
+                alt="Stellar"
+                width={800}
+                height={200}
+                style={{ height: "calc(var(--cap) * 0.62)", width: "auto" }}
+              />
+            </span>
+          </SweepReveal>
+        </h2>
       </div>
     </section>
   );

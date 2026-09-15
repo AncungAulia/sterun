@@ -389,8 +389,8 @@ html::-webkit-scrollbar {
 }
 .sweep__trail {
   position: absolute;
-  top: -0.06em;
-  bottom: -0.06em;
+  top: calc(var(--sweep-bleed, 6%) * -1);
+  bottom: calc(var(--sweep-bleed, 6%) * -1);
   right: calc((100 - var(--sweep-p)) * 1%);
   width: calc(min(var(--sweep-p), var(--sweep-cap)) * 1%);
   background: linear-gradient(
@@ -406,8 +406,8 @@ html::-webkit-scrollbar {
 }
 .sweep__edge {
   position: absolute;
-  top: -0.12em;
-  bottom: -0.12em;
+  top: calc(var(--sweep-bleed, 6%) * -1.6);
+  bottom: calc(var(--sweep-bleed, 6%) * -1.6);
   left: calc(var(--sweep-p) * 1%);
   width: 3px;
   margin-left: -1.5px;
