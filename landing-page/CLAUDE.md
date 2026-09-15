@@ -1,11 +1,11 @@
 @AGENTS.md
 
-# `landing-page/` — the landing page (CLAUDE.md)
+# `landing-page/`: the landing page (CLAUDE.md)
 
-The `@AGENTS.md` block above is rewritten by `next dev` — leave it, and commit it with your work.
+The `@AGENTS.md` block above is rewritten by `next dev`. Leave it, and commit it with your work.
 What follows belongs to Sterun.
 
-Owner: **Nabil**. Komponen C13 (landing + design system).
+Owner: **Nabil**. Component C13 (landing page + design system).
 
 The stack: **Next.js 16.3.3**, React 19.2.8, Tailwind v4, TypeScript 5, ESLint 9.
 
@@ -28,7 +28,7 @@ pnpm --filter landing-page lint
 
 The design system landed with STE-7: `app/tokens.css` holds the brand, greyscale and status tokens,
 and the `app/tokens` route renders every one of them in the situation it was chosen for. The usage
-rules — asset files, minimum sizes, the type ladder, the contrast reasoning — are in
+rules (asset files, minimum sizes, the type ladder, the contrast reasoning) are in
 [`../docs/brand.md`](../docs/brand.md).
 
 `app/tokens.css` is duplicated into `fe/`, deliberately: the two apps deploy separately. Change one,
@@ -39,7 +39,7 @@ worth its cost; an honest duplicate beats a wrong abstraction.
 
 The landing page sells the protocol, so a claim on it has to be true:
 
-- **Non-transferable** may be stated as fact — it is proven from the wasm export surface
+- **Non-transferable** may be stated as fact, proven from the wasm export surface
   (`sc/contracts/race_record/CLAUDE.md`), not promised. Since v2 that claim has a boundary worth
   keeping: it is about the deployed wasm plus the admin key, not about an address forever
   (`docs/specs/INTERFACE.md` §4).
@@ -48,141 +48,151 @@ The landing page sells the protocol, so a claim on it has to be true:
   changes, and the addresses did change when v2 landed.
 - Testnet uses **sUSD**, not USDC. USDC only applies on mainnet.
 
-- Copy landing: **English** (keputusan Nabil, STE-12). Pembacanya reviewer Instawards dan
-  ekosistem Stellar global; versi Indonesia untuk organiser lokal adalah percakapan lain, bukan
-  halaman ini. Teksnya tinggal di [`docs/landing-copy.md`](../docs/landing-copy.md) berikut
-  larangan yang berlaku — kalau teks di kode berbeda dengan file itu, samakan di commit yang sama.
-- Aksesibilitas dan performa bukan polish belakangan — ini halaman yang dibuka reviewer grant
-  duluan.
-- Perbarui file ini begitu design system-nya punya bentuk (token, komponen, cara `fe/` memakainya).
 
-## Section dan header
+- The landing page's own copy: **English** (Nabil's decision, STE-12). Its readers are Instawards
+  reviewers and the wider Stellar ecosystem; an Indonesian version for local organisers is a
+  different conversation and not this page. The text lives in
+  [`docs/landing-copy.md`](../docs/landing-copy.md) along with the claims it may not make. When the
+  copy in the code differs from that file, bring the two level in the same commit.
+- Accessibility and performance are not later polish. This is the page a grant reviewer opens first.
+- Update this file as soon as the design system takes shape (tokens, components, how `fe/` consumes
+  them).
 
-Header `fixed` di atas semua section, **selalu terlihat** (tidak pernah disembunyikan saat scroll,
-tidak di-fade, tidak di-translate), dan warnanya **mengikuti section di bawahnya**. Saat tepi section
-melewati header, header **terbelah horizontal** tepat di garis itu: bagian atas satu warna, bagian
-bawah warna lain. Setiap section selebar layar membawa:
+## Sections and the header
+
+The header is `fixed` above every section, **always visible** (never hidden on scroll, never faded,
+never translated), and its colour **follows the section underneath it**. When a section edge crosses
+the header, the header **splits horizontally** exactly on that line: one colour above, another
+below. Every full-width section carries:
 
 ```tsx
-<section data-nav-theme="dark">   // hero, section berlatar gelap
-<section data-nav-theme="light">  // Problem, section berlatar terang (default kalau tidak ditandai)
+<section data-nav-theme="dark">   // hero, and any dark-ground section
+<section data-nav-theme="light">  // Problem, and any light one (the default when unmarked)
 ```
 
-Section tanpa atribut dianggap terang. Blok yang tidak selebar layar dan tidak pernah sampai ke
-header (mis. kotak coal di bawah Problem) tidak perlu ditandai.
+An unmarked section counts as light. A block that is not full width and never reaches the header
+(the coal box under Problem, for instance) needs no marking.
 
-Cara kerjanya (`components/layouts/Navbar.tsx`, `lib/navTheme.ts`):
+How it works (`components/layouts/Navbar.tsx`, `lib/navTheme.ts`):
 
-- **Empat salinan baris header** dengan geometri identik: `nav__layer--onLight` (ink + CTA teal),
-  dua `nav__layer--onDark` (paper), dan `nav__layer--hit` yang **tak terlihat** (`opacity: 0`) tapi
-  berisi link dan tombol asli. Layer bercat `aria-hidden`, `inert`, `pointer-events: none`.
-  Hit layer dipisah karena `clip-path` ikut memotong hit-testing: tombol yang kepotong setengah
-  cuma bisa diklik setengah.
-- Tiap frame, script menghitung pita gelap yang menimpa header dan menulis `clip-path` inline:
-  onDark `inset()` per pita (pool dua layer), onLight kebalikannya (polygon even-odd). **Jangan
-  pernah** memberi `transition` pada `clip-path` layer ini, garisnya akan tertinggal dari tepi
-  section.
-- Update jalan dari `subscribeScroll` (`lib/scroll.ts`; event scroll Lenis di frame yang sama, atau
-  scroll native tanpa Lenis), plus resize, `ScrollTrigger` refresh, `ResizeObserver`, dan
-  `document.fonts.ready`. Offset section di-cache; jangan baca layout di loop scroll.
-- Panel overlay menu ditandai `data-nav-surface` + `data-nav-theme`; selama menu bergerak, posisinya
-  dibaca live per frame, jadi header ikut terbelah di atas panel yang sedang turun.
-- Hover dan fokus keyboard disimpan di `<header>` sebagai `data-hover` / `data-focus`
-  (`cta` | `menu` | `logo`) dan di-style dari sana, jadi dua belahan CTA ter-wipe bersamaan.
-  **Jangan** pakai `:hover` untuk efek header, cuma satu layer yang menerimanya.
-- Logo inline SVG `currentColor` (`components/elements/Lockup.tsx`, di-generate dari
-  `public/brand/logo/sterun-lockup-black.svg`). Satu `<symbol>`, tiap layer `<use>`.
-- **Tidak** memakai `mix-blend-mode` di header.
+- **Four copies of the header row** with identical geometry: `nav__layer--onLight` (ink plus a teal
+  CTA), two `nav__layer--onDark` (paper), and `nav__layer--hit`, which is **invisible**
+  (`opacity: 0`) but holds the real links and buttons. The painted layers are `aria-hidden`,
+  `inert`, `pointer-events: none`. The hit layer is separate because `clip-path` clips hit testing
+  too: a button cut in half would only be clickable in half.
+- Every frame, the script works out the dark bands overlapping the header and writes an inline
+  `clip-path`: `inset()` per band for onDark (pooled across the two layers), the inverse for onLight
+  (an even-odd polygon). **Never** put a `transition` on these layers' `clip-path`, or the line lags
+  behind the section edge.
+- Updates come from `subscribeScroll` (`lib/scroll.ts`; Lenis's scroll event in the same frame, or
+  native scroll without Lenis), plus resize, `ScrollTrigger` refresh, `ResizeObserver` and
+  `document.fonts.ready`. Section offsets are cached; never read layout inside a scroll loop.
+- The menu overlay panel is marked `data-nav-surface` plus `data-nav-theme`; while the menu is
+  moving its position is read live each frame, so the header splits over the panel on its way down.
+- Hover and keyboard focus are stored on the `<header>` as `data-hover` / `data-focus`
+  (`cta` | `menu` | `logo`) and styled from there, so both halves of the CTA wipe together. **Do
+  not** use `:hover` for a header effect: only one layer ever receives it.
+- The logo is inline SVG using `currentColor` (`components/elements/Lockup.tsx`, generated from
+  `public/brand/logo/sterun-lockup-black.svg`). One `<symbol>`, one `<use>` per layer.
+- The header does **not** use `mix-blend-mode`.
 
-Permukaan yang digerakkan script, bukan cuma oleh scroll (lapisan biru polos di kotak How it
-works), ditandai `data-nav-surface data-nav-live data-nav-theme`: header membaca rect-nya **tiap
-update**, dipotong ke ancestor `data-nav-bounds`. Script yang menggerakkannya memanggil
-`notifyScroll()` tepat setelah menulis transform, supaya header tidak tertinggal satu frame.
+A surface that a script moves, rather than one that only scroll moves (the plain blue layer inside
+the How it works box), is marked `data-nav-surface data-nav-live data-nav-theme`: the header reads
+its rect on **every** update, clipped to its `data-nav-bounds` ancestor. Whatever script moves it
+calls `notifyScroll()` immediately after writing the transform, so the header never lags a frame.
 
-Section yang menahan layar (stage `sticky`, mis. How it works) tidak bisa dibaca header lewat
-offset yang di-cache, karena posisinya berubah selama ditahan. Tandai bagian gelapnya dengan
-elemen kosong `absolute` di **posisi akhirnya**, saat stage sudah dilepas (lihat marker di
-`modules/how-it-works/HowItWorks.tsx`). Selama stage ditahan, bagian gelap itu tetap di bawah
-header, jadi satu posisi statis itu benar di kedua fase.
+A section that holds the screen (a `sticky` stage, such as How it works) cannot be read through
+cached offsets, because its position changes while it is held. Mark its dark part with an empty
+`absolute` element at its **final** position, once the stage has been released (see the marker in
+`modules/how-it-works/HowItWorks.tsx`). While the stage is held, that dark part stays under the
+header anyway, so one static position is correct in both phases.
 
 ## Motion
 
+Durations and curves come from the `--motion-*` and `--ease-*` tokens, the same ones the race-day
+and profile designs use. Nothing on this page invents a duration.
+
 ### Smooth scroll: Lenis
 
-- **`lenis` dipin persis `1.2.3`** (tanpa `^`). Default-nya berubah antar versi minor, dan rasa scroll
-  halaman ini datang dari default itu.
-- Init cuma `new Lenis({ autoRaf: true })` di `lib/scroll.ts`. **Jangan** override `lerp`,
-  `duration`, atau `easing`.
-- **Jangan** pakai `ScrollTrigger.scrollerProxy`, `lenis.on("scroll", ScrollTrigger.update)`, atau
-  `gsap.ticker.lagSmoothing(0)`. Lenis menggerakkan posisi scroll window yang asli, jadi browser
-  melempar event scroll native dan ScrollTrigger sinkron sendiri. Proxy atau loop update kedua di
-  atasnya membuat keduanya berebut. Terukur dengan scroll roda mouse: progres reveal mengikuti
-  posisi scroll.
-- Kunci scroll **hanya** lewat `lockScroll()` / `unlockScroll()` dari `lib/scroll.ts`: `lenis.stop()`
-  kalau Lenis jalan, `overflow: hidden` di `<html>` kalau tidak. **Jangan pernah** memasang
-  `overflow: hidden` di `<body>`: saat Lenis berhenti `<html>` sudah `overflow: clip`, jadi body
-  berubah jadi scroll container sendiri dan semua elemen `sticky` lepas dari layar (stage How it
-  works sempat melompat di belakang menu karena ini).
-- Elemen yang scroll sendiri di dalam halaman (panel menu) diberi `data-lenis-prevent`.
-- Di bawah `prefers-reduced-motion` Lenis **tidak dijalankan sama sekali**
-  (`components/elements/SmoothScroll.tsx`), dan preferensi itu diikuti langsung.
+- **`lenis` is pinned to exactly `1.2.3`** (no `^`). Its defaults change between minor versions, and
+  the way this page scrolls comes from those defaults.
+- The only initialisation is `new Lenis({ autoRaf: true })` in `lib/scroll.ts`. **Do not** override
+  `lerp`, `duration` or `easing`.
+- **Do not** use `ScrollTrigger.scrollerProxy`, `lenis.on("scroll", ScrollTrigger.update)` or
+  `gsap.ticker.lagSmoothing(0)`. Lenis moves the window's real scroll position, so the browser fires
+  native scroll events and ScrollTrigger stays in sync on its own. A proxy, or a second update loop
+  on top, makes the two fight. Measured with a mouse wheel: reveal progress follows scroll position.
+- Lock scrolling **only** through `lockScroll()` / `unlockScroll()` in `lib/scroll.ts`:
+  `lenis.stop()` when Lenis is running, `overflow: hidden` on `<html>` when it is not. **Never** put
+  `overflow: hidden` on `<body>`: when Lenis stops, `<html>` is already `overflow: clip`, so body
+  becomes a scroll container of its own and every `sticky` element comes unstuck. This is what sent
+  the How it works stage jumping behind the menu.
+- An element that scrolls inside the page (the menu panel) gets `data-lenis-prevent`.
+- Under `prefers-reduced-motion`, Lenis **is not started at all**
+  (`components/elements/SmoothScroll.tsx`), and the preference is honoured immediately.
 
 ### GSAP
 
-- **GSAP 3.15** (lisensi standar gratis). Plugin yang di-register: **ScrollTrigger** dan
-  **SplitText**. Flip dan InertiaPlugin ada di paket tapi baru di-register kalau benar-benar dipakai.
-- GSAP dipakai **hanya** untuk gerakan yang tidak bisa diungkapkan CSS dengan bersih: reveal per
-  karakter yang di-scrub ke scroll, dan entrance yang dipicu viewport dengan stagger. Hover,
-  underline, roll CTA, dan panel menu tetap CSS / transition (`app/globals.css`,
-  `MenuOverlay.tsx`). Jangan tambah library animasi lain.
-- Semua setup GSAP ada di dalam `gsap.matchMedia().add("(prefers-reduced-motion: no-preference)")`.
-  Reduced motion otomatis berarti tidak ada gerakan, dan `mm.revert()` di cleanup membersihkan inline
-  style, ScrollTrigger, serta SplitText saat komponen unmount.
-- Pecah teks dengan **SplitText** (`type: "words,chars"`, `aria: "auto"`), bukan span buatan tangan.
-  Word wrapper menjaga baris cuma pecah di spasi, dan `aria: "auto"` membuat screen reader membaca
-  kalimat, bukan mengeja huruf.
-- Warna yang dianimasikan dibaca **dari elemen ber-kelas token** (`getComputedStyle`), bukan ditulis
-  sebagai hex. Tailwind v4 cuma meng-emit variabel `--color-*` yang dipakai oleh suatu kelas, jadi
-  membaca `var(--color-…)` langsung dari `:root` bisa kosong.
-- **Menahan section di layar pakai CSS `sticky`, bukan `pin` ScrollTrigger.** Tidak ada pin
-  spacer yang menggeser layout saat refresh, dan offset section tetap statis untuk header. Ancestor
-  stage harus `overflow-x-clip`, bukan `overflow-hidden`: `hidden` menjadikannya scroll container
-  dan stage tidak pernah menempel.
-- **Scrub hanya `transform`** (`x`, `y`, `yPercent`) supaya compositor yang mengerjakan dan tidak
-  ada frame yang repaint. Wipe yang membuka isi pakai mask dua lapis (kotak bergerak ke satu arah,
-  isinya ke arah sebaliknya), bukan `width` atau `clip-path`.
-- **Hati-hati `invalidateOnRefresh` di timeline ber-stagger.** Tween yang di-invalidate lupa nilai
-  awalnya sampai playhead mencapainya, jadi panel yang belum gilirannya terukur sudah turun penuh.
-  Nilai fungsi (px hasil ukur) cuma untuk tween yang mulai di waktu 0; sisanya pakai persen.
-- **Track horizontal How it works** (`modules/how-it-works/HowItWorksTrack.tsx`, model di
-  `lib/hiwMotion.ts`). Gerakannya **diukur dari akaru.fr**, bukan dikarang: halaman mereka
-  di-sample di Chrome headless (1440x900, tiap 50px scroll) dan tiap kurva di `hiwMotion.ts` adalah
-  fit ke data itu. Jangan "merapikan" angkanya tanpa mengukur ulang.
-  - Track berada **di dalam kotak biru**. Kotak itu panel pour terakhir, sekaligus container
-    yang meng-clip track, dan tingginya satu layar penuh. Isinya di-counter-translate selama pour,
-    jadi diam saat tepi kotak turun. **Tidak ada jeda**: wipe coal/runway, lalu pour sambil halaman
-    terus scroll (judul naik keluar), dan pour mendarat tepat saat kotak sampai di atas layar, lalu
-    kotak ditahan. Pour-nya **satu lapisan** (kotak biru), selesai saat section sampai di atas
-    layar. Kotak membawa penutup `data-hiw-cover` (5 lapisan warna di atas track) yang di-wipe
-    turun **berlapis** (biru pergi duluan, ink terakhir) mulai dari tengah pour sampai kotak
-    menyentuh atas layar, jadi konten sudah terbuka selagi judul masih terlihat. Titik serah
-    wipe coal → pour: `HANDOVER_SCREEN` di `lib/hiwMotion.ts`. Satu-satunya penahan adalah stage sticky ber-`top` negatif (tinggi
-    judul). Titik serah wipe → pour ada di `HANDOVER`. Semua ukuran relatif ke **lebar kotak**
-    (`--bw`, di-update `ResizeObserver`), dan panjang scroll track = `3450/900 ×` tinggi kotak.
-  - Panel yang menunggu: jendela di-scale dari kiri-tengah dan turun sedikit, gambar di dalamnya
-    `2 - scale`. Tarikan ke kanan dilepas oleh progres **panel sebelumnya**, bukan posisinya
-    sendiri. Judul, pill, detail, dan tombol dimainkan dengan timer saat kiri panel melewati
-    ambangnya, dan mundur (lebih cepat, tanpa stagger) saat di-scroll balik.
-  - Enter menempati slot intro akaru, jadi mulai tergeser `0.5 - 0.666` ke kiri.
-  - Tombol panah membuka langkah itu jadi dialog penuh kotak (`StepDetail.tsx`, data di
-    `steps.ts`): kartu mengembang dari posisinya (clip-path), gambar mulai persis seperti di kartu
-    lalu jadi crop selebar kotak, judul meluncur ke kolom kiri, deskripsi + link muncul di kanan.
-    Selama terbuka: scroll dikunci (`lockScroll` + wheel/touch/tombol scroll dicegah), track
-    `inert`, Tab terkunci di dialog, Escape menutup, fokus kembali ke panah **setelah** render
-    berikutnya (sebelum itu track masih inert dan `focus()` diabaikan).
-  - Scroll lengths akaru mengikuti **tinggi** viewport, bukan lebar (diukur di 1440x700).
-  - **`gsap.quickSetter(el, "scale")` diam-diam tidak menulis apa pun** (`scale` alias). Tulis
-    `style.transform` langsung untuk elemen yang transform-nya milik sendiri.
-- **Jangan animasikan `font-weight` pada teks yang mengalir.** Bobot yang lebih berat juga lebih
-  lebar, jadi setiap karakter setelahnya bergeser dan baris bisa pindah. Untuk efek tebal, pakai
-  `-webkit-text-stroke` berwarna sama (lihat `.problem-char` di `globals.css`).
+- **GSAP 3.15** (the free standard licence). Registered plugins: **ScrollTrigger** and **SplitText**.
+  Flip and InertiaPlugin ship in the package but are only registered if something actually uses them.
+- GSAP is used **only** for movement CSS cannot express cleanly: per-character reveals scrubbed to
+  scroll, and viewport-triggered entrances with a stagger. Hover, underlines, the CTA roll and the
+  menu panel stay CSS and transitions (`app/globals.css`, `MenuOverlay.tsx`). Do not add another
+  animation library.
+- Every GSAP setup sits inside `gsap.matchMedia().add("(prefers-reduced-motion: no-preference)")`.
+  Reduced motion then means no movement without any extra work, and `mm.revert()` in cleanup clears
+  inline styles, ScrollTriggers and SplitText when the component unmounts.
+- Split text with **SplitText** (`type: "words,chars"`, `aria: "auto"`), never hand-rolled spans.
+  The word wrapper keeps lines breaking only at spaces, and `aria: "auto"` makes a screen reader
+  read the sentence rather than spell it out.
+- Animated colours are read **from an element carrying the token class** (`getComputedStyle`), never
+  written as a hex. Tailwind v4 only emits the `--color-*` variables some class actually uses, so
+  reading `var(--color-…)` straight off `:root` can come back empty.
+- **Hold a section on screen with CSS `sticky`, not ScrollTrigger's `pin`.** No pin spacer shifts the
+  layout on refresh, and section offsets stay static for the header. The stage's ancestor must be
+  `overflow-x-clip`, not `overflow-hidden`: `hidden` turns it into a scroll container and the stage
+  never sticks.
+- **Scrub `transform` only** (`x`, `y`, `yPercent`), so the compositor does the work and no frame
+  repaints. A wipe that opens content uses a two-layer mask (the box moves one way, its content the
+  other), never `width` or `clip-path`.
+- **Beware `invalidateOnRefresh` on a staggered timeline.** An invalidated tween forgets its start
+  value until the playhead reaches it, so a panel whose turn has not come measures as already fully
+  down. Function values (measured pixels) are for tweens that start at time 0; everything else uses
+  percentages.
+- **The How it works horizontal track** (`modules/how-it-works/HowItWorksTrack.tsx`, the model in
+  `lib/hiwMotion.ts`). Its movement is **measured from akaru.fr**, not invented: their page was
+  sampled in headless Chrome (1440x900, every 50px of scroll) and every curve in `hiwMotion.ts` is a
+  fit to that data. Do not "tidy up" the numbers without measuring again.
+  - The track sits **inside the blue box**. That box is the last pour panel and also the container
+    that clips the track, and it is one screen tall. Its contents are counter-translated during the
+    pour, so they hold still while the box edge comes down. **Nothing ever stops**: the coal and
+    runway wipe, then the pour runs while the page keeps scrolling (the heading rises out of view),
+    and the pour lands exactly as the box reaches the top of the screen, where the box is then held.
+    The pour is **one layer** (the blue box) and finishes as the section reaches the top. The box
+    carries `data-hiw-cover`, five colour layers over the track, wiped down **in sequence** (blue
+    leaves first, ink last) from the middle of the pour until the box touches the top, so the
+    content is already opening while the heading is still visible. The only thing holding the screen
+    is the sticky stage with a negative `top` (the height of the heading). The handover from the
+    coal wipe to the pour is `HANDOVER_SCREEN` in `lib/hiwMotion.ts`, which `HowItWorks.tsx` turns
+    into the ScrollTrigger position `HANDOVER`. Every size is relative to the **box width** (`--bw`,
+    kept current by a `ResizeObserver`), and the track's scroll length is `3450/900 x` the box
+    height.
+  - A panel that is waiting: its window scales from its left-centre and drops slightly, and the
+    image inside it scales `2 - scale`. Its pull to the right is released by the **previous**
+    panel's progress, not by its own position. Title, pill, details and button are played on a timer
+    when the panel's left edge crosses its threshold, and run backwards (faster, without the
+    stagger) when the page is scrolled back.
+  - Enter occupies akaru's intro slot, so it starts shifted `0.5 - 0.666` to the left.
+  - The arrow button opens that step into a dialog filling the box (`StepDetail.tsx`, data in
+    `steps.ts`): the card expands from where it sits (clip-path), the image starts exactly as it was
+    in the card and becomes a crop the width of the box, the title slides to the left column, and
+    the description and links appear on the right. While it is open: scrolling is locked
+    (`lockScroll` plus wheel, touch and scroll keys prevented), the track is `inert`, Tab is trapped
+    in the dialog, Escape closes it, and focus returns to the arrow **after** the next render
+    (before that the track is still inert and `focus()` is ignored).
+  - akaru's scroll lengths follow viewport **height**, not width (measured at 1440x700).
+  - **`gsap.quickSetter(el, "scale")` silently writes nothing** (`scale` is an alias). Write
+    `style.transform` directly for an element that owns its own transform.
+- **Do not animate `font-weight` on text that flows.** A heavier weight is also a wider one, so every
+  character after it shifts and a line can move. For a bold effect, use `-webkit-text-stroke` in the
+  same colour (see `.problem-char` in `globals.css`).
