@@ -113,6 +113,13 @@ runner", because rescanning cannot change the answer.
 | Manual-entry fields | 68px tall, `--text-3xl`, tabular figures |
 | Chips | `--radius-sm`, `--text-xs`; state colours from the status tokens |
 | Screen padding | 20px sides, which is the gutter the rest of `fe/` uses |
+| Meta row | Label in `--text-xs`, uppercase, `.1em` tracking, over its value in `--text-base`; 24px between items |
+
+**No glyph separators.** Facts are told apart by space and by hierarchy, never by a middle dot, a
+slash or a pipe. A row like `10K · Sun 27 Sep · Kupang` reads as one flat string, so finding the
+distance means reading the date and the city on the way past; the same three facts as labelled
+columns can be scanned for one of them. The rule holds for every list row and status line: two
+facts, two positions, 16px apart at least.
 
 Type below `--text-sm` is used only for timestamps and ledger numbers. Nothing a runner reads at a
 desk is below `--text-base`.
@@ -152,20 +159,20 @@ translate first if the desk turns out to be Indonesian-speaking only.
 
 | Screen | String |
 | --- | --- |
-| R1 | `Camera not working? Read these out` · `New code in 19s` · `Works without signal. Keep the screen bright.` |
+| R1 | `Camera not working? Read these out`, `New code in 19s`, `Works without signal. Keep the screen bright.` |
 | R2 | `A code that just changed still works` / `The scanner accepts the step before and after, so being scanned mid-change is fine.` |
-| R3 | `Offline — your pass still works` / `Codes are made on this phone. Nothing is downloaded at the desk.` |
-| R4 | `Racepack collected` · `The pass stops making codes once the racepack is collected. Keep it for the race record.` |
-| S1 | `Pick the event and download its roster while you still have signal.` · `The download needs signal once. After that the whole desk works offline.` |
-| S2 | `Hold the runner's QR inside the frame` · `Type the code instead` |
-| S3 | `HAND OVER` · `Queued to send · 4 waiting` · `Next runner` |
+| R3 | `Offline. Your pass still works` / `Codes are made on this phone. Nothing is downloaded at the desk.` |
+| R4 | `Racepack collected` / `The pass stops making codes once the racepack is collected. Keep it for the race record.` |
+| S1 | `Pick the event and download its roster while you still have signal.` / `The download needs signal once. After that the whole desk works offline.` |
+| S2 | `Hold the runner's QR inside the frame` / `Type the code instead` |
+| S3 | `HAND OVER` / `4 claims waiting to send` / `Next runner` |
 | S4 | `CODE EXPIRED` / `The code on the runner's phone changes every 30 seconds. Ask for the one showing now.` |
 | S5 | `ALREADY CLAIMED` / `Collected 09:41 at desk 2. Do not hand over a second racepack.` |
 | S6 | `NOT ON ROSTER` / `This bib is not in the download for this event. Check the runner is at the right race.` |
-| S7 | `Ask the runner to read out the six digits, then their bib.` · `A code starting with 0 is normal — type all six.` |
+| S7 | `Ask the runner to read out the six digits, then their bib.` / `A code starting with 0 is normal. Type all six.` |
 | S8 | `This phone's clock is 4 minutes fast` / `Every scan will fail until it is fixed. Settings → Date & time → Set automatically, then come back.` |
 | S9 | `4 claims waiting` / `Saved on this phone. They go to the chain by themselves once there is signal.` |
-| S10 | `Sending 4 claims` · `A refused claim moves to Refused. Nothing is dropped silently.` |
+| S10 | `Sending 4 claims` / `A refused claim moves to Refused. Nothing is dropped silently.` |
 | S11 | `2 refused` / `Another desk got there first, which is the system working. Only chase it if the runner is still standing in front of you.` |
 
 Words deliberately avoided: **synced** (says nothing about what is on the chain — the screens give a

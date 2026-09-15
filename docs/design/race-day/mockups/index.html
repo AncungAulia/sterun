@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Sterun race day — QR pass and scanner (STE-18)</title>
+<title>Sterun race day: QR pass and scanner (STE-18)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap">
@@ -57,11 +57,24 @@ figcaption code { font-size: var(--text-xs); color: var(--color-n-500); }
 .pass > .muted:last-child, .pass > .btn:last-child { margin-top: auto; }
 .pass__event { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: var(--text-xl); }
 .pass__meta { color: var(--color-n-500); font-size: var(--text-sm); margin-top: 2px; }
+/* Meta is a spec row, not a run of text: a small label over its value, spaced.
+   The middle dot it replaces flattened three different kinds of fact into one
+   line, so finding the distance meant reading the date and the city too. */
+.metaRow { display: flex; flex-wrap: wrap; gap: 24px; }
+.metaRow--tight { gap: 18px; }
+.metaItem { display: flex; flex-direction: column; gap: 3px; }
+.metaLabel { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; color: var(--color-n-500); }
+.metaLabel--onDark { color: var(--color-n-400); }
+.metaValue { font-size: var(--text-base); }
+.metaValue--sm { font-size: var(--text-sm); }
+/* Two facts of equal weight, told apart by distance rather than punctuation. */
+.inline { display: flex; align-items: baseline; gap: 16px; }
+.inline--wide { gap: 22px; }
 .bibRow { display: flex; align-items: flex-end; justify-content: space-between; }
 .bibLabel { font-size: var(--text-xs); letter-spacing: .12em; text-transform: uppercase; color: var(--color-n-500); }
 .bib { font-size: var(--text-bib); line-height: var(--text-bib--line-height); font-weight: 600; }
-.qrCard { background: var(--color-paper); border: 1px solid var(--color-n-200); border-radius: var(--radius-lg);
-  padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.qrCard { background: var(--color-paper); border-radius: var(--radius-lg); box-shadow: var(--shadow-lifted);
+  padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .qrCard img { width: 268px; height: 268px; display: block; }
 .codeLabel { font-size: var(--text-xs); color: var(--color-n-500); text-align: center; }
 .code { font-size: var(--text-3xl); font-weight: 600; letter-spacing: .22em; }
@@ -126,11 +139,11 @@ svg { display: block; }
 <body>
 <div class="board">
 <header>
-  <h1>Race day — QR pass and scanner</h1>
+  <h1>Race day: QR pass and scanner</h1>
   <p class="lede">STE-18. Screens for STE-21 (runner pass) and STE-22 (scanner PWA). Every value comes from the design tokens; the QR codes are real payloads from <code>docs/specs/HASH_AND_TOTP.md</code> §5. The written spec is <code>docs/design/race-day/README.md</code>.</p>
 </header>
 
-<h2 class="group">Runner — the pass (STE-21, <code>/pass/[tokenId]</code>)</h2>
+<h2 class="group">Runner: the pass (STE-21, <code>/pass/[tokenId]</code>)</h2>
 <p class="groupNote">One screen, four states. The bib is the largest thing on it, because at a pickup desk the volunteer reads the bib before anything else; the QR and the six digits are two routes to the same check.</p>
 <div class="row">
 
@@ -141,7 +154,11 @@ svg { display: block; }
         <div class="pass">
           <div>
             <div class="pass__event">Sasando Run 2026</div>
-            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+            <div class="metaRow" style="margin-top:10px">
+              <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+              <div class="metaItem"><span class="metaLabel">Date</span><span class="metaValue">Sun 27 Sep</span></div>
+              <div class="metaItem"><span class="metaLabel">Where</span><span class="metaValue">Kupang</span></div>
+            </div>
           </div>
           <div class="bibRow">
             <div>
@@ -165,7 +182,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>R1 · Pass, valid</b>Default state. The QR and the six digits change together every 30 s.<code>/pass/7</code></figcaption>
+    <figcaption><b>R1 Pass, valid</b>Default state. The QR and the six digits change together every 30 s.<code>/pass/7</code></figcaption>
   </figure>
 
   <figure>
@@ -175,7 +192,11 @@ svg { display: block; }
         <div class="pass">
           <div>
             <div class="pass__event">Sasando Run 2026</div>
-            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+            <div class="metaRow" style="margin-top:10px">
+              <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+              <div class="metaItem"><span class="metaLabel">Date</span><span class="metaValue">Sun 27 Sep</span></div>
+              <div class="metaItem"><span class="metaLabel">Where</span><span class="metaValue">Kupang</span></div>
+            </div>
           </div>
           <div class="bibRow">
             <div><div class="bibLabel">Bib</div><div class="bib numeric">128</div></div>
@@ -198,7 +219,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>R2 · Pass, about to roll over</b>The note appears only in the last 5 s, so nobody re-reads their digits mid-scan.<code>/pass/7</code></figcaption>
+    <figcaption><b>R2 Pass, about to roll over</b>The note appears only in the last 5 s, so nobody re-reads their digits mid-scan.<code>/pass/7</code></figcaption>
   </figure>
 
   <figure>
@@ -207,11 +228,15 @@ svg { display: block; }
         <div class="statusbar"><span>09:12</span><span>No signal</span></div>
         <div class="pass">
           <div class="banner banner--offline">
-            <div><b>Offline — your pass still works</b><br><span>Codes are made on this phone. Nothing is downloaded at the desk.</span></div>
+            <div><b>Offline. Your pass still works</b><br><span>Codes are made on this phone. Nothing is downloaded at the desk.</span></div>
           </div>
           <div>
             <div class="pass__event">Sasando Run 2026</div>
-            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+            <div class="metaRow" style="margin-top:10px">
+              <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+              <div class="metaItem"><span class="metaLabel">Date</span><span class="metaValue">Sun 27 Sep</span></div>
+              <div class="metaItem"><span class="metaLabel">Where</span><span class="metaValue">Kupang</span></div>
+            </div>
           </div>
           <div class="bibRow">
             <div><div class="bibLabel">Bib</div><div class="bib numeric">128</div></div>
@@ -231,7 +256,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>R3 · Pass, airplane mode</b>The banner is reassurance, not an error: no signal is the expected state at a venue.<code>/pass/7</code></figcaption>
+    <figcaption><b>R3 Pass, airplane mode</b>The banner is reassurance, not an error: no signal is the expected state at a venue.<code>/pass/7</code></figcaption>
   </figure>
 
   <figure>
@@ -241,7 +266,11 @@ svg { display: block; }
         <div class="pass">
           <div>
             <div class="pass__event">Sasando Run 2026</div>
-            <div class="pass__meta">10K · Sun 27 Sep · Kupang</div>
+            <div class="metaRow" style="margin-top:10px">
+              <div class="metaItem"><span class="metaLabel">Distance</span><span class="metaValue">10K</span></div>
+              <div class="metaItem"><span class="metaLabel">Date</span><span class="metaValue">Sun 27 Sep</span></div>
+              <div class="metaItem"><span class="metaLabel">Where</span><span class="metaValue">Kupang</span></div>
+            </div>
           </div>
           <div class="bibRow">
             <div><div class="bibLabel">Bib</div><div class="bib numeric">128</div></div>
@@ -250,19 +279,19 @@ svg { display: block; }
           <div class="claimedPanel">
             <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
             <div class="big">Racepack collected</div>
-            <div class="muted">27 Sep, 09:41 · Hall A</div>
+            <div class="inline muted" style="justify-content:center"><span>27 Sep, 09:41</span><span>Hall A</span></div>
           </div>
           <div class="muted" style="text-align:center">The pass stops making codes once the racepack is collected. Keep it for the race record.</div>
           <a class="btn btn--ghost">View race record</a>
         </div>
       </div>
     </div>
-    <figcaption><b>R4 · Pass, already claimed</b>No QR: a second scan can only fail, so it is not offered.<code>/pass/7</code></figcaption>
+    <figcaption><b>R4 Pass, already claimed</b>No QR: a second scan can only fail, so it is not offered.<code>/pass/7</code></figcaption>
   </figure>
 </div>
 
-<h2 class="group">Volunteer — the scanner (STE-22, <code>/scan</code>)</h2>
-<p class="groupNote">A verdict has to be readable at arm's length, in sunlight, in under two seconds. Green and red are 1.26:1 apart in luminance, which is nothing — so the icon shape, the word and the striped ground on a refusal carry the meaning, and the colour only confirms it.</p>
+<h2 class="group">Volunteer: the scanner (STE-22, <code>/scan</code>)</h2>
+<p class="groupNote">A verdict has to be readable at arm's length, in sunlight, in under two seconds. Green and red are 1.26:1 apart in luminance, which is nothing, so the icon shape, the word and the striped ground on a refusal carry the meaning, and the colour only confirms it.</p>
 <div class="row">
 
   <figure>
@@ -278,18 +307,18 @@ svg { display: block; }
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
               <div>
                 <div style="font-size:var(--text-lg);font-weight:500">Sasando Run 2026</div>
-                <div class="muted numeric">412 entries · 10K, 5K</div>
+                <div class="metaRow metaRow--tight" style="margin-top:8px"><div class="metaItem"><span class="metaLabel">Entries</span><span class="metaValue numeric">412</span></div><div class="metaItem"><span class="metaLabel">Distances</span><span class="metaValue">10K, 5K</span></div></div>
               </div>
               <span class="chip chip--claimed">Downloaded</span>
             </div>
-            <div class="muted numeric">Roster 09:02 · ledger 4,469,811</div>
+            <div class="metaRow metaRow--tight"><div class="metaItem"><span class="metaLabel">Downloaded</span><span class="metaValue numeric">09:02</span></div><div class="metaItem"><span class="metaLabel">Ledger</span><span class="metaValue numeric">4,469,811</span></div></div>
             <a class="btn">Open scanner</a>
             <a class="btn btn--ghost">Download again</a>
           </div>
           <div class="card">
             <div>
               <div style="font-size:var(--text-lg);font-weight:500">Timor Coastal 10K</div>
-              <div class="muted numeric">96 entries · 10K</div>
+              <div class="metaRow metaRow--tight" style="margin-top:8px"><div class="metaItem"><span class="metaLabel">Entries</span><span class="metaValue numeric">96</span></div><div class="metaItem"><span class="metaLabel">Distances</span><span class="metaValue">10K</span></div></div>
             </div>
             <div class="muted">Not downloaded yet</div>
             <a class="btn">Download roster</a>
@@ -298,16 +327,16 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>S1 · Choose an event</b>Freshness is stated as a ledger and a time, never as the word "synced".<code>/scan</code></figcaption>
+    <figcaption><b>S1 Choose an event</b>Freshness is stated as a ledger and a time, never as the word "synced".<code>/scan</code></figcaption>
   </figure>
 
   <figure>
     <div class="device" id="s2-scan-idle">
       <div class="screen dark">
-        <div class="statusbar onDark"><span>09:20</span><span>Offline · 3 queued</span></div>
+        <div class="statusbar onDark"><span>09:20</span><span class="inline"><span>Offline</span><span>3 queued</span></span></div>
         <div class="camera">
           <div class="scanTop">
-            <span class="chip chip--clockOk">Sasando Run · 10K</span>
+            <span class="inline" style="gap:8px"><span class="chip chip--clockOk">Sasando Run</span><span class="chip chip--clockOk">10K</span></span>
             <span class="chip chip--queue numeric">3 queued</span>
           </div>
           <div class="reticle"><i></i><i></i><i></i><i></i></div>
@@ -318,7 +347,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>S2 · Ready to scan</b>The queue count is always on screen, so nobody has to remember whether claims are pending.<code>/scan/0</code></figcaption>
+    <figcaption><b>S2 Ready to scan</b>The queue count is always on screen, so nobody has to remember whether claims are pending.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -330,15 +359,16 @@ svg { display: block; }
           </div>
           <div class="verdict__word">Hand over</div>
           <div class="verdict__bib numeric">128</div>
-          <div class="verdict__who">Budi S. · 10K</div>
+          <div class="verdict__who">Budi S.</div>
+          <div class="verdict__who" style="font-size:var(--text-base)">10K</div>
         </div>
         <div class="verdict__foot">
-          <div class="hint numeric">Queued to send · 4 waiting</div>
+          <div class="hint numeric">4 claims waiting to send</div>
           <a class="btn btn--onDark">Next runner</a>
         </div>
       </div>
     </div>
-    <figcaption><b>S3 · GREEN</b>Ink on green measures 4.61:1. Word first, bib second, name third — the order a volunteer reads.<code>/scan/0</code></figcaption>
+    <figcaption><b>S3 GREEN</b>Ink on green measures 4.61:1. Word first, bib second, name third, the order a volunteer reads.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -357,7 +387,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>S4 · RED, expired code</b>Recoverable, so the next action sits on the same screen.<code>/scan/0</code></figcaption>
+    <figcaption><b>S4 RED, expired code</b>Recoverable, so the next action sits on the same screen.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -377,7 +407,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>S5 · RED, already claimed</b>A different icon from S4: this one cannot be fixed by scanning again.<code>/scan/0</code></figcaption>
+    <figcaption><b>S5 RED, already claimed</b>A different icon from S4: this one cannot be fixed by scanning again.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -393,17 +423,17 @@ svg { display: block; }
         </div>
         <div class="verdict__foot">
           <a class="btn btn--onDark">Next runner</a>
-          <div class="hint numeric">Roster 09:02 · ledger 4,469,811</div>
+          <div class="inline hint numeric" style="justify-content:center"><span>Roster 09:02</span><span>Ledger 4,469,811</span></div>
         </div>
       </div>
     </div>
-    <figcaption><b>S6 · RED, unknown record</b>The roster's age is shown here, because a stale download is the likely cause.<code>/scan/0</code></figcaption>
+    <figcaption><b>S6 RED, unknown record</b>The roster's age is shown here, because a stale download is the likely cause.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
     <div class="device" id="s7-scan-manual">
       <div class="screen dark">
-        <div class="statusbar onDark"><span>09:21</span><span>Offline · 3 queued</span></div>
+        <div class="statusbar onDark"><span>09:21</span><span class="inline"><span>Offline</span><span>3 queued</span></span></div>
         <div class="pad stack" style="gap:20px;padding-top:8px;flex:1">
           <div>
             <div class="screenTitle">Type the code</div>
@@ -417,7 +447,7 @@ svg { display: block; }
             <label>Bib number</label>
             <div class="box numeric empty">128</div>
           </div>
-          <div class="mutedDark">A code starting with 0 is normal — type all six.</div>
+          <div class="mutedDark">A code starting with 0 is normal. Type all six.</div>
           <div class="stack" style="margin-top:auto;gap:10px;padding-bottom:20px">
             <a class="btn">Check</a>
             <a class="btn btn--ghostDark">Back to camera</a>
@@ -425,13 +455,13 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>S7 · Manual fallback</b>The bib replaces the token id, and the leading zero is called out because it is the classic failure.<code>/scan/0</code></figcaption>
+    <figcaption><b>S7 Manual fallback</b>The bib replaces the token id, and the leading zero is called out because it is the classic failure.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
     <div class="device" id="s8-scan-clock">
       <div class="screen dark">
-        <div class="statusbar onDark"><span>09:24</span><span>Offline · 3 queued</span></div>
+        <div class="statusbar onDark"><span>09:24</span><span class="inline"><span>Offline</span><span>3 queued</span></span></div>
         <div class="clockBanner">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.4l3.2 2"/></svg>
           <div>
@@ -441,18 +471,18 @@ svg { display: block; }
         </div>
         <div class="camera">
           <div class="scanTop">
-            <span class="chip chip--clockOk">Sasando Run · 10K</span>
+            <span class="inline" style="gap:8px"><span class="chip chip--clockOk">Sasando Run</span><span class="chip chip--clockOk">10K</span></span>
             <span class="chip chip--queue numeric">3 queued</span>
           </div>
           <div class="reticle"><i></i><i></i><i></i><i></i></div>
           <div class="scanBottom">
-            <a class="btn btn--onDark">I fixed it — check again</a>
+            <a class="btn btn--onDark">I fixed it, check again</a>
             <div class="hint">The code tolerates 90 seconds of drift, not four minutes.</div>
           </div>
         </div>
       </div>
     </div>
-    <figcaption><b>S8 · Clock sanity</b>Shown when the device is more than ±90 s from the time the roster was signed.<code>/scan/0</code></figcaption>
+    <figcaption><b>S8 Clock sanity</b>Shown when the device is more than ±90 s from the time the roster was signed.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -465,16 +495,16 @@ svg { display: block; }
             <div class="mutedDark">Saved on this phone. They go to the chain by themselves once there is signal.</div>
           </div>
           <div>
-            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when">Budi S. · 09:41</div></div><span class="chip chip--queue">Waiting</span></div>
-            <div class="listRow"><div><div class="who numeric">Bib 133</div><div class="when">Sari W. · 09:42</div></div><span class="chip chip--queue">Waiting</span></div>
-            <div class="listRow"><div><div class="who numeric">Bib 141</div><div class="when">Andi P. · 09:44</div></div><span class="chip chip--queue">Waiting</span></div>
-            <div class="listRow"><div><div class="who numeric">Bib 145</div><div class="when">Rina T. · 09:45</div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when"><span>Budi S.</span><span class="when" style="margin-left:16px">09:41</span></div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 133</div><div class="when"><span>Sari W.</span><span class="when" style="margin-left:16px">09:42</span></div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 141</div><div class="when"><span>Andi P.</span><span class="when" style="margin-left:16px">09:44</span></div></div><span class="chip chip--queue">Waiting</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 145</div><div class="when"><span>Rina T.</span><span class="when" style="margin-left:16px">09:45</span></div></div><span class="chip chip--queue">Waiting</span></div>
           </div>
           <div class="mutedDark" style="margin-top:auto;padding-bottom:20px">Leaving this screen does not lose them. Keep the phone unlocked while they send.</div>
         </div>
       </div>
     </div>
-    <figcaption><b>S9 · Offline queue</b>The names are the roster's name fragment, never a full name.<code>/scan/0</code></figcaption>
+    <figcaption><b>S9 Offline queue</b>The names are the roster's name fragment, never a full name.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -488,8 +518,8 @@ svg { display: block; }
           </div>
           <div class="progress"><i style="width:50%"></i></div>
           <div>
-            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when">Sent · ledger 4,469,902</div></div><span class="chip chip--claimed">Done</span></div>
-            <div class="listRow"><div><div class="who numeric">Bib 133</div><div class="when">Sent · ledger 4,469,902</div></div><span class="chip chip--claimed">Done</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when"><span>Sent</span><span class="when" style="margin-left:16px">Ledger 4,469,902</span></div></div><span class="chip chip--claimed">Done</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 133</div><div class="when"><span>Sent</span><span class="when" style="margin-left:16px">Ledger 4,469,902</span></div></div><span class="chip chip--claimed">Done</span></div>
             <div class="listRow"><div><div class="who numeric">Bib 141</div><div class="when">Sending…</div></div><span class="chip chip--queue">Now</span></div>
             <div class="listRow"><div><div class="who numeric">Bib 145</div><div class="when">Waiting</div></div><span class="chip chip--queue">Waiting</span></div>
           </div>
@@ -497,7 +527,7 @@ svg { display: block; }
         </div>
       </div>
     </div>
-    <figcaption><b>S10 · Syncing</b>Each row carries the ledger it landed in, so a claim can be checked afterwards.<code>/scan/0</code></figcaption>
+    <figcaption><b>S10 Syncing</b>Each row carries the ledger it landed in, so a claim can be checked afterwards.<code>/scan/0</code></figcaption>
   </figure>
 
   <figure>
@@ -510,15 +540,15 @@ svg { display: block; }
             <div class="mutedDark">The chain would not take these. They are kept here so the organiser can reconcile.</div>
           </div>
           <div>
-            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when">Already claimed at desk 2 · 09:41</div></div><span class="chip chip--refused">Refused</span></div>
-            <div class="listRow"><div><div class="who numeric">Bib 204</div><div class="when">Already claimed at desk 1 · 09:52</div></div><span class="chip chip--refused">Refused</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 128</div><div class="when"><span>Already claimed at desk 2</span><span class="when" style="margin-left:16px">09:41</span></div></div><span class="chip chip--refused">Refused</span></div>
+            <div class="listRow"><div><div class="who numeric">Bib 204</div><div class="when"><span>Already claimed at desk 1</span><span class="when" style="margin-left:16px">09:52</span></div></div><span class="chip chip--refused">Refused</span></div>
           </div>
           <div class="mutedDark">Another desk got there first, which is the system working. Only chase it if the runner is still standing in front of you.</div>
           <div style="margin-top:auto;padding-bottom:20px"><a class="btn btn--onDark">Copy list for the organiser</a></div>
         </div>
       </div>
     </div>
-    <figcaption><b>S11 · Refused claims</b><code>AlreadyClaimed(102)</code> after the fact. Kept, not hidden.<code>/scan/0/flagged</code></figcaption>
+    <figcaption><b>S11 Refused claims</b><code>AlreadyClaimed(102)</code> after the fact. Kept, not hidden.<code>/scan/0/flagged</code></figcaption>
   </figure>
 </div>
 </div>
