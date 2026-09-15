@@ -60,7 +60,7 @@ These come from the frozen spec. A screen that breaks one of them is wrong, howe
 | S2 | Ready | Camera, event chip, queue count, manual-entry button | `exports/s2-scan-idle.png` |
 | S3 | **GREEN** | `HAND OVER`, bib, name fragment and category | `exports/s3-scan-green.png` |
 | S4 | **RED** code expired | Cross icon, what to ask for, both ways to retry | `exports/s4-scan-red-expired.png` |
-| S5 | **RED** already claimed | Triangle icon, when and which desk | `exports/s5-scan-red-claimed.png` |
+| S5 | **RED** already claimed | Triangle icon, when and which desk. From the roster or this phone's own queue, at scan time | `exports/s5-scan-red-claimed.png` |
 | S6 | **RED** not on roster | Question icon, bib, the roster's age | `exports/s6-scan-red-unknown.png` |
 | S7 | Manual entry | Six-digit code, bib, the leading-zero note | `exports/s7-scan-manual.png` |
 | S8 | Clock sanity | Amber banner with the drift and how to fix it | `exports/s8-scan-clock.png` |
@@ -132,6 +132,12 @@ screen, so "did that send?" never needs asking. When connectivity returns, claim
 time and each row keeps the ledger it landed in (S10). A claim the chain refuses moves to Refused
 (S11) rather than vanishing.
 
+**What the queue holds is the intent, not a signed transaction.** A queued row is the token id, the
+bib and the moment it was scanned. The transaction is built and signed when it is sent, for two
+reasons given in section 9: an authorisation signature carries the ledger it expires on, and one
+account can only have one transaction in flight at a time. Pre-signing a morning of claims at the
+desk would produce a pile that expires and cannot be ordered.
+
 **The clock banner** (S8) appears when the device clock is more than ±90 s from the time the roster
 was generated — that is the tolerance the spec gives, so beyond it every scan fails for a reason the
 volunteer cannot see. The banner names the drift ("4 minutes fast"), gives the fix, and stays until
@@ -185,3 +191,32 @@ code expires), and **verified** for a scan (the chain verifies; the scanner chec
    direct sunlight. Not specified here because the PWA's capability is Ancung's call.
 3. **Indonesian copy.** The strings above are English, per the decision for this ticket. The
    volunteer-facing set is small and worth translating if the pilot desk asks for it.
+
+---
+
+## 9. Checked against the Stellar docs
+
+Run through the Stellar Raven MCP on 15 Sep 2026, because a design that assumes the wrong thing
+about the chain fails on race morning rather than in review.
+
+| What the design assumes | Verdict | Source |
+| --- | --- | --- |
+| Only an allowlisted scanner can claim, and it signs for itself | Holds. `require_auth()` on the address is checked on every call to the function | [Contract authorization](https://developers.stellar.org/docs/build/guides/auth/contract-authorization#require_auth) |
+| A claim can be queued offline and sent later | Holds, but only as intent. An authorisation entry carries `signatureExpirationLedger`, the ledger sequence its signature stops being valid on | [Authorization data](https://developers.stellar.org/docs/learn/fundamentals/contract-development/contract-interactions/stellar-transaction#authorization-data) |
+| The queue is sent one claim after another (S10) | Holds, and it is not a choice: "Accounts can only perform one transaction at a time" | [Operations and transactions](https://developers.stellar.org/docs/learn/fundamentals/transactions/operations-and-transactions#transactions) |
+| A transaction should not sit around unsent | Holds. The docs recommend time or ledger bounds, and treat a transaction not applied within 1 to 2 minutes as one to give up on | [Debugging contract errors](https://developers.stellar.org/docs/learn/fundamentals/contract-development/errors-and-debugging/debugging-errors#3-core-includes-the-transaction-in-the-ledger), [Fees and surge pricing](https://developers.stellar.org/docs/learn/fundamentals/fees-resource-limits-metering#surge-pricing) |
+| A refused claim is visible after the fact, not before | Holds. A contract error comes back as a failed transaction, with the error in the result meta, so the scanner learns it at submit time | [Debugging contract errors](https://developers.stellar.org/docs/learn/fundamentals/contract-development/errors-and-debugging/debugging-errors#4-core-applies-the-transaction-to-the-ledger) |
+| Sending is a submit then a poll, not one answer | Holds. `sendTransaction` answers `PENDING`, and the client polls `getTransaction` until it is no longer `NOT_FOUND` | [Submit a transaction with the JS SDK](https://developers.stellar.org/docs/build/guides/transactions/submit-transaction-wait-js) |
+| Ledger time is a usable clock reference | With a caveat worth knowing: close time is a UNIX timestamp whose "accuracy depends on the system clock" of the validators | [Ledgers](https://developers.stellar.org/docs/learn/fundamentals/stellar-data-structures/ledgers#close-time) |
+
+**What this changed in the design.** "Already claimed" is two different moments, and they are two
+different screens:
+
+- **S5, at scan time.** The roster says the record is `RacepackClaimed`, or this phone already has a
+  claim queued for it. The volunteer finds out while the runner is still standing there, which is
+  the only moment the answer is useful.
+- **S11, after the fact.** The chain refused the claim when it was finally sent, because another
+  desk got there first. Nobody is in front of the volunteer any more, so the screen is built for
+  reconciliation rather than for a decision.
+
+Section 5's rule about queuing intent rather than signed transactions comes from the same pass.
