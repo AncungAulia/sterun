@@ -22,8 +22,8 @@ import { shortfall, type SusdBalance } from "@/lib/wallet/susd";
 import { formatAmount, formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterunxyz/sdk";
 
-import type { Basket, Selection } from "../basket";
-import { GENDERS, ID_TYPES, formatDateOfBirth, maskIdNumber, type RunnerDetails } from "../details";
+import type { Basket, Selection } from "../lib/basket";
+import { GENDERS, ID_TYPES, formatDateOfBirth, maskIdNumber, type RunnerDetails } from "../lib/details";
 
 import { GetTestSusd } from "@/components/wallet/GetTestSusd";
 import { StepCard } from "./StepCard";

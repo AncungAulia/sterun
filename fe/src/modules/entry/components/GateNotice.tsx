@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import type { EventSummary } from "@/lib/event/events";
 import { cn } from "@/utils/cn";
 
-import type { Gate } from "../gate";
+import type { Gate } from "../lib/gate";
 
 export function GateNotice({
   gate,

@@ -28,10 +28,10 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { eventKeys } from "@/hooks/useEvents";
 import { runnerRecordsKey } from "@/hooks/useRunnerRecords";
 import { susdKey } from "@/hooks/useSusdBalance";
-import { saveEntry } from "@/lib/entry-store";
+import { saveEntry } from "@/modules/entry/lib/entry-store";
 import { friendlyError, isDeclined, isNoAnswer } from "@/lib/api/errors";
 import type { EventSummary } from "@/lib/event/events";
-import { submitParticipant, type Submitted } from "@/lib/participants";
+import { submitParticipant, type Submitted } from "@/modules/entry/lib/participants";
 import { readClient } from "@/lib/chain/sterun";
 import { readSusdBalance } from "@/lib/wallet/susd";
 import { signMessage, signTransaction } from "@/lib/wallet/kit";
@@ -40,10 +40,10 @@ import {
   attemptReducer,
   nextStep,
   type AttemptState,
-} from "@/modules/entry/attempt";
-import { addonIdsFor, type Basket, type Selection } from "@/modules/entry/basket";
-import type { ParticipantBody } from "@/modules/entry/details";
-import { classifyEnterFailure, type ChainAfter } from "@/modules/entry/enter-failure";
+} from "@/modules/entry/lib/attempt";
+import { addonIdsFor, type Basket, type Selection } from "@/modules/entry/lib/basket";
+import type { ParticipantBody } from "@/modules/entry/lib/details";
+import { classifyEnterFailure, type ChainAfter } from "@/modules/entry/lib/enter-failure";
 import type { SterunClient, SterunRecord } from "@sterunxyz/sdk";
 
 /** Everything one attempt needs, built by the pay step from the three steps. */

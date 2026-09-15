@@ -37,7 +37,7 @@ import {
   type Gender,
   type IdType,
   type RunnerDetails,
-} from "../details";
+} from "../lib/details";
 
 import { PhoneField, type Country } from "./PhoneField";
 import { StepCard } from "./StepCard";

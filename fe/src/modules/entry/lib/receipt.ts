@@ -15,7 +15,7 @@
  * personal. And never the check-in secret, which would let anyone who holds
  * the file show this runner's pass.
  */
-import type { StoredEntry } from "@/lib/entry-store";
+import type { StoredEntry } from "@/modules/entry/lib/entry-store";
 import { formatEventDate, formatPrice } from "@/utils/format";
 
 export interface ReceiptLine {

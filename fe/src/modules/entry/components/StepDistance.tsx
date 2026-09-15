@@ -31,7 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterunxyz/sdk";
 
-import type { Basket, Selection } from "../basket";
+import type { Basket, Selection } from "../lib/basket";
 
 import { StepCard } from "./StepCard";
 

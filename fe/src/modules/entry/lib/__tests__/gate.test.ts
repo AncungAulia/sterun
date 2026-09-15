@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EventSummary } from "@/lib/event/events";
-import { entryGate } from "@/modules/entry/gate";
+import { entryGate } from "@/modules/entry/lib/gate";
 import type { EventStatus, SterunCategory, SterunRecord } from "@sterunxyz/sdk";
 
 const EVENT_ID = 5;

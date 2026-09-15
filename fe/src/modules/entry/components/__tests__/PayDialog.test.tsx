@@ -11,8 +11,8 @@ vi.mock("@/components/wallet/GetTestSusd", () => ({
   GetTestSusd: () => <button type="button">Get test sUSD</button>,
 }));
 
-import type { AttemptState } from "@/modules/entry/attempt";
-import { PayDialog, type PayDialogProps } from "@/modules/entry/component/PayDialog";
+import type { AttemptState } from "@/modules/entry/lib/attempt";
+import { PayDialog, type PayDialogProps } from "@/modules/entry/components/PayDialog";
 
 const RUNNER = "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR";
 const submitted = {

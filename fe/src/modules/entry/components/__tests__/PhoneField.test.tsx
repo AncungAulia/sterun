@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { PhoneField } from "@/modules/entry/component/PhoneField";
+import { PhoneField } from "@/modules/entry/components/PhoneField";
 
 /** Holds the value the way the form does, and reports every change. */
 function Harness({ onValue, defaultCountry = "ID" }: { onValue: (value: string) => void; defaultCountry?: "ID" | "SG" }) {

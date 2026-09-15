@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { markReceiptSaved, readEntry, saveEntry, type StoredEntry } from "@/lib/entry-store";
+import { markReceiptSaved, readEntry, saveEntry, type StoredEntry } from "@/modules/entry/lib/entry-store";
 
 const entry: StoredEntry = {
   eventId: 1,

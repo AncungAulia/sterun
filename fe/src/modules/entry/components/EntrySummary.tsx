@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { formatEventDate, formatPrice } from "@/utils/format";
 import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
-import type { Basket, Selection } from "../basket";
+import type { Basket, Selection } from "../lib/basket";
 
 export function EntrySummary({
   event,

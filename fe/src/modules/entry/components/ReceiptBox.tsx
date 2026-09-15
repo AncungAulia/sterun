@@ -13,7 +13,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-import { maskCode } from "../receipt";
+import { maskCode } from "../lib/receipt";
 
 export function ReceiptBox({ code, onDownload }: { code: string; onDownload: () => void }) {
   const [shown, setShown] = useState(false);

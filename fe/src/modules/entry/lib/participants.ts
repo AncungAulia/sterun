@@ -12,7 +12,7 @@
  */
 import { apiFetch } from "@/lib/api/client";
 import type { MessageSigner } from "@/lib/api/upload";
-import type { ParticipantBody } from "@/modules/entry/details";
+import type { ParticipantBody } from "@/modules/entry/lib/details";
 
 export interface Submitted {
   /** The vault row. The backend links it to the record from the chain (STE-59). */

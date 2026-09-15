@@ -32,7 +32,7 @@ import {
 import { cn } from "@/utils/cn";
 import { formatAmount, formatPrice } from "@/utils/format";
 
-import type { AttemptState } from "../attempt";
+import type { AttemptState } from "../lib/attempt";
 
 import { GetTestSusd } from "@/components/wallet/GetTestSusd";
 

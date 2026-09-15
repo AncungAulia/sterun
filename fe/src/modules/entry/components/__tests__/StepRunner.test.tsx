@@ -7,8 +7,8 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { StepRunner } from "@/modules/entry/component/StepRunner";
-import { EMPTY_DETAILS, type RunnerDetails } from "@/modules/entry/details";
+import { StepRunner } from "@/modules/entry/components/StepRunner";
+import { EMPTY_DETAILS, type RunnerDetails } from "@/modules/entry/lib/details";
 
 const TODAY = "2026-09-15";
 

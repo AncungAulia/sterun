@@ -11,8 +11,8 @@ vi.mock("@/lib/api/client", async (importOriginal) => ({
 }));
 
 import { ApiError } from "@/lib/api/client";
-import { submitParticipant } from "@/lib/participants";
-import type { ParticipantBody } from "@/modules/entry/details";
+import { submitParticipant } from "@/modules/entry/lib/participants";
+import type { ParticipantBody } from "@/modules/entry/lib/details";
 
 const RUNNER = "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR";
 const body = { runner_address: RUNNER, event_id: 1, category_id: 0, name: "Sari" } as ParticipantBody;

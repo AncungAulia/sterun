@@ -10,8 +10,8 @@ import {
   nextStep,
   type AttemptEvent,
   type AttemptState,
-} from "@/modules/entry/attempt";
-import type { EnterFailure } from "@/modules/entry/enter-failure";
+} from "@/modules/entry/lib/attempt";
+import type { EnterFailure } from "@/modules/entry/lib/enter-failure";
 
 const submitted = {
   participantId: "p",

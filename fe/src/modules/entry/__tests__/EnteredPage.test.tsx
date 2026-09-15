@@ -29,7 +29,7 @@ vi.mock("@/lib/event/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/event/events")>()),
   getEventSummary,
 }));
-vi.mock("@/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
+vi.mock("@/modules/entry/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
 vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
@@ -40,11 +40,11 @@ vi.mock("@/lib/wallet/kit", () => ({
   signMessage,
   walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
-vi.mock("@/modules/entry/receipt-pdf", () => ({ downloadReceipt }));
+vi.mock("@/modules/entry/lib/receipt-pdf", () => ({ downloadReceipt }));
 vi.mock("canvas-confetti", () => ({ default: confetti }));
 
 import { useWallet } from "@/hooks/useWallet";
-import type { StoredEntry } from "@/lib/entry-store";
+import type { StoredEntry } from "@/modules/entry/lib/entry-store";
 import { EnteredPage } from "@/modules/entry/EnteredPage";
 import type { SterunRecord } from "@sterunxyz/sdk";
 

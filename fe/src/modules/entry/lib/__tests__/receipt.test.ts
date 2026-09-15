@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { StoredEntry } from "@/lib/entry-store";
-import { buildReceipt, maskCode } from "@/modules/entry/receipt";
+import type { StoredEntry } from "@/modules/entry/lib/entry-store";
+import { buildReceipt, maskCode } from "@/modules/entry/lib/receipt";
 
 const EXPLORER = "https://stellar.expert/explorer/testnet";
 const SALT = "a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e";

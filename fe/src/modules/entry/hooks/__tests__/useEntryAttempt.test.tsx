@@ -10,8 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/wallet/kit", () => ({ signMessage: vi.fn(), signTransaction: vi.fn() }));
 vi.mock("@/lib/chain/sterun", () => ({ readClient: {} }));
 
-import { useEntryAttempt, type EntryAttemptDeps, type EntryPlan } from "@/hooks/useEntryAttempt";
-import type { ChainAfter } from "@/modules/entry/enter-failure";
+import { useEntryAttempt, type EntryAttemptDeps, type EntryPlan } from "@/modules/entry/hooks/useEntryAttempt";
+import type { ChainAfter } from "@/modules/entry/lib/enter-failure";
 
 const RUNNER = "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR";
 const TX = "d".repeat(64);

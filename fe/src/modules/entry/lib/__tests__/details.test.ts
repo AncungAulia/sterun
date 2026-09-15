@@ -14,7 +14,7 @@ import {
   missingRunnerDetails,
   participantBody,
   type RunnerDetails,
-} from "@/modules/entry/details";
+} from "@/modules/entry/lib/details";
 
 const TODAY = "2026-09-15";
 

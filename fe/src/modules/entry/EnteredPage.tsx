@@ -47,13 +47,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
 import { fireConfetti } from "@/lib/confetti";
-import { markReceiptSaved, readEntry, type StoredEntry } from "@/lib/entry-store";
+import { markReceiptSaved, readEntry, type StoredEntry } from "@/modules/entry/lib/entry-store";
 import { readClient } from "@/lib/chain/sterun";
 import { formatEventDate } from "@/utils/format";
 
-import { Bib } from "./component/Bib";
-import { ReceiptBox } from "./component/ReceiptBox";
-import { downloadReceipt } from "./receipt-pdf";
+import { Bib } from "./components/Bib";
+import { ReceiptBox } from "./components/ReceiptBox";
+import { downloadReceipt } from "./lib/receipt-pdf";
 
 export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: number }) {
   const record = useQuery({

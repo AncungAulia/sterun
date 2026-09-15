@@ -12,7 +12,7 @@
  * Browser only: it needs `document`, a canvas for the logo, and a download.
  */
 import { EXPLORER_BASE } from "@/lib/chain/env";
-import type { StoredEntry } from "@/lib/entry-store";
+import type { StoredEntry } from "@/modules/entry/lib/entry-store";
 
 import { buildReceipt } from "./receipt";
 

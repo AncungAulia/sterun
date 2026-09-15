@@ -24,7 +24,7 @@
  *
  * Pure. `hooks/useEntryAttempt.ts` runs the step `nextStep` names.
  */
-import type { Submitted } from "@/lib/participants";
+import type { Submitted } from "@/modules/entry/lib/participants";
 
 import type { EnterFailure } from "./enter-failure";
 

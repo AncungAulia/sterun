@@ -16,9 +16,9 @@ vi.mock("@/components/wallet/GetTestSusd", () => ({
 import { useSusdBalance } from "@/hooks/useSusdBalance";
 import type { SusdBalance } from "@/lib/wallet/susd";
 import type { JoinedAddOn } from "@/lib/event/add-ons";
-import { buildBasket } from "@/modules/entry/basket";
-import { PayPanel, StepPay } from "@/modules/entry/component/StepPay";
-import type { RunnerDetails } from "@/modules/entry/details";
+import { buildBasket } from "@/modules/entry/lib/basket";
+import { PayPanel, StepPay } from "@/modules/entry/components/StepPay";
+import type { RunnerDetails } from "@/modules/entry/lib/details";
 import type { SterunAddOn, SterunCategory } from "@sterunxyz/sdk";
 
 const RUNNER = "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR";

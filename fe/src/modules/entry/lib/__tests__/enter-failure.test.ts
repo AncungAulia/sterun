@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { classifyEnterFailure, type ChainAfter } from "@/modules/entry/enter-failure";
+import { classifyEnterFailure, type ChainAfter } from "@/modules/entry/lib/enter-failure";
 
 const healthy: ChainAfter = {
   status: "Open",

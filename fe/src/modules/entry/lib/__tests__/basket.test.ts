@@ -13,7 +13,7 @@ import {
   packChoices,
   sanitizeSelection,
   totalStroops,
-} from "@/modules/entry/basket";
+} from "@/modules/entry/lib/basket";
 import type { SterunAddOn, SterunCategory } from "@sterunxyz/sdk";
 
 function row(addonId: number, code: string, priceStroops: bigint, unitsLeft = 10): SterunAddOn {
