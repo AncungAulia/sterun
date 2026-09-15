@@ -381,6 +381,34 @@ export class Vault {
   }
 
   /**
+   * What a runner's pass needs, for a confirmed record (STE-52): the check-in
+   * secret and the name printed on the bib. No PII.
+   *
+   * `runnerAddress` comes back so the route can check that this row was
+   * submitted by the wallet asking, on top of the chain saying that wallet owns
+   * the record. Confirmed rows only: an unconfirmed row has no token id.
+   */
+  async passForToken(
+    tokenId: number,
+  ): Promise<{ runnerAddress: string; totpSecretHex: string; bibName: string | null } | null> {
+    const { rows } = await this.pool.query<{
+      runner_address: string;
+      totp_secret: Buffer;
+      bib_name: string | null;
+    }>(
+      "SELECT runner_address, totp_secret, bib_name FROM participants WHERE token_id = $1",
+      [tokenId],
+    );
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      runnerAddress: r.runner_address,
+      totpSecretHex: r.totp_secret.toString("hex"),
+      bibName: r.bib_name,
+    };
+  }
+
+  /**
    * The secret material a scanner needs for one event's roster (STE-16).
    *
    * This is the second read path out of the vault, and it stays inside the

@@ -305,6 +305,42 @@ resubmission adds a row. `Vault.sweepUnconfirmed(24)` deletes rows with `token_i
 Checked by breaking each part: restoring the old SELECT-then-UPDATE confirm, dropping `token_id IS
 NULL`, dropping the window, and removing the one-sweep-at-a-time guard each fail the tests.
 
+**Restoring a pass: the second place a secret leaves the vault (STE-52).**
+`GET /records/:tokenId/pass` → `{ token_id, totp_secret, bib_name }`. A runner who entered on a
+laptop needs the pass on their phone; one who changes phone needs it again. They open the pass page,
+connect the same wallet, sign, and get the secret back.
+
+"PII goes in and never comes out" still holds: this returns a check-in secret and the name printed on
+the bib, and `test/response-schemas.test.ts` pins the full list of responses that may carry a
+`totp_secret` — submit, the roster, and this. A fourth has to be argued for the same way.
+
+| | Roster bundle (STE-16) | Pass (STE-52) |
+| --- | --- | --- |
+| Hands out | every secret in one event | one secret |
+| To | the organiser and allowlisted scanners | the wallet that owns the record |
+| Decided by | `get_organiser` / `is_scanner`, read from chain per request | `owner_of`, read from chain per request |
+
+Three gates, in this order, each checked by removing it (the tests fail without each):
+
+1. **Wallet signature**, before anything is read, so an anonymous caller learns nothing, not even
+   whether the token exists.
+2. **`owner_of(token_id)` must be the caller**, read from chain, never the index. Records are
+   non-transferable, so the owner is the runner who signed `enter`. A non-owner gets 403 without the
+   vault being read at all.
+3. **The vault row must have been submitted by that same wallet.** Otherwise 404 `no-pass`, and a
+   warning with the token id.
+
+Gate 3 exists because of a gap worth knowing: **`POST /participants/:id/confirm` takes `token_id`
+from the client** and checks only that the caller owns the vault row, not that the caller owns the
+token. So a row can be pointed at someone else's token. Gate 3 keeps that from reaching this route.
+The roster has the same exposure: such a row would put the wrong secret on the desk's list for that
+token. The fix is for confirm to check `owner_of` and `record_of(token_id).participant_hash` against
+the row, raised as a follow-up rather than folded in here.
+
+Errors: 401 (auth), 403 `forbidden` (another wallet), 404 `not-found` (no such token on chain), 404
+`no-pass` (no confirmed entry details for this record). Rate-limited at 20 per minute per client.
+Logged with the token id only.
+
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
 
@@ -382,7 +418,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-924 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+939 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that

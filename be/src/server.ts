@@ -34,6 +34,7 @@ import type { FaucetPayer } from "./faucet.js";
 import { filesRoutes, MAX_FILE_BYTES } from "./routes/files.js";
 import { participantRoutes } from "./routes/participants.js";
 import { resultsRoutes } from "./routes/results.js";
+import { passRoutes } from "./routes/pass.js";
 import { rosterRoutes } from "./routes/roster.js";
 import { ALLOWED_CONTENT_TYPES } from "./files/content-type.js";
 import type { FileStore } from "./files/store.js";
@@ -271,6 +272,13 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   if (deps.pool && deps.vault && deps.reader) {
     const roster = { pool: deps.pool, vault: deps.vault, reader: deps.reader, challenges };
     void app.register(async (instance) => rosterRoutes(instance, roster));
+  }
+
+  // STE-52. Needs the vault (the secret) and the chain (who owns the record).
+  // No reader means no way to check ownership, so the route is not mounted.
+  if (deps.vault && deps.reader) {
+    const pass = { vault: deps.vault, reader: deps.reader, challenges };
+    void app.register(async (instance) => passRoutes(instance, pass));
   }
 
   // STE-20. Needs the index (to resolve bib -> token_id) and the chain (to ask

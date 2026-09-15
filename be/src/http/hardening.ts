@@ -47,6 +47,12 @@ export const RATE_LIMITS = {
    * loop minting fresh keypairs from one machine before it reaches the ledger.
    */
   faucet: 6,
+  /**
+   * STE-52, restoring a pass. Each request is a chain read and hands out a
+   * check-in secret, and a runner needs it a handful of times at most — a new
+   * phone, a cleared browser.
+   */
+  pass: 20,
 } as const;
 
 /**
