@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildEventDocument } from "@/lib/event-document";
+import { buildEventDocument } from "@/modules/organiser/create/lib/event-document";
 import {
   METADATA_TIMEOUT_MS,
   fetchEventMetadata,

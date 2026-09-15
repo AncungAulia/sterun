@@ -20,7 +20,7 @@ import NewEventLayout from "../app/(organiser)/org/new/layout";
 import BrowseNotFound from "../app/(browse)/not-found";
 import ConsoleNotFound from "../app/(organiser)/org/(console)/not-found";
 import NotFound from "../app/not-found";
-import { ConsoleHeader } from "@/modules/organiser/component/ConsoleHeader";
+import { ConsoleHeader } from "@/modules/organiser/shared/components/ConsoleHeader";
 import { shortAddress } from "@/utils/format";
 
 const ADDRESS = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";

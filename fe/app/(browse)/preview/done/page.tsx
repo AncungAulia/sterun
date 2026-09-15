@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { DonePreview } from "./DonePreview";
+import { DonePreview } from "@/modules/organiser/create/DonePreview";
 
 /**
  * A harness for the last step of the create-event wizard.
