@@ -4,7 +4,7 @@
 //   node docs/design/race-day/tools/export-mockups.cjs ["C:/path/to/chrome.exe"]
 //
 // A handoff tool, not part of any build: nothing in the apps imports it. It needs
-// puppeteer-core and a local Chrome, which is why the exports are committed —
+// puppeteer-core and a local Chrome, which is why the exports are committed:
 // reading the design must not depend on being able to run this.
 const fs = require("fs");
 const path = require("path");

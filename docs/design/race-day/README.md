@@ -1,4 +1,4 @@
-# Race day — QR pass and scanner (STE-18)
+# Race day: QR pass and scanner (STE-18)
 
 The design handoff for the two screens a race day actually runs on: the runner's **QR pass**
 (STE-21, `/pass/[tokenId]`) and the volunteer's **scanner** (STE-22, `/scan`). It is written to be
@@ -6,13 +6,13 @@ implemented from, without asking a question per screen.
 
 | What | Where |
 | --- | --- |
-| The screens | [`mockups/index.html`](mockups/index.html) — open it in a browser, no build step |
-| One PNG per screen | [`exports/`](exports/) — `r*` runner, `s*` scanner |
+| The screens | [`mockups/index.html`](mockups/index.html), openable in a browser, no build step |
+| One PNG per screen | [`exports/`](exports/): `r*` runner, `s*` scanner |
 | The whole board as one image | [`exports/board.png`](exports/board.png) |
 | The rules these screens obey | `docs/specs/HASH_AND_TOTP.md` §4–§5 (FROZEN), `docs/WEB_APP_IA.md` §4 and §5.2 |
 
 The mockups are plain HTML and CSS. Every colour, size, radius and shadow is a token from
-`mockups/tokens.css`, which is **generated** from `landing-page/app/tokens.css` — there is not one
+`mockups/tokens.css`, which is **generated** from `landing-page/app/tokens.css`. There is not one
 invented hex or pixel value in the file. Regenerate after a token change:
 
 ```bash
@@ -43,7 +43,7 @@ These come from the frozen spec. A screen that breaks one of them is wrong, howe
 
 ## 2. Screen inventory
 
-### Runner — `/pass/[tokenId]` (STE-21)
+### Runner: `/pass/[tokenId]` (STE-21)
 
 | Id | State | Shows | Export |
 | --- | --- | --- | --- |
@@ -52,7 +52,7 @@ These come from the frozen spec. A screen that breaks one of them is wrong, howe
 | R3 | Offline | Same, plus the offline banner | `exports/r3-pass-offline.png` |
 | R4 | Racepack claimed | No QR. A collected panel with the time and desk | `exports/r4-pass-claimed.png` |
 
-### Volunteer — `/scan` (STE-22)
+### Volunteer: `/scan` (STE-22)
 
 | Id | State | Shows | Export |
 | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ a volunteer who cannot tell green from red. Three rules carry that:
 | Pair | Ratio | Verdict |
 | --- | ---: | --- |
 | `success-strong` vs `danger-strong` | **1.26:1** | The two verdict grounds are almost the same brightness. Colour alone cannot separate them. |
-| ink on `success-strong` | 4.61:1 | Passes AA at any size — **this is why GREEN uses ink text, not white.** |
+| ink on `success-strong` | 4.61:1 | Passes AA at any size. **This is why GREEN uses ink text, not white.** |
 | paper on `danger-strong` | 4.05:1 | Passes AA for large text; RED text is never below `--text-2xl`. |
 | ink on `warning-strong` | 5.39:1 | The clock banner, ink on amber as the tokens require. |
 | paper on `warning-strong` | 2.76:1 | **Fails.** Never put paper text on amber. |
@@ -129,7 +129,7 @@ desk is below `--text-base`.
 ## 5. Behaviour the screens imply
 
 **The pass.** The QR and the code are one thing shown two ways, so they change together on the same
-tick. Between 25 s and 30 s into a step, R2's line appears — it exists because a runner who sees the
+tick. Between 25 s and 30 s into a step, R2's line appears, and it exists because a runner who sees the
 code change mid-scan will otherwise start reading the new digits aloud over the volunteer. On claim,
 the pass stops producing codes (R4): the only thing a second scan can produce is a refusal.
 
@@ -146,7 +146,7 @@ account can only have one transaction in flight at a time. Pre-signing a morning
 desk would produce a pile that expires and cannot be ordered.
 
 **The clock banner** (S8) appears when the device clock is more than ±90 s from the time the roster
-was generated — that is the tolerance the spec gives, so beyond it every scan fails for a reason the
+was generated, which is the tolerance the spec gives, so beyond it every scan fails for a reason the
 volunteer cannot see. The banner names the drift ("4 minutes fast"), gives the fix, and stays until
 a re-check passes.
 
@@ -175,7 +175,7 @@ translate first if the desk turns out to be Indonesian-speaking only.
 | S10 | `Sending 4 claims` / `A refused claim moves to Refused. Nothing is dropped silently.` |
 | S11 | `2 refused` / `Another desk got there first, which is the system working. Only chase it if the runner is still standing in front of you.` |
 
-Words deliberately avoided: **synced** (says nothing about what is on the chain — the screens give a
+Words deliberately avoided: **synced** (says nothing about what is on the chain, where the screens give a
 ledger and a time instead), **error** and **invalid** on a refusal (the runner is not at fault when a
 code expires), and **verified** for a scan (the chain verifies; the scanner checks a code).
 
