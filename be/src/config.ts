@@ -132,6 +132,14 @@ export interface Config {
       | undefined;
   };
   /**
+   * STE-50. Entries submitted and never confirmed are deleted after
+   * `unconfirmedHours`; the API checks every `sweepIntervalMs`.
+   */
+  readonly retention: {
+    readonly unconfirmedHours: number;
+    readonly sweepIntervalMs: number;
+  };
+  /**
    * The PII vault, or `undefined` when this process is not running one.
    *
    * Absent is a legitimate state — `pnpm dev` with no setup should still start
@@ -215,6 +223,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       maxTotalBytes: num(env.STERUN_FILES_MAX_BYTES, 512 * 1024 * 1024),
       publicBaseUrl: normaliseBaseUrl(env.STERUN_PUBLIC_BASE_URL),
       r2: loadR2Config(env),
+    },
+    retention: {
+      unconfirmedHours: num(env.VAULT_UNCONFIRMED_TTL_HOURS, 24),
+      sweepIntervalMs: num(env.VAULT_SWEEP_INTERVAL_MS, 60 * 60 * 1000),
     },
     vault: loadVaultConfig(env),
   };

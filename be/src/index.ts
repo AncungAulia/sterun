@@ -18,6 +18,7 @@ import { R2FileStore } from "./files/r2.js";
 import { LocalFileStore } from "./files/store.js";
 import { migrate } from "./db/migrate.js";
 import { buildServer } from "./server.js";
+import { startUnconfirmedSweep } from "./retention.js";
 import { Vault } from "./vault.js";
 
 // The documented setup is "copy .env.example to be/.env"; config reads
@@ -93,10 +94,14 @@ const faucetPayer = config.faucetSecret
   ? new StellarFaucetPayer(config, config.faucetSecret)
   : undefined;
 
+const vault = pool && config.vault ? new Vault(pool, config.vault.keyring, config.vault.indexKey) : undefined;
+/** STE-50. Set once the server is listening; cleared on shutdown. */
+let stopSweep: (() => void) | undefined;
+
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
   fileStore,
-  ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring, config.vault.indexKey) } : {}),
+  ...(vault ? { vault } : {}),
   challenges,
   reader,
   ...(faucetPayer ? { faucetPayer } : {}),
@@ -105,6 +110,7 @@ const app = buildServer(config, {
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     app.log.info({ signal }, "shutting down");
+    stopSweep?.();
     void app
       .close()
       .then(() => pool?.end())
@@ -114,6 +120,14 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 try {
   await app.listen({ host: config.host, port: config.port });
+  if (vault) {
+    // STE-50: entries that were submitted and never paid for are personal data
+    // with no purpose. Swept from here, the process that owns the vault.
+    stopSweep = startUnconfirmedSweep(vault, app.log, {
+      olderThanHours: config.retention.unconfirmedHours,
+      intervalMs: config.retention.sweepIntervalMs,
+    });
+  }
   app.log.info(
     {
       network: config.network.name,

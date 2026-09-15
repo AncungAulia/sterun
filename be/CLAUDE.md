@@ -279,6 +279,32 @@ Each of the four properties was checked by breaking it: letting unconfirmed rows
 check, hashing the raw number instead of `norm_id`, and leaving the event id out of the MAC each
 fail the tests.
 
+**Entries that never happened are deleted after a day (STE-50).** The entry flow stores the details
+**before** the runner signs `enter`, so a paid runner is never missing from the roster. When the
+payment never happens, that leaves personal data for an entry that does not exist, and every
+resubmission adds a row. `Vault.sweepUnconfirmed(24)` deletes rows with `token_id IS NULL` older than
+`VAULT_UNCONFIRMED_TTL_HOURS` (24) in **one statement**, logging a count and nothing else.
+
+- **Where it runs: the API process**, at boot and then hourly (`src/retention.ts`). Not the keeper,
+  which is weekly by design: a 24-hour rule checked weekly keeps a row up to eight days. Several API
+  instances are fine; the DELETE is idempotent. `pnpm vault sweep` runs it on demand.
+- **It cannot delete a row a confirm is writing.** Postgres re-evaluates `token_id IS NULL` on a row
+  whose lock it waited for, so a confirm that commits first wins. A test holds that lock from a second
+  connection to prove it rather than assume it.
+- **`confirm` had to change for this, and the reason matters.** It used to SELECT the row and then
+  UPDATE `WHERE id = $1`. A sweep landing between the two made the UPDATE touch nothing while confirm
+  returned **success**: a runner told they were entered, with no row, no pass, and no roster line. It
+  is now one `UPDATE … WHERE id = $1 AND token_id IS NULL`, and only a zero row count leads to a look
+  at why: gone is `404 not-found`, another token is `409`, the same token is the idempotent retry.
+- **The consequence for a client:** a confirm more than 24 hours after its submit answers 404, even
+  if the runner paid. That should not happen in the entry flow, which confirms seconds after `enter`
+  lands; if it does, the fix is to submit again (a fresh row) and confirm that.
+- **An hour is the floor.** `sweepUnconfirmed` refuses anything less, so a misconfigured `0` cannot
+  delete entries whose runner is still at the wallet prompt.
+
+Checked by breaking each part: restoring the old SELECT-then-UPDATE confirm, dropping `token_id IS
+NULL`, dropping the window, and removing the one-sweep-at-a-time guard each fail the tests.
+
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
 
@@ -356,7 +382,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-913 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+924 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that

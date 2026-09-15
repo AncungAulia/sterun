@@ -140,6 +140,39 @@ the next leak does not add victims.
 real PII can prove that link forever. This is a consequence the design accepts knowingly
 (`docs/SYSTEM_DESIGN.md` §11) and the reason what gets hashed is salted per record.
 
+## Unconfirmed entries are deleted after a day (STE-50)
+
+`POST /participants` stores a runner's details before they pay. If they never pay, the row is
+personal data kept for an entry that does not exist. The API deletes such rows (`token_id IS NULL`)
+once they are older than `VAULT_UNCONFIRMED_TTL_HOURS` (default 24): once when it starts, then every
+`VAULT_SWEEP_INTERVAL_MS` (default one hour). Confirmed entries are never touched.
+
+What to look for in the API log:
+
+```
+{"removed":3,"olderThanHours":24,"msg":"swept unconfirmed entries"}
+```
+
+A count and the window, never rows. `sweeping unconfirmed entries failed` means the database was
+unreachable at that tick; the next tick retries, and the API keeps serving.
+
+On demand, e.g. right after a deploy:
+
+```bash
+docker compose -f compose.prod.yml -f compose.homelab.yml run -T --rm --no-deps api \
+  node dist/cli/vault.js sweep </dev/null
+# removed 0 unconfirmed entries older than 24h
+```
+
+Things worth knowing before changing the window:
+
+- **Deleted is deleted.** There is no soft delete and nothing to restore; a database backup still
+  contains the rows until that backup ages out, which is the real retention bound.
+- **A confirm after the window answers 404**, even for a runner who paid, because their row is gone.
+  The entry flow confirms seconds after `enter`, so this needs a runner whose confirm failed and who
+  came back a day later. The recovery is to submit the details again and confirm the new row.
+- **Values under 1 hour are refused**, so a typo cannot delete entries whose runner is mid-payment.
+
 ## Starting the backend
 
 ```bash

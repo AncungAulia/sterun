@@ -268,22 +268,21 @@ export class Vault {
    * second entry quietly overwriting the first must not be a success.
    */
   async confirm(participantId: string, tokenId: number, enterTxHash: string): Promise<ConfirmResult> {
-    const existing = await this.pool.query<{ token_id: number | null }>(
-      "SELECT token_id FROM participants WHERE id = $1",
-      [participantId],
-    );
-    const row = existing.rows[0];
-    if (!row) throw new ParticipantNotFoundError(participantId);
-    if (row.token_id !== null) {
-      if (row.token_id !== tokenId) throw new AlreadyConfirmedError(row.token_id);
-      return { participantId, tokenId, enterTxHash };
-    }
-
+    // One conditional UPDATE first, and only then a look at why it did nothing.
+    //
+    // This used to SELECT and then UPDATE `WHERE id = $1`. Since STE-50 a sweep
+    // deletes old unconfirmed rows, and one landing between those two statements
+    // made the UPDATE touch zero rows while confirm still returned success: a
+    // runner told they were confirmed, with no row behind it. `AND token_id IS
+    // NULL` also stops two concurrent confirms re-pointing one row. Postgres
+    // re-checks both conditions after waiting on a row lock, so whichever of
+    // confirm and sweep commits first, the other sees the result.
+    let updated;
     try {
-      await this.pool.query(
+      updated = await this.pool.query(
         `UPDATE participants
             SET token_id = $2, enter_tx_hash = $3, confirmed_at = now()
-          WHERE id = $1`,
+          WHERE id = $1 AND token_id IS NULL`,
         [participantId, tokenId, enterTxHash],
       );
     } catch (e) {
@@ -292,8 +291,47 @@ export class Vault {
       if ((e as { code?: string }).code === "23505") throw new ParticipantExistsError(tokenId);
       throw e;
     }
+    if ((updated.rowCount ?? 0) === 1) return { participantId, tokenId, enterTxHash };
 
+    const existing = await this.pool.query<{ token_id: number | null }>(
+      "SELECT token_id FROM participants WHERE id = $1",
+      [participantId],
+    );
+    const row = existing.rows[0];
+    // Never submitted, or swept away as an unconfirmed entry older than the
+    // retention window (STE-50).
+    if (!row) throw new ParticipantNotFoundError(participantId);
+    // A retry after a dropped response is fine; a different token is not.
+    if (row.token_id !== tokenId) throw new AlreadyConfirmedError(row.token_id as number);
     return { participantId, tokenId, enterTxHash };
+  }
+
+  /**
+   * Delete entries that were submitted and never confirmed (STE-50).
+   *
+   * The entry flow stores the details BEFORE the runner signs `enter`, so a paid
+   * runner is never missing from the roster. When the payment never happens,
+   * that leaves personal data for an entry that does not exist, and we have no
+   * purpose for keeping it (UU PDP). Returns how many rows went, and nothing
+   * about them.
+   *
+   * One statement, so it cannot delete a row a confirm is writing: Postgres
+   * re-evaluates `token_id IS NULL` on a row whose lock it had to wait for, and
+   * a row confirmed in the meantime no longer matches.
+   */
+  async sweepUnconfirmed(olderThanHours: number): Promise<number> {
+    // Below an hour this would delete entries whose runner is still at the
+    // wallet prompt. A misconfigured 0 must not be able to do that.
+    if (!Number.isInteger(olderThanHours) || olderThanHours < 1) {
+      throw new RangeError(`olderThanHours must be a whole number of hours >= 1, got ${olderThanHours}`);
+    }
+    const result = await this.pool.query(
+      `DELETE FROM participants
+        WHERE token_id IS NULL
+          AND created_at < now() - make_interval(hours => $1)`,
+      [olderThanHours],
+    );
+    return result.rowCount ?? 0;
   }
 
   /** Row metadata with no PII in it. Safe to return over HTTP. */
