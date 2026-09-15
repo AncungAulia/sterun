@@ -330,14 +330,12 @@ fn reserve_slot_from_caller_contract_hands_out_sequential_bibs() {
     let race_record = wire_race_record(&env, &client);
     let caller = MockRaceRecordClient::new(&env, &race_record);
 
-    for expected_seq in 0..3u32 {
-        assert_eq!(
-            caller.reserve(&registry, &event_id, &category_id),
-            expected_seq
-        );
+    // Bibs count from 1; the category's quota counter counts the same slots.
+    for nth in 1..=3u32 {
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), nth);
         assert_eq!(
             client.get_category(&event_id, &category_id).entered_count,
-            expected_seq + 1
+            nth
         );
     }
 }
@@ -461,7 +459,7 @@ fn emits_slot_reserved() {
         std::vec![SlotReserved {
             event_id,
             category_id,
-            seq: 0,
+            seq: 1,
         }
         .to_xdr(&env, &registry)]
     );
@@ -634,7 +632,7 @@ fn mock_all_auths_masks_the_invoker_gate_harness_caveat() {
     env.mock_all_auths();
     assert_eq!(
         client.try_reserve_slot(&event_id, &category_id),
-        Ok(Ok(0)),
+        Ok(Ok(1)),
         "recording auth mode mocks contract-address auth in the root frame"
     );
 }
@@ -708,8 +706,8 @@ fn reserve_slot_reverts_when_quota_is_full() {
     let race_record = wire_race_record(&env, &client);
     let caller = MockRaceRecordClient::new(&env, &race_record);
 
-    assert_eq!(caller.reserve(&registry, &event_id, &category_id), 0);
     assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+    assert_eq!(caller.reserve(&registry, &event_id, &category_id), 2);
     assert_eq!(
         caller.try_reserve(&registry, &event_id, &category_id),
         Err(Ok(Error::QuotaFull))
@@ -926,7 +924,7 @@ fn a_cancelled_event_refuses_new_entries() {
     // While Open, an entry lands.
     assert_eq!(
         caller.try_reserve(&registry, &event_id, &category_id),
-        Ok(Ok(0))
+        Ok(Ok(1))
     );
 
     env.mock_all_auths();
@@ -1063,12 +1061,13 @@ fn free_category_and_extreme_values_are_accepted() {
         }
     );
 
-    // A u32::MAX quota still hands out bibs from 0.
+    // A u32::MAX quota still hands out bibs from 1, and the free category
+    // continues the SAME sequence rather than restarting it.
     client.set_event_status(&event_id, &EventStatus::Open);
     let race_record = wire_race_record(&env, &client);
     let caller = MockRaceRecordClient::new(&env, &race_record);
-    assert_eq!(caller.reserve(&registry, &event_id, &extreme), 0);
-    assert_eq!(caller.reserve(&registry, &event_id, &free), 0);
+    assert_eq!(caller.reserve(&registry, &event_id, &extreme), 1);
+    assert_eq!(caller.reserve(&registry, &event_id, &free), 2);
     // The free category had quota 1.
     assert_eq!(
         caller.try_reserve(&registry, &event_id, &free),
@@ -1860,6 +1859,246 @@ fn removing_an_organiser_drops_the_entry_rather_than_falsifying_it() {
 }
 
 // ---------------------------------------------------------------------------
+// Bib numbers (v2.3, STE-54)
+//
+// A bib is unique within its event and starts at 1. Before v2.3 it was the
+// category's `entered_count`, so the first 10K entrant and the first 5K entrant
+// of one race were both bib `0` — two runners wearing the same number, and one
+// of them wearing zero.
+//
+// The property under test is the one a race director cares about: no two
+// runners at a race share a number. What is deliberately NOT tested is any
+// relationship between the number and the distance, because there is none —
+// encoding the distance into the number is what caps a field at a thousand
+// runners.
+// ---------------------------------------------------------------------------
+mod bib {
+    use super::*;
+
+    /// Adds a second distance to an event that is already `Open`.
+    fn add_distance(
+        env: &Env,
+        client: &EventRegistryClient,
+        event_id: u32,
+        code: Symbol,
+        distance_m: u32,
+        quota: u32,
+    ) -> u32 {
+        env.mock_all_auths();
+        client.add_category(&event_id, &code, &distance_m, &quota, &0)
+    }
+
+    /// The whole ticket in one assertion: two distances, one event, and the
+    /// first runner of each gets a DIFFERENT number — 1 and 2, not 0 and 0.
+    #[test]
+    fn two_distances_in_one_event_never_share_a_bib() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 10);
+        let five_k = add_distance(&env, &client, event_id, symbol_short!("5K"), 5_000, 10);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &five_k), 2);
+    }
+
+    /// The first entrant of an event gets bib 1 whichever distance they picked.
+    /// Running it over every distance of the same fresh event would only prove
+    /// it for the first one, so each pass builds its own event.
+    #[test]
+    fn the_first_entrant_of_an_event_gets_bib_one_in_any_distance() {
+        for chosen in 0..3u32 {
+            let env = Env::default();
+            let (_admin, registry) = deploy(&env);
+            let client = EventRegistryClient::new(&env, &registry);
+            let organiser = Address::generate(&env);
+
+            let (event_id, _first) = open_event(&env, &client, &organiser, 10);
+            add_distance(&env, &client, event_id, symbol_short!("5K"), 5_000, 10);
+            add_distance(&env, &client, event_id, symbol_short!("21K"), 21_097, 10);
+            let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+            assert_eq!(
+                caller.reserve(&registry, &event_id, &chosen),
+                1,
+                "the first entrant of category {chosen} should be bib 1"
+            );
+        }
+    }
+
+    /// Entrants arriving in a mixed order draw from ONE sequence: 1, 2, 3, 4,
+    /// 5 across three distances, with no repeats and no gaps.
+    #[test]
+    fn the_event_counter_advances_across_distances() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 10);
+        let five_k = add_distance(&env, &client, event_id, symbol_short!("5K"), 5_000, 10);
+        let half = add_distance(&env, &client, event_id, symbol_short!("21K"), 21_097, 10);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        let order = [five_k, five_k, half, ten_k, half];
+        let bibs: std::vec::Vec<u32> = order
+            .iter()
+            .map(|c| caller.reserve(&registry, &event_id, c))
+            .collect();
+
+        assert_eq!(bibs, std::vec![1, 2, 3, 4, 5]);
+        // Each distance still counted only its own entrants.
+        assert_eq!(client.get_category(&event_id, &five_k).entered_count, 2);
+        assert_eq!(client.get_category(&event_id, &half).entered_count, 2);
+        assert_eq!(client.get_category(&event_id, &ten_k).entered_count, 1);
+    }
+
+    /// The counter is per event, not per contract: a second event starts its
+    /// own numbering at 1. Bibs identify a runner at a race, not on the ledger.
+    #[test]
+    fn each_event_numbers_from_one() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (first_event, first_cat) = open_event(&env, &client, &organiser, 10);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+        assert_eq!(caller.reserve(&registry, &first_event, &first_cat), 1);
+        assert_eq!(caller.reserve(&registry, &first_event, &first_cat), 2);
+
+        let (second_event, second_cat) = open_event(&env, &client, &organiser, 10);
+        assert_eq!(caller.reserve(&registry, &second_event, &second_cat), 1);
+        // …and the first event carries on from where it was.
+        assert_eq!(caller.reserve(&registry, &first_event, &first_cat), 3);
+    }
+
+    /// Quota is enforced **per distance** and the bib counter gates nothing.
+    /// A sold-out 5K does not stop the 10K selling, and the 10K's bibs keep
+    /// counting past the number of slots the 5K ever had.
+    #[test]
+    fn quota_is_still_per_distance_while_bibs_are_per_event() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 4);
+        let five_k = add_distance(&env, &client, event_id, symbol_short!("5K"), 5_000, 2);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        assert_eq!(caller.reserve(&registry, &event_id, &five_k), 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &five_k), 2);
+        // The 5K is full — and says so with the same error as ever.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &five_k),
+            Err(Ok(Error::QuotaFull))
+        );
+        // The 10K is untouched by that, and its bibs continue the event's run.
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 3);
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 4);
+
+        assert_eq!(client.get_category(&event_id, &five_k).entered_count, 2);
+        assert_eq!(client.get_category(&event_id, &ten_k).entered_count, 2);
+    }
+
+    /// A refused entry consumes no bib. Otherwise every sold-out attempt would
+    /// punch a hole in the numbering, and a race with gaps in its bib list
+    /// looks like a race that lost entries.
+    #[test]
+    fn a_refused_entry_does_not_burn_a_bib() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 10);
+        let five_k = add_distance(&env, &client, event_id, symbol_short!("5K"), 5_000, 1);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        assert_eq!(caller.reserve(&registry, &event_id, &five_k), 1);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &five_k),
+            Err(Ok(Error::QuotaFull))
+        );
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &404),
+            Err(Ok(Error::CategoryNotFound))
+        );
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 2);
+    }
+
+    /// The counter lives under its own key, and the key is bumped like every
+    /// other persistent entry it shares an event with — a bib sequence that
+    /// archived would restart at 1 and re-issue numbers that are already on
+    /// chain.
+    #[test]
+    fn the_event_counter_is_stored_under_its_own_key_and_kept_alive() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 10);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+        caller.reserve(&registry, &event_id, &category_id);
+        caller.reserve(&registry, &event_id, &category_id);
+
+        let key = DataKey::EventEntryCount(event_id);
+        assert_eq!(
+            env.as_contract(&registry, || env
+                .storage()
+                .persistent()
+                .get::<_, u32>(&key)
+                .unwrap()),
+            2
+        );
+        assert_eq!(persistent_ttl(&env, &registry, key), BUMP_TO);
+    }
+
+    /// `SlotReserved.seq` carries the bib, so an indexer that reads only events
+    /// sees the same number the entrant was handed.
+    #[test]
+    fn slot_reserved_carries_the_event_bib() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 10);
+        let five_k = add_distance(&env, &client, event_id, symbol_short!("5K"), 5_000, 10);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        // `events()` holds what the LAST top-level invocation emitted, so
+        // each entry is checked where it happens rather than in one batch.
+        caller.reserve(&registry, &event_id, &ten_k);
+        assert_eq!(
+            env.events().all(),
+            std::vec![SlotReserved {
+                event_id,
+                category_id: ten_k,
+                seq: 1,
+            }
+            .to_xdr(&env, &registry)]
+        );
+
+        caller.reserve(&registry, &event_id, &five_k);
+        assert_eq!(
+            env.events().all(),
+            std::vec![SlotReserved {
+                event_id,
+                category_id: five_k,
+                seq: 2,
+            }
+            .to_xdr(&env, &registry)]
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // These tests deploy the registry from the BUILT WASM rather than from the
@@ -1907,6 +2146,21 @@ mod upgrade {
     /// v2.0.1.
     const LIVE_PRE_ALLOWLIST_HASH: &str =
         "22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f";
+
+    /// The executable running at the same address when STE-54 was written —
+    /// v2.2, the one STE-36 installed. It is the code that issued every bib
+    /// now on chain, so it is the only "before" that can prove those numbers
+    /// survive the switch to an event-wide sequence.
+    ///
+    /// Two fixtures, not one: `LIVE_PRE_ALLOWLIST_WASM` above proves the
+    /// allowlist key was appended safely and is kept for that, while this one
+    /// is the current chain state. Provenance: `testdata/README.md`.
+    const LIVE_PRE_BIB_WASM: &[u8] = include_bytes!("../testdata/event_registry_live_pre_bib.wasm");
+
+    /// sha256 of the artifact above — what `stellar contract info hash` reports
+    /// for `CAPB6NQP…` before this branch is deployed.
+    const LIVE_PRE_BIB_HASH: &str =
+        "cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0";
 
     /// Lowercase hex, so a mismatch prints the two hashes instead of two byte
     /// arrays.
@@ -2168,6 +2422,93 @@ mod upgrade {
             client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT),
             event_id + 1
         );
+
+        // Still upgradeable — losing that would be permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+    }
+
+    /// STE-54 — the in-place upgrade this branch actually ships, rehearsed
+    /// against the bytes that are live.
+    ///
+    /// The old executable fills a two-distance event the way the chain has
+    /// been filling them: bibs per distance, counting from 0, so the first 10K
+    /// runner and the first 5K runner are both `0`. Then the new code replaces
+    /// it, and the three things that matter are checked in order — what was
+    /// written is unchanged, what the old numbering produced is still what it
+    /// produced, and a new event numbers 1, 2, 3 across its distances.
+    #[test]
+    fn bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let registry = env.register(LIVE_PRE_BIB_WASM, (admin.clone(),));
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        // The fixture is the live artifact, not a lookalike.
+        let live_hash = env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&env, LIVE_PRE_BIB_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_BIB_HASH);
+
+        // -- written by the OLD code: the bug, reproduced -------------------
+        env.mock_all_auths();
+        client.add_organiser(&organiser);
+        let old_event =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let ten_k = client.add_category(&old_event, &symbol_short!("10K"), &10_000, &5, &0);
+        let five_k = client.add_category(&old_event, &symbol_short!("5K"), &5_000, &5, &0);
+        client.set_event_status(&old_event, &EventStatus::Open);
+        let race_record = wire_race_record(&env, &client);
+        let caller = MockRaceRecordClient::new(&env, &race_record);
+
+        assert_eq!(caller.reserve(&registry, &old_event, &ten_k), 0);
+        assert_eq!(caller.reserve(&registry, &old_event, &ten_k), 1);
+        // Two runners, one race, one number — this is what STE-54 is for.
+        assert_eq!(caller.reserve(&registry, &old_event, &five_k), 0);
+
+        let event_before = client.get_event(&old_event);
+        let ten_k_before = client.get_category(&old_event, &ten_k);
+        let five_k_before = client.get_category(&old_event, &five_k);
+        // The old code has no counter to read, so the key is genuinely absent.
+        let counter_key = DataKey::EventEntryCount(old_event);
+        assert!(!env.as_contract(&registry, || env.storage().persistent().has(&counter_key)));
+
+        // -- the upgrade ----------------------------------------------------
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        // -- everything the old code wrote still decodes, byte for byte ------
+        assert_eq!(client.get_event(&old_event), event_before);
+        assert_eq!(client.get_category(&old_event, &ten_k), ten_k_before);
+        assert_eq!(client.get_category(&old_event, &five_k), five_k_before);
+        assert_eq!(ten_k_before.entered_count, 2);
+        assert_eq!(five_k_before.entered_count, 1);
+        assert_eq!(client.category_count(&old_event), 2);
+        assert_eq!(client.event_count(), 1);
+        assert_eq!(client.get_admin(), admin);
+        assert_eq!(client.get_race_record(), race_record);
+        assert!(client.is_organiser(&organiser));
+
+        // -- a NEW event gets the new numbering -----------------------------
+        env.mock_all_auths();
+        let new_event =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let new_ten_k = client.add_category(&new_event, &symbol_short!("10K"), &10_000, &5, &0);
+        let new_five_k = client.add_category(&new_event, &symbol_short!("5K"), &5_000, &5, &0);
+        client.set_event_status(&new_event, &EventStatus::Open);
+
+        assert_eq!(caller.reserve(&registry, &new_event, &new_ten_k), 1);
+        assert_eq!(caller.reserve(&registry, &new_event, &new_five_k), 2);
+        assert_eq!(caller.reserve(&registry, &new_event, &new_ten_k), 3);
+
+        // -- and the pre-upgrade event keeps selling, per-distance quota
+        // intact. Its counter starts at 0 because nothing was migrated, which
+        // is why the backend keeps its duplicate-bib guard for events that
+        // predate this upgrade.
+        assert_eq!(caller.reserve(&registry, &old_event, &five_k), 1);
+        assert_eq!(client.get_category(&old_event, &five_k).entered_count, 2);
+        assert_eq!(client.get_category(&old_event, &ten_k), ten_k_before);
 
         // Still upgradeable — losing that would be permanent.
         env.mock_all_auths();
