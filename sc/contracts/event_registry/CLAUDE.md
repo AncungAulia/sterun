@@ -29,7 +29,7 @@ entries written by old code. A `DataKey` variant is transmitted as its **name**,
 variant at the end is safe; deleting one, renaming one, or changing its value type orphans the old
 entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`.
 
-## Seven things that are easy to break
+## Eight things that are easy to break
 
 1. **`set_race_record` is one-shot.** A second call is refused (`RaceRecordAlreadySet = 7`). The
    reason: that address is the only trusted caller of `reserve_slot`. If it could be swapped, a
@@ -56,17 +56,38 @@ entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`
      call that takes a runner's money. `be/` keeps its duplicate-bib guard for those events.
    - **Touching how either counter advances changes numbers already printed into on-chain records.**
      That is not a refactor, it is a data change.
-4. **`EventStatus` transitions.** `Draft → Open → Closed → Completed`, with `Closed ↔ Open` allowed
+4. **`increase_quota` only ever raises the number.** (v2.4, STE-55) `new_quota` must be strictly
+   greater than the category's current `quota`; equal and smaller are both `QuotaNotIncreased = 19`,
+   under one code because they are one rule. This is the feature, not validation around it: runners
+   paid against a published number, and a shrink would put `entered_count` above its own `quota`, so
+   `reserve_slot` would answer `QuotaFull = 5` for a race that had been rewritten underneath
+   entrants who are already on chain. Stopping registration is `Closed`, and that is reversible.
+   Four things to hold when touching it:
+   - **it adds no storage key and changes no struct.** `quota` is a `CategoryData` field from v1;
+     this writes a bigger value into it. That is what made the upgrade that shipped it the dullest
+     one yet from the storage side, which is the best thing an in-place upgrade can be;
+   - **`entered_count` and `EventEntryCount` are neither read nor written**, so a second batch
+     continues the race's bib numbering rather than restarting it. Do not "helpfully" reconcile
+     either counter here;
+   - **there is no status gate, on purpose.** A `Closed` event is exactly where the second-batch
+     flow puts it — lift the cap, then re-open — and on a terminal event the larger number sells
+     nothing anyway, because `reserve_slot` demands `Open`;
+   - **the contract cannot check that anyone was told.** Raising a published quota is a real change
+     to what a runner bought, so the console pairs it with a signed announcement (STE-34). That is
+     an application-level rule. Do not write a comment, a doc or a UI string implying the chain
+     enforces it.
+
+5. **`EventStatus` transitions.** `Draft → Open → Closed → Completed`, with `Closed ↔ Open` allowed
    (an organiser can reopen entries) and `Completed` **terminal**. An illegal transition is
    `InvalidStatus = 11`. **v2** adds `Cancelled`: allowed from `Draft`/`Open`/`Closed`, terminal, and
    **not** allowed from `Completed` — a race that was run and whose results were published did
    happen. `Cancelled` ≠ `Closed`: `Closed` means "entries shut, the race goes ahead, can be
    reopened". There are no on-chain refunds; the value is that "cancelled" is recorded on the chain.
-5. **`reserve_addon` returns the PRICE, not a `seq`.** (v2) Its caller is `RaceRecord.enter`, which
+6. **`reserve_addon` returns the PRICE, not a `seq`.** (v2) Its caller is `RaceRecord.enter`, which
    needs the number in order to charge. Reading it through a second call would mean the amount
    charged and the unit taken come from two different reads. The unit's `seq` is still emitted in the
    `AddOnReserved` event for fulfilment. Changing its return value changes how `enter` charges.
-6. **`create_event` has TWO gates.** (v2.1, STE-36) `organiser.require_auth()` answers "does the
+7. **`create_event` has TWO gates.** (v2.1, STE-36) `organiser.require_auth()` answers "does the
    caller hold this keypair"; `is_organiser` answers "has the admin vetted this keypair". `name` is a
    free-form `String`, so without the second gate anyone could publish "Jakarta Marathon 2026". What
    to remember when touching it:
@@ -79,7 +100,7 @@ entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`
    - after an `upgrade`, the allowlist is **empty**. There is no migration. Until the admin calls
      `add_organiser`, no `create_event` succeeds — that is a deploy step, not an afterthought.
 
-7. **`reserved_count` never decreases.** Cancelling an event does not "return" jerseys already sold,
+8. **`reserved_count` never decreases.** Cancelling an event does not "return" jerseys already sold,
    because the refund is off-chain. If that ever changes, it is a new feature with a new function —
    not a counter quietly decremented.
 
@@ -89,7 +110,7 @@ entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`
 `RaceRecordNotSet=6`, `RaceRecordAlreadySet=7`, `InvalidQuota=8`, `InvalidPrice=9`,
 `InvalidDistance=10`, `InvalidStatus=11`, `ScannerAlreadyAdded=12`, `ScannerNotFound=13`,
 `AddOnNotFound=14`, `AddOnQuotaFull=15`, `OrganiserAlreadyAdded=16`, `OrganiserNotFound=17`,
-`NotAllowlistedOrganiser=18`.
+`NotAllowlistedOrganiser=18`, `QuotaNotIncreased=19`. The next free code is **20**.
 
 `add_addon` **reuses** `InvalidQuota=8` and `InvalidPrice=9` — its conditions are exactly
 `add_category`'s (`quota == 0`, `price < 0`), and a new code would only force clients to distinguish
@@ -105,7 +126,11 @@ not a C2 error. That is what the bands are for.
 `SlotReserved` (its `seq` is the bib — event-wide and 1-based since v2.3, **same layout**), plus in
 v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`, plus in v2.1:
 `OrganiserAdded`, `OrganiserRemoved` (their topics carry **no** `event_id` — the allowlist is
-contract-wide).
+contract-wide), plus in v2.4: `QuotaIncreased`.
+
+`QuotaIncreased` makes `category_id` a **topic**, which `CategoryAdded` deliberately does not: the
+question it answers is per distance ("did the 10K open a second batch"), not per event. It carries
+`previous` and `current` both, so a consumer never has to diff against its own last read.
 
 Topic names derive from struct names, and `AddOn` breaks into two words:
 `AddOnReserved` → `"add_on_reserved"`, **not** `"addon_reserved"`. Function arguments stay
@@ -117,7 +142,7 @@ is **alphabetical**, not declaration order. It is `#[topic]` that keeps declarat
 
 ## Tests
 
-`src/test.rs`, 75 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
+`src/test.rs`, 91 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
 `pub fn` or an error variant, add **positive + negative + edge** with it — `cargo test` is not a
 place for happy paths alone.
 
@@ -134,6 +159,7 @@ the only pair that can prove the storage change in question was safe:
 | --- | --- | --- |
 | `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` | `event_registry_live_pre_allowlist.wasm`, `22bb432e…` | `DataKey::Organiser` was appended safely (STE-36) |
 | `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` | `event_registry_live_pre_bib.wasm`, `cf009033…` | the per-distance bibs on chain still decode once bibs go event-wide (STE-54) |
+| `a_quota_can_be_raised_on_a_category_the_live_wasm_created` | `event_registry_live_pre_quota.wasm`, `c8b5e82a…` | a sold-out category written by the running code takes a larger quota and sells again (STE-55) |
 
 The rules for adding the next fixture — add, never overwrite — are in `testdata/README.md`.
 
