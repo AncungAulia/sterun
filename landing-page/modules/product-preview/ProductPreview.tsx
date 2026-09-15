@@ -122,7 +122,7 @@ export function ProductPreview() {
          arrives. The negative margin is what makes it rise OVER the held How it
          works box instead of pushing it: that section carries a matching extra
          screen of height, so the page is no taller than it was. */
-      className="relative z-10 -mt-[100svh] h-[100svh] overflow-hidden bg-teal-800 text-paper [--pp-pt:6rem] sm:[--pp-pt:8rem]"
+      className="relative z-10 -mt-[100svh] h-[100svh] overflow-hidden bg-teal text-paper [--pp-pt:6rem] sm:[--pp-pt:8rem]"
     >
       <div className="mx-auto flex h-full max-w-[1500px] flex-col px-5 sm:px-6 lg:px-4">
         {/* Title in the left corner, label in the right one, on one row, the way
@@ -131,13 +131,13 @@ export function ProductPreview() {
           className="flex items-start justify-between gap-6"
           style={{ paddingTop: "var(--pp-pt)" }}
         >
-          <h2 className="heading-hero leading-[0.86] tracking-[-0.015em]">
-            <span data-pp="title" className="block text-[clamp(3.5rem,9vw,8.5rem)]">
+          <h2 className="heading-hero tracking-[-0.015em] [--pp-title:clamp(4rem,11.5vw,11rem)]">
+            <span data-pp="title" className="block text-[length:var(--pp-title)] leading-[0.82]">
               Open it.
             </span>
             <span
               data-pp="title"
-              className="mt-[0.12em] block text-[clamp(1.5rem,3.2vw,3rem)] text-teal-200"
+              className="mt-[calc(var(--pp-title)*0.2)] block text-[clamp(1.5rem,3.2vw,3rem)] leading-[1]"
             >
               No wallet needed.
             </span>
@@ -145,7 +145,7 @@ export function ProductPreview() {
 
           <span
             data-pp="label"
-            className="mt-[0.6em] shrink-0 text-right text-xs uppercase tracking-[0.14em] text-teal-200"
+            className="mt-[0.9em] shrink-0 text-right text-base font-medium leading-tight"
           >
             Live on
             <br />
@@ -155,14 +155,14 @@ export function ProductPreview() {
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 pt-8 lg:flex-row lg:items-stretch lg:gap-10 lg:pt-10">
           <div className="flex flex-col lg:h-full lg:w-[36%] lg:shrink-0">
-            <p data-pp="copy" className="max-w-[46ch] text-sm leading-[1.6] text-teal-100">
+            <p data-pp="copy" className="max-w-[46ch] text-sm leading-[1.6] text-teal-50">
               The event directory and every event page read straight from the chain. Browse them the
               way a runner would, before you connect anything.
             </p>
 
             <a
               href="#"
-              className="wipe-underline mt-8 inline-flex w-fit items-center gap-3 text-base font-medium lg:mt-auto lg:mb-[7vh]"
+              className="wipe-underline relative mt-8 inline-flex w-fit items-center gap-3 text-base font-medium leading-tight text-paper lg:mt-auto lg:mb-[7vh]"
             >
               Browse live events
               <svg
@@ -191,9 +191,9 @@ export function ProductPreview() {
           <div data-pp-frame className="ml-auto min-h-0 w-full overflow-hidden lg:h-full lg:w-[43%]">
             <div
               data-pp-picture
-              className="grid h-full min-h-[34svh] w-full place-items-center border border-b-0 border-dashed border-teal-700 bg-teal-700/30 lg:min-h-0"
+              className="grid h-full min-h-[34svh] w-full place-items-center bg-paper lg:min-h-0"
             >
-              <span className="text-sm text-teal-200">Screenshot of an event page</span>
+              <span className="text-sm text-n-600">Screenshot of an event page</span>
             </div>
           </div>
         </div>
