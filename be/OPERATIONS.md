@@ -72,6 +72,41 @@ fails with `no key with id N in PII_KEYS`, and that is the only honest answer av
 When to rotate: a key is suspected leaked, somebody who held one leaves the team, or on a schedule
 (suggested: every 90 days if this ever became real production).
 
+### The blind-index key (`PII_INDEX_KEY`, STE-51)
+
+A third secret next to `PII_KEYS`, with a different job and different rules. It keys
+`participants.identity_index`, the HMAC that lets `POST /participants` refuse a second entry by the
+same identity number in one race without decrypting anything (`be/CLAUDE.md`, the vault section).
+
+```bash
+PII_INDEX_KEY="<64 hex>"   # no id prefix: there is exactly one
+```
+
+- **Required whenever the vault is on.** The API refuses to start without it.
+- **Held and stored exactly like `PII_KEYS`**: the same people, only in `be/.env` /
+  `be/.env.production`, never in a backup of the database.
+- **It decrypts nothing.** On its own it gives an attacker who also has the table the ability to test
+  a guessed identity number against a race's entries — which is why it is kept with the PII keys and
+  not treated as harmless.
+- **Do not rotate it with `PII_KEYS`, and do not change it casually.** A new value makes every
+  existing entry invisible to the check: nothing breaks and nothing warns, the check simply stops
+  refusing duplicates for races already running. If it must change (suspected leak), recompute every
+  row's value under the new key — decrypt `national_id_enc`, apply `identityIndex` — before the API
+  starts using it. That job does not exist yet, same as the re-encrypt job above.
+
+Setting it on a box for the first time, without the value passing through a terminal or a log (same
+host-side pattern as the faucet key):
+
+```bash
+cd /opt/sterun
+grep -c '^PII_INDEX_KEY=.' be/.env.production   # 0 means not set yet
+umask 077
+printf '\nPII_INDEX_KEY=%s\n' "$(openssl rand -hex 32)" >> be/.env.production
+grep -c '^PII_INDEX_KEY=[0-9a-f]\{64\}$' be/.env.production   # must print 1
+```
+
+Do this **before** deploying a version that contains migration 011, or the API will not start.
+
 ## If the database leaks
 
 **What an attacker gets:**
@@ -87,6 +122,10 @@ When to rotate: a key is suspected leaked, somebody who held one leaves the team
     claiming somebody else's race pack — **if** they can also be there physically and the record is
     unclaimed. The contract's `AlreadyClaimed` guard still limits the damage to one pack.
 - `runner_address`, `event_id`, `token_id` — all already public on chain.
+- `identity_index` (STE-51) — 32 opaque bytes per row. Without `PII_INDEX_KEY` it cannot be linked to
+  a number, and because the event id is inside the HMAC, the same person's rows in two races do not
+  match each other either. Within one race, two equal values do show that two entries share an
+  identity number, which is exactly what the check refuses for confirmed entries.
 
 **What they do NOT get:** readable PII, as long as the keys did not leak with it. That is why the
 keys must not live on the same machine as a database dump, and must not be included in a database

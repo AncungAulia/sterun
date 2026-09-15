@@ -10,6 +10,7 @@
  * talk to the wrong contract.
  */
 import { Networks } from "@stellar/stellar-sdk";
+import { parseIndexKey } from "./crypto/blind-index.js";
 import { parseKeyring, type Keyring } from "./crypto/keyring.js";
 import { loadDeployments, type Deployments } from "./deployments.js";
 import { DEFAULT_PAGE_LIMIT } from "./indexer/indexer.js";
@@ -142,6 +143,12 @@ export interface Config {
     | {
         readonly databaseUrl: string;
         readonly keyring: Keyring;
+        /**
+         * PII_INDEX_KEY (STE-51). Keys the blind index that finds a second entry
+         * by the same identity number in one race. Not a PII key: it decrypts
+         * nothing, and it must not rotate with them — see src/crypto/blind-index.ts.
+         */
+        readonly indexKey: Buffer;
       }
     | undefined;
 }
@@ -292,7 +299,14 @@ function loadVaultConfig(env: NodeJS.ProcessEnv): Config["vault"] {
         "See be/OPERATIONS.md.",
     );
   }
-  return { databaseUrl, keyring: parseKeyring(keys, env.PII_ACTIVE_KEY_ID ?? "") };
+  // Required with the vault, not optional: without it the vault would accept a
+  // second entry by the same person, and a rule that is only enforced where
+  // someone remembered a variable is not a rule.
+  return {
+    databaseUrl,
+    keyring: parseKeyring(keys, env.PII_ACTIVE_KEY_ID ?? ""),
+    indexKey: parseIndexKey(env.PII_INDEX_KEY),
+  };
 }
 
 /** sUSD has 7 decimals, like every classic Stellar asset. */

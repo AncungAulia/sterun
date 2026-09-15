@@ -84,6 +84,7 @@ describe("response schemas cannot express PII", () => {
 describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
   let keyring: Keyring;
+  let indexKey: Buffer;
   let close: () => Promise<void>;
   let app: FastifyInstance;
   let challenges: ChallengeStore;
@@ -107,6 +108,10 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     };
   }
 
+  // A new identity number per submission unless a test names one. Since STE-51
+  // a confirmed entry refuses the same person in the same race, so a shared
+  // number would make every test depend on which ones confirmed before it.
+  let nextNationalId = 0;
   const submit = async (kp: Keypair, overrides: Record<string, unknown> = {}) =>
     app.inject({
       method: "POST",
@@ -114,6 +119,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       headers: await credentials(kp),
       payload: {
         ...PERSON,
+        national_id: `99${String(nextNationalId++).padStart(14, "0")}`,
         ...FORM,
         event_id: 0,
         category_id: 0,
@@ -123,10 +129,10 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     });
 
   beforeAll(async () => {
-    ({ pool, keyring, close } = await freshDatabase());
+    ({ pool, keyring, indexKey, close } = await freshDatabase());
     challenges = new ChallengeStore();
     app = buildServer(loadConfig({ NODE_ENV: "test" }), {
-      vault: new Vault(pool, keyring),
+      vault: new Vault(pool, keyring, indexKey),
       challenges,
     });
     await app.ready();
@@ -138,7 +144,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
 
   describe("POST /participants", () => {
     it("stores the entry and returns hash, salt and secret exactly once", async () => {
-      const res = await submit(runner);
+      const res = await submit(runner, { national_id: PERSON.national_id });
       expect(res.statusCode).toBe(201);
       const body = res.json();
       expect(body.participant_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -158,17 +164,17 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     });
 
     it("never echoes the submitted PII back", async () => {
-      const res = await submit(runner);
+      const res = await submit(runner, { national_id: PERSON.national_id });
       for (const value of PII_VALUES) expect(res.body).not.toContain(value);
     });
 
     describe("the entry form's fields (STE-47)", () => {
       it("stores every field, encrypted where it is PII, and echoes none of it", async () => {
-        const res = await submit(runner);
+        const res = await submit(runner, { national_id: PERSON.national_id });
         expect(res.statusCode).toBe(201);
         for (const value of PII_VALUES) expect(res.body).not.toContain(value);
 
-        const stored = await new Vault(pool, keyring).decryptForAudit(res.json().participant_id);
+        const stored = await new Vault(pool, keyring, indexKey).decryptForAudit(res.json().participant_id);
         expect(stored).toEqual({
           name: PERSON.name,
           nationalId: PERSON.national_id,
@@ -187,7 +193,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
         // +6281234567890 is the contact in docs/specs/vectors/participant_hash.json.
         // E.164 is already what norm_contact produces, so requiring it changes
         // no hash — it only stops a second spelling of the same number.
-        const res = await submit(runner);
+        const res = await submit(runner, { national_id: PERSON.national_id });
         const body = res.json();
         expect(
           participantHash(
@@ -276,6 +282,30 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
         });
         expect(res.statusCode).toBe(400);
       });
+    });
+
+    it("409s `already-entered` when the same person enters a race twice from another wallet", async () => {
+      // STE-51. Event 5151 and its own identity number, so no other test's
+      // confirmed entry is involved.
+      const person = { national_id: "34-04 0125 5151", event_id: 5151 };
+      const first = (await submit(runner, person)).json();
+      const confirmed = await app.inject({
+        method: "POST",
+        url: `/participants/${first.participant_id}/confirm`,
+        headers: await credentials(runner),
+        payload: { token_id: 5151, enter_tx_hash: "e".repeat(64) },
+      });
+      expect(confirmed.statusCode).toBe(200);
+
+      // Formatted differently, from a different wallet: still the same person.
+      const res = await submit(stranger, { ...person, national_id: "340401255151" });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toBe("already-entered");
+      expect(res.json().message).toMatch(/already has an entry in this race/);
+      // The answer names nobody and echoes nothing that was submitted.
+      expect(res.body).not.toContain("340401255151");
+      expect(res.body).not.toContain(PERSON.name);
     });
 
     it("refuses to store one account's documents under another's address", async () => {
@@ -445,7 +475,9 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       });
       bodies.push(challenge.body);
 
-      const created = await submit(runner);
+      // Its own race, and the fixture's own identity number so the PII check
+      // below covers the number that was actually sent.
+      const created = await submit(runner, { national_id: PERSON.national_id, event_id: 4242 });
       bodies.push(created.body);
       const { participant_id, participant_hash, totp_secret } = created.json();
 
@@ -471,7 +503,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       }
 
       // And the roster path (STE-16) can still mint the runner's codes.
-      const vaultSecret = await new Vault(pool, keyring).totpSecretForToken(4242);
+      const vaultSecret = await new Vault(pool, keyring, indexKey).totpSecretForToken(4242);
       expect(vaultSecret?.toString("hex")).toBe(totp_secret);
     });
   });

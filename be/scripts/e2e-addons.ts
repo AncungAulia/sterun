@@ -127,7 +127,7 @@ async function main(): Promise<void> {
   const challenges = new ChallengeStore();
   const app = buildServer(config, {
     pool,
-    vault: new Vault(pool, config.vault.keyring),
+    vault: new Vault(pool, config.vault.keyring, config.vault.indexKey),
     reader,
     challenges,
   });

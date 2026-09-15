@@ -244,6 +244,41 @@ Three rules worth knowing before touching them:
 The columns are nullable because rows from before migration 009 have none of these values; the API
 requires all of them for every new submission.
 
+**One person, one entry per race (STE-51, migration 011).** `POST /participants` answers **409
+`already-entered`** when a **confirmed** entry in the same race has the same identity number after
+`norm_id`, even from another wallet. The web app already stops a second entry from the same wallet;
+this stops the same person using a second one. The contract cannot: it sees only a salted hash, and
+two entries by one person look unrelated there.
+
+The number is encrypted with a fresh nonce, so ciphertexts never compare equal. The lookup is a
+**blind index** in `participants.identity_index`:
+
+```
+HMAC-SHA256(PII_INDEX_KEY, "sterun/identity-index/v1\0" || u32be(event_id) || norm_id(national_id))
+```
+
+- **An HMAC, never a hash.** An NIK is 16 structured digits; sha256 of one is reversed by enumeration.
+- **Its own key, not a PII key.** `PII_KEYS` rotate by re-encrypting under a new id; an index key that
+  moved with them would silently stop matching old rows. And a leaked index key opens no PII.
+- **The event id is inside the MAC**, so one person in two races has two unrelated values: the column
+  cannot be used to follow someone between races.
+- **`PII_INDEX_KEY` is required whenever the vault is on.** Optional would mean a deployment that
+  forgot a variable quietly accepts duplicates.
+
+Where the check sits, and the limit that follows from it:
+
+- **Only confirmed rows refuse.** An unconfirmed row is a payment that has not happened, and a runner
+  retrying after a declined payment must not be locked out by their own first attempt.
+- **Checked at submit, not enforced at confirm, and the index is not unique.** Confirm runs after the
+  runner has paid on chain; refusing then leaves a paid record with no vault row and no pass. The
+  cost is a narrow window: two entries whose payments overlap both get through. Only the contract
+  could close it, and the contract never sees the number.
+- **Rows from before 011 have no index** and block nobody. Computing one needs the decrypted number.
+
+Each of the four properties was checked by breaking it: letting unconfirmed rows count, removing the
+check, hashing the raw number instead of `norm_id`, and leaving the event id out of the MAC each
+fail the tests.
+
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
 
@@ -321,7 +356,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-783 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+913 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that

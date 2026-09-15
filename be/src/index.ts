@@ -96,7 +96,7 @@ const faucetPayer = config.faucetSecret
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
   fileStore,
-  ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
+  ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring, config.vault.indexKey) } : {}),
   challenges,
   reader,
   ...(faucetPayer ? { faucetPayer } : {}),

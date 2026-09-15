@@ -14,7 +14,13 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Pool } from "pg";
 import type { Keyring } from "../src/crypto/keyring.js";
-import { Vault, AlreadyConfirmedError, ParticipantNotFoundError } from "../src/vault.js";
+import { identityIndex } from "../src/crypto/blind-index.js";
+import {
+  Vault,
+  AlreadyConfirmedError,
+  AlreadyEnteredError,
+  ParticipantNotFoundError,
+} from "../src/vault.js";
 import { participantHash, saltFromHex } from "../src/spec/participant-hash.js";
 import { codeAt } from "../src/spec/totp.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
@@ -40,12 +46,13 @@ const ENTRY = { ...PERSON, ...FORM, eventId: 0, categoryId: 0, runnerAddress: RU
 describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
   let keyring: Keyring;
+  let indexKey: Buffer;
   let close: () => Promise<void>;
   let vault: Vault;
 
   beforeAll(async () => {
-    ({ pool, keyring, close } = await freshDatabase());
-    vault = new Vault(pool, keyring);
+    ({ pool, keyring, indexKey, close } = await freshDatabase());
+    vault = new Vault(pool, keyring, indexKey);
   });
   afterAll(async () => close?.());
 
@@ -199,8 +206,10 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
   });
 
   describe("confirm", () => {
+    // Each confirming test enters its own race: since STE-51 a confirmed entry
+    // refuses the same person in the same race, which is the rule, not noise.
     it("links the row to the on-chain record", async () => {
-      const r = await vault.submit(ENTRY);
+      const r = await vault.submit({ ...ENTRY, eventId: 4200 });
       const tx = "a".repeat(64);
       await vault.confirm(r.participantId, 42, tx);
       const s = await vault.summary(r.participantId);
@@ -209,14 +218,14 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
     });
 
     it("is idempotent for the same token_id — a dropped response must be retryable", async () => {
-      const r = await vault.submit(ENTRY);
+      const r = await vault.submit({ ...ENTRY, eventId: 4201 });
       const tx = "b".repeat(64);
       await vault.confirm(r.participantId, 43, tx);
       await expect(vault.confirm(r.participantId, 43, tx)).resolves.toMatchObject({ tokenId: 43 });
     });
 
     it("refuses to re-point a confirmed row at a different token_id", async () => {
-      const r = await vault.submit(ENTRY);
+      const r = await vault.submit({ ...ENTRY, eventId: 4202 });
       await vault.confirm(r.participantId, 44, "c".repeat(64));
       await expect(vault.confirm(r.participantId, 45, "d".repeat(64))).rejects.toBeInstanceOf(
         AlreadyConfirmedError,
@@ -224,8 +233,8 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
     });
 
     it("refuses two participants claiming one token_id — one bib, one person", async () => {
-      const a = await vault.submit(ENTRY);
-      const b = await vault.submit(ENTRY);
+      const a = await vault.submit({ ...ENTRY, eventId: 4203 });
+      const b = await vault.submit({ ...ENTRY, eventId: 4203, nationalId: "3174012509900002" });
       await vault.confirm(a.participantId, 46, "e".repeat(64));
       await expect(vault.confirm(b.participantId, 46, "f".repeat(64))).rejects.toThrow();
     });
@@ -237,14 +246,14 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
     });
 
     it("refuses a confirmation without a real transaction hash", async () => {
-      const r = await vault.submit(ENTRY);
+      const r = await vault.submit({ ...ENTRY, eventId: 4204 });
       await expect(vault.confirm(r.participantId, 48, "not-a-hash")).rejects.toThrow();
     });
   });
 
   describe("roster handoff (what STE-16 will read)", () => {
     it("returns the TOTP secret for a confirmed record, and it mints working codes", async () => {
-      const r = await vault.submit(ENTRY);
+      const r = await vault.submit({ ...ENTRY, eventId: 4205 });
       await vault.confirm(r.participantId, 49, "1".repeat(64));
       const secret = await vault.totpSecretForToken(49);
       expect(secret?.toString("hex")).toBe(r.totpSecretHex);
@@ -325,6 +334,113 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
           [randomUUID(), bytes, RUNNER, JSON.stringify({ "Event jersey": "L" })],
         ),
       ).rejects.toThrow(/add_ons_is_a_list/);
+    });
+  });
+
+  describe("one person, one entry per race (STE-51)", () => {
+    // Event ids 5100+ belong to this block, so no other test's confirmed row
+    // for the shared fixture can refuse an entry here.
+    const OTHER_WALLET = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H";
+    let nextToken = 51_000;
+    const enterAndConfirm = async (entry: Parameters<Vault["submit"]>[0]) => {
+      const r = await vault.submit(entry);
+      await vault.confirm(r.participantId, nextToken++, "5".repeat(64));
+      return r;
+    };
+    const rowsFor = async (eventId: number) =>
+      Number(
+        (
+          await pool.query<{ n: string }>(
+            "SELECT count(*) AS n FROM participants WHERE event_id = $1",
+            [eventId],
+          )
+        ).rows[0]?.n,
+      );
+
+    it("refuses a second entry by the same identity number from another wallet", async () => {
+      await enterAndConfirm({ ...ENTRY, eventId: 5100 });
+
+      await expect(
+        vault.submit({ ...ENTRY, eventId: 5100, runnerAddress: OTHER_WALLET }),
+      ).rejects.toThrow(AlreadyEnteredError);
+      // Refused before anything is written: no second row of PII to clean up.
+      expect(await rowsFor(5100)).toBe(1);
+    });
+
+    it("refuses it in another category of the same race too", async () => {
+      await enterAndConfirm({ ...ENTRY, eventId: 5101, categoryId: 0 });
+      await expect(vault.submit({ ...ENTRY, eventId: 5101, categoryId: 1 })).rejects.toThrow(
+        AlreadyEnteredError,
+      );
+    });
+
+    it("treats `34-04 0125` and `34040125` as the same person", async () => {
+      await enterAndConfirm({ ...ENTRY, eventId: 5102, nationalId: "34-04 0125" });
+      await expect(
+        vault.submit({ ...ENTRY, eventId: 5102, nationalId: "34040125", runnerAddress: OTHER_WALLET }),
+      ).rejects.toThrow(AlreadyEnteredError);
+    });
+
+    it("accepts the same identity number in a different race", async () => {
+      await enterAndConfirm({ ...ENTRY, eventId: 5103 });
+      await expect(vault.submit({ ...ENTRY, eventId: 5104 })).resolves.toMatchObject({
+        participantId: expect.any(String),
+      });
+    });
+
+    it("accepts a different person in the same race", async () => {
+      await enterAndConfirm({ ...ENTRY, eventId: 5105 });
+      await expect(
+        vault.submit({ ...ENTRY, eventId: 5105, nationalId: "3174012509900002" }),
+      ).resolves.toBeDefined();
+    });
+
+    it("does not let an unconfirmed attempt lock the runner out", async () => {
+      // A declined payment leaves an unconfirmed row. The retry must go through,
+      // and so must the one after that.
+      await vault.submit({ ...ENTRY, eventId: 5106 });
+      await vault.submit({ ...ENTRY, eventId: 5106 });
+      const third = await vault.submit({ ...ENTRY, eventId: 5106 });
+      expect(await rowsFor(5106)).toBe(3);
+
+      // Once one of them is confirmed, the rule applies.
+      await vault.confirm(third.participantId, nextToken++, "6".repeat(64));
+      await expect(vault.submit({ ...ENTRY, eventId: 5106 })).rejects.toThrow(AlreadyEnteredError);
+    });
+
+    it("stores a keyed index that reveals neither the number nor the race", async () => {
+      const r = await vault.submit({ ...ENTRY, eventId: 5107 });
+      const { rows } = await pool.query<{ identity_index: Buffer }>(
+        "SELECT identity_index FROM participants WHERE id = $1",
+        [r.participantId],
+      );
+      const stored = rows[0]?.identity_index as Buffer;
+
+      expect(stored).toHaveLength(32);
+      expect(stored.includes(Buffer.from(PERSON.nationalId, "utf8"))).toBe(false);
+      expect(stored.equals(identityIndex(indexKey, 5107, PERSON.nationalId))).toBe(true);
+      // Same person, another race: unrelated bytes.
+      expect(stored.equals(identityIndex(indexKey, 5108, PERSON.nationalId))).toBe(false);
+    });
+
+    it("does not block on a confirmed row from before migration 011, which has no index", async () => {
+      // The honest limit: computing an index for an old row needs its decrypted
+      // number, so such rows are invisible to the check rather than guessed at.
+      const old = await enterAndConfirm({ ...ENTRY, eventId: 5109 });
+      await pool.query("UPDATE participants SET identity_index = NULL WHERE id = $1", [
+        old.participantId,
+      ]);
+      await expect(vault.submit({ ...ENTRY, eventId: 5109 })).resolves.toBeDefined();
+    });
+
+    it("refuses an index that is not 32 bytes at the database", async () => {
+      const r = await vault.submit({ ...ENTRY, eventId: 5110 });
+      await expect(
+        pool.query("UPDATE participants SET identity_index = $1 WHERE id = $2", [
+          Buffer.from(PERSON.nationalId, "utf8"),
+          r.participantId,
+        ]),
+      ).rejects.toThrow(/identity_index_is_a_sha256_hmac/);
     });
   });
 });

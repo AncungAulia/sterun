@@ -44,6 +44,35 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ PORT: "http" })).toThrow(/expected an integer/);
   });
 
+  describe("PII_INDEX_KEY (STE-51)", () => {
+    const VAULT = {
+      DATABASE_URL: "postgres://sterun:sterun@127.0.0.1:55432/sterun",
+      PII_KEYS: `1:${"cd".repeat(32)}`,
+      PII_ACTIVE_KEY_ID: "1",
+    };
+
+    it("is required whenever the vault is on", () => {
+      // Optional would mean a deployment that forgot one variable quietly
+      // accepts a second entry by the same person.
+      expect(() => loadConfig(VAULT)).toThrow(/PII_INDEX_KEY/);
+    });
+
+    it("is loaded as 32 bytes next to the keyring", () => {
+      const hex = "ef".repeat(32);
+      expect(loadConfig({ ...VAULT, PII_INDEX_KEY: hex }).vault?.indexKey.toString("hex")).toBe(hex);
+    });
+
+    it("refuses a malformed key without printing it", () => {
+      const bad = "not-a-key-but-could-have-been-one";
+      expect(() => loadConfig({ ...VAULT, PII_INDEX_KEY: bad })).toThrow(/64 lowercase hex/);
+      expect(() => loadConfig({ ...VAULT, PII_INDEX_KEY: bad })).not.toThrow(new RegExp(bad));
+    });
+
+    it("is not needed when the vault is off", () => {
+      expect(loadConfig({}).vault).toBeUndefined();
+    });
+  });
+
   it("binds to loopback by default — deployment opts in to exposure", () => {
     expect(loadConfig({}).host).toBe("127.0.0.1");
     expect(loadConfig({ HOST: "0.0.0.0" }).host).toBe("0.0.0.0");

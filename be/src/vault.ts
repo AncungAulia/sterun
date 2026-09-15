@@ -15,6 +15,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { identityIndex } from "./crypto/blind-index.js";
 import { aad, decrypt, encrypt } from "./crypto/envelope.js";
 import type { Keyring } from "./crypto/keyring.js";
 import { nameFragment } from "./roster/name-fragment.js";
@@ -156,10 +157,26 @@ export class AlreadyConfirmedError extends Error {
   }
 }
 
+/**
+ * The same identity number already has a confirmed entry in this race (STE-51).
+ * Says which race and nothing about the person or the other entry.
+ */
+export class AlreadyEnteredError extends Error {
+  constructor(readonly eventId: number) {
+    super(
+      "this identity number already has an entry in this race; one person can enter one " +
+        "category of a race",
+    );
+    this.name = "AlreadyEnteredError";
+  }
+}
+
 export class Vault {
   constructor(
     private readonly pool: Pool,
     private readonly keyring: Keyring,
+    /** PII_INDEX_KEY. See src/crypto/blind-index.ts. */
+    private readonly indexKey: Buffer,
   ) {}
 
   /**
@@ -181,13 +198,30 @@ export class Vault {
     // needs a "decrypt the name" path to build a roster (STE-16).
     const fragment = nameFragment(input.name);
 
+    // STE-51: one person, one entry per race. Only a CONFIRMED entry refuses:
+    // an unconfirmed row is a payment that has not happened yet, and a runner
+    // retrying after a declined payment must not be locked out by their own
+    // first attempt.
+    //
+    // Checked here, at submit, and not enforced at confirm: confirm runs after
+    // the runner has paid on chain, and refusing then would leave a paid record
+    // with no vault row and no pass. The cost is a narrow window — two entries
+    // whose payments overlap both get through — which only the contract could
+    // close, and the contract only ever sees a salted hash.
+    const identity = identityIndex(this.indexKey, input.eventId, input.nationalId);
+    const taken = await this.pool.query(
+      "SELECT 1 FROM participants WHERE identity_index = $1 AND token_id IS NOT NULL LIMIT 1",
+      [identity],
+    );
+    if ((taken.rowCount ?? 0) > 0) throw new AlreadyEnteredError(input.eventId);
+
     await this.pool.query(
       `INSERT INTO participants
          (id, name_enc, national_id_enc, emergency_contact_enc, name_fragment_enc,
           salt, totp_secret, participant_hash, event_id, category_id, runner_address,
           add_ons, id_type, bib_name, email_enc, phone_enc, gender_enc,
-          date_of_birth_enc, emergency_contact_name_enc)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+          date_of_birth_enc, emergency_contact_name_enc, identity_index)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [
         id,
         encrypt(this.keyring, input.name, aad("pii.name", id)),
@@ -213,6 +247,7 @@ export class Vault {
         encrypt(this.keyring, input.gender, aad("pii.gender", id)),
         encrypt(this.keyring, input.dateOfBirth, aad("pii.date_of_birth", id)),
         encrypt(this.keyring, input.emergencyContactName, aad("pii.emergency_contact_name", id)),
+        identity,
       ],
     );
 

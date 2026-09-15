@@ -56,16 +56,17 @@ const PERSON = {
 describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
   let keyring: Keyring;
+  let indexKey: Buffer;
   let close: () => Promise<void>;
   let app: FastifyInstance;
   let vault: Vault;
   let chain: FakeChain;
 
   beforeEach(async () => {
-    ({ pool, keyring, close } = await freshDatabase());
+    ({ pool, keyring, indexKey, close } = await freshDatabase());
     chain = new FakeChain(ADDRESSES);
     const reader = new ChainReader(chain, ADDRESSES);
-    vault = new Vault(pool, keyring);
+    vault = new Vault(pool, keyring, indexKey);
 
     chain.addEvent({
       eventId: 0,
@@ -113,6 +114,9 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
     const submitted = await vault.submit({
       ...PERSON,
       name,
+      // One token, one person: since STE-51 one identity number cannot hold two
+      // confirmed entries in a race, and these fixtures are different runners.
+      nationalId: `31740125${String(tokenId).padStart(8, "0")}`,
       eventId,
       categoryId: 0,
       runnerAddress: kp.publicKey(),
@@ -324,6 +328,8 @@ describe.skipIf(!DATABASE_URL)(`roster bundle (${DATABASE_URL ? "postgres" : SKI
       await enrol(runnerKp, 0, 0);
       const submitted = await vault.submit({
         ...PERSON,
+        // Runner B is another person than the runner enrolled above.
+        nationalId: "3174012509900002",
         eventId: 0,
         categoryId: 0,
         runnerAddress: runnerBKp.publicKey(),
