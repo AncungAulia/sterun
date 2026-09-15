@@ -14,7 +14,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { readClient } from "@/lib/sterun";
+import { readClient } from "@/lib/chain/sterun";
 
 import { useChainWrite, type Actor } from "./useChainWrite";
 

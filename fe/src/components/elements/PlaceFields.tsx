@@ -25,12 +25,12 @@
  * distance calculation, which is exact, free and needs no list of names. These
  * are for reading, and for filtering by region.
  */
-import { Field, FieldMessage, LabelText } from "@/components/elements/Field";
-import { SearchableSelect } from "@/components/elements/SearchableSelect";
+import { Field, FieldMessage, LabelText } from "@/components/form/Field";
+import { SearchableSelect } from "@/components/form/SearchableSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCities } from "@/hooks/useCities";
-import { countries, hasCities, provincesOf } from "@/lib/places";
+import { countries, hasCities, provincesOf } from "@/lib/place/places";
 
 export interface Place {
   venue: string;

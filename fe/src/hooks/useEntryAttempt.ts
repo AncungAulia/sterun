@@ -29,12 +29,12 @@ import { eventKeys } from "@/hooks/useEvents";
 import { runnerRecordsKey } from "@/hooks/useRunnerRecords";
 import { susdKey } from "@/hooks/useSusdBalance";
 import { saveEntry } from "@/lib/entry-store";
-import { friendlyError, isDeclined, isNoAnswer } from "@/lib/errors";
-import type { EventSummary } from "@/lib/events";
+import { friendlyError, isDeclined, isNoAnswer } from "@/lib/api/errors";
+import type { EventSummary } from "@/lib/event/events";
 import { submitParticipant, type Submitted } from "@/lib/participants";
-import { readClient } from "@/lib/sterun";
-import { readSusdBalance } from "@/lib/susd";
-import { signMessage, signTransaction } from "@/lib/wallet";
+import { readClient } from "@/lib/chain/sterun";
+import { readSusdBalance } from "@/lib/wallet/susd";
+import { signMessage, signTransaction } from "@/lib/wallet/kit";
 import {
   INITIAL_ATTEMPT,
   attemptReducer,

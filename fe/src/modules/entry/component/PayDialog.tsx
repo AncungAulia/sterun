@@ -34,7 +34,7 @@ import { formatAmount, formatPrice } from "@/utils/format";
 
 import type { AttemptState } from "../attempt";
 
-import { GetTestSusd } from "./GetTestSusd";
+import { GetTestSusd } from "@/components/wallet/GetTestSusd";
 
 export interface PayDialogProps {
   open: boolean;

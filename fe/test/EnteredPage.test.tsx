@@ -24,13 +24,13 @@ const confetti = vi.hoisted(() => vi.fn());
 const fireConfetti = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/confetti", () => ({ fireConfetti }));
 
-vi.mock("@/lib/sterun", () => ({ readClient: { recordOf } }));
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/chain/sterun", () => ({ readClient: { recordOf } }));
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   getEventSummary,
 }));
 vi.mock("@/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

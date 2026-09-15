@@ -21,8 +21,8 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { Help } from "@/components/elements/Help";
-import { FieldMessage, LabelText } from "@/components/elements/Field";
+import { Help } from "@/components/form/Help";
+import { FieldMessage, LabelText } from "@/components/form/Field";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";

@@ -4,8 +4,8 @@
  */
 import type { EventStatus, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
-import type { EventSummary } from "@/lib/events";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventSummary } from "@/lib/event/events";
+import type { EventMetadata } from "@/lib/event/metadata";
 
 /** Stroops in one sUSD. */
 export const SUSD = 10_000_000n;

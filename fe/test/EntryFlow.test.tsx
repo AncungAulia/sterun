@@ -14,17 +14,17 @@ const fetchEventMetadata = vi.hoisted(() => vi.fn());
 const listAddOns = vi.hoisted(() => vi.fn());
 const recordsOfDetailed = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   getEventSummary,
 }));
-vi.mock("@/lib/sterun", () => ({ readClient: { listAddOns, recordsOfDetailed } }));
-vi.mock("@/lib/metadata", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/metadata")>()),
+vi.mock("@/lib/chain/sterun", () => ({ readClient: { listAddOns, recordsOfDetailed } }));
+vi.mock("@/lib/event/metadata", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/metadata")>()),
   fetchEventMetadata,
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),
@@ -36,8 +36,8 @@ vi.mock("@/lib/wallet", () => ({
 }));
 
 import { useWallet } from "@/hooks/useWallet";
-import type { EventSummary } from "@/lib/events";
-import type { MetadataResult } from "@/lib/metadata";
+import type { EventSummary } from "@/lib/event/events";
+import type { MetadataResult } from "@/lib/event/metadata";
 import { EntryFlow } from "@/modules/entry/EntryFlow";
 import type { EventStatus, SterunAddOn, SterunCategory, SterunRecord } from "@sterunxyz/sdk";
 

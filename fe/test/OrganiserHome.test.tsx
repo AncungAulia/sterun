@@ -7,21 +7,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrganiserHome } from "@/modules/organiser/OrganiserHome";
 import { NeedsProvider } from "@/modules/organiser/component/NeedsContext";
 import type { Need } from "@/modules/organiser/needs";
-import { WalletGate } from "@/components/layouts/WalletGate";
+import { WalletGate } from "@/components/wallet/WalletGate";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWallet } from "@/hooks/useWallet";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import type { EventStatus, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 const listEvents = vi.hoisted(() => vi.fn());
 /* The organiser allowlist (STE-36). Allowed unless a test says otherwise. */
 const isOrganiser = vi.hoisted(() => vi.fn(async () => true));
 
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
 }));
-vi.mock("@/lib/sterun", () => ({ readClient: { isOrganiser } }));
+vi.mock("@/lib/chain/sterun", () => ({ readClient: { isOrganiser } }));
 /*
   The dashboard reads the index for each race's entries-per-day line, and
   `vitest.config.ts` points NEXT_PUBLIC_API_URL at the live API. A refusal
@@ -30,11 +30,11 @@ vi.mock("@/lib/sterun", () => ({ readClient: { isOrganiser } }));
   A request that was never answered is silence, not a finding, so no need is
   invented from it and every row still draws.
 */
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
   apiFetch: vi.fn(() => Promise.reject(new Error("the index is unreachable"))),
 }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

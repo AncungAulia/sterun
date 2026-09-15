@@ -20,7 +20,7 @@
  */
 import Link from "next/link";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 import { useRunnerRecords } from "@/hooks/useRunnerRecords";

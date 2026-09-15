@@ -10,8 +10,8 @@
  * the rest of the attempt: the hash is what `enter` pays for, the salt is the
  * runner's receipt code, the secret is their pass.
  */
-import { apiFetch } from "./api";
-import type { MessageSigner } from "./upload";
+import { apiFetch } from "@/lib/api/client";
+import type { MessageSigner } from "@/lib/api/upload";
 import type { ParticipantBody } from "@/modules/entry/details";
 
 export interface Submitted {

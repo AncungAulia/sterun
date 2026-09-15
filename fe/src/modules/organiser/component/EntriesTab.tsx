@@ -18,7 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { useEventAddOns } from "@/hooks/useEvents";
 import { useRaceRecords, useRaceRecordsFailed } from "@/hooks/useRaceRecords";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import type { IndexedRecord } from "@/lib/records";
 import { formatEventDate, shortAddress } from "@/utils/format";
 

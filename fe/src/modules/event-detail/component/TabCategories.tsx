@@ -18,8 +18,8 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/elements/EmptyState";
-import { NonRefundableNotice } from "@/components/elements/NonRefundableNotice";
+import { EmptyState } from "@/components/feedback/EmptyState";
+import { NonRefundableNotice } from "@/components/feedback/NonRefundableNotice";
 import { formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterunxyz/sdk";
 

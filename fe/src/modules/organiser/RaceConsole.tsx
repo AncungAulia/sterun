@@ -11,8 +11,8 @@
  * but its organiser, so it gets one sentence and a way back, not three tabs of
  * buttons that would each fail at the wallet prompt.
  */
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
-import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
+import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
 import { useEvent } from "@/hooks/useEvents";
 import { useWallet } from "@/hooks/useWallet";
 

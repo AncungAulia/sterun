@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildEventDocument, documentHash, type EventDocumentDraft } from "@/lib/event-document";
-import { fetchEventMetadata, gunStartConflict } from "@/lib/metadata";
+import { fetchEventMetadata, gunStartConflict } from "@/lib/event/metadata";
 
 /** 2026-10-04T06:00+07:00 */
 const STARTS_AT = 1_791_068_400n;

@@ -6,8 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
-import { AREA_STORAGE_KEY, type Area } from "@/lib/area";
-import type { EventMetadata } from "@/lib/metadata";
+import { AREA_STORAGE_KEY, type Area } from "@/lib/place/area";
+import type { EventMetadata } from "@/lib/event/metadata";
 import { Directory } from "@/modules/directory/Directory";
 
 import { category, daysFromNow, metadata, summary } from "./fixtures/directory";
@@ -15,12 +15,12 @@ import { category, daysFromNow, metadata, summary } from "./fixtures/directory";
 const listEvents = vi.hoisted(() => vi.fn());
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
 }));
-vi.mock("@/lib/metadata", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/metadata")>()),
+vi.mock("@/lib/event/metadata", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/metadata")>()),
   fetchEventMetadata,
 }));
 

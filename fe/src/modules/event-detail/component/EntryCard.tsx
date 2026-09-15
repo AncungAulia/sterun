@@ -35,8 +35,8 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
-import { EXPLORER_BASE } from "@/lib/env";
+import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
+import { EXPLORER_BASE } from "@/lib/chain/env";
 import { formatPrice, shortAddress } from "@/utils/format";
 import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 

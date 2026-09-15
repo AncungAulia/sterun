@@ -16,7 +16,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api/client";
 
 /** The backend's own maximum page (`MAX_PAGE` in be/src/routes/directory.ts). */
 const PAGE = 200;

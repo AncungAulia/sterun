@@ -8,9 +8,9 @@
  */
 import type { SterunCategory } from "@sterunxyz/sdk";
 
-import type { Area, Place } from "@/lib/area";
-import { sortEvents, type EventSummary } from "@/lib/events";
-import type { EventMetadata } from "@/lib/metadata";
+import type { Area, Place } from "@/lib/place/area";
+import { sortEvents, type EventSummary } from "@/lib/event/events";
+import type { EventMetadata } from "@/lib/event/metadata";
 import { formatPrice } from "@/utils/format";
 import { haversineKm, type Coordinates } from "@/utils/geo";
 

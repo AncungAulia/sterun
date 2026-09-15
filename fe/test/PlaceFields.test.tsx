@@ -15,12 +15,12 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PlaceFields, EMPTY_PLACE, type Place } from "@/components/elements/PlaceFields";
-import { provincesOf } from "@/lib/places";
+import { provincesOf } from "@/lib/place/places";
 
 const fetchCities = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/places", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/places")>()),
+vi.mock("@/lib/place/places", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/place/places")>()),
   fetchCities,
 }));
 

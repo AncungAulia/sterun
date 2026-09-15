@@ -5,12 +5,12 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWallet } from "@/hooks/useWallet";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import { StatusAction } from "@/modules/organiser/component/StatusAction";
 
 const readClient = vi.hoisted(() => ({ setEventStatus: vi.fn() }));
-vi.mock("@/lib/sterun", () => ({ readClient }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/chain/sterun", () => ({ readClient }));
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

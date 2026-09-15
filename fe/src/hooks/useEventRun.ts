@@ -37,12 +37,12 @@ import {
   useSetEventStatus,
 } from "@/hooks/useOrganiser";
 import { useWallet } from "@/hooks/useWallet";
-import { friendlyError } from "@/lib/errors";
-import { fetchEventMetadata } from "@/lib/metadata";
-import { PlainError } from "@/lib/plain-error";
+import { friendlyError } from "@/lib/api/errors";
+import { fetchEventMetadata } from "@/lib/event/metadata";
+import { PlainError } from "@/lib/api/plain-error";
 import { clearRunProgress, loadRunProgress, saveRunProgress } from "@/lib/run-progress";
-import { uploadEventFile } from "@/lib/upload";
-import { signMessage } from "@/lib/wallet";
+import { uploadEventFile } from "@/lib/api/upload";
+import { signMessage } from "@/lib/wallet/kit";
 import type { PlannedCategory } from "@/modules/organiser/component/StepCategoryPlan";
 import type { PublishedDocument } from "@/modules/organiser/component/DocumentFallback";
 import { addOnUnits, type PlannedAddOn } from "@/modules/organiser/addons";

@@ -29,10 +29,10 @@
  */
 import { useState } from "react";
 
-import { Field } from "@/components/elements/Field";
+import { Field } from "@/components/form/Field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchEventMetadata } from "@/lib/metadata";
+import { fetchEventMetadata } from "@/lib/event/metadata";
 
 export interface PublishedDocument {
   uri: string;

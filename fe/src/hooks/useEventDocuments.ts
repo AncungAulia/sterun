@@ -10,8 +10,8 @@
 import { useQueries } from "@tanstack/react-query";
 
 import { metadataQuery } from "@/hooks/useEventMetadata";
-import type { EventSummary } from "@/lib/events";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventSummary } from "@/lib/event/events";
+import type { EventMetadata } from "@/lib/event/metadata";
 
 export interface EventDocuments {
   /** Event id to its verified document, or null when there is none to show. */

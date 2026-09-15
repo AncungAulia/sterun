@@ -6,17 +6,17 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWallet } from "@/hooks/useWallet";
-import { apiFetch } from "@/lib/api";
-import type { EventSummary } from "@/lib/events";
+import { apiFetch } from "@/lib/api/client";
+import type { EventSummary } from "@/lib/event/events";
 import { ScannersTab } from "@/modules/organiser/component/ScannersTab";
 
 const readClient = vi.hoisted(() => ({ addScanner: vi.fn(), removeScanner: vi.fn() }));
-vi.mock("@/lib/sterun", () => ({ readClient }));
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
+vi.mock("@/lib/chain/sterun", () => ({ readClient }));
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
   apiFetch: vi.fn(),
 }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

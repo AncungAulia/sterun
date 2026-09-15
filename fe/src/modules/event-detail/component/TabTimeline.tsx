@@ -44,7 +44,7 @@ import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatEventDateTime, formatEventTime } from "@/utils/format";
 import { mapsLink } from "@/utils/geo";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventMetadata } from "@/lib/event/metadata";
 
 /** The phases in the order they happen, named the way a runner says them. */
 const PHASE_LABELS: Record<string, { starts: string; ends: string }> = {

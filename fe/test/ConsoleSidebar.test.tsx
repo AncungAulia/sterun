@@ -6,12 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConsoleSidebar } from "@/modules/organiser/component/ConsoleSidebar";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import type { EventStatus, SterunEvent } from "@sterunxyz/sdk";
 
 const listEvents = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
 }));
 

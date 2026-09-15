@@ -10,7 +10,7 @@ import { metadata, summary } from "./fixtures/directory";
 
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/metadata", () => ({ fetchEventMetadata }));
+vi.mock("@/lib/event/metadata", () => ({ fetchEventMetadata }));
 
 const HASH = "ab".repeat(32);
 

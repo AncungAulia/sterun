@@ -12,7 +12,7 @@
  * The wallet itself is not a case here: `EntryFlow` wraps the whole page in
  * `WalletGate`.
  */
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import type { SterunRecord } from "@sterunxyz/sdk";
 
 export type Gate =

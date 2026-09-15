@@ -7,8 +7,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/wallet", () => ({ signMessage: vi.fn(), signTransaction: vi.fn() }));
-vi.mock("@/lib/sterun", () => ({ readClient: {} }));
+vi.mock("@/lib/wallet/kit", () => ({ signMessage: vi.fn(), signTransaction: vi.fn() }));
+vi.mock("@/lib/chain/sterun", () => ({ readClient: {} }));
 
 import { useEntryAttempt, type EntryAttemptDeps, type EntryPlan } from "@/hooks/useEntryAttempt";
 import type { ChainAfter } from "@/modules/entry/enter-failure";

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Stepper } from "@/components/elements/Stepper";
+import { Stepper } from "@/components/form/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

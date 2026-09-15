@@ -30,7 +30,7 @@
  */
 import type { ReactNode } from "react";
 
-import { WalletGate } from "@/components/layouts/WalletGate";
+import { WalletGate } from "@/components/wallet/WalletGate";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useNeeds } from "@/hooks/useNeeds";
 import { useWallet } from "@/hooks/useWallet";

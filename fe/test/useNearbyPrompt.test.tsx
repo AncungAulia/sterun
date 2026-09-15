@@ -14,7 +14,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useNearbyPrompt } from "@/hooks/useNearbyPrompt";
-import { readStoredPlace } from "@/lib/area";
+import { readStoredPlace } from "@/lib/place/area";
 
 const getCurrentPosition = vi.fn();
 
@@ -89,7 +89,7 @@ describe("useNearbyPrompt", () => {
       });
       renderProbe();
 
-      const { storePlace } = await import("@/lib/area");
+      const { storePlace } = await import("@/lib/place/area");
       act(() => {
         storePlace({ mode: "area", countryCode: "ID", country: "Indonesia", province: "DI Yogyakarta" });
       });

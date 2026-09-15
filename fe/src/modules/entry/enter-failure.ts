@@ -21,8 +21,8 @@
  * Declines and no-answers are read first, from the error, because neither is a
  * refusal and the chain has nothing to add to them.
  */
-import { friendlyError, isDeclined, isNoAnswer } from "@/lib/errors";
-import { shortfall, type SusdBalance } from "@/lib/susd";
+import { friendlyError, isDeclined, isNoAnswer } from "@/lib/api/errors";
+import { shortfall, type SusdBalance } from "@/lib/wallet/susd";
 import type { EventStatus } from "@sterunxyz/sdk";
 
 /** The chain, re-read after a refusal. `useEntryAttempt` assembles it. */

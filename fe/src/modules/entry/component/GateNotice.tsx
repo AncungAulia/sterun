@@ -13,7 +13,7 @@ import { BadgeCheckIcon, BanIcon, CircleOffIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import { cn } from "@/utils/cn";
 
 import type { Gate } from "../gate";

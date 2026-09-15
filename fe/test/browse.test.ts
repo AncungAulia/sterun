@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Area, Nearby } from "@/lib/area";
+import type { Area, Nearby } from "@/lib/place/area";
 import {
   entriesLine,
   inArea,

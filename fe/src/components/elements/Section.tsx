@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { Help } from "@/components/elements/Help";
+import { Help } from "@/components/form/Help";
 
 /**
  * A heading, the one line that has to be read, and the rest behind an info

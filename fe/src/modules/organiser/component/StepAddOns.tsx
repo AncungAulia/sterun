@@ -37,8 +37,8 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 
 import { CreatableSelect } from "@/components/elements/CreatableSelect";
 import { FileField } from "@/components/elements/FileField";
-import { LabelRow } from "@/components/elements/Field";
-import { Help } from "@/components/elements/Help";
+import { LabelRow } from "@/components/form/Field";
+import { Help } from "@/components/form/Help";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";

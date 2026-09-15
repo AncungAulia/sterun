@@ -24,15 +24,15 @@
  */
 import Link from "next/link";
 
-import { EmptyState } from "@/components/elements/EmptyState";
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { EmptyState } from "@/components/feedback/EmptyState";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { useEvents } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { useCanCreateEvents } from "@/hooks/useOrganiser";
 import { useRaceRecords } from "@/hooks/useRaceRecords";
 import { useWallet } from "@/hooks/useWallet";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import { entriesPerDay, trending } from "@/lib/records";
 import { formatAmount } from "@/utils/format";
 

@@ -41,8 +41,8 @@
 import { SearchIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { EmptyState } from "@/components/elements/EmptyState";
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { EmptyState } from "@/components/feedback/EmptyState";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useArea } from "@/hooks/useArea";

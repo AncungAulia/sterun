@@ -8,7 +8,7 @@
  * Degrades to the truncated hash when no explorer is configured. A hash nobody
  * can click is still a hash somebody can paste, which beats hiding it.
  */
-import { EXPLORER_BASE } from "@/lib/env";
+import { EXPLORER_BASE } from "@/lib/chain/env";
 
 export function Receipt({ txHash, label = "Receipt" }: { txHash: string; label?: string }) {
   if (!EXPLORER_BASE) {

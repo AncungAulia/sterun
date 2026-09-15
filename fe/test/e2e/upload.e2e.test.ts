@@ -27,7 +27,7 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 
 import { documentHash } from "@/lib/event-document";
-import { uploadEventFile } from "@/lib/upload";
+import { uploadEventFile } from "@/lib/api/upload";
 
 const live = process.env.STERUN_E2E === "1" ? describe : describe.skip;
 

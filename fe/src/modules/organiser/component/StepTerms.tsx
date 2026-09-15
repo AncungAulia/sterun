@@ -30,7 +30,7 @@
  * empty ones or leave out the one that mattered. The placeholder shows the
  * shape without imposing it.
  */
-import { TextAreaField } from "@/components/elements/Field";
+import { TextAreaField } from "@/components/form/Field";
 import { Section } from "@/components/elements/Section";
 
 const PLACEHOLDER = `General

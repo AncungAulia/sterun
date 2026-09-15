@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { EXPLORER_BASE } from "@/lib/env";
+import { EXPLORER_BASE } from "@/lib/chain/env";
 import { formatEventDateTime, shortAddress } from "@/utils/format";
 import { mapsLink } from "@/utils/geo";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventMetadata } from "@/lib/event/metadata";
 
 /**
  * One fact, with a glyph for the kind of fact it is.

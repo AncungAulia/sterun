@@ -13,7 +13,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { TabTimeline } from "@/modules/event-detail/component/TabTimeline";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventMetadata } from "@/lib/event/metadata";
 
 /** 2026-11-21T05:00+07:00, the same gun start the other event tests use. */
 const RACE_DAY = 1_795_824_000n;

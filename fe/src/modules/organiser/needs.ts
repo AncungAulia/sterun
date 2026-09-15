@@ -17,7 +17,7 @@
  * A cancelled race needs nothing. There is no race to check anyone into and no
  * result to record.
  */
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 
 const DAY = 86_400n;
 

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import { entryGate } from "@/modules/entry/gate";
 import type { EventStatus, SterunCategory, SterunRecord } from "@sterunxyz/sdk";
 

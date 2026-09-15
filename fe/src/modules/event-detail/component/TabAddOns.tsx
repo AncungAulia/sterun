@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { joinAddOns, type JoinedAddOn } from "@/lib/event/add-ons";
 import { formatPrice } from "@/utils/format";
-import type { MetadataAddOn } from "@/lib/metadata";
+import type { MetadataAddOn } from "@/lib/event/metadata";
 import type { SterunAddOn } from "@sterunxyz/sdk";
 
 /** The price to lead with. Sizes of one item are priced the same. */

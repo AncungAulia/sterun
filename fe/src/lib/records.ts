@@ -10,7 +10,7 @@
  * Numbers on the wire are strings where they are u64 or i128, because a JSON
  * number is a double and these are timestamps and money.
  */
-import { apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api/client";
 
 export type RecordState = "Entered" | "RacepackClaimed" | "Finished" | "Dnf";
 

@@ -4,10 +4,10 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WalletGate } from "@/components/layouts/WalletGate";
+import { WalletGate } from "@/components/wallet/WalletGate";
 import { CreateEvent } from "@/modules/organiser/CreateEvent";
 import { useWallet } from "@/hooks/useWallet";
-import { provincesOf } from "@/lib/places";
+import { provincesOf } from "@/lib/place/places";
 
 const createEvent = vi.hoisted(() => vi.fn(async () => ({ value: 4, txHash: "tx1", ledger: 1 })));
 const addCategory = vi.hoisted(() => vi.fn(async () => ({ value: 0, txHash: "tx2", ledger: 1 })));
@@ -33,19 +33,19 @@ const uploadEventFile = vi.hoisted(() => vi.fn());
  */
 const fetchCities = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/sterun", () => ({
+vi.mock("@/lib/chain/sterun", () => ({
   readClient: { createEvent, addCategory, setEventStatus, isOrganiser },
 }));
 vi.mock("@/hooks/useExistingEventNames", () => ({ useExistingEventNames: existingNames }));
-vi.mock("@/lib/places", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/places")>()),
+vi.mock("@/lib/place/places", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/place/places")>()),
   fetchCities,
 }));
-vi.mock("@/lib/metadata", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/metadata")>()),
+vi.mock("@/lib/event/metadata", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/metadata")>()),
   fetchEventMetadata,
 }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),
@@ -55,8 +55,8 @@ vi.mock("@/lib/wallet", () => ({
   signMessage: vi.fn(async () => "c2ln"),
   walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
-vi.mock("@/lib/upload", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/upload")>()),
+vi.mock("@/lib/api/upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/upload")>()),
   uploadEventFile,
 }));
 

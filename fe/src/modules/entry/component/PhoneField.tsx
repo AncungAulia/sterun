@@ -31,7 +31,7 @@ import en from "react-phone-number-input/locale/en";
 import { CheckIcon, ChevronsUpDownIcon } from "lucide-react";
 import { useState, type ComponentProps, type ReactNode } from "react";
 
-import { FieldMessage, LabelRow } from "@/components/elements/Field";
+import { FieldMessage, LabelRow } from "@/components/form/Field";
 import { Button } from "@/components/ui/button";
 import {
   Command,

@@ -27,8 +27,8 @@ const ADDRESS = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
 const SHORT = shortAddress(ADDRESS);
 
 const listEvents = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/org" }));

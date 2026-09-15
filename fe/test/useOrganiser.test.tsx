@@ -24,10 +24,10 @@ const removeScanner = vi.hoisted(() =>
   vi.fn(async () => ({ value: undefined, txHash: "t", ledger: 1 })),
 );
 
-vi.mock("@/lib/sterun", () => ({
+vi.mock("@/lib/chain/sterun", () => ({
   readClient: { createEvent, addCategory, setEventStatus, addScanner, removeScanner },
 }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

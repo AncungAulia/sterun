@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EventDetail } from "@/modules/event-detail/EventDetail";
-import type { EventSummary } from "@/lib/events";
-import type { MetadataResult } from "@/lib/metadata";
+import type { EventSummary } from "@/lib/event/events";
+import type { MetadataResult } from "@/lib/event/metadata";
 import { useWallet } from "@/hooks/useWallet";
 import type { EventStatus, SterunAddOn, SterunCategory, SterunEvent, SterunRecord } from "@sterunxyz/sdk";
 
@@ -21,12 +21,12 @@ const listAddOns = vi.hoisted(() => vi.fn(async (): Promise<SterunAddOn[]> => []
 /* STE-21: the page asks the chain whether the connected wallet already entered. */
 const recordsOfDetailed = vi.hoisted(() => vi.fn(async (): Promise<SterunRecord[]> => []));
 
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   getEventSummary,
 }));
-vi.mock("@/lib/sterun", () => ({ readClient: { listAddOns, recordsOfDetailed } }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/chain/sterun", () => ({ readClient: { listAddOns, recordsOfDetailed } }));
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),
@@ -36,8 +36,8 @@ vi.mock("@/lib/wallet", () => ({
   signMessage: vi.fn(),
   walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
-vi.mock("@/lib/metadata", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/metadata")>()),
+vi.mock("@/lib/event/metadata", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/metadata")>()),
   fetchEventMetadata,
 }));
 

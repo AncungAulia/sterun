@@ -8,12 +8,12 @@ import { useWallet } from "@/hooks/useWallet";
 
 const uploadEventFile = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   signMessage: vi.fn(async () => "c2ln"),
   walletErrorMessage: (error: unknown) => String(error),
 }));
-vi.mock("@/lib/upload", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/upload")>()),
+vi.mock("@/lib/api/upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/upload")>()),
   uploadEventFile,
 }));
 

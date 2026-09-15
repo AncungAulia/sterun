@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventMetadata } from "@/lib/event/metadata";
 import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 import { EntryCard } from "./component/EntryCard";

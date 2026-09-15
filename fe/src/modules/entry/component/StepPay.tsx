@@ -15,17 +15,17 @@
 import { Fragment } from "react";
 import { formatPhoneNumberIntl } from "react-phone-number-input";
 
-import { NonRefundableNotice } from "@/components/elements/NonRefundableNotice";
+import { NonRefundableNotice } from "@/components/feedback/NonRefundableNotice";
 import { Button } from "@/components/ui/button";
 import { useSusdBalance } from "@/hooks/useSusdBalance";
-import { shortfall, type SusdBalance } from "@/lib/susd";
+import { shortfall, type SusdBalance } from "@/lib/wallet/susd";
 import { formatAmount, formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterunxyz/sdk";
 
 import type { Basket, Selection } from "../basket";
 import { GENDERS, ID_TYPES, formatDateOfBirth, maskIdNumber, type RunnerDetails } from "../details";
 
-import { GetTestSusd } from "./GetTestSusd";
+import { GetTestSusd } from "@/components/wallet/GetTestSusd";
 import { StepCard } from "./StepCard";
 
 type Row = [label: string, value: string];

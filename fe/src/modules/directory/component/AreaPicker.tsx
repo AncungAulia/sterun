@@ -21,7 +21,7 @@ import { Suspense, lazy, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { placeLabel, type Area, type Place } from "@/lib/area";
+import { placeLabel, type Area, type Place } from "@/lib/place/area";
 
 const AreaForm = lazy(() => import("./AreaForm").then((module) => ({ default: module.AreaForm })));
 

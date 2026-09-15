@@ -33,8 +33,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useWallet } from "@/hooks/useWallet";
-import { PlainError } from "@/lib/plain-error";
-import { signTransaction } from "@/lib/wallet";
+import { PlainError } from "@/lib/api/plain-error";
+import { signTransaction } from "@/lib/wallet/kit";
 
 /** What a caller is waiting for right now. */
 export type WritePhase = "idle" | "signing" | "confirming";

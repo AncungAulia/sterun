@@ -41,14 +41,14 @@ import Link from "next/link";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
 import { fireConfetti } from "@/lib/confetti";
 import { markReceiptSaved, readEntry, type StoredEntry } from "@/lib/entry-store";
-import { readClient } from "@/lib/sterun";
+import { readClient } from "@/lib/chain/sterun";
 import { formatEventDate } from "@/utils/format";
 
 import { Bib } from "./component/Bib";

@@ -23,8 +23,8 @@ import {
 import { eventKeys } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { useSetEventStatus } from "@/hooks/useOrganiser";
-import type { EventSummary } from "@/lib/events";
-import { friendlyError } from "@/lib/errors";
+import type { EventSummary } from "@/lib/event/events";
+import { friendlyError } from "@/lib/api/errors";
 
 import { statusAction } from "../status-action";
 

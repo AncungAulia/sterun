@@ -19,7 +19,7 @@ import { CalendarDaysIcon, MapPinIcon, TicketIcon } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
 
-import { EventStatusBadge } from "@/components/elements/EventStatusBadge";
+import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
 import { cn } from "@/utils/cn";
 import { formatEventDate } from "@/utils/format";
 

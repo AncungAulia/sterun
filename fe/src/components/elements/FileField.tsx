@@ -32,12 +32,12 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { FieldMessage, LabelRow } from "@/components/elements/Field";
+import { FieldMessage, LabelRow } from "@/components/form/Field";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
-import { friendlyError } from "@/lib/errors";
-import { MAX_FILE_BYTES, uploadEventFile } from "@/lib/upload";
-import { signMessage } from "@/lib/wallet";
+import { friendlyError } from "@/lib/api/errors";
+import { MAX_FILE_BYTES, uploadEventFile } from "@/lib/api/upload";
+import { signMessage } from "@/lib/wallet/kit";
 
 /**
  * What the field is for, which decides both what it accepts and how it shows

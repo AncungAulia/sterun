@@ -19,7 +19,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Area, Place } from "@/lib/area";
+import type { Area, Place } from "@/lib/place/area";
 import { AreaPicker } from "@/modules/directory/component/AreaPicker";
 
 vi.setConfig({ testTimeout: 20_000 });

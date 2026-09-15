@@ -11,7 +11,7 @@ import { saveRunProgress } from "@/lib/run-progress";
 // them run in this file, but `useChainWrite` calls `useMutation` on render
 // regardless, so the client and the wallet plumbing below exist only to let
 // the hook mount without touching the network.
-vi.mock("@/lib/sterun", () => ({
+vi.mock("@/lib/chain/sterun", () => ({
   readClient: {
     createEvent: vi.fn(),
     addCategory: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("@/lib/sterun", () => ({
     setEventStatus: vi.fn(),
   },
 }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

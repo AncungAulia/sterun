@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api/client";
 import { fetchScanners } from "@/lib/scanners";
 
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
   apiFetch: vi.fn(),
 }));
 

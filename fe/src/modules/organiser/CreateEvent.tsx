@@ -34,7 +34,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Stepper } from "@/components/elements/Stepper";
+import { Stepper } from "@/components/form/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { NotAllowedScreen } from "./component/NotAllowed";
@@ -43,7 +43,7 @@ import { useExistingEventNames } from "@/hooks/useExistingEventNames";
 import { useCanCreateEvents } from "@/hooks/useOrganiser";
 import { useWallet } from "@/hooks/useWallet";
 import { buildEventDocument, documentHash } from "@/lib/event-document";
-import { countryName, provinceName } from "@/lib/places";
+import { countryName, provinceName } from "@/lib/place/places";
 
 import {
   EMPTY_CATEGORY,

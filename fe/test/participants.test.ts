@@ -5,12 +5,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiFetch = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
   apiFetch,
 }));
 
-import { ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api/client";
 import { submitParticipant } from "@/lib/participants";
 import type { ParticipantBody } from "@/modules/entry/details";
 

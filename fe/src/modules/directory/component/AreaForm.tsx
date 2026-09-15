@@ -15,13 +15,13 @@
  */
 import { useState } from "react";
 
-import { SearchableSelect } from "@/components/elements/SearchableSelect";
+import { SearchableSelect } from "@/components/form/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Area, Place } from "@/lib/area";
-import { countries, countryName, provincesOf } from "@/lib/places";
+import type { Area, Place } from "@/lib/place/area";
+import { countries, countryName, provincesOf } from "@/lib/place/places";
 
 const DEFAULT_COUNTRY = "ID";
 

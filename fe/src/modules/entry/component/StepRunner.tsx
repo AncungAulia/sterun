@@ -17,8 +17,8 @@
  * These details live in memory only. `EntryFlow` does not write them to any
  * storage, so a refresh on a shared laptop leaves no identity number behind.
  */
-import { DateTimeField } from "@/components/elements/DateTimeField";
-import { Field, FieldMessage, LabelRow } from "@/components/elements/Field";
+import { DateTimeField } from "@/components/form/DateTimeField";
+import { Field, FieldMessage, LabelRow } from "@/components/form/Field";
 import {
   Select,
   SelectContent,

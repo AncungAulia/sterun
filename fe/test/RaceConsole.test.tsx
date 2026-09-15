@@ -19,12 +19,12 @@ const readClient = vi.hoisted(() => ({
   addScanner: vi.fn(),
   removeScanner: vi.fn(),
 }));
-vi.mock("@/lib/sterun", () => ({ readClient }));
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
+vi.mock("@/lib/chain/sterun", () => ({ readClient }));
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
   apiFetch: vi.fn(() => Promise.reject(new Error("the index is unreachable"))),
 }));
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

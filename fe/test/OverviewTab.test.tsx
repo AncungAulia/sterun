@@ -3,15 +3,15 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiFetch } from "@/lib/api";
-import type { EventSummary } from "@/lib/events";
+import { apiFetch } from "@/lib/api/client";
+import type { EventSummary } from "@/lib/event/events";
 import { OverviewTab } from "@/modules/organiser/component/OverviewTab";
 import type { SterunAddOn } from "@sterunxyz/sdk";
 
 const readClient = vi.hoisted(() => ({ listAddOns: vi.fn() }));
-vi.mock("@/lib/sterun", () => ({ readClient }));
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
+vi.mock("@/lib/chain/sterun", () => ({ readClient }));
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/client")>()),
   apiFetch: vi.fn(),
 }));
 

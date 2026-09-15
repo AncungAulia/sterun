@@ -12,7 +12,7 @@
 import { useEventAddOns } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { useRaceRecords, useRaceRecordsFailed } from "@/hooks/useRaceRecords";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import { entriesPerDay } from "@/lib/records";
 import { formatAmount } from "@/utils/format";
 

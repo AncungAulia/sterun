@@ -13,7 +13,7 @@
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 
-import { readSusdBalance } from "@/lib/susd";
+import { readSusdBalance } from "@/lib/wallet/susd";
 
 const LIVE = process.env.STERUN_E2E === "1";
 

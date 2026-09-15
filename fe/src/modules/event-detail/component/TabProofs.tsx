@@ -26,8 +26,8 @@
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { CONTRACTS, EXPLORER_BASE } from "@/lib/env";
-import { gunStartConflict, type MetadataResult } from "@/lib/metadata";
+import { CONTRACTS, EXPLORER_BASE } from "@/lib/chain/env";
+import { gunStartConflict, type MetadataResult } from "@/lib/event/metadata";
 
 function Contract({ label, id }: { label: string; id: string }) {
   if (!id) return null;

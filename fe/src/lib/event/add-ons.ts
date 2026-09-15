@@ -9,7 +9,7 @@
  *
  * Shared by the race page's add-ons tab and the entry flow's basket.
  */
-import type { MetadataAddOn } from "@/lib/metadata";
+import type { MetadataAddOn } from "@/lib/event/metadata";
 import type { SterunAddOn } from "@sterunxyz/sdk";
 
 /** One item as the page shows it: the description, joined to its chain rows. */

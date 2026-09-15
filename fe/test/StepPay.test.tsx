@@ -9,12 +9,12 @@ vi.mock("@/hooks/useSusdBalance", () => ({
   useSusdBalance: vi.fn(),
   susdKey: (address: string | null) => ["susd-balance", address],
 }));
-vi.mock("@/modules/entry/component/GetTestSusd", () => ({
+vi.mock("@/components/wallet/GetTestSusd", () => ({
   GetTestSusd: () => <button type="button">Get test sUSD</button>,
 }));
 
 import { useSusdBalance } from "@/hooks/useSusdBalance";
-import type { SusdBalance } from "@/lib/susd";
+import type { SusdBalance } from "@/lib/wallet/susd";
 import type { JoinedAddOn } from "@/lib/event/add-ons";
 import { buildBasket } from "@/modules/entry/basket";
 import { PayPanel, StepPay } from "@/modules/entry/component/StepPay";

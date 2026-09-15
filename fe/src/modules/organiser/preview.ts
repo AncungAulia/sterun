@@ -22,7 +22,7 @@
  */
 import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
-import { readEventDocument, type EventMetadata } from "@/lib/metadata";
+import { readEventDocument, type EventMetadata } from "@/lib/event/metadata";
 import { parseStroops } from "@/utils/format";
 
 import { addOnUnits, type PlannedAddOn } from "./addons";

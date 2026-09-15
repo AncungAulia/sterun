@@ -25,7 +25,7 @@
  */
 import { useEffect } from "react";
 
-import { markAsked, readStoredPlace, storePlace } from "@/lib/area";
+import { markAsked, readStoredPlace, storePlace } from "@/lib/place/area";
 
 /**
  * A cold GPS fix on a phone can take several seconds; a device with the radio
@@ -58,7 +58,7 @@ export function useNearbyPrompt(): void {
         // The province list is a third of a megabyte and the picker already
         // loads it late for that reason. Imported here, after an answer, so a
         // visitor who refuses never downloads it.
-        void import("@/lib/places").then(({ nearestProvince }) => {
+        void import("@/lib/place/places").then(({ nearestProvince }) => {
           // A place picked by hand while the prompt was open wins: it is the
           // more deliberate of the two answers.
           if (readStoredPlace().place) return;

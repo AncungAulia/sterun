@@ -20,7 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,8 +33,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAddScanner, useRemoveScanner } from "@/hooks/useOrganiser";
 import { useRaceScanners } from "@/hooks/useRaceScanners";
-import type { EventSummary } from "@/lib/events";
-import { friendlyError } from "@/lib/errors";
+import type { EventSummary } from "@/lib/event/events";
+import { friendlyError } from "@/lib/api/errors";
 import type { IndexedScanner } from "@/lib/scanners";
 import { formatEventDate } from "@/utils/format";
 

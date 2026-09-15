@@ -5,7 +5,7 @@ import {
   racesToAskAboutResults,
   racesToAskAboutScanners,
 } from "@/modules/organiser/needs";
-import type { EventSummary } from "@/lib/events";
+import type { EventSummary } from "@/lib/event/events";
 import type { EventStatus, SterunEvent } from "@sterunxyz/sdk";
 
 const NOW = 1_800_000_000n;

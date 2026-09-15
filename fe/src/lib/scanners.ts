@@ -7,7 +7,7 @@
  * was added and how many runners it checked in (STE-43). A table that waited
  * for them would not exist; a table that invented them would lie.
  */
-import { apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api/client";
 
 export interface IndexedScanner {
   address: string;

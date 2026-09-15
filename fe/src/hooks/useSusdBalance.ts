@@ -7,7 +7,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { readSusdBalance, type SusdBalance } from "@/lib/susd";
+import { readSusdBalance, type SusdBalance } from "@/lib/wallet/susd";
 
 export const susdKey = (address: string | null) => ["susd-balance", address] as const;
 
