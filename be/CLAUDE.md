@@ -246,8 +246,8 @@ requires all of them for every new submission.
 
 **One person, one entry per race (STE-51, migration 011).** `POST /participants` answers **409
 `already-entered`** when a **confirmed** entry in the same race has the same identity number after
-`norm_id`, even from another wallet. The web app already stops a second entry from the same wallet;
-this stops the same person using a second one. The contract cannot: it sees only a salted hash, and
+`norm_id`, even from another wallet — including a second entry from the same wallet, which the web app
+does not block on its own (its entry flow does not exist yet, and a client check is advisory anyway). The contract cannot: it sees only a salted hash, and
 two entries by one person look unrelated there.
 
 The number is encrypted with a fresh nonce, so ciphertexts never compare equal. The lookup is a
@@ -330,12 +330,28 @@ Three gates, in this order, each checked by removing it (the tests fail without 
 3. **The vault row must have been submitted by that same wallet.** Otherwise 404 `no-pass`, and a
    warning with the token id.
 
-Gate 3 exists because of a gap worth knowing: **`POST /participants/:id/confirm` takes `token_id`
-from the client** and checks only that the caller owns the vault row, not that the caller owns the
-token. So a row can be pointed at someone else's token. Gate 3 keeps that from reaching this route.
-The roster has the same exposure: such a row would put the wrong secret on the desk's list for that
-token. The fix is for confirm to check `owner_of` and `record_of(token_id).participant_hash` against
-the row, raised as a follow-up rather than folded in here.
+Gate 3 is defence in depth now. It was the only guard when this route shipped, because confirm used
+to take `token_id` from the client unchecked; that is fixed (below), and gate 3 still covers any row
+linked before the fix.
+
+**Confirm checks the token on chain.** `POST /participants/:id/confirm` takes `token_id` from the
+client, and until this fix it only checked that the caller owned the vault row — so a runner could
+point their own row at **someone else's** token. The roster would then give the desk the attacker's
+check-in secret for the victim's record. Now, before linking:
+
+1. A row already linked to a different token answers 409 `conflict` without a chain read.
+2. `record_of(token_id)` is read from chain. "Does not exist" is re-read after 1s and 2s, because the
+   wallet may report `enter` from an RPC node a ledger ahead of the one this service asks; still
+   missing is **404 `record-not-found`**. Any other RPC failure is a 5xx at once, never "not found".
+3. The record's `participant_hash`, `event_id` and `category_id` must equal the row's, and
+   `owner_of(token_id)` must be the caller. Otherwise **409 `record-mismatch`** and nothing is linked.
+   The hash is the strong check (its salt belongs to this row alone); the rest makes a mismatch
+   explicit rather than lucky.
+4. With no chain reader mounted, confirm answers **503 `chain-unavailable`** instead of linking blind.
+
+`enter_tx_hash` is still the client's claim and is stored as such; nothing downstream trusts it. Each
+of the hash check, the owner check, the whole chain read and the re-read was removed once, and the
+tests fail without each.
 
 Errors: 401 (auth), 403 `forbidden` (another wallet), 404 `not-found` (no such token on chain), 404
 `no-pass` (no confirmed entry details for this record). Rate-limited at 20 per minute per client.

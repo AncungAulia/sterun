@@ -258,7 +258,11 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
 
   if (deps.vault) {
     const vault = deps.vault;
-    void app.register(async (instance) => participantRoutes(instance, { vault, challenges }));
+    // The reader is how confirm checks the claimed token is this entry's record.
+    const reader = deps.reader;
+    void app.register(async (instance) =>
+      participantRoutes(instance, { vault, challenges, ...(reader ? { reader } : {}) }),
+    );
   }
 
   if (deps.pool) {

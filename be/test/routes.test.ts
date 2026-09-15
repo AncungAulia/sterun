@@ -21,6 +21,9 @@ import { RESPONSE_SCHEMAS } from "../src/routes/participants.js";
 import { buildServer } from "../src/server.js";
 import { participantHash, saltFromHex } from "../src/spec/participant-hash.js";
 import { Vault } from "../src/vault.js";
+import { ChainReader } from "../src/chain/reader.js";
+import { ADDRESSES } from "./helpers/addresses.js";
+import { FakeChain } from "./helpers/fake-chain.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
 
 const PERSON = {
@@ -108,6 +111,41 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     };
   }
 
+  // The chain confirm checks a claimed token against. `onChain` puts there the
+  // record `enter` would have minted for a submission: its hash, race, owner.
+  const chain = new FakeChain(ADDRESSES);
+  const onChain = (
+    tokenId: number,
+    submitted: { participant_hash: string },
+    owner: Keypair,
+    where: { event_id?: number; category_id?: number } = {},
+  ) =>
+    chain.addRecord({
+      tokenId,
+      eventId: where.event_id ?? 0,
+      categoryId: where.category_id ?? 0,
+      owner: owner.publicKey(),
+      participantHash: submitted.participant_hash,
+    });
+  const confirm = async (participantId: string, tokenId: number, kp: Keypair, target = app) => {
+    const challenge = await target.inject({
+      method: "POST",
+      url: "/auth/challenge",
+      payload: { address: kp.publicKey() },
+    });
+    const { nonce } = challenge.json();
+    return target.inject({
+      method: "POST",
+      url: `/participants/${participantId}/confirm`,
+      headers: {
+        "x-sterun-address": kp.publicKey(),
+        "x-sterun-nonce": nonce,
+        "x-sterun-signature": Buffer.from(kp.sign(Buffer.from(nonce, "utf8"))).toString("base64"),
+      },
+      payload: { token_id: tokenId, enter_tx_hash: "a".repeat(64) },
+    });
+  };
+
   // A new identity number per submission unless a test names one. Since STE-51
   // a confirmed entry refuses the same person in the same race, so a shared
   // number would make every test depend on which ones confirmed before it.
@@ -134,6 +172,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     app = buildServer(loadConfig({ NODE_ENV: "test" }), {
       vault: new Vault(pool, keyring, indexKey),
       challenges,
+      reader: new ChainReader(chain, ADDRESSES),
     });
     await app.ready();
   });
@@ -289,6 +328,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       // confirmed entry is involved.
       const person = { national_id: "34-04 0125 5151", event_id: 5151 };
       const first = (await submit(runner, person)).json();
+      onChain(5151, first, runner, { event_id: 5151 });
       const confirmed = await app.inject({
         method: "POST",
         url: `/participants/${first.participant_id}/confirm`,
@@ -370,7 +410,9 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
 
   describe("POST /participants/:id/confirm", () => {
     it("links the row to the on-chain record", async () => {
-      const { participant_id } = (await submit(runner)).json();
+      const submitted = (await submit(runner)).json();
+      const { participant_id } = submitted;
+      onChain(7, submitted, runner);
       const res = await app.inject({
         method: "POST",
         url: `/participants/${participant_id}/confirm`,
@@ -393,7 +435,9 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
     });
 
     it("409s when the row is already confirmed as a different token", async () => {
-      const { participant_id } = (await submit(runner)).json();
+      const submitted = (await submit(runner)).json();
+      const { participant_id } = submitted;
+      onChain(9, submitted, runner);
       const url = `/participants/${participant_id}/confirm`;
       await app.inject({
         method: "POST",
@@ -408,6 +452,130 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
         payload: { token_id: 10, enter_tx_hash: "d".repeat(64) },
       });
       expect(res.statusCode).toBe(409);
+    });
+
+    describe("the claimed token must be this entry's record on chain", () => {
+      const tokenOf = async (participantId: string) =>
+        (await pool.query<{ token_id: number | null }>(
+          "SELECT token_id FROM participants WHERE id = $1",
+          [participantId],
+        )).rows[0]?.token_id;
+
+      it("409s `record-mismatch` when the token is another entry's record, and links nothing", async () => {
+        // The hole this closes: pointing your own row at someone else's token
+        // would put your check-in secret on the desk's roster for them.
+        const mine = (await submit(runner)).json();
+        const theirs = (await submit(stranger, { runner_address: stranger.publicKey() })).json();
+        onChain(20, theirs, stranger);
+
+        const res = await confirm(mine.participant_id, 20, runner);
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json().error).toBe("record-mismatch");
+        expect(await tokenOf(mine.participant_id)).toBeNull();
+      });
+
+      it("409s when only the participant hash differs: the runner's own other entry", async () => {
+        // Same wallet, same race, same category, a real record the runner owns —
+        // just not the one entered for THIS submission. Only the hash can tell.
+        const first = (await submit(runner)).json();
+        const second = (await submit(runner)).json();
+        onChain(29, second, runner);
+
+        const res = await confirm(first.participant_id, 29, runner);
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json().error).toBe("record-mismatch");
+        expect(await tokenOf(first.participant_id)).toBeNull();
+      });
+
+      it("409s when the hash matches but the chain says another wallet owns the record", async () => {
+        const mine = (await submit(runner)).json();
+        onChain(21, mine, stranger);
+        const res = await confirm(mine.participant_id, 21, runner);
+        expect(res.statusCode).toBe(409);
+        expect(await tokenOf(mine.participant_id)).toBeNull();
+      });
+
+      it("409s when the record is in a different category or race than the entry", async () => {
+        const mine = (await submit(runner)).json();
+        onChain(22, mine, runner, { category_id: 1 });
+        expect((await confirm(mine.participant_id, 22, runner)).statusCode).toBe(409);
+
+        const other = (await submit(runner)).json();
+        onChain(25, other, runner, { event_id: 9 });
+        expect((await confirm(other.participant_id, 25, runner)).statusCode).toBe(409);
+      });
+
+      it("404s `record-not-found` for a token not on chain, after re-reading it", async () => {
+        const mine = (await submit(runner)).json();
+        const started = Date.now();
+
+        const res = await confirm(mine.participant_id, 23, runner);
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().error).toBe("record-not-found");
+        // The default re-reads (1s, then 2s) really happened before giving up.
+        expect(Date.now() - started).toBeGreaterThanOrEqual(2_900);
+        expect(await tokenOf(mine.participant_id)).toBeNull();
+      }, 10_000);
+
+      it("waits for a record an RPC node has not seen yet, instead of failing the runner", async () => {
+        const mine = (await submit(runner)).json();
+        setTimeout(() => onChain(24, mine, runner), 300);
+
+        const res = await confirm(mine.participant_id, 24, runner);
+
+        expect(res.statusCode).toBe(200);
+        expect(await tokenOf(mine.participant_id)).toBe(24);
+      }, 10_000);
+
+      it("still treats a retried confirm of the same token as success", async () => {
+        const mine = (await submit(runner)).json();
+        onChain(26, mine, runner);
+        expect((await confirm(mine.participant_id, 26, runner)).statusCode).toBe(200);
+        expect((await confirm(mine.participant_id, 26, runner)).statusCode).toBe(200);
+      });
+
+      it("answers 503 rather than linking blind when there is no chain reader", async () => {
+        const blind = buildServer(loadConfig({ NODE_ENV: "test" }), {
+          vault: new Vault(pool, keyring, indexKey),
+          challenges: new ChallengeStore(),
+        });
+        await blind.ready();
+        try {
+          const mine = (await submit(runner)).json();
+          onChain(27, mine, runner);
+          const res = await confirm(mine.participant_id, 27, runner, blind);
+          expect(res.statusCode).toBe(503);
+          expect(res.json().error).toBe("chain-unavailable");
+          expect(await tokenOf(mine.participant_id)).toBeNull();
+        } finally {
+          await blind.close();
+        }
+      });
+
+      it("answers an RPC failure as a 5xx, never as `record-not-found`", async () => {
+        const broken = buildServer(loadConfig({ NODE_ENV: "test" }), {
+          vault: new Vault(pool, keyring, indexKey),
+          challenges: new ChallengeStore(),
+          reader: {
+            recordOf: async () => {
+              throw new Error("socket hang up");
+            },
+          } as unknown as ChainReader,
+        });
+        await broken.ready();
+        try {
+          const mine = (await submit(runner)).json();
+          const res = await confirm(mine.participant_id, 28, runner, broken);
+          expect(res.statusCode).toBe(500);
+          expect(res.body).not.toContain("socket hang up");
+          expect(await tokenOf(mine.participant_id)).toBeNull();
+        } finally {
+          await broken.close();
+        }
+      });
     });
 
     it("rejects a transaction hash that is not one", async () => {
@@ -480,6 +648,7 @@ describe.skipIf(!DATABASE_URL)(`participant routes (${DATABASE_URL ? "postgres" 
       const created = await submit(runner, { national_id: PERSON.national_id, event_id: 4242 });
       bodies.push(created.body);
       const { participant_id, participant_hash, totp_secret } = created.json();
+      onChain(4242, created.json(), runner, { event_id: 4242 });
 
       const confirmed = await app.inject({
         method: "POST",
