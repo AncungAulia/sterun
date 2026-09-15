@@ -53,6 +53,10 @@ export const SOMETHING_WENT_WRONG = "Something went wrong. Please try again.";
  *
  * Add a method here only after checking that it invokes nothing but
  * EventRegistry and RaceRecord.
+ *
+ * STE-21 kept `enter` out. Its refusals are explained by re-reading the ledger
+ * after the failure instead (`modules/entry/enter-failure.ts`): if the
+ * distance now has no places, "sold out" is true whichever contract refused.
  */
 const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
   "createEvent",
@@ -77,8 +81,9 @@ const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
  * The entry-time refusals (`QuotaFull`, `EventNotOpen`, `AddOnQuotaFull`) used
  * to be here and were taken out: they can only arrive from `enter`, which is
  * exactly the call this file refuses to classify, so a sentence for them could
- * never fire honestly. STE-21 brings them back together with a way of telling a
- * token revert from ours.
+ * never fire honestly. STE-21 did not bring them back here: the entry flow says
+ * them from the chain's state after a refusal (`modules/entry/enter-failure.ts`),
+ * which needs no way of telling a token revert from ours.
  */
 const CONTRACT_MESSAGES: Partial<Record<`${ContractErrorSource}:${string}`, string>> = {
   "event-registry:NotAllowlistedOrganiser":
@@ -133,6 +138,33 @@ const MAYBE_ALREADY_DONE_TEXT =
  * exists.
  */
 const REACHED_THE_NETWORK_TEXT = /submitted|sent to the network|sent transaction|still pending/i;
+
+/**
+ * A step that stopped without an answer: something may have reached the network.
+ *
+ * For a flow that branches on the kind of stop rather than printing a sentence
+ * (the entry flow's Sign and pay, STE-21). The same text rules as
+ * `friendlyError` below, so there is still one list to read.
+ */
+export function isNoAnswer(error: unknown): boolean {
+  return MAYBE_ALREADY_DONE_TEXT.test(messageOf(error));
+}
+
+/**
+ * A refusal from the wallet, and only one that cannot have been submitted.
+ *
+ * The entry flow answers a decline with "Nothing was charged", so this is
+ * narrower than the decline rule in `friendlyError`: anything that also reads
+ * as submitted, or as no answer, is not a decline here.
+ */
+export function isDeclined(error: unknown): boolean {
+  const text = messageOf(error);
+  return (
+    DECLINED_TEXT.test(text) &&
+    !REACHED_THE_NETWORK_TEXT.test(text) &&
+    !MAYBE_ALREADY_DONE_TEXT.test(text)
+  );
+}
 
 export function friendlyError(error: unknown): string {
   // Ours, and already written for the reader.
