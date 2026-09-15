@@ -31,7 +31,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Sterun — runs you can't fake",
+  title: "Sterun: runs you can't fake",
   description: "Non-transferable race records for running events, on Stellar.",
 };
 
