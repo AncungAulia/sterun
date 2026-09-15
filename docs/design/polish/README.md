@@ -37,6 +37,7 @@ Worth stating, because a findings list on its own reads as though everything is 
 | --- | --- |
 | Focus rings | **Every** focusable element in our code changes appearance on a real Tab press. The only element without one is the Next.js dev overlay, which does not ship |
 | Horizontal overflow at 390px | None, on any page |
+| Contrast, everywhere except F1 | The 404, the console and the create-race page have **no** failing pair at either width |
 | Raw hex in `fe` | **0** |
 | Default Tailwind palette classes in `fe` | **0** |
 | `lang` attribute | `en` on every page |
@@ -58,11 +59,12 @@ hard it is to fix.
 
 **F1. The muted grey fails AA, everywhere it is used on a light ground.**
 `fe/app/globals.css:48` maps `--color-muted-foreground` to `--color-n-500`. Measured on the live
-pages: **4.22:1** on `paper` and **3.92:1** on `n-100`, where AA wants 4.5 for text under 18.66px.
+pages: **4.22:1** on `paper` and **4.48:1** on white, where AA wants 4.5 for text under 18.66px. The
+second one misses by two hundredths, which is still a miss.
 
-Seen on real screens as: the "No image" label on every event card in the directory (20 instances on
-one screen), "This race has not published a poster." on the event page, and the unit word inside
-the entries-left readout.
+It is now the **only** contrast failure left anywhere in the web app. Every instance is this one
+colour: the "No image" label on every event card in the directory (19 on one screen), "Organised by"
+and the inactive tab labels on an event page, and the unit word inside the entries-left readout.
 
 Scale: 57 uses of `text-muted-foreground` across 25 files, all fed by that one token line, plus
 **59** direct `text-n-500` uses on text across 33 files. `n-600` measures **6.58:1** on paper and
@@ -131,16 +133,7 @@ Now matching `fe`, which was right. The contract function `claim_racepack`, the 
 | Entry and the QR pass (STE-21) | Not built. No code exists to audit |
 | Scanner PWA (STE-22) | Not built |
 | Organiser console (STE-17) | **Being written right now.** It was measured today and the two pages that exist are in the numbers above, but Ancung has commits landing in it daily, so a full pass belongs after STE-17 merges |
-| The landing page | **Not on `main`.** See below |
-
-**The landing page is not on `main`.** `main` still carries a placeholder that renders the words
-"Empty page for landing page". The real landing lives on `feat/8-landing-page`, which is **38
-commits ahead of `main` and 266 commits behind it**. It cannot be audited as a live flow because it
-is not live, and the drift is worth naming on its own: that branch has not seen `main` since before
-the v2 contracts, the organiser allowlist, the bib change and the quota change all landed. The
-longer it sits, the more the merge costs.
-
-*Owner: Nabil (me). Next step: rebase or merge STE-12, then run this tool against it.*
+| The landing page | Now measured. See section 5 |
 
 ## 4. Re-running this
 
@@ -157,3 +150,55 @@ and both produced false confidence:
 
 Text hidden with the `sr-only` pattern is excluded from the contrast check. It is clipped to a 1px
 box on purpose, and measuring it reports an alarming 1:1 on a label only a screen reader reads.
+
+---
+
+## 5. The landing page
+
+Measured after STE-12 was merged into `main`, which is what made it measurable at all. Before that,
+`main` rendered a placeholder reading "Empty page for landing page".
+
+**No real contrast failure.** The crawler reported some, and every one of them turned out to be the
+crawler's fault rather than the page's. Settled by computing the token pairs directly, which needs no
+browser and cannot be fooled:
+
+| Pair | Ratio | |
+| --- | --- | --- |
+| ink on `n-200`, `teal-100`, `n-100`, `teal-50` (the four How it works panels) | 12.14 to 14.08:1 | passes |
+| paper on `ink`, `n-900`, `n-950` (hero, coal) | 14.86 to 16.77:1 | passes |
+| paper on `teal` | 5.88:1 | passes |
+| **ink on `teal`** | **2.53:1** | **fails at every size.** Nothing does this today. Worth knowing before somebody does |
+
+**Target sizes** match the rest of the product: every control clears the 24px AA floor, none reaches
+the 44px comfortable size. Menu items are 350x43, the footer links 25px tall, the Menu button 60x26.
+Same advisory as F4.
+
+**One copy fix.** The page title was `Sterun — runs you can't fake`, using the em dash we do not use
+anywhere else. It is now a colon. This is the single most visible string on the site: it is the tab,
+the bookmark and the link preview.
+
+### What the crawler cannot see here, and why it matters
+
+This page is the limit of the method, and the limit is worth writing down rather than hiding behind
+a clean-looking number.
+
+1. **Text revealed by scroll reads as invisible at scroll 0.** The Problem section's characters
+   start paper-coloured and are scrubbed into view, so a single reading at the top of the page
+   reported 352 separate 1:1 "failures" on text that is simply not shown yet. The tool now measures
+   at five scroll depths and keeps the **best** ratio each piece of text ever reaches, which is the
+   question that actually matters: is it readable once revealed.
+2. **A ground painted by a sibling is invisible to a parent walk.** Each How it works panel paints
+   its colour with an absolutely positioned sibling div, so walking up from the text sailed past it
+   and landed on the dark teal box: ink at 2.53:1, for text that really sits on pale blue at 12:1.
+   The tool now reads the ground from `elementsFromPoint`, which returns the real paint stack.
+3. **Text caught mid-wipe is measured mid-wipe.** The cover layers over the How it works track are
+   ink through teal and they wipe away; text sampled while one is still over it measures against
+   that cover. Keeping the best of five depths helps and does not fully solve it.
+4. **A closed overlay still has text in the DOM.** The menu's items are paper on a panel that is not
+   painted until the menu opens, so they read as paper on paper. The crawler never opens the menu.
+5. **Video and gradients are reported, not guessed.** The hero's text sits over a video and a
+   gradient. Those are listed separately as unmeasurable rather than given an invented number.
+
+The rule this leaves: **a scroll-driven page is checked by token pair and by eye, not by crawling.**
+The crawler is the right tool for the web app, where the ground is a solid colour and the content is
+there when the page loads.
