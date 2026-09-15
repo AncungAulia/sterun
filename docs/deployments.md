@@ -2551,6 +2551,34 @@ quota of 4, next to a 5K that was never raised and is still capped at 1.
 > it as plain text (`previous: 2`). Recorded rather than quietly re-run, because the ledger has the
 > half-finished event in it either way.
 
+### The SDK e2e after the upgrade — `pnpm --filter @sterunxyz/sdk e2e` ✅
+
+`@sterunxyz/sdk` does not expose `increase_quota` — adding it is a teammate's ticket, the way STE-37
+followed STE-35 — so this run proves the other direction, which is the one an upgrade can break: that
+**every method the published package already has still works against the new wasm**.
+
+```
+EventRegistry  CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+event_id            20
+token_id (free)     32  bib 1  Finished 3161s
+createEvent         0b2225d57f48449118bc67f98e3367b37440cec989ca53d47eedd4cb3ee5ef52
+setEventStatus Open 8af461b5cf73d670b118465367774fe675a60c8a5e47a4d2d72a0f5938bc2625
+enter               da5f272717c0ecf28fe8b210bced13ce5293db72c61d95aafd8e0578f158cb7a
+claimRacepack       504e7a7665d36f24788d997470f35aba084203497da10d6c0152cb62e25be105
+recordFinish        20a0dbdae64aa8d97844e481733ff1048d89ba2d2deead3a36a2f626a109c1ba
+token_id (untimed)  33  Finished, finish_time_s null
+recordFinishUntimed c940a462437717db0b40fa0993cb580798e3c0cccff475b21dafe85e7b043efd
+```
+
+Negatives included: `AlreadyClaimed(102)`, `InvalidState(103)` from four directions, and the reads
+re-run through a client with no wallet at all. Event 20's first entrant is bib **1**, so the v2.3
+numbering is intact across this upgrade too.
+
+**The paid-entry leg was SKIPPED**, and that is stated rather than glossed: `SUSD_DISTRIBUTOR_SECRET`
+was not set in this environment, so the SEP-41 transfer inside `enter` did not run. Everything else
+did. That path is unchanged by this ticket — `increase_quota` moves no money and `reserve_slot` was
+not touched — but it was not exercised here.
+
 ### What did NOT change, and is worth stating
 
 - **`entered_count` and the bib sequence.** `increase_quota` reads neither. Entries already taken are
