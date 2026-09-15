@@ -23,6 +23,7 @@ vi.mock("@/lib/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/metadata")>()),
   fetchEventMetadata,
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/wallet", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),

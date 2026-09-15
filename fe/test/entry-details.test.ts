@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import {
   BIB_NAME_MAX,
   EMPTY_DETAILS,
+  formatDateOfBirth,
+  maskIdNumber,
   impossibleRunnerDetails,
   missingRunnerDetails,
   participantBody,
@@ -134,5 +136,36 @@ describe("participantBody", () => {
 
   it("sends the emergency phone as the hashed contact, never the runner's phone", () => {
     expect(participantBody(filled, { ...context, addOns: [] }).emergency_contact).toBe(filled.emergencyPhone);
+  });
+});
+
+describe("maskIdNumber", () => {
+  it("shows only the last four characters, in groups of four", () => {
+    expect(maskIdNumber("3471014501900001")).toBe("•••• •••• •••• 0001");
+  });
+
+  it("masks a shorter document number the same way", () => {
+    expect(maskIdNumber("A1234567")).toBe("•••• 4567");
+  });
+
+  it("never shows a number of four characters or fewer at all", () => {
+    expect(maskIdNumber("1234")).toBe("••••");
+    expect(maskIdNumber("12")).toBe("••••");
+  });
+
+  it("ignores the spaces a runner typed", () => {
+    expect(maskIdNumber("3471 0145 0190 0001")).toBe("•••• •••• •••• 0001");
+  });
+});
+
+describe("formatDateOfBirth", () => {
+  it("spells the date without moving it across a time zone", () => {
+    expect(formatDateOfBirth("1990-01-05")).toBe("Jan 5, 1990");
+    expect(formatDateOfBirth("2000-12-31")).toBe("Dec 31, 2000");
+  });
+
+  it("gives back nothing for a value that is not a date", () => {
+    expect(formatDateOfBirth("")).toBe("");
+    expect(formatDateOfBirth("1990-13-40")).toBe("");
   });
 });

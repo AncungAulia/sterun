@@ -6,6 +6,13 @@
  * Design: `docs/superpowers/specs/2026-09-15-entry-flow-design.md`. Mockup:
  * `2026-09-15-entry-flow-mockup.html`, blocks 1 to 4, 7 and 8.
  *
+ * ## Two components, for the hooks' sake
+ *
+ * `EntryForm` reads and decides what to show before the form. `EntryReady` is
+ * the form, mounted only once everything it needs has answered. The split is
+ * what lets `useEntryAttempt` be called unconditionally with a real plan: a
+ * hook cannot sit below an early return, and the plan cannot exist above one.
+ *
  * ## What is read before the form
  *
  * The race, this wallet's records (from chain: they decide whether somebody
@@ -20,8 +27,17 @@
  * can be shared, and an identity number must not be left in browser storage.
  * A saved choice is only restored for the distance the link asks for, and is
  * sanitised against current stock before it is shown.
+ *
+ * ## What an attempt is told
+ *
+ * Once details have reached the vault, the attempt keeps that answer so a retry
+ * never sends them twice. Any change to the distance, the race pack or the
+ * details makes that answer stale, so each of them tells the attempt to forget
+ * it: paying with a hash for choices the runner has since changed would put the
+ * wrong entry in the vault.
  */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeftIcon } from "lucide-react";
 import { useState } from "react";
 import { isSupportedCountry } from "react-phone-number-input";
@@ -30,29 +46,36 @@ import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { Stepper } from "@/components/elements/Stepper";
 import { WalletGate } from "@/components/layouts/WalletGate";
 import { Button } from "@/components/ui/button";
+import { useArea } from "@/hooks/useArea";
+import { useEntryAttempt, type EntryPlan } from "@/hooks/useEntryAttempt";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useRunnerRecords } from "@/hooks/useRunnerRecords";
-import { useArea } from "@/hooks/useArea";
 import { useWallet } from "@/hooks/useWallet";
+import type { EventSummary } from "@/lib/events";
+import type { EventMetadata } from "@/lib/metadata";
 import { joinAddOns } from "@/modules/event-detail/component/TabAddOns";
 import { focusField } from "@/modules/organiser/missing";
 import { formatEventDate } from "@/utils/format";
+import type { SterunAddOn } from "@sterunxyz/sdk";
 
 import {
   EMPTY_SELECTION,
   buildBasket,
   missingPackSizes,
+  packChoices,
   sanitizeSelection,
   totalStroops,
   type Selection,
 } from "./basket";
 import { EntrySummary } from "./component/EntrySummary";
 import { GateNotice } from "./component/GateNotice";
+import { PayDialog } from "./component/PayDialog";
 import type { Country } from "./component/PhoneField";
 import { StepDistance } from "./component/StepDistance";
+import { PayPanel, StepPay } from "./component/StepPay";
 import { StepRunner } from "./component/StepRunner";
-import { EMPTY_DETAILS, missingRunnerDetails, type RunnerDetails } from "./details";
+import { EMPTY_DETAILS, missingRunnerDetails, participantBody, type RunnerDetails } from "./details";
 import { entryGate } from "./gate";
 
 export type EntryStep = "distance" | "details" | "pay";
@@ -121,6 +144,14 @@ function writeChoice(eventId: number, choice: SavedChoice): void {
   }
 }
 
+function clearChoice(eventId: number): void {
+  try {
+    window.sessionStorage.removeItem(storageKey(eventId));
+  } catch {
+    // Nothing to clear is not a failure.
+  }
+}
+
 function EntryForm({
   eventId,
   requestedCategory,
@@ -134,28 +165,6 @@ function EntryForm({
   const onChain = useEventAddOns(eventId);
   const records = useRunnerRecords(address);
   const metadata = useEventMetadata(race.data?.event.uri ?? "", race.data?.event.metadataHash ?? "");
-
-  const [restored] = useState<SavedChoice | null>(() => {
-    if (typeof window === "undefined") return null;
-    const saved = readChoice(eventId);
-    return saved && (requestedCategory === null || saved.categoryId === requestedCategory) ? saved : null;
-  });
-  const [chosenCategory, setChosenCategory] = useState<number | null>(restored?.categoryId ?? null);
-  const [selection, setSelection] = useState<Selection>(restored?.selection ?? EMPTY_SELECTION);
-  const [step, setStep] = useState<EntryStep>("distance");
-  const [sizesAsked, setSizesAsked] = useState(false);
-  // Memory only, never storage: see the header.
-  const [details, setDetails] = useState<RunnerDetails>(EMPTY_DETAILS);
-  const [detailsAsked, setDetailsAsked] = useState(false);
-  /**
-   * The runner's own calendar day, read once. `en-CA` formats as YYYY-MM-DD in
-   * local time; an ISO string would be UTC, which is yesterday for an early
-   * morning in Jakarta and would refuse a date of birth that is today.
-   */
-  const [today] = useState(() => new Date().toLocaleDateString("en-CA"));
-  const { place } = useArea();
-  const areaCountry = place?.mode === "area" ? place.countryCode.toUpperCase() : "";
-  const defaultCountry: Country = isSupportedCountry(areaCountry) ? areaCountry : "ID";
 
   if (race.isError) {
     return (
@@ -196,31 +205,120 @@ function EntryForm({
   const gate = entryGate(summary, records.data, requestedCategory);
   if (gate.kind !== "open") return <GateNotice gate={gate} summary={summary} />;
 
+  return (
+    <EntryReady
+      eventId={eventId}
+      requestedCategory={requestedCategory}
+      address={address}
+      summary={summary}
+      openCategoryId={gate.categoryId}
+      raceDocument={metadata.data?.status === "verified" ? metadata.data.document : undefined}
+      onChain={onChain.data ?? []}
+    />
+  );
+}
+
+function EntryReady({
+  eventId,
+  requestedCategory,
+  address,
+  summary,
+  openCategoryId,
+  raceDocument,
+  onChain,
+}: {
+  eventId: number;
+  requestedCategory: number | null;
+  address: string;
+  summary: EventSummary;
+  /** The distance the gate opened on: the requested one, or the first with places. */
+  openCategoryId: number;
+  raceDocument: EventMetadata | undefined;
+  onChain: SterunAddOn[];
+}) {
+  const router = useRouter();
+  const { place } = useArea();
+
+  const [restored] = useState<SavedChoice | null>(() => {
+    const saved = readChoice(eventId);
+    return saved && (requestedCategory === null || saved.categoryId === requestedCategory) ? saved : null;
+  });
+  const [chosenCategory, setChosenCategory] = useState<number | null>(restored?.categoryId ?? null);
+  const [selection, setSelection] = useState<Selection>(restored?.selection ?? EMPTY_SELECTION);
+  const [step, setStep] = useState<EntryStep>("distance");
+  const [sizesAsked, setSizesAsked] = useState(false);
+  // Memory only, never storage: see the header.
+  const [details, setDetails] = useState<RunnerDetails>(EMPTY_DETAILS);
+  const [detailsAsked, setDetailsAsked] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  /**
+   * The runner's own calendar day, read once. `en-CA` formats as YYYY-MM-DD in
+   * local time; an ISO string would be UTC, which is yesterday for an early
+   * morning in Jakarta and would refuse a date of birth that is today.
+   */
+  const [today] = useState(() => new Date().toLocaleDateString("en-CA"));
+
+  const areaCountry = place?.mode === "area" ? place.countryCode.toUpperCase() : "";
+  const defaultCountry: Country = isSupportedCountry(areaCountry) ? areaCountry : "ID";
+
   const categoryId =
     chosenCategory !== null &&
     summary.categories.some((c) => c.categoryId === chosenCategory && c.slotsLeft > 0)
       ? chosenCategory
-      : gate.categoryId;
-  const category = summary.categories.find((c) => c.categoryId === categoryId);
-  if (!category) return <GateNotice gate={{ kind: "no-distance" }} summary={summary} />;
+      : openCategoryId;
+  // The gate opened on a distance this race has, so the fallback always finds one.
+  const category =
+    summary.categories.find((c) => c.categoryId === categoryId) ??
+    summary.categories.find((c) => c.categoryId === openCategoryId) ??
+    summary.categories[0];
 
-  const raceDocument = metadata.data?.status === "verified" ? metadata.data.document : undefined;
-  const basket = buildBasket(joinAddOns(raceDocument?.addOns ?? [], onChain.data ?? []), category.code);
+  const basket = buildBasket(joinAddOns(raceDocument?.addOns ?? [], onChain), category.code);
   const chosen = sanitizeSelection(basket, selection);
   const total = totalStroops(category, basket, chosen);
   const missingSizes = sizesAsked ? missingPackSizes(basket, chosen) : [];
   const venue = raceDocument?.location?.name ?? raceDocument?.location?.city;
+
+  const plan: EntryPlan | null =
+    step === "pay"
+      ? {
+          runner: address,
+          summary,
+          categoryId: category.categoryId,
+          basket,
+          selection: chosen,
+          body: participantBody(details, {
+            eventId,
+            categoryId: category.categoryId,
+            runner: address,
+            addOns: packChoices(basket, chosen),
+          }),
+          total,
+        }
+      : null;
+  const attempt = useEntryAttempt(plan);
+
+  /** Anything the vault was sent is stale once a choice changes. See the header. */
+  function forgetSubmitted() {
+    if ("submitted" in attempt.state && attempt.state.submitted) attempt.detailsChanged();
+  }
 
   function pickCategory(next: number) {
     setChosenCategory(next);
     setSelection(EMPTY_SELECTION);
     setSizesAsked(false);
     writeChoice(eventId, { categoryId: next, selection: EMPTY_SELECTION });
+    forgetSubmitted();
   }
 
   function pickSelection(next: Selection) {
     setSelection(next);
-    writeChoice(eventId, { categoryId, selection: next });
+    writeChoice(eventId, { categoryId: category.categoryId, selection: next });
+    forgetSubmitted();
+  }
+
+  function changeDetails(next: RunnerDetails) {
+    setDetails(next);
+    forgetSubmitted();
   }
 
   function continueFromDistance() {
@@ -243,6 +341,11 @@ function EntryForm({
     setStep("pay");
   }
 
+  function pay() {
+    setPayOpen(true);
+    attempt.start();
+  }
+
   return (
     <Page>
       <div className="flex flex-col gap-2">
@@ -262,15 +365,16 @@ function EntryForm({
       <Stepper steps={ENTRY_STEPS} current={step} />
 
       {/*
-        Three children so a phone reads the form, the summary, then the button
-        (mockup block 8), while from `lg` the summary sits beside both.
+        Three children so a phone reads the form, the summary and payment, then
+        the way back or on (mockup block 8), while from `lg` the summary column
+        sits beside both.
       */}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="lg:col-start-1 lg:row-start-1">
           {step === "distance" ? (
             <StepDistance
               categories={summary.categories}
-              categoryId={categoryId}
+              categoryId={category.categoryId}
               basket={basket}
               selection={chosen}
               missingSizes={missingSizes}
@@ -281,15 +385,22 @@ function EntryForm({
           {step === "details" ? (
             <StepRunner
               details={details}
-              onChange={setDetails}
+              onChange={changeDetails}
               today={today}
               showMissing={detailsAsked}
               defaultCountry={defaultCountry}
             />
           ) : null}
+          {step === "pay" ? (
+            <StepPay category={category} basket={basket} selection={chosen} details={details} onEdit={setStep} />
+          ) : null}
         </div>
 
-        <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        {/*
+          Sticky on the column, not on the card: the column is only as tall as
+          its content, so a sticky card inside it had nowhere to move.
+        */}
+        <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <EntrySummary
             event={summary.event}
             category={category}
@@ -297,6 +408,7 @@ function EntryForm({
             selection={chosen}
             total={total}
           />
+          {step === "pay" ? <PayPanel runner={address} total={total} busy={attempt.running} onPay={pay} /> : null}
         </div>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between lg:col-start-1 lg:row-start-2">
@@ -319,12 +431,32 @@ function EntryForm({
               </Button>
             </>
           ) : (
-            <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setStep("details")}>
+            <Button variant="link" className="px-0" onClick={() => setStep("details")}>
               Back
             </Button>
           )}
         </div>
       </div>
+
+      {step === "pay" ? (
+        <PayDialog
+          open={payOpen}
+          onOpenChange={setPayOpen}
+          raceName={summary.event.name}
+          eventId={eventId}
+          runner={address}
+          total={total}
+          attempt={attempt}
+          onChangeDistance={() => {
+            setPayOpen(false);
+            setStep("distance");
+          }}
+          onDone={(tokenId) => {
+            clearChoice(eventId);
+            router.push(`/events/${eventId}/entered/${tokenId}`);
+          }}
+        />
+      ) : null}
     </Page>
   );
 }

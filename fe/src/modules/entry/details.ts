@@ -103,7 +103,7 @@ export function missingRunnerDetails(d: RunnerDetails, today: string): Missing[]
   ask(!d.gender, "gender", "runner-gender", "Pick one.");
   ask(!d.dateOfBirth, "dateOfBirth", "runner-dob-date", "Pick your date of birth.");
   ask(!d.emergencyName.trim(), "emergencyName", "runner-emergency-name", "Enter who we call in an emergency.");
-  ask(!d.emergencyPhone, "emergencyPhone", "runner-emergency-phone", "Add a phone number someone can answer on race day.");
+  ask(!d.emergencyPhone, "emergencyPhone", "runner-emergency-phone", "Add a phone number.");
 
   return [...missing, ...impossibleRunnerDetails(d, today)];
 }
@@ -166,6 +166,39 @@ export function impossibleRunnerDetails(d: RunnerDetails, today: string): Missin
   }
 
   return problems;
+}
+
+/**
+ * An identity number as the review step shows it: only the last four
+ * characters, the rest as dots in groups of four.
+ *
+ * Enough for the runner to recognise their own number, not enough for
+ * somebody looking over a shoulder to copy it. A number of four characters or
+ * fewer is hidden entirely, since its last four would be all of it.
+ */
+export function maskIdNumber(value: string): string {
+  const compact = value.replace(/\s+/g, "");
+  if (compact.length <= 4) return "••••";
+  const groups = Math.ceil((compact.length - 4) / 4);
+  return [...Array.from({ length: groups }, () => "••••"), compact.slice(-4)].join(" ");
+}
+
+/**
+ * `YYYY-MM-DD` spelled for a person, in UTC on purpose.
+ *
+ * A date of birth is a calendar date, not an instant. Read in local time, the
+ * midnight of the fifth of January is the fourth somewhere west of Greenwich.
+ */
+export function formatDateOfBirth(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 /** `POST /participants`'s body, field for field. */
