@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { EventCard } from "@/modules/directory/component/EventCard";
+import { EventCard } from "@/modules/directory/components/EventCard";
 import { formatEventDate } from "@/utils/format";
 
-import { SUSD, category, entry, metadata, summary } from "./fixtures/directory";
+import { SUSD, category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 describe("EventCard", () => {
   describe("positive", () => {

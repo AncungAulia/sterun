@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { PosterFrame } from "@/modules/directory/component/PosterFrame";
+import { PosterFrame } from "@/modules/directory/components/PosterFrame";
 
 const POSTER = "https://files.test/poster.jpg";
 

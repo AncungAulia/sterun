@@ -9,9 +9,9 @@ import {
   matchesFilters,
   type DistanceBucketId,
   type PriceBucketId,
-} from "@/modules/directory/filters";
+} from "@/modules/directory/lib/filters";
 
-import { SUSD, category, entry, metadata, summary } from "./fixtures/directory";
+import { SUSD, category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 function priceBucket(id: PriceBucketId) {
   const bucket = PRICE_BUCKETS.find((item) => item.id === id);

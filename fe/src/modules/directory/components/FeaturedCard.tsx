@@ -23,7 +23,7 @@ import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
 import { cn } from "@/utils/cn";
 import { formatEventDate } from "@/utils/format";
 
-import { entriesLine, placeLine, priceLine, type DirectoryEntry } from "../browse";
+import { entriesLine, placeLine, priceLine, type DirectoryEntry } from "../lib/browse";
 import { PosterFrame } from "./PosterFrame";
 
 export type FeaturedCardSize = "lead" | "side";

@@ -3,10 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useEventDocuments } from "@/hooks/useEventDocuments";
+import { useEventDocuments } from "@/modules/directory/hooks/useEventDocuments";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 
-import { metadata, summary } from "./fixtures/directory";
+import { metadata, summary } from "../../__tests__/fixtures";
 
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
 

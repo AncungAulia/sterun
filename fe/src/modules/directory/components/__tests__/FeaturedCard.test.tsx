@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FeaturedCard, featuredTitleClass } from "@/modules/directory/component/FeaturedCard";
+import { FeaturedCard, featuredTitleClass } from "@/modules/directory/components/FeaturedCard";
 import { formatEventDate } from "@/utils/format";
 
-import { SUSD, category, entry, metadata, summary } from "./fixtures/directory";
+import { SUSD, category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 /** 39 characters, from testnet: long enough that the title has to step down. */
 const LONG_NAME = "Sterun untimed finish sanity 2026-09-11";

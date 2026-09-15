@@ -22,7 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
-import type { DateOrder, DirectoryEntry } from "../browse";
+import type { DateOrder, DirectoryEntry } from "../lib/browse";
 import {
   AVAILABLE_ONLY_LABEL,
   DISTANCE_BUCKETS,
@@ -31,7 +31,7 @@ import {
   activeFilterCount,
   matchesFilters,
   type Filters,
-} from "../filters";
+} from "../lib/filters";
 
 const ORDERS: { value: DateOrder; label: string }[] = [
   { value: "soonest", label: "Nearest date first" },

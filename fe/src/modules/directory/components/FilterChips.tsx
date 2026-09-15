@@ -7,7 +7,7 @@ import { XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import { filterChips, type Filters } from "../filters";
+import { filterChips, type Filters } from "../lib/filters";
 
 interface FilterChipsProps {
   filters: Filters;

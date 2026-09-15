@@ -20,7 +20,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Area, Place } from "@/lib/place/area";
-import { AreaPicker } from "@/modules/directory/component/AreaPicker";
+import { AreaPicker } from "@/modules/directory/components/AreaPicker";
 
 vi.setConfig({ testTimeout: 20_000 });
 

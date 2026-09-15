@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { FilterChips } from "@/modules/directory/component/FilterChips";
-import { NO_FILTERS } from "@/modules/directory/filters";
+import { FilterChips } from "@/modules/directory/components/FilterChips";
+import { NO_FILTERS } from "@/modules/directory/lib/filters";
 
 describe("FilterChips", () => {
   it("removes one filter from its chip", async () => {

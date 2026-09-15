@@ -12,7 +12,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { TabTimeline } from "@/modules/event-detail/component/TabTimeline";
+import { TabTimeline } from "@/modules/event-detail/components/TabTimeline";
 import type { EventMetadata } from "@/lib/event/metadata";
 
 /** 2026-11-21T05:00+07:00, the same gun start the other event tests use. */

@@ -11,9 +11,9 @@ import {
   publicEvents,
   sortByDate,
   sortByPlace,
-} from "@/modules/directory/browse";
+} from "@/modules/directory/lib/browse";
 
-import { SUSD, category, entry, metadata, summary } from "./fixtures/directory";
+import { SUSD, category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 const NOW = 1_800_000_000n;
 const DAY = 86_400n;

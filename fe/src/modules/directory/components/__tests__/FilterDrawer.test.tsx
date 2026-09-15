@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { FilterDrawer } from "@/modules/directory/component/FilterDrawer";
-import { NO_FILTERS } from "@/modules/directory/filters";
+import { FilterDrawer } from "@/modules/directory/components/FilterDrawer";
+import { NO_FILTERS } from "@/modules/directory/lib/filters";
 
-import { SUSD, category, entry, metadata, summary } from "./fixtures/directory";
+import { SUSD, category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 const FREE = entry(summary(0, { name: "Free Fun Run" }, [category(0, { priceStroops: 0n })]), metadata());
 const PAID = entry(summary(1, { name: "Paid Road Race" }, [category(0, { priceStroops: 25n * SUSD })]), metadata());

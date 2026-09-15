@@ -20,7 +20,7 @@
  */
 import { cn } from "@/utils/cn";
 
-import type { DirectoryEntry } from "../browse";
+import type { DirectoryEntry } from "../lib/browse";
 import { FeaturedCard } from "./FeaturedCard";
 
 export function FeaturedEvents({ entries }: { entries: readonly DirectoryEntry[] }) {

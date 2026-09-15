@@ -46,9 +46,9 @@ import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useArea } from "@/hooks/useArea";
-import { useEventDocuments } from "@/hooks/useEventDocuments";
+import { useEventDocuments } from "@/modules/directory/hooks/useEventDocuments";
 import { useEvents } from "@/hooks/useEvents";
-import { useNearbyPrompt } from "@/hooks/useNearbyPrompt";
+import { useNearbyPrompt } from "@/modules/directory/hooks/useNearbyPrompt";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
 
 import {
@@ -58,14 +58,14 @@ import {
   sortByPlace,
   type DateOrder,
   type DirectoryEntry,
-} from "./browse";
-import { AreaPicker } from "./component/AreaPicker";
-import { DirectorySkeleton } from "./component/DirectorySkeleton";
-import { EventCard } from "./component/EventCard";
-import { FeaturedEvents } from "./component/FeaturedEvents";
-import { FilterChips } from "./component/FilterChips";
-import { FilterDrawer } from "./component/FilterDrawer";
-import { NO_FILTERS, activeFilterCount, matchesFilters, type Filters } from "./filters";
+} from "./lib/browse";
+import { AreaPicker } from "./components/AreaPicker";
+import { DirectorySkeleton } from "./components/DirectorySkeleton";
+import { EventCard } from "./components/EventCard";
+import { FeaturedEvents } from "./components/FeaturedEvents";
+import { FilterChips } from "./components/FilterChips";
+import { FilterDrawer } from "./components/FilterDrawer";
+import { NO_FILTERS, activeFilterCount, matchesFilters, type Filters } from "./lib/filters";
 
 export function Directory() {
   const { data, isPending, isError, refetch } = useEvents();

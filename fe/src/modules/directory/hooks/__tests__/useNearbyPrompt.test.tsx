@@ -13,7 +13,7 @@ import { StrictMode } from "react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useNearbyPrompt } from "@/hooks/useNearbyPrompt";
+import { useNearbyPrompt } from "@/modules/directory/hooks/useNearbyPrompt";
 import { readStoredPlace } from "@/lib/place/area";
 
 const getCurrentPosition = vi.fn();

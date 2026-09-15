@@ -1,9 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FeaturedEvents } from "@/modules/directory/component/FeaturedEvents";
+import { FeaturedEvents } from "@/modules/directory/components/FeaturedEvents";
 
-import { category, entry, metadata, summary } from "./fixtures/directory";
+import { category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 function race(eventId: number) {
   return entry(summary(eventId, {}, [category(0)]), metadata());

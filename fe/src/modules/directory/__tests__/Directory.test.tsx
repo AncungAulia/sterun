@@ -10,7 +10,7 @@ import { AREA_STORAGE_KEY, type Area } from "@/lib/place/area";
 import type { EventMetadata } from "@/lib/event/metadata";
 import { Directory } from "@/modules/directory/Directory";
 
-import { category, daysFromNow, metadata, summary } from "./fixtures/directory";
+import { category, daysFromNow, metadata, summary } from "./fixtures";
 
 const listEvents = vi.hoisted(() => vi.fn());
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
