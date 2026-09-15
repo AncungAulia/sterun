@@ -59,18 +59,22 @@ function Calendar({
           defaultClassNames.months
         ),
         month: cn("flex w-full flex-col gap-4", defaultClassNames.month),
+        // The nav spans the whole caption row to place its two arrows, so it
+        // sat on top of the month and year Selects and took every click meant
+        // for them (found in the browser; jsdom has no layout to show it). It
+        // lets clicks through; only its arrows take them.
         nav: cn(
-          "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
+          "pointer-events-none absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
           defaultClassNames.nav
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_next
         ),
         month_caption: cn(
