@@ -1,2 +1,386 @@
 @import "tailwindcss";
 @import "./tokens.css";
+
+/* ============================================================================
+   Landing-only interaction primitives.
+   ----------------------------------------------------------------------------
+   These live here rather than in tokens.css because tokens.css is mirrored into
+   fe/ and describes the design system; a hover wipe on a marketing nav is not
+   part of that contract.
+
+   They are written as CSS rather than composed from utilities on purpose. Each
+   one needs a paired enter/leave state — a clip-path that only moves one way, or
+   a transform-origin that flips between hover and rest — and expressing that in
+   variant classes spreads one behaviour across four places where it is easy to
+   change half of it. Tailwind also silently emitted nothing for one of the
+   translate utilities used here earlier, which cost an afternoon.
+   ========================================================================= */
+
+/* --- Page scrollbar -------------------------------------------------------
+   Hidden, while scrolling keeps working. The page is driven by the scroll
+   itself (Lenis, the held stages, the step track), so the bar added nothing but
+   a strip down the right edge of every full-bleed section. scrollbar-width
+   covers Firefox and current Chromium; the pseudo-element covers Safari and
+   older Chromium. */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- Nav fill ------------------------------------------------------------
+   A 1:1 copy of the word, clipped away at the bottom and revealed upward on
+   hover, so the colour reads as poured in rather than swapped. */
+.nav-fill {
+  clip-path: inset(100% 0 0 0);
+  transition: clip-path 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.nav-item:hover .nav-fill,
+.nav-item:focus-visible .nav-fill {
+  clip-path: inset(0 0 0 0);
+}
+
+/* --- Underline -----------------------------------------------------------
+   Grows from the left, then is pulled off to the right. The origin flip is
+   what makes leaving feel like a withdrawal instead of a rewind. */
+.wipe-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.08em;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.wipe-underline:hover::after,
+.wipe-underline:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* ============================================================================
+   Adaptive header.
+   ----------------------------------------------------------------------------
+   Four stacked copies of the header row (see Navbar.tsx). The painted layers
+   are clipped per frame by script; nothing here may transition clip-path, or
+   the split line would trail behind the section edge it is meant to sit on.
+
+   Interaction state lives on <header> as data-hover / data-focus, written by
+   the invisible interactive layer, and every painted layer styles itself from
+   it. :hover cannot be used: the painted layers ignore the pointer, so only
+   one of them would ever react and a split CTA would wipe on one side only.
+   ========================================================================= */
+
+/* The dark-on-light values are the base, set on every layer including the
+   invisible interactive one. They must be: the CTA border is declared as
+   var(--nav-cta), and on a layer without the variable that declaration is
+   invalid, the border drops to nothing, and that layer's CTA comes out 2px
+   smaller than the painted ones. Measured before this, 2px off at every width. */
+.nav__layer {
+  position: absolute;
+  inset: 0;
+  --nav-fg: var(--color-ink);
+  --nav-cta: var(--color-ink);
+  --nav-cta-contrast: var(--color-paper);
+  color: var(--nav-fg);
+}
+
+/* Painted over light surfaces: ink logo and MENU, a filled ink CTA with paper
+   type (the base). */
+
+/* Painted over dark surfaces: paper logo and MENU, a filled paper CTA with ink
+   type. */
+.nav__layer--onDark {
+  --nav-fg: var(--color-paper);
+  --nav-cta: var(--color-paper);
+  --nav-cta-contrast: var(--color-ink);
+  color: var(--nav-fg);
+}
+
+.nav__layer--paint {
+  pointer-events: none;
+}
+
+/* Server-rendered state, before the script's first measurement: the page opens
+   on the dark hero, so the first light-on-dark layer shows and the others are
+   hidden. The script overwrites these inline before the first paint. */
+.nav__layer--onLight,
+.nav__layer--onDark[data-pool="1"] {
+  clip-path: inset(50% 0 50% 0);
+}
+
+/* The real link and button. Invisible and never clipped, because clip-path
+   clips hit-testing too; its focus ring is drawn by the painted layers. */
+.nav__layer--hit {
+  opacity: 0;
+}
+
+.nav-logo {
+  transition: opacity 0.3s ease;
+}
+.nav[data-open] .nav-logo {
+  opacity: 0;
+}
+.nav[data-open] .nav__layer--hit .nav-logo {
+  pointer-events: none;
+}
+
+/* --- CTA -----------------------------------------------------------------
+   Filled at rest: ink with paper type over light surfaces, paper with ink type
+   over dark ones, so a split header shows both halves of the same button. On
+   hover the button inverts: the type colour sweeps in from the left as the new
+   fill, the label rolls up to its own duplicate in the old fill colour, and
+   the border keeps the old fill so the button keeps its shape against a ground
+   of the same colour. Not a brand-teal hover: teal disappears over the blue
+   How it works box. The arrow holds still because a moving target is harder to
+   aim at, and the label's colour lags the fill slightly so it flips once the
+   ground beneath it has actually changed. */
+.nav-cta {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--nav-cta);
+  border-radius: 9999px;
+  background: var(--nav-cta);
+  color: var(--nav-cta-contrast);
+  transition: color 0.25s ease 0.12s;
+}
+.nav-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--nav-cta-contrast);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* The label and its stacked duplicate. Three levels, each earning its place:
+   the outer box is one line tall and clips, the middle one travels, and the two
+   copies carry an explicit height so the distance moved is exact. Moving every
+   child instead once slid each copy half its own height and tore the label. */
+.nav-cta-roll {
+  display: block;
+  overflow: hidden;
+  height: 1.2em;
+}
+.nav-cta-roll > span {
+  display: block;
+  transition: transform 0.4s cubic-bezier(0.76, 0, 0.24, 1);
+}
+.nav-cta-roll > span > span {
+  display: block;
+  height: 1.2em;
+  line-height: 1.2em;
+}
+.nav-cta-arrow {
+  transition: transform 0.25s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* --- MENU underline ------------------------------------------------------ */
+.nav-underline {
+  position: relative;
+}
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.08em;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Hover only where a pointer can hover; on touch a tap would leave it stuck. */
+@media (hover: hover) {
+  .nav[data-hover="cta"] .nav-cta {
+    color: var(--nav-cta);
+  }
+  .nav[data-hover="cta"] .nav-cta::before {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  .nav[data-hover="cta"] .nav-cta-roll > span {
+    transform: translateY(-1.2em);
+  }
+  .nav[data-hover="cta"] .nav-cta-arrow {
+    transform: translateX(3px);
+  }
+  .nav[data-hover="menu"] .nav-underline::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+/* Keyboard focus mirrors hover, plus a visible ring. The ring is drawn here on
+   the painted layers because the focused element itself is invisible. */
+.nav[data-focus="cta"] .nav-cta {
+  color: var(--nav-cta);
+}
+.nav[data-focus="cta"] .nav-cta::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+.nav[data-focus="cta"] .nav-cta-roll > span {
+  transform: translateY(-1.2em);
+}
+.nav[data-focus="menu"] .nav-underline::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+.nav[data-focus="logo"] .nav__layer--paint .nav-logo,
+.nav[data-focus="cta"] .nav__layer--paint .nav-cta,
+.nav[data-focus="menu"] .nav__layer--paint .nav-underline {
+  outline: 2px solid var(--color-teal-400);
+  outline-offset: 3px;
+}
+
+/* --- How it works track --------------------------------------------------
+   Layout for HowItWorksTrack.tsx. The box (.hiw) clips the track, and --bw is
+   the box's width, written by the component. The script only ever writes
+   transforms. */
+.hiw__track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: max-content;
+}
+/* Each moving box gets its own compositor layer. Without it the scaled picture
+   and its window were repainted every frame of the scrub. */
+.hiw__panel,
+.hiw__window,
+.hiw__image {
+  will-change: transform;
+}
+/* akaru opens the window from its left edge, centred vertically. */
+.hiw__window {
+  transform-origin: 0 50%;
+}
+.hiw__image {
+  transform-origin: 50% 50%;
+}
+
+/* akaru's project button: a 1px ink ring. On hover an ink disc grows from the
+   centre to fill it, and the arrow is swapped: the resting one leaves toward
+   the top right while a paper one comes in from the bottom left. */
+.hiw-cta {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: var(--cta);
+  height: var(--cta);
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px var(--color-ink);
+  color: var(--color-ink);
+  isolation: isolate;
+}
+.hiw-cta__dot {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--color-ink);
+  transform: scale(0);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hiw-cta__arrows {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  overflow: hidden;
+}
+.hiw-cta__arrow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.hiw-cta__arrow--hover {
+  color: var(--color-paper);
+  transform: translate(-100%, 100%);
+}
+/* The close button inside an opened step: the same ring and disc, with a cross
+   that turns paper and a quarter turn as the disc fills. */
+.hiw-cta__x {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  transition:
+    color 0.3s ease,
+    transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.hiw-cta:focus-visible .hiw-cta__x {
+  color: var(--color-paper);
+}
+@media (hover: hover) {
+  .hiw-cta:hover .hiw-cta__x {
+    color: var(--color-paper);
+    transform: rotate(90deg);
+  }
+}
+.hiw-cta:focus-visible {
+  outline: 2px solid var(--color-teal-400);
+  outline-offset: 3px;
+}
+.hiw-cta:focus-visible .hiw-cta__dot {
+  transform: scale(1);
+}
+.hiw-cta:focus-visible .hiw-cta__arrow--rest {
+  transform: translate(100%, -100%);
+}
+.hiw-cta:focus-visible .hiw-cta__arrow--hover {
+  transform: translate(0, 0);
+}
+@media (hover: hover) {
+  .hiw-cta:hover .hiw-cta__dot {
+    transform: scale(1);
+  }
+  .hiw-cta:hover .hiw-cta__arrow--rest {
+    transform: translate(100%, -100%);
+  }
+  .hiw-cta:hover .hiw-cta__arrow--hover {
+    transform: translate(0, 0);
+  }
+}
+
+/* --- Problem reveal ------------------------------------------------------
+   Characters are thickened while highlighted with a stroke in their own
+   colour, driven by a variable GSAP animates. It is not font-weight on
+   purpose: Poppins is loaded at fixed weights, and a heavier weight is wider,
+   so every character after the highlight would shift and lines would rewrap
+   mid-scroll. A stroke thickens the glyph without touching its advance width. */
+.problem-char {
+  -webkit-text-stroke: var(--char-bold, 0em) currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-fill,
+  .wipe-underline::after,
+  .nav-logo,
+  .nav-cta,
+  .nav-cta::before,
+  .nav-cta-roll > span,
+  .nav-cta-arrow,
+  .nav-underline::after,
+  .hiw-cta__dot,
+  .hiw-cta__arrow,
+  .hiw-cta__x {
+    transition: none;
+  }
+
+  /* The box becomes a plain horizontal scroller: no hold, no packing, every
+     step open and every title set. */
+  .hiw__mask {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}

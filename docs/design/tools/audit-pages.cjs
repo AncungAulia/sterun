@@ -40,8 +40,13 @@ const WIDTHS = [
   { id: "1440", width: 1440, height: 900, label: "laptop" },
 ];
 
+// --only=landing,directory runs a subset, for when one app is up and the other
+// is not, or when re-checking a single page after a fix.
+const onlyArg = process.argv.find((a) => a.startsWith("--only="));
+const ONLY = onlyArg ? onlyArg.slice(7).split(",").map((s) => s.trim()) : null;
+
 const CHROME_CANDIDATES = [
-  process.argv[2],
+  process.argv.slice(2).find((a) => !a.startsWith("--")),
   process.env.CHROME_PATH,
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
@@ -116,13 +121,34 @@ const MEASURE = function () {
     return false;
   };
 
-  // The first ancestor that actually paints something opaque. A gradient or an
-  // image is reported rather than guessed at, because a measured number against
-  // an invented ground is worse than no number.
+  // What is actually painted behind this text. Walking ancestors is the obvious
+  // way and it is wrong: a panel whose ground is an absolutely positioned sibling
+  // (<div class="absolute inset-0 bg-teal-100" />) is invisible to a parent walk,
+  // so the walk sails past it and lands on whatever the container is. That
+  // reported ink on the dark teal box at 2.53:1 for text that actually sits on
+  // pale blue at 12:1.
+  //
+  // elementsFromPoint returns the real paint stack under a point, siblings and
+  // overlays included, so the ground is taken from there instead. A gradient or
+  // an image is reported rather than guessed at: a measured number against an
+  // invented ground is worse than no number.
   const ground = (el) => {
-    let n = el;
+    const r = el.getBoundingClientRect();
+    const x = Math.min(Math.max(r.left + Math.min(r.width / 2, 40), 1), window.innerWidth - 2);
+    const y = Math.min(Math.max(r.top + r.height / 2, 1), window.innerHeight - 2);
+    let stack = document.elementsFromPoint(x, y);
+    if (!stack || !stack.length) stack = [];
+    let started = false;
     let acc = null;
-    while (n && n.nodeType === 1) {
+    for (const n of stack) {
+      // Everything above the text itself is an overlay over it, so start at the
+      // text. The text's own element counts: a button painted teal with a paper
+      // label is the commonest case in the product, and skipping it reported
+      // paper on white at 1.06:1.
+      if (!started) {
+        if (n === el) started = true;
+        else continue;
+      }
       const s = getComputedStyle(n);
       if (s.backgroundImage && s.backgroundImage !== "none") return { unknown: s.backgroundImage.slice(0, 40) };
       const c = parse(s.backgroundColor);
@@ -130,7 +156,6 @@ const MEASURE = function () {
         acc = acc ? over(acc, c) : c;
         if (c.a >= 1) return { colour: acc };
       }
-      n = n.parentElement;
     }
     return { colour: acc || { r: 255, g: 255, b: 255, a: 1 } };
   };
@@ -225,7 +250,7 @@ const MEASURE = function () {
   const browser = await puppeteer.launch({ executablePath, headless: true });
   const report = { measuredAt: new Date().toISOString(), pages: [] };
 
-  for (const page of PAGES) {
+  for (const page of PAGES.filter((p) => !ONLY || ONLY.includes(p.id))) {
     for (const w of WIDTHS) {
       const tab = await browser.newPage();
       const consoleErrors = [];
@@ -242,9 +267,40 @@ const MEASURE = function () {
       }
       await new Promise((r) => setTimeout(r, 1200));
 
+      // A page whose content is revealed by scroll cannot be judged at scroll 0.
+      // The landing's Problem text starts paper-on-paper by design and is scrubbed
+      // into view, and the menu overlay is closed, so a single reading at the top
+      // reported hundreds of 1:1 "failures" on text that is simply not shown yet.
+      // Measure at several depths and keep the BEST ratio each piece of text ever
+      // reaches: the question is whether it is readable once revealed.
+      const DEPTHS = [0, 0.25, 0.5, 0.75, 1];
       let result = null;
       try {
-        result = await tab.evaluate(MEASURE);
+        const passes = [];
+        for (const d of DEPTHS) {
+          await tab.evaluate((frac) => {
+            const max = document.documentElement.scrollHeight - window.innerHeight;
+            window.scrollTo(0, Math.round(max * frac));
+          }, d);
+          await new Promise((r) => setTimeout(r, 700));
+          passes.push(await tab.evaluate(MEASURE));
+        }
+        await tab.evaluate(() => window.scrollTo(0, 0));
+        await new Promise((r) => setTimeout(r, 500));
+
+        result = passes[0];
+        const best = {};
+        for (const pass of passes) {
+          for (const t of pass.text || []) {
+            const k = t.where + "|" + t.px + "|" + t.weight + "|" + t.sample;
+            if (!best[k] || t.ratio > best[k].ratio) best[k] = t;
+          }
+        }
+        result.text = Object.values(best);
+        // Targets and overflow are layout, so the widest reading wins.
+        result.targets = passes.reduce((a, p) => (p.targets || []).length > a.length ? p.targets : a, []);
+        result.overflowX = Math.max(...passes.map((p) => p.overflowX || 0));
+        result.depthsMeasured = DEPTHS.length;
       } catch (e) {
         result = { error: e.message };
       }
@@ -328,8 +384,9 @@ const MEASURE = function () {
     }
   }
 
-  fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify(report, null, 1));
-  console.log("\nwrote " + path.relative(process.cwd(), path.join(OUT, "audit.json")));
+  const outName = ONLY ? "audit-" + ONLY.join("-") + ".json" : "audit.json";
+  fs.writeFileSync(path.join(OUT, outName), JSON.stringify(report, null, 1));
+  console.log("\nwrote " + path.relative(process.cwd(), path.join(OUT, outName)));
   await browser.close();
 })().catch((e) => {
   console.error("ERR", e.message);

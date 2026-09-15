@@ -1,5 +1,5 @@
 {
- "measuredAt": "2026-09-15T10:10:19.971Z",
+ "measuredAt": "2026-09-15T11:11:42.932Z",
  "pages": [
   {
    "page": "landing",
@@ -11,25 +11,670 @@
    "consoleErrors": [],
    "text": [
     {
-     "sample": "Empty page for landing page",
-     "where": "html.big_shoulders_89ebf4a3-module__ScHEOG__variable.poppins_3df2eb2a-module__pKKDEq__variable > body.min-h-full.flex > div.flex.flex-col",
+     "sample": "App",
+     "where": "span > span > span.sm:hidden",
      "fg": "#1e232b",
-     "bg": "#000000",
-     "px": 16,
+     "bg": "#ffffff",
+     "px": 15,
+     "weight": 500,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "Menu",
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > span.nav-underline.heading-hero",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 26,
+     "weight": 700,
+     "ratio": 15.78,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Home",
+     "where": "span.block.pl-[max(2.4vw,1.75rem)] > span.heading-hero.relative > span.nav-fill.absolute",
+     "fg": "#59b1cb",
+     "bg": "#ffffff",
+     "px": 44,
+     "weight": 700,
+     "ratio": 2.45,
+     "need": 3,
+     "pass": false,
+     "count": 4
+    },
+    {
+     "sample": "Home",
+     "where": "span.relative.block > span.block.pl-[max(2.4vw,1.75rem)] > span.heading-hero.relative",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 44,
+     "weight": 700,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
+     "count": 4
+    },
+    {
+     "sample": "Source",
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 20,
      "weight": 400,
-     "ratio": 1.33,
+     "ratio": 1.06,
      "need": 4.5,
      "pass": false,
+     "count": 6
+    },
+    {
+     "sample": "Verified race records for running events, built ",
+     "where": "span.block > span.flex.flex-col > span",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 1.06,
+     "need": 4.5,
+     "pass": false,
+     "count": 4
+    },
+    {
+     "sample": "B",
+     "where": "p > div > div.problem-char",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 27,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 3,
+     "pass": true,
+     "count": 41
+    },
+    {
+     "sample": "How it works",
+     "where": "div.absolute.inset-0 > div.absolute.inset-x-0 > h2#how-it-works-heading",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 35.5765,
+     "weight": 700,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
      "count": 1
+    },
+    {
+     "sample": "Menu",
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > button.nav-underline.heading-hero",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 26,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Runs you can’t fake",
+     "where": "section#top > div.relative.mx-auto > h1.heading-hero.max-w-[92%]",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 48,
+     "weight": 700,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "Verified on Stellar.",
+     "where": "div.md:pr-10 > ul.text-[clamp(0.625rem,0.95vw,0.75rem)].uppercase > li",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 10,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "The contracts are already running. Read them you",
+     "where": "div.md:pr-10 > div#proof > p.max-w-[26ch]",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "EventRegistry",
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 500,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "h",
+     "where": "p > div > div.problem-char",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 227
+    },
+    {
+     "sample": "e",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e262f",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 14.4,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "r",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e2c36",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 13.46,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "s",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e313c",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 12.68,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "k",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e3643",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 11.88,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "p",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e4656",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 9.57,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "c",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e5063",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 8.3,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "n",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e657d",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 6.15,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "h",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e7089",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 5.3,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "o",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e7590",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 4.94,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "t",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e7a96",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 4.62,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": ",",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e85a3",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 4,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "a",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e8aaa",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 3.75,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "d",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#3095b2",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 3.26,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "b",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#51a5be",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 2.65,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "y",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#71b5c9",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 2.16,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "v",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#9dcbd8",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 1.65,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "i",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#bedbe4",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 1.37,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "f",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#c9e0e7",
+     "bg": "#f8f8f8",
+     "px": 27,
+     "weight": 400,
+     "ratio": 1.29,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "Runner",
+     "where": "div.absolute.inset-x-[var(--g)] > span.block.shrink-0 > span.block.rounded-full",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 11,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 3
+    },
+    {
+     "sample": "One signature",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 10,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 5
+    },
+    {
+     "sample": "E",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 26.013,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 3,
+     "pass": true,
+     "count": 17
+    },
+    {
+     "sample": "Volunteer",
+     "where": "div.absolute.inset-x-[var(--g)] > span.block.shrink-0 > span.block.rounded-full",
+     "fg": "#1e232b",
+     "bg": "#cbe8f0",
+     "px": 11,
+     "weight": 600,
+     "ratio": 12.28,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Code changes every 30s",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#cbe8f0",
+     "px": 10,
+     "weight": 600,
+     "ratio": 12.28,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "C",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#cbe8f0",
+     "px": 26.013,
+     "weight": 400,
+     "ratio": 12.28,
+     "need": 3,
+     "pass": true,
+     "count": 16
+    },
+    {
+     "sample": "03",
+     "where": "section.hiw__panel.relative > div.relative.h-[40.1%] > span.absolute.bottom-[var(--g)]",
+     "fg": "#1e232b",
+     "bg": "#eef0f2",
+     "px": 10,
+     "weight": 600,
+     "ratio": 13.82,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Signed by the organiser",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#eef0f2",
+     "px": 10,
+     "weight": 600,
+     "ratio": 13.82,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "i",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#eef0f2",
+     "px": 26.013,
+     "weight": 400,
+     "ratio": 13.82,
+     "need": 3,
+     "pass": true,
+     "count": 3
+    },
+    {
+     "sample": "Anyone",
+     "where": "div.absolute.inset-x-[var(--g)] > span.block.shrink-0 > span.block.rounded-full",
+     "fg": "#1e232b",
+     "bg": "#e8f4f8",
+     "px": 11,
+     "weight": 600,
+     "ratio": 14.08,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Public profile",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#e8f4f8",
+     "px": 10,
+     "weight": 600,
+     "ratio": 14.08,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "V",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#e8f4f8",
+     "px": 26.013,
+     "weight": 400,
+     "ratio": 14.08,
+     "need": 3,
+     "pass": true,
+     "count": 6
     }
    ],
-   "overImage": [],
-   "targets": [],
+   "overImage": [
+    {
+     "sample": "Menu",
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > button.nav-underline.heading-hero",
+     "fg": "rgb(30, 35, 43)",
+     "ground": "linear-gradient(to right, oklab(0.254671",
+     "px": 26
+    },
+    {
+     "sample": "Runs you can’t fake",
+     "where": "section#top > div.relative.mx-auto > h1.heading-hero.max-w-[92%]",
+     "fg": "rgb(248, 248, 248)",
+     "ground": "linear-gradient(to top, oklab(0.254671 -",
+     "px": 48
+    }
+   ],
+   "targets": [
+    {
+     "where": "div.nav__layer.nav__layer--hit > div.mx-auto.flex > a.nav-logo.block",
+     "text": "Sterun home",
+     "w": 140,
+     "h": 30,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > button.nav-underline.heading-hero",
+     "text": "Menu",
+     "w": 60,
+     "h": 26,
+     "fails248": false
+    },
+    {
+     "where": "ul > li.leading-[0.95].tracking-[-0.01em] > a.nav-item.block",
+     "text": "01HomeHome",
+     "w": 350,
+     "h": 43,
+     "fails248": false
+    },
+    {
+     "where": "ul > li.leading-[0.95].tracking-[-0.01em] > a.nav-item.block",
+     "text": "02ProblemProblem",
+     "w": 350,
+     "h": 43,
+     "fails248": false
+    },
+    {
+     "where": "ul > li.leading-[0.95].tracking-[-0.01em] > a.nav-item.block",
+     "text": "03How it worksHow it works",
+     "w": 350,
+     "h": 43,
+     "fails248": false
+    },
+    {
+     "where": "ul > li.leading-[0.95].tracking-[-0.01em] > a.nav-item.block",
+     "text": "04ProofProof",
+     "w": 350,
+     "h": 43,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "Source",
+     "w": 87,
+     "h": 25,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "SDK",
+     "w": 56,
+     "h": 25,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "Updates",
+     "w": 102,
+     "h": 25,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "EventRegistry",
+     "w": 151,
+     "h": 25,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "RaceRecord",
+     "w": 139,
+     "h": 25,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "sUSD",
+     "w": 68,
+     "h": 25,
+     "fails248": false
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "EventRegistry",
+     "w": 111,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "RaceRecord",
+     "w": 100,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "sUSD",
+     "w": 51,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "Source",
+     "w": 64,
+     "h": 21,
+     "fails248": true
+    }
+   ],
    "overflowX": 0,
-   "title": "Sterun — runs you can't fake",
+   "title": "Sterun: runs you can't fake",
    "langAttr": "en",
-   "h1Count": 0,
+   "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.min-h-full.flex > script > nextjs-portal",
@@ -48,25 +693,414 @@
    "consoleErrors": [],
    "text": [
     {
-     "sample": "Empty page for landing page",
-     "where": "html.big_shoulders_89ebf4a3-module__ScHEOG__variable.poppins_3df2eb2a-module__pKKDEq__variable > body.min-h-full.flex > div.flex.flex-col",
+     "sample": "Launch app",
+     "where": "span > span > span.hidden.sm:inline",
      "fg": "#1e232b",
-     "bg": "#000000",
-     "px": 16,
+     "bg": "#ffffff",
+     "px": 15,
+     "weight": 500,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "Menu",
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > span.nav-underline.heading-hero",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 34,
+     "weight": 700,
+     "ratio": 15.78,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Home",
+     "where": "span.block.pl-[max(2.4vw,1.75rem)] > span.heading-hero.relative > span.nav-fill.absolute",
+     "fg": "#59b1cb",
+     "bg": "#ffffff",
+     "px": 158.4,
+     "weight": 700,
+     "ratio": 2.45,
+     "need": 3,
+     "pass": false,
+     "count": 4
+    },
+    {
+     "sample": "Home",
+     "where": "span.relative.block > span.block.pl-[max(2.4vw,1.75rem)] > span.heading-hero.relative",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 158.4,
+     "weight": 700,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
+     "count": 4
+    },
+    {
+     "sample": "Source",
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 31.68,
      "weight": 400,
-     "ratio": 1.33,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
+     "count": 6
+    },
+    {
+     "sample": "Verified race records for running events, built ",
+     "where": "span.block > span.flex.flex-col > span",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 20,
+     "weight": 400,
+     "ratio": 1.06,
      "need": 4.5,
      "pass": false,
+     "count": 4
+    },
+    {
+     "sample": "B",
+     "where": "p > div > div.problem-char",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 42,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 3,
+     "pass": true,
+     "count": 185
+    },
+    {
+     "sample": "How it works",
+     "where": "div.absolute.inset-0 > div.absolute.inset-x-0 > h2#how-it-works-heading",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 74.7106,
+     "weight": 700,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
      "count": 1
+    },
+    {
+     "sample": "Menu",
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > button.nav-underline.heading-hero",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 34,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Runs you can’t fake",
+     "where": "section#top > div.relative.mx-auto > h1.heading-hero.max-w-[92%]",
+     "fg": "#f8f8f8",
+     "bg": "#ffffff",
+     "px": 136,
+     "weight": 700,
+     "ratio": 1.06,
+     "need": 3,
+     "pass": false,
+     "count": 1
+    },
+    {
+     "sample": "Verified on Stellar.",
+     "where": "div.md:pr-10 > ul.text-[clamp(0.625rem,0.95vw,0.75rem)].uppercase > li",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 12,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "The contracts are already running. Read them you",
+     "where": "div.md:pr-10 > div#proof > p.max-w-[26ch]",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "EventRegistry",
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 500,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "A",
+     "where": "p.mt-[2.9em] > div > div.problem-char",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 42,
+     "weight": 400,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 167
+    },
+    {
+     "sample": "Runner",
+     "where": "div.absolute.inset-x-[var(--g)] > span.block.shrink-0 > span.block.rounded-full",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 11.9952,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "One signature",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 10,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 9
+    },
+    {
+     "sample": "E",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 96.048,
+     "weight": 400,
+     "ratio": 15.78,
+     "need": 3,
+     "pass": true,
+     "count": 17
+    },
+    {
+     "sample": "Code changes every 30s",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#cbe8f0",
+     "px": 10,
+     "weight": 600,
+     "ratio": 12.28,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "C",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#cbe8f0",
+     "px": 96.048,
+     "weight": 400,
+     "ratio": 12.28,
+     "need": 3,
+     "pass": true,
+     "count": 16
+    },
+    {
+     "sample": "03",
+     "where": "section.hiw__panel.relative > div.relative.h-[40.1%] > span.absolute.bottom-[var(--g)]",
+     "fg": "#1e232b",
+     "bg": "#eef0f2",
+     "px": 10,
+     "weight": 600,
+     "ratio": 13.82,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Signed by the organiser",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#eef0f2",
+     "px": 10,
+     "weight": 600,
+     "ratio": 13.82,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "s",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#eef0f2",
+     "px": 96.048,
+     "weight": 400,
+     "ratio": 13.82,
+     "need": 3,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "Anyone",
+     "where": "div.absolute.inset-x-[var(--g)] > span.block.shrink-0 > span.block.rounded-full",
+     "fg": "#1e232b",
+     "bg": "#e8f4f8",
+     "px": 11.9952,
+     "weight": 600,
+     "ratio": 14.08,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Public profile",
+     "where": "span.grid.w-[47.2%] > span.block.overflow-hidden > span.block",
+     "fg": "#1e232b",
+     "bg": "#e8f4f8",
+     "px": 10,
+     "weight": 600,
+     "ratio": 14.08,
+     "need": 4.5,
+     "pass": true,
+     "count": 3
+    },
+    {
+     "sample": "V",
+     "where": "div > div > div.hiw-char",
+     "fg": "#1e232b",
+     "bg": "#e8f4f8",
+     "px": 96.048,
+     "weight": 400,
+     "ratio": 14.08,
+     "need": 3,
+     "pass": true,
+     "count": 6
     }
    ],
-   "overImage": [],
-   "targets": [],
+   "overImage": [
+    {
+     "sample": "Menu",
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > button.nav-underline.heading-hero",
+     "fg": "rgb(30, 35, 43)",
+     "ground": "linear-gradient(to right, oklab(0.254671",
+     "px": 34
+    },
+    {
+     "sample": "Runs you can’t fake",
+     "where": "section#top > div.relative.mx-auto > h1.heading-hero.max-w-[92%]",
+     "fg": "rgb(248, 248, 248)",
+     "ground": "linear-gradient(to top, oklab(0.254671 -",
+     "px": 136
+    }
+   ],
+   "targets": [
+    {
+     "where": "div.nav__layer.nav__layer--hit > div.mx-auto.flex > a.nav-logo.block",
+     "text": "Sterun home",
+     "w": 187,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.shrink-0 > button.nav-underline.heading-hero",
+     "text": "Menu",
+     "w": 78,
+     "h": 34,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "Source",
+     "w": 138,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "SDK",
+     "w": 88,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "Updates",
+     "w": 162,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "EventRegistry",
+     "w": 240,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "RaceRecord",
+     "w": 220,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "span.block.overflow-hidden > span.block > a.wipe-underline.relative",
+     "text": "sUSD",
+     "w": 107,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "EventRegistry",
+     "w": 111,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "RaceRecord",
+     "w": 100,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "sUSD",
+     "w": 51,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "ul.mt-4.flex > li > a.wipe-underline.relative",
+     "text": "Source",
+     "w": 64,
+     "h": 21,
+     "fails248": true
+    }
+   ],
    "overflowX": 0,
-   "title": "Sterun — runs you can't fake",
+   "title": "Sterun: runs you can't fake",
    "langAttr": "en",
-   "h1Count": 0,
+   "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.min-h-full.flex > script > nextjs-portal",
@@ -83,11 +1117,11 @@
    "widthLabel": "phone",
    "loaded": true,
    "consoleErrors": [
-    "Access to fetch at 'https://sterun.xyz/events/sanity.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin'",
+    "Access to fetch at 'https://sterun.xyz/events/cancelled.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Orig",
     "Failed to load resource: net::ERR_FAILED",
     "Access to fetch at 'https://sterun.xyz/events/addons-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Ori",
     "Failed to load resource: net::ERR_FAILED",
-    "Access to fetch at 'https://sterun.xyz/events/bib-sanity.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Ori",
+    "Access to fetch at 'https://sterun.xyz/events/quota-sanity.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-O",
     "Failed to load resource: net::ERR_FAILED"
    ],
    "text": [
@@ -107,10 +1141,10 @@
      "sample": "All locations",
      "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
      "fg": "#515a66",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 500,
-     "ratio": 6.58,
+     "ratio": 6.99,
      "need": 4.5,
      "pass": true,
      "count": 1
@@ -119,10 +1153,10 @@
      "sample": "Browse races",
      "where": "header.flex.flex-col > div.flex.flex-col > h1.heading-hero.text-4xl",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 48,
      "weight": 700,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 3,
      "pass": true,
      "count": 1
@@ -131,10 +1165,10 @@
      "sample": "All races",
      "where": "div.mx-auto.flex > section.flex.flex-col > h2#directory-list",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 28,
      "weight": 600,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 3,
      "pass": true,
      "count": 1
@@ -143,61 +1177,97 @@
      "sample": "No image",
      "where": "div.relative.aspect-video > div.absolute.inset-0 > span.text-sm",
      "fg": "#6f7883",
-     "bg": "#eef0f2",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 400,
-     "ratio": 3.92,
+     "ratio": 4.48,
      "need": 4.5,
      "pass": false,
-     "count": 20
+     "count": 19
     },
     {
      "sample": "Open for entry",
      "where": "div.relative.aspect-video > div.absolute.top-3 > span.inline-flex.w-fit",
      "fg": "#067a38",
-     "bg": "#e6f6ec",
+     "bg": "#ffffff",
      "px": 12,
      "weight": 500,
-     "ratio": 4.87,
+     "ratio": 5.46,
      "need": 4.5,
      "pass": true,
-     "count": 19
+     "count": 17
     },
     {
      "sample": "Sterun entry rules e2e 2026-09-15",
      "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_0_",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 22,
      "weight": 600,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
-     "count": 20
+     "count": 18
     },
     {
      "sample": "Sep 16, 2026",
      "where": "ul#_r_1_ > li.flex.items-center > span.numeric",
      "fg": "#515a66",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 400,
-     "ratio": 6.58,
+     "ratio": 6.99,
      "need": 4.5,
      "pass": true,
-     "count": 39
+     "count": 35
     },
     {
      "sample": "Free",
      "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 16,
      "weight": 500,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
-     "count": 20
+     "count": 17
+    },
+    {
+     "sample": "Sterun SDK e2e 2026-09-15",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_2_",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 22,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 19
+    },
+    {
+     "sample": "Sep 16, 2026",
+     "where": "ul#_r_3_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.99,
+     "need": 4.5,
+     "pass": true,
+     "count": 37
+    },
+    {
+     "sample": "Free to sUSD 5",
+     "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 16,
+     "weight": 500,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 19
     },
     {
      "sample": "Cancelled",
@@ -210,6 +1280,114 @@
      "need": 4.5,
      "pass": true,
      "count": 1
+    },
+    {
+     "sample": "From sUSD 20",
+     "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 3
+    },
+    {
+     "sample": "TechSprint UGM 2026 (TESTING 3)",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_8_",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 22,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "Nov 13, 2026",
+     "where": "ul#_r_9_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "Sterun quota increase sanity 2026-09-15",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_g_",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 22,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "Jan 15, 2027",
+     "where": "ul#_r_h_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "Sterun SDK e2e 2026-09-09",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_q_",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 22,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "Sep 11, 2026",
+     "where": "ul#_r_r_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "3 entries left",
+     "where": "ul#_r_13_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "Sterun Testnet Rehearsal",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_14_",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 22,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
     }
    ],
    "overImage": [],
@@ -262,6 +1440,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": []
   },
   {
@@ -276,7 +1455,7 @@
     "Failed to load resource: net::ERR_FAILED",
     "Access to fetch at 'https://sterun.xyz/events/entry-rules-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allo",
     "Failed to load resource: net::ERR_FAILED",
-    "Access to fetch at 'https://sterun.xyz/events/addons-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Ori",
+    "Access to fetch at 'https://sterun.xyz/events/quota-sanity.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-O",
     "Failed to load resource: net::ERR_FAILED"
    ],
    "text": [
@@ -296,10 +1475,10 @@
      "sample": "All locations",
      "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
      "fg": "#515a66",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 500,
-     "ratio": 6.58,
+     "ratio": 6.99,
      "need": 4.5,
      "pass": true,
      "count": 1
@@ -308,10 +1487,10 @@
      "sample": "Browse races",
      "where": "header.flex.flex-col > div.flex.flex-col > h1.heading-hero.text-4xl",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 64,
      "weight": 700,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 3,
      "pass": true,
      "count": 1
@@ -320,10 +1499,10 @@
      "sample": "Filters",
      "where": "div.flex.w-full > button.inline-flex.shrink-0 > span.hidden.sm:inline",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 500,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
      "count": 1
@@ -332,10 +1511,10 @@
      "sample": "All races",
      "where": "div.mx-auto.flex > section.flex.flex-col > h2#directory-list",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 28,
      "weight": 600,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 3,
      "pass": true,
      "count": 1
@@ -344,61 +1523,97 @@
      "sample": "No image",
      "where": "div.relative.aspect-video > div.absolute.inset-0 > span.text-sm",
      "fg": "#6f7883",
-     "bg": "#eef0f2",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 400,
-     "ratio": 3.92,
+     "ratio": 4.48,
      "need": 4.5,
      "pass": false,
-     "count": 20
+     "count": 12
     },
     {
      "sample": "Open for entry",
      "where": "div.relative.aspect-video > div.absolute.top-3 > span.inline-flex.w-fit",
      "fg": "#067a38",
-     "bg": "#e6f6ec",
+     "bg": "#ffffff",
      "px": 12,
      "weight": 500,
-     "ratio": 4.87,
+     "ratio": 5.46,
      "need": 4.5,
      "pass": true,
-     "count": 19
+     "count": 11
     },
     {
      "sample": "Sterun entry rules e2e 2026-09-15",
      "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_0_",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 22,
      "weight": 600,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
-     "count": 20
+     "count": 12
     },
     {
      "sample": "Sep 16, 2026",
      "where": "ul#_r_1_ > li.flex.items-center > span.numeric",
      "fg": "#515a66",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 400,
-     "ratio": 6.58,
+     "ratio": 6.99,
      "need": 4.5,
      "pass": true,
-     "count": 39
+     "count": 19
     },
     {
      "sample": "Free",
      "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 16,
      "weight": 500,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
-     "count": 20
+     "count": 12
+    },
+    {
+     "sample": "TechSprint UGM 2026 (TESTING 3)",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_8_",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 22,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 16
+    },
+    {
+     "sample": "Nov 13, 2026",
+     "where": "ul#_r_9_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.99,
+     "need": 4.5,
+     "pass": true,
+     "count": 31
+    },
+    {
+     "sample": "From sUSD 25",
+     "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 16,
+     "weight": 500,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 16
     },
     {
      "sample": "Cancelled",
@@ -411,6 +1626,42 @@
      "need": 4.5,
      "pass": true,
      "count": 1
+    },
+    {
+     "sample": "Sterun quota increase sanity 2026-09-15",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_g_",
+     "fg": "#1e232b",
+     "bg": "#ffffff",
+     "px": 22,
+     "weight": 600,
+     "ratio": 15.78,
+     "need": 4.5,
+     "pass": true,
+     "count": 12
+    },
+    {
+     "sample": "Jan 15, 2027",
+     "where": "ul#_r_h_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.99,
+     "need": 4.5,
+     "pass": true,
+     "count": 23
+    },
+    {
+     "sample": "7 entries left",
+     "where": "ul#_r_1_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 20
     }
    ],
    "overImage": [],
@@ -463,6 +1714,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": []
   },
   {
@@ -493,25 +1745,25 @@
      "sample": "All races",
      "where": "main.flex.flex-1 > div.mx-auto.flex > a.text-sm.text-teal-500",
      "fg": "#016985",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 400,
-     "ratio": 5.88,
+     "ratio": 6.25,
      "need": 4.5,
      "pass": true,
-     "count": 2
+     "count": 1
     },
     {
      "sample": "This race has not published a poster.",
      "where": "div.grid.gap-6 > div.flex.h-full > p.text-sm.text-n-500",
      "fg": "#6f7883",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 14,
      "weight": 400,
-     "ratio": 4.22,
+     "ratio": 4.48,
      "need": 4.5,
      "pass": false,
-     "count": 6
+     "count": 1
     },
     {
      "sample": "LARI TEKNIK (TESTING 2)",
@@ -571,7 +1823,7 @@
      "ratio": 4.22,
      "need": 4.5,
      "pass": false,
-     "count": 6
+     "count": 1
     },
     {
      "sample": "sUSD 25",
@@ -589,34 +1841,58 @@
      "sample": "Details",
      "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-details",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 16,
      "weight": 500,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
      "count": 1
+    },
+    {
+     "sample": "Terms",
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-terms",
+     "fg": "#6f7883",
+     "bg": "#ffffff",
+     "px": 16,
+     "weight": 400,
+     "ratio": 4.48,
+     "need": 4.5,
+     "pass": false,
+     "count": 5
     },
     {
      "sample": "General information",
      "where": "div.flex.flex-col > section > h2.heading-strong.text-lg",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 18,
      "weight": 600,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
      "count": 1
     },
     {
+     "sample": "Organised by",
+     "where": "div.mt-2 > div.flex.flex-wrap > p.flex.w-44",
+     "fg": "#6f7883",
+     "bg": "#ffffff",
+     "px": 14,
+     "weight": 400,
+     "ratio": 4.48,
+     "need": 4.5,
+     "pass": false,
+     "count": 2
+    },
+    {
      "sample": "GA5VKC…P5HZS7",
      "where": "div.flex.flex-wrap > div.text-base.text-foreground > a.numeric.text-teal-500",
      "fg": "#016985",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 16,
      "weight": 400,
-     "ratio": 5.88,
+     "ratio": 6.25,
      "need": 4.5,
      "pass": true,
      "count": 1
@@ -625,13 +1901,61 @@
      "sample": "Nov 21, 2026, 05:00 GMT+7",
      "where": "div.flex.flex-wrap > div.text-base.text-foreground > span.numeric",
      "fg": "#1e232b",
-     "bg": "#f8f8f8",
+     "bg": "#ffffff",
      "px": 16,
      "weight": 400,
-     "ratio": 14.86,
+     "ratio": 15.78,
      "need": 4.5,
      "pass": true,
      "count": 1
+    },
+    {
+     "sample": "Enter this race",
+     "where": "div.flex.flex-col > div.mt-auto > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Race pack",
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-add-ons",
+     "fg": "#6f7883",
+     "bg": "#ffffff",
+     "px": 16,
+     "weight": 400,
+     "ratio": 4.48,
+     "need": 4.5,
+     "pass": false,
+     "count": 2
+    },
+    {
+     "sample": "GA5V…HZS7",
+     "where": "div.flex.flex-col > p.text-sm.text-n-500 > a.numeric.text-teal-500",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Organised by",
+     "where": "div.grid.gap-6 > div.flex.flex-col > p.text-sm.text-n-500",
+     "fg": "#6f7883",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 4.22,
+     "need": 4.5,
+     "pass": false,
+     "count": 5
     }
    ],
    "overImage": [],
@@ -733,6 +2057,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1009,6 +2334,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1037,6 +2363,54 @@
      "need": 4.5,
      "pass": true,
      "count": 1
+    },
+    {
+     "sample": "We could not load this race",
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > p.heading-strong.text-lg",
+     "fg": "#a31c11",
+     "bg": "#fceae8",
+     "px": 18,
+     "weight": 600,
+     "ratio": 6.62,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "This race does not exist, or we could not connec",
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > p.mt-1.text-base",
+     "fg": "#3a424c",
+     "bg": "#fceae8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 8.76,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Try again",
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > button.inline-flex.shrink-0",
+     "fg": "#2a3038",
+     "bg": "#eef0f2",
+     "px": 14,
+     "weight": 500,
+     "ratio": 11.65,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Back to all races",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > a.mt-6.inline-block",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
     }
    ],
    "overImage": [],
@@ -1054,6 +2428,20 @@
      "w": 138,
      "h": 36,
      "fails248": false
+    },
+    {
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > button.inline-flex.shrink-0",
+     "text": "Try again",
+     "w": 90,
+     "h": 32,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > a.mt-6.inline-block",
+     "text": "Back to all races",
+     "w": 131,
+     "h": 26,
+     "fails248": false
     }
    ],
    "overflowX": 0,
@@ -1061,6 +2449,7 @@
    "langAttr": "en",
    "h1Count": 0,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1089,6 +2478,54 @@
      "need": 4.5,
      "pass": true,
      "count": 1
+    },
+    {
+     "sample": "We could not load this race",
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > p.heading-strong.text-lg",
+     "fg": "#a31c11",
+     "bg": "#fceae8",
+     "px": 18,
+     "weight": 600,
+     "ratio": 6.62,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "This race does not exist, or we could not connec",
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > p.mt-1.text-base",
+     "fg": "#3a424c",
+     "bg": "#fceae8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 8.76,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Try again",
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > button.inline-flex.shrink-0",
+     "fg": "#2a3038",
+     "bg": "#eef0f2",
+     "px": 14,
+     "weight": 500,
+     "ratio": 11.65,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Back to all races",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > a.mt-6.inline-block",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
     }
    ],
    "overImage": [],
@@ -1106,6 +2543,20 @@
      "w": 138,
      "h": 36,
      "fails248": false
+    },
+    {
+     "where": "div.mx-auto.w-full > div.rounded-lg.border > button.inline-flex.shrink-0",
+     "text": "Try again",
+     "w": 90,
+     "h": 32,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > a.mt-6.inline-block",
+     "text": "Back to all races",
+     "w": 131,
+     "h": 26,
+     "fails248": false
     }
    ],
    "overflowX": 0,
@@ -1113,6 +2564,7 @@
    "langAttr": "en",
    "h1Count": 0,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1189,6 +2641,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1265,6 +2718,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1348,6 +2802,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
@@ -1431,6 +2886,7 @@
    "langAttr": "en",
    "h1Count": 1,
    "imgNoAlt": 0,
+   "depthsMeasured": 5,
    "focus": [
     {
      "where": "body.flex.min-h-full > script > nextjs-portal",
