@@ -24,7 +24,6 @@ import { PackageIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -33,6 +32,8 @@ import { formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterunxyz/sdk";
 
 import type { Basket, Selection } from "../basket";
+
+import { StepCard } from "./StepCard";
 
 export function StepDistance({
   categories,
@@ -198,31 +199,6 @@ export function StepDistance({
         </StepCard>
       ) : null}
     </div>
-  );
-}
-
-/** A card named by its own heading, so it is a region a screen reader can jump to. */
-function StepCard({
-  id,
-  title,
-  hint,
-  children,
-}: {
-  id: string;
-  title: string;
-  hint: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card id={id} role="region" aria-labelledby={`${id}-title`} className="gap-4 p-5">
-      <div>
-        <h2 id={`${id}-title`} className="heading-strong text-lg text-ink">
-          {title}
-        </h2>
-        <p className="mt-1 text-sm text-n-500">{hint}</p>
-      </div>
-      {children}
-    </Card>
   );
 }
 

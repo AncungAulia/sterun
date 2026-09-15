@@ -103,7 +103,7 @@ export function missingRunnerDetails(d: RunnerDetails, today: string): Missing[]
   ask(!d.gender, "gender", "runner-gender", "Pick one.");
   ask(!d.dateOfBirth, "dateOfBirth", "runner-dob-date", "Pick your date of birth.");
   ask(!d.emergencyName.trim(), "emergencyName", "runner-emergency-name", "Enter who we call in an emergency.");
-  ask(!d.emergencyPhone, "emergencyPhone", "runner-emergency-phone", "Enter their phone number.");
+  ask(!d.emergencyPhone, "emergencyPhone", "runner-emergency-phone", "Add a phone number someone can answer on race day.");
 
   return [...missing, ...impossibleRunnerDetails(d, today)];
 }

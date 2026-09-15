@@ -24,6 +24,7 @@
 import Link from "next/link";
 import { ChevronLeftIcon } from "lucide-react";
 import { useState } from "react";
+import { isSupportedCountry } from "react-phone-number-input";
 
 import { ErrorNotice } from "@/components/elements/ErrorNotice";
 import { Stepper } from "@/components/elements/Stepper";
@@ -32,8 +33,10 @@ import { Button } from "@/components/ui/button";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useRunnerRecords } from "@/hooks/useRunnerRecords";
+import { useArea } from "@/hooks/useArea";
 import { useWallet } from "@/hooks/useWallet";
 import { joinAddOns } from "@/modules/event-detail/component/TabAddOns";
+import { focusField } from "@/modules/organiser/missing";
 import { formatEventDate } from "@/utils/format";
 
 import {
@@ -46,7 +49,10 @@ import {
 } from "./basket";
 import { EntrySummary } from "./component/EntrySummary";
 import { GateNotice } from "./component/GateNotice";
+import type { Country } from "./component/PhoneField";
 import { StepDistance } from "./component/StepDistance";
+import { StepRunner } from "./component/StepRunner";
+import { EMPTY_DETAILS, missingRunnerDetails, type RunnerDetails } from "./details";
 import { entryGate } from "./gate";
 
 export type EntryStep = "distance" | "details" | "pay";
@@ -138,6 +144,18 @@ function EntryForm({
   const [selection, setSelection] = useState<Selection>(restored?.selection ?? EMPTY_SELECTION);
   const [step, setStep] = useState<EntryStep>("distance");
   const [sizesAsked, setSizesAsked] = useState(false);
+  // Memory only, never storage: see the header.
+  const [details, setDetails] = useState<RunnerDetails>(EMPTY_DETAILS);
+  const [detailsAsked, setDetailsAsked] = useState(false);
+  /**
+   * The runner's own calendar day, read once. `en-CA` formats as YYYY-MM-DD in
+   * local time; an ISO string would be UTC, which is yesterday for an early
+   * morning in Jakarta and would refuse a date of birth that is today.
+   */
+  const [today] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const { place } = useArea();
+  const areaCountry = place?.mode === "area" ? place.countryCode.toUpperCase() : "";
+  const defaultCountry: Country = isSupportedCountry(areaCountry) ? areaCountry : "ID";
 
   if (race.isError) {
     return (
@@ -215,6 +233,16 @@ function EntryForm({
     setStep("details");
   }
 
+  function continueFromDetails() {
+    const missing = missingRunnerDetails(details, today);
+    if (missing.length > 0) {
+      setDetailsAsked(true);
+      focusField(missing[0].focusId);
+      return;
+    }
+    setStep("pay");
+  }
+
   return (
     <Page>
       <div className="flex flex-col gap-2">
@@ -250,6 +278,15 @@ function EntryForm({
               onSelection={pickSelection}
             />
           ) : null}
+          {step === "details" ? (
+            <StepRunner
+              details={details}
+              onChange={setDetails}
+              today={today}
+              showMissing={detailsAsked}
+              defaultCountry={defaultCountry}
+            />
+          ) : null}
         </div>
 
         <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
@@ -272,12 +309,17 @@ function EntryForm({
                 Continue
               </Button>
             </>
+          ) : step === "details" ? (
+            <>
+              <Button variant="link" className="px-0" onClick={() => setStep("distance")}>
+                Back
+              </Button>
+              <Button className="w-full sm:w-auto" onClick={continueFromDetails}>
+                Continue
+              </Button>
+            </>
           ) : (
-            <Button
-              variant="secondary"
-              className="w-full sm:w-auto"
-              onClick={() => setStep(step === "pay" ? "details" : "distance")}
-            >
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setStep("details")}>
               Back
             </Button>
           )}
