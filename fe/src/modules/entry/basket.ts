@@ -30,12 +30,15 @@ export interface PackOption {
 
 export interface PackItem {
   name: string;
+  /** From the event document, when it has one. */
+  photoUrl?: string;
   sized: boolean;
   options: PackOption[];
 }
 
 export interface ExtraItem {
   name: string;
+  photoUrl?: string;
   addonId: number;
   priceStroops: bigint;
   unitsLeft: number;
@@ -72,6 +75,7 @@ export function buildBasket(joined: JoinedAddOn[], categoryCode: string): Basket
       const sized = Boolean(item.sizes?.length);
       pack.push({
         name: item.name,
+        ...(item.photoUrl ? { photoUrl: item.photoUrl } : {}),
         sized,
         options: rows.map((row) => ({
           label: sized
@@ -87,6 +91,7 @@ export function buildBasket(joined: JoinedAddOn[], categoryCode: string): Basket
       const first = rows[0];
       extras.push({
         name: item.name,
+        ...(item.photoUrl ? { photoUrl: item.photoUrl } : {}),
         addonId: first.addonId,
         priceStroops: price,
         unitsLeft: first.unitsLeft,
@@ -145,4 +150,29 @@ export function packChoices(
     const option = item.options.find((o) => o.addonId === selection.sizes[item.name]);
     return option ? [{ item: item.name, choice: option.label }] : [];
   });
+}
+
+/**
+ * A selection with everything no longer possible taken out.
+ *
+ * The choice is kept across a reload (`EntryFlow`, sessionStorage), and stock
+ * moves while a runner fills in a form. A size that sold out since it was
+ * picked, or an extra this distance no longer offers, must not be shown as
+ * chosen, counted in the total, or sent to `enter`, which would refuse it.
+ */
+export function sanitizeSelection(basket: Basket, selection: Selection): Selection {
+  const sizes: Record<string, number> = {};
+  for (const item of basket.pack) {
+    if (!item.sized) continue;
+    const id = selection.sizes[item.name];
+    if (item.options.some((option) => option.addonId === id && !option.soldOut)) {
+      sizes[item.name] = id;
+    }
+  }
+
+  const extras = basket.extras
+    .filter((extra) => extra.unitsLeft > 0 && selection.extras.includes(extra.addonId))
+    .map((extra) => extra.addonId);
+
+  return { sizes, extras };
 }

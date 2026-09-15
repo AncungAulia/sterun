@@ -11,6 +11,7 @@ import {
   buildBasket,
   missingPackSizes,
   packChoices,
+  sanitizeSelection,
   totalStroops,
 } from "@/modules/entry/basket";
 import type { SterunAddOn, SterunCategory } from "@sterunxyz/sdk";
@@ -185,5 +186,39 @@ describe("packChoices", () => {
 
   it("is empty before a size is chosen", () => {
     expect(packChoices(basket, EMPTY_SELECTION)).toEqual([]);
+  });
+});
+
+describe("photos", () => {
+  it("carries an item's photo from the document when it has one", () => {
+    const withPhoto: JoinedAddOn = { ...medal, item: { ...medal.item, photoUrl: "https://x.test/medal.png" } };
+    expect(buildBasket([withPhoto], "10K").pack[0].photoUrl).toBe("https://x.test/medal.png");
+  });
+
+  it("leaves the field out when there is none", () => {
+    expect("photoUrl" in buildBasket([towel], "10K").extras[0]).toBe(false);
+  });
+});
+
+describe("sanitizeSelection", () => {
+  const basket = buildBasket([jersey, medal, towel, soldOutCap], "10K");
+
+  it("keeps a choice that is still available", () => {
+    const selection = { sizes: { "Event jersey": 1 }, extras: [3] };
+    expect(sanitizeSelection(basket, selection)).toEqual(selection);
+  });
+
+  it("drops a size that sold out since it was chosen", () => {
+    expect(sanitizeSelection(basket, { sizes: { "Event jersey": 0 }, extras: [] })).toEqual(EMPTY_SELECTION);
+  });
+
+  it("drops an extra that sold out, or that this distance does not offer", () => {
+    expect(sanitizeSelection(basket, { sizes: {}, extras: [4, 5, 3] })).toEqual({ sizes: {}, extras: [3] });
+  });
+
+  it("drops a size id that matches no option, as a stale saved choice might", () => {
+    expect(sanitizeSelection(basket, { sizes: { "Event jersey": 99, Ghost: 1 }, extras: [] })).toEqual(
+      EMPTY_SELECTION,
+    );
   });
 });

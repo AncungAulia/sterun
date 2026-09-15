@@ -15,7 +15,28 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
 
-export function WalletGate({ children }: { children: ReactNode }) {
+/** What the organiser console says when nothing is connected. */
+const ORGANISER_ASK = {
+  title: "Organiser console",
+  description:
+    "Connect the wallet you want to organise with. Everything you create here belongs to it, " +
+    "and it is the only one that can change your events later.",
+};
+
+export function WalletGate({
+  children,
+  title = ORGANISER_ASK.title,
+  description = ORGANISER_ASK.description,
+}: {
+  children: ReactNode;
+  /**
+   * The ask, in the words of whoever is asked. A runner entering a race is not
+   * in an organiser console, and telling them so is the first thing on the
+   * page (STE-21 passes its own).
+   */
+  title?: string;
+  description?: string;
+}) {
   const { address, isRestoring, isConnecting, connect, error } = useWallet();
 
   if (isRestoring) {
@@ -29,11 +50,8 @@ export function WalletGate({ children }: { children: ReactNode }) {
   if (!address) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-16">
-        <h1 className="heading-hero text-4xl text-ink">Organiser console</h1>
-        <p className="mt-3 max-w-xl text-lg text-n-600">
-          Connect the wallet you want to organise with. Everything you create here belongs to it,
-          and it is the only one that can change your events later.
-        </p>
+        <h1 className="heading-hero text-4xl text-ink">{title}</h1>
+        <p className="mt-3 max-w-xl text-lg text-n-600">{description}</p>
         <Button className="mt-6" onClick={() => void connect()} disabled={isConnecting}>
           {isConnecting ? "Connecting" : "Connect wallet"}
         </Button>
