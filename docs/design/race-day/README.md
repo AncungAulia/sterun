@@ -17,9 +17,9 @@ The mockups are plain HTML and CSS. Every colour, size, radius and shadow is a t
 invented hex or pixel value in the file. Regenerate after a token change:
 
 ```bash
-python docs/design/race-day/tools/gen_tokens_css.py     # mockups/tokens.css
-node docs/design/race-day/tools/export-mockups.cjs      # exports/*.png
-node docs/design/race-day/tools/export-motion.cjs       # exports/motion-*.png
+python docs/design/tools/gen_tokens_css.py                    # every mockups/tokens.css
+node docs/design/tools/export-mockups.cjs mockups/index.html  # exports/*.png
+node docs/design/tools/export-motion.cjs                      # exports/motion-*.png
 ```
 
 The exporter needs `puppeteer-core` and a local Chrome; that is why the PNGs are committed. Reading
@@ -52,7 +52,7 @@ These come from the frozen spec. A screen that breaks one of them is wrong, howe
 | R1 | Valid | Bib, QR, six digits, countdown, `Entered` chip | `exports/r1-pass-valid.png` |
 | R2 | About to roll over (last 5 s) | Same, plus the line that a code mid-change still works | `exports/r2-pass-rollover.png` |
 | R3 | Offline | Same, plus the offline banner | `exports/r3-pass-offline.png` |
-| R4 | Racepack claimed | No QR. A collected panel with the time and desk | `exports/r4-pass-claimed.png` |
+| R4 | Race pack claimed | No QR. A collected panel with the time and desk | `exports/r4-pass-claimed.png` |
 
 ### Volunteer: `/scan` (STE-22)
 
@@ -86,6 +86,7 @@ a volunteer who cannot tell green from red. Three rules carry that:
 | paper on `danger-strong` | 4.05:1 | Passes AA for large text; RED text is never below `--text-2xl`. |
 | ink on `warning-strong` | 5.39:1 | The clock banner, ink on amber as the tokens require. |
 | paper on `warning-strong` | 2.76:1 | **Fails.** Never put paper text on amber. |
+| `n-500` on `paper` | 4.22:1 | **Fails.** Measured while designing the profile screens and fixed here too: every quiet label, caption and empty-field placeholder on a light ground uses `n-600` (6.58:1). |
 
 So every verdict differs in **three** ways before colour is considered: the **word** (`HAND OVER`,
 `CODE EXPIRED`, `ALREADY CLAIMED`, `NOT ON ROSTER`), the **icon shape** (check, cross, triangle,
@@ -236,12 +237,12 @@ translate first if the desk turns out to be Indonesian-speaking only.
 | R1 | `Camera not working? Read these out`, `New code in 19s`, `Works without signal. Keep the screen bright.` |
 | R2 | `A code that just changed still works` / `The scanner accepts the step before and after, so being scanned mid-change is fine.` |
 | R3 | `Offline. Your pass still works` / `Codes are made on this phone. Nothing is downloaded at the desk.` |
-| R4 | `Racepack collected` / `The pass stops making codes once the racepack is collected. Keep it for the race record.` |
+| R4 | `Race pack collected` / `The pass stops making codes once the race pack is collected. Keep it for the race record.` |
 | S1 | `Pick the event and download its roster while you still have signal.` / `The download needs signal once. After that the whole desk works offline.` |
 | S2 | `Hold the runner's QR inside the frame` / `Type the code instead` |
 | S3 | `HAND OVER` / `4 claims waiting to send` / `Next runner` |
 | S4 | `CODE EXPIRED` / `The code on the runner's phone changes every 30 seconds. Ask for the one showing now.` |
-| S5 | `ALREADY CLAIMED` / `Collected 09:41 at desk 2. Do not hand over a second racepack.` |
+| S5 | `ALREADY CLAIMED` / `Collected 09:41 at desk 2. Do not hand over a second race pack.` |
 | S6 | `NOT ON ROSTER` / `This bib is not in the download for this event. Check the runner is at the right race.` |
 | S7 | `Ask the runner to read out the six digits, then their bib.` / `A code starting with 0 is normal. Type all six.` |
 | S8 | `This phone's clock is 4 minutes fast` / `Every scan will fail until it is fixed. Settings → Date & time → Set automatically, then come back.` |

@@ -1,7 +1,7 @@
 // Export a filmstrip of the verdict entry from the STE-18 motion board, so the
 // timing can be reviewed as a single image by someone who cannot open the page.
 //
-//   node docs/design/race-day/tools/export-motion.cjs ["C:/path/to/chrome.exe"]
+//   node docs/design/tools/export-motion.cjs ["C:/path/to/chrome.exe"]
 //
 // A handoff tool, not part of any build, same as export-mockups.cjs: it needs
 // puppeteer-core and a local Chrome, which is why the export is committed.
@@ -14,8 +14,8 @@ const url = require("url");
 const puppeteer = require("puppeteer-core");
 
 const HERE = __dirname;
-const BOARD = path.join(HERE, "..", "mockups", "motion.html");
-const OUT = path.join(HERE, "..", "exports");
+const BOARD = path.join(HERE, "..", "race-day", "mockups", "motion.html");
+const OUT = path.join(HERE, "..", "race-day", "exports");
 const FRAMES = [0, 50, 100, 150, 200, 280]; // ms into the entry
 
 const CHROME_CANDIDATES = [

@@ -1,0 +1,1443 @@
+{
+ "measuredAt": "2026-09-15T10:10:19.971Z",
+ "pages": [
+  {
+   "page": "landing",
+   "name": "Landing",
+   "url": "http://localhost:3000/",
+   "width": 390,
+   "widthLabel": "phone",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Empty page for landing page",
+     "where": "html.big_shoulders_89ebf4a3-module__ScHEOG__variable.poppins_3df2eb2a-module__pKKDEq__variable > body.min-h-full.flex > div.flex.flex-col",
+     "fg": "#1e232b",
+     "bg": "#000000",
+     "px": 16,
+     "weight": 400,
+     "ratio": 1.33,
+     "need": 4.5,
+     "pass": false,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [],
+   "overflowX": 0,
+   "title": "Sterun — runs you can't fake",
+   "langAttr": "en",
+   "h1Count": 0,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.min-h-full.flex > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(255, 255, 255)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "landing",
+   "name": "Landing",
+   "url": "http://localhost:3000/",
+   "width": 1440,
+   "widthLabel": "laptop",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Empty page for landing page",
+     "where": "html.big_shoulders_89ebf4a3-module__ScHEOG__variable.poppins_3df2eb2a-module__pKKDEq__variable > body.min-h-full.flex > div.flex.flex-col",
+     "fg": "#1e232b",
+     "bg": "#000000",
+     "px": 16,
+     "weight": 400,
+     "ratio": 1.33,
+     "need": 4.5,
+     "pass": false,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [],
+   "overflowX": 0,
+   "title": "Sterun — runs you can't fake",
+   "langAttr": "en",
+   "h1Count": 0,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.min-h-full.flex > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(255, 255, 255)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "directory",
+   "name": "Event directory",
+   "url": "http://localhost:3001/",
+   "width": 390,
+   "widthLabel": "phone",
+   "loaded": true,
+   "consoleErrors": [
+    "Access to fetch at 'https://sterun.xyz/events/sanity.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin'",
+    "Failed to load resource: net::ERR_FAILED",
+    "Access to fetch at 'https://sterun.xyz/events/addons-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Ori",
+    "Failed to load resource: net::ERR_FAILED",
+    "Access to fetch at 'https://sterun.xyz/events/bib-sanity.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Ori",
+    "Failed to load resource: net::ERR_FAILED"
+   ],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "All locations",
+     "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 500,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Browse races",
+     "where": "header.flex.flex-col > div.flex.flex-col > h1.heading-hero.text-4xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 48,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "All races",
+     "where": "div.mx-auto.flex > section.flex.flex-col > h2#directory-list",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 28,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "No image",
+     "where": "div.relative.aspect-video > div.absolute.inset-0 > span.text-sm",
+     "fg": "#6f7883",
+     "bg": "#eef0f2",
+     "px": 14,
+     "weight": 400,
+     "ratio": 3.92,
+     "need": 4.5,
+     "pass": false,
+     "count": 20
+    },
+    {
+     "sample": "Open for entry",
+     "where": "div.relative.aspect-video > div.absolute.top-3 > span.inline-flex.w-fit",
+     "fg": "#067a38",
+     "bg": "#e6f6ec",
+     "px": 12,
+     "weight": 500,
+     "ratio": 4.87,
+     "need": 4.5,
+     "pass": true,
+     "count": 19
+    },
+    {
+     "sample": "Sterun entry rules e2e 2026-09-15",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_0_",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 22,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 20
+    },
+    {
+     "sample": "Sep 16, 2026",
+     "where": "ul#_r_1_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 39
+    },
+    {
+     "sample": "Free",
+     "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 20
+    },
+    {
+     "sample": "Cancelled",
+     "where": "div.relative.aspect-video > div.absolute.top-3 > span.inline-flex.w-fit",
+     "fg": "#ffffff",
+     "bg": "#a31c11",
+     "px": 12,
+     "weight": 500,
+     "ratio": 7.69,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
+     "text": "All locations",
+     "w": 128,
+     "h": 32,
+     "fails248": false
+    },
+    {
+     "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
+     "text": "Refresh",
+     "w": 32,
+     "h": 32,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.w-full > div.relative.flex-1 > input.h-9.w-full",
+     "text": "Search races",
+     "w": 308,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.flex-col > div.flex.w-full > button.inline-flex.shrink-0",
+     "text": "Filters",
+     "w": 42,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": []
+  },
+  {
+   "page": "directory",
+   "name": "Event directory",
+   "url": "http://localhost:3001/",
+   "width": 1440,
+   "widthLabel": "laptop",
+   "loaded": true,
+   "consoleErrors": [
+    "Access to fetch at 'https://sterun.xyz/events/sdk-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Origin",
+    "Failed to load resource: net::ERR_FAILED",
+    "Access to fetch at 'https://sterun.xyz/events/entry-rules-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allo",
+    "Failed to load resource: net::ERR_FAILED",
+    "Access to fetch at 'https://sterun.xyz/events/addons-e2e.json' from origin 'http://localhost:3001' has been blocked by CORS policy: No 'Access-Control-Allow-Ori",
+    "Failed to load resource: net::ERR_FAILED"
+   ],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "All locations",
+     "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 500,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Browse races",
+     "where": "header.flex.flex-col > div.flex.flex-col > h1.heading-hero.text-4xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 64,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Filters",
+     "where": "div.flex.w-full > button.inline-flex.shrink-0 > span.hidden.sm:inline",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "All races",
+     "where": "div.mx-auto.flex > section.flex.flex-col > h2#directory-list",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 28,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "No image",
+     "where": "div.relative.aspect-video > div.absolute.inset-0 > span.text-sm",
+     "fg": "#6f7883",
+     "bg": "#eef0f2",
+     "px": 14,
+     "weight": 400,
+     "ratio": 3.92,
+     "need": 4.5,
+     "pass": false,
+     "count": 20
+    },
+    {
+     "sample": "Open for entry",
+     "where": "div.relative.aspect-video > div.absolute.top-3 > span.inline-flex.w-fit",
+     "fg": "#067a38",
+     "bg": "#e6f6ec",
+     "px": 12,
+     "weight": 500,
+     "ratio": 4.87,
+     "need": 4.5,
+     "pass": true,
+     "count": 19
+    },
+    {
+     "sample": "Sterun entry rules e2e 2026-09-15",
+     "where": "a.flex.h-full > div.flex.flex-1 > h3#_r_0_",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 22,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 20
+    },
+    {
+     "sample": "Sep 16, 2026",
+     "where": "ul#_r_1_ > li.flex.items-center > span.numeric",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 39
+    },
+    {
+     "sample": "Free",
+     "where": "a.flex.h-full > div.flex.flex-1 > p.numeric.mt-auto",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 20
+    },
+    {
+     "sample": "Cancelled",
+     "where": "div.relative.aspect-video > div.absolute.top-3 > span.inline-flex.w-fit",
+     "fg": "#ffffff",
+     "bg": "#a31c11",
+     "px": 12,
+     "weight": 500,
+     "ratio": 7.69,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
+     "text": "All locations",
+     "w": 128,
+     "h": 32,
+     "fails248": false
+    },
+    {
+     "where": "header.flex.flex-col > div.flex.items-center > button.inline-flex.shrink-0",
+     "text": "Refresh",
+     "w": 32,
+     "h": 32,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.w-full > div.relative.flex-1 > input.h-9.w-full",
+     "text": "Search races",
+     "w": 477,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.flex-col > div.flex.w-full > button.inline-flex.shrink-0",
+     "text": "Filters",
+     "w": 91,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": []
+  },
+  {
+   "page": "event",
+   "name": "Event detail",
+   "url": "http://localhost:3001/events/4",
+   "width": 390,
+   "widthLabel": "phone",
+   "loaded": true,
+   "consoleErrors": [
+    "Access to fetch at 'https://api-sterun.jameshub.fun/files/b4fe24876b8013be51ddad1410d4a6b57065f5e452c4c0e439e9f25923b723af.json' from origin 'http://localhost:3",
+    "Failed to load resource: net::ERR_FAILED"
+   ],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "All races",
+     "where": "main.flex.flex-1 > div.mx-auto.flex > a.text-sm.text-teal-500",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "This race has not published a poster.",
+     "where": "div.grid.gap-6 > div.flex.h-full > p.text-sm.text-n-500",
+     "fg": "#6f7883",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 4.22,
+     "need": 4.5,
+     "pass": false,
+     "count": 6
+    },
+    {
+     "sample": "LARI TEKNIK (TESTING 2)",
+     "where": "div.flex.flex-col > div.flex.items-start > h1.heading-hero.text-3xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 36,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Open for entry",
+     "where": "div.flex.flex-col > div.flex.items-start > span.inline-flex.w-fit",
+     "fg": "#067a38",
+     "bg": "#e6f6ec",
+     "px": 12,
+     "weight": 500,
+     "ratio": 4.87,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "3K",
+     "where": "div.flex.flex-wrap > span.inline-flex.w-fit > span.numeric",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 12,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "400",
+     "where": "div.grid.gap-4 > div > p.numeric.heading-strong",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 36,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "left",
+     "where": "div > p.numeric.heading-strong > span.text-base.font-normal",
+     "fg": "#6f7883",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 4.22,
+     "need": 4.5,
+     "pass": false,
+     "count": 6
+    },
+    {
+     "sample": "sUSD 25",
+     "where": "div.grid.gap-4 > div > p.numeric.heading-strong",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 28,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Details",
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-details",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "General information",
+     "where": "div.flex.flex-col > section > h2.heading-strong.text-lg",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 18,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "GA5VKC…P5HZS7",
+     "where": "div.flex.flex-wrap > div.text-base.text-foreground > a.numeric.text-teal-500",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Nov 21, 2026, 05:00 GMT+7",
+     "where": "div.flex.flex-wrap > div.text-base.text-foreground > span.numeric",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.flex > a.text-sm.text-teal-500",
+     "text": "All races",
+     "w": 358,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "div.flex.flex-col > p.text-sm.text-n-500 > a.numeric.text-teal-500",
+     "text": "GA5V…HZS7",
+     "w": 80,
+     "h": 20,
+     "fails248": true
+    },
+    {
+     "where": "div.flex.flex-col > div.mt-auto > button.inline-flex.shrink-0",
+     "text": "Enter this race",
+     "w": 132,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.flex-col > div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full",
+     "text": "DetailsTermsTimelineDistancesRace packVe",
+     "w": 358,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-details",
+     "text": "Details",
+     "w": 103,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-terms",
+     "text": "Terms",
+     "w": 97,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-timeline",
+     "text": "Timeline",
+     "w": 115,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-categories",
+     "text": "Distances",
+     "w": 126,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-add-ons",
+     "text": "Race pack",
+     "w": 132,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-proofs",
+     "text": "Verification",
+     "w": 139,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.flex-wrap > div.text-base.text-foreground > a.numeric.text-teal-500",
+     "text": "GA5VKC…P5HZS7",
+     "w": 133,
+     "h": 23,
+     "fails248": true
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "event",
+   "name": "Event detail",
+   "url": "http://localhost:3001/events/4",
+   "width": 1440,
+   "widthLabel": "laptop",
+   "loaded": true,
+   "consoleErrors": [
+    "Access to fetch at 'https://api-sterun.jameshub.fun/files/b4fe24876b8013be51ddad1410d4a6b57065f5e452c4c0e439e9f25923b723af.json' from origin 'http://localhost:3",
+    "Failed to load resource: net::ERR_FAILED"
+   ],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "All races",
+     "where": "main.flex.flex-1 > div.mx-auto.flex > a.text-sm.text-teal-500",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "This race has not published a poster.",
+     "where": "div.grid.gap-6 > div.flex.h-full > p.text-sm.text-n-500",
+     "fg": "#6f7883",
+     "bg": "#f8f8f8",
+     "px": 14,
+     "weight": 400,
+     "ratio": 4.22,
+     "need": 4.5,
+     "pass": false,
+     "count": 6
+    },
+    {
+     "sample": "LARI TEKNIK (TESTING 2)",
+     "where": "div.flex.flex-col > div.flex.items-start > h1.heading-hero.text-3xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 36,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Open for entry",
+     "where": "div.flex.flex-col > div.flex.items-start > span.inline-flex.w-fit",
+     "fg": "#067a38",
+     "bg": "#e6f6ec",
+     "px": 12,
+     "weight": 500,
+     "ratio": 4.87,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "3K",
+     "where": "div.flex.flex-wrap > span.inline-flex.w-fit > span.numeric",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 12,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 4
+    },
+    {
+     "sample": "400",
+     "where": "div.grid.gap-4 > div > p.numeric.heading-strong",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 36,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "left",
+     "where": "div > p.numeric.heading-strong > span.text-base.font-normal",
+     "fg": "#6f7883",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 4.22,
+     "need": 4.5,
+     "pass": false,
+     "count": 6
+    },
+    {
+     "sample": "sUSD 25",
+     "where": "div.grid.gap-4 > div > p.numeric.heading-strong",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 28,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Details",
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-details",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 500,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "General information",
+     "where": "div.flex.flex-col > section > h2.heading-strong.text-lg",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 18,
+     "weight": 600,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "GA5VKC…P5HZS7",
+     "where": "div.flex.flex-wrap > div.text-base.text-foreground > a.numeric.text-teal-500",
+     "fg": "#016985",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Nov 21, 2026, 05:00 GMT+7",
+     "where": "div.flex.flex-wrap > div.text-base.text-foreground > span.numeric",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 16,
+     "weight": 400,
+     "ratio": 14.86,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.flex > a.text-sm.text-teal-500",
+     "text": "All races",
+     "w": 992,
+     "h": 21,
+     "fails248": true
+    },
+    {
+     "where": "div.flex.flex-col > p.text-sm.text-n-500 > a.numeric.text-teal-500",
+     "text": "GA5V…HZS7",
+     "w": 80,
+     "h": 20,
+     "fails248": true
+    },
+    {
+     "where": "div.flex.flex-col > div.mt-auto > button.inline-flex.shrink-0",
+     "text": "Enter this race",
+     "w": 132,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.flex-col > div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full",
+     "text": "DetailsTermsTimelineDistancesRace packVe",
+     "w": 992,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-details",
+     "text": "Details",
+     "w": 165,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-terms",
+     "text": "Terms",
+     "w": 165,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-timeline",
+     "text": "Timeline",
+     "w": 165,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-categories",
+     "text": "Distances",
+     "w": 165,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-add-ons",
+     "text": "Race pack",
+     "w": 165,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.overflow-x-auto.overflow-y-hidden > div.grid.min-w-full > button#radix-_r_0_-trigger-proofs",
+     "text": "Verification",
+     "w": 165,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.flex.flex-wrap > div.text-base.text-foreground > a.numeric.text-teal-500",
+     "text": "GA5VKC…P5HZS7",
+     "w": 133,
+     "h": 23,
+     "fails248": true
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "notfound",
+   "name": "Event that does not exist",
+   "url": "http://localhost:3001/events/99999",
+   "width": 390,
+   "widthLabel": "phone",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 0,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "notfound",
+   "name": "Event that does not exist",
+   "url": "http://localhost:3001/events/99999",
+   "width": 1440,
+   "widthLabel": "laptop",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 0,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "console",
+   "name": "Organiser console",
+   "url": "http://localhost:3001/org",
+   "width": 390,
+   "widthLabel": "phone",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Organiser console",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > h1.heading-hero.text-4xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 48,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Connect the wallet you want to organise with. Ev",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > p.mt-3.max-w-xl",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 18,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Connect wallet",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "div.flex.w-full > div.flex.shrink-0 > a.flex.w-fit",
+     "text": "Sterun",
+     "w": 120,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "console",
+   "name": "Organiser console",
+   "url": "http://localhost:3001/org",
+   "width": 1440,
+   "widthLabel": "laptop",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Organiser console",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > h1.heading-hero.text-4xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 48,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Connect the wallet you want to organise with. Ev",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > p.mt-3.max-w-xl",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 18,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Connect wallet",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "div.flex.w-full > div.flex.shrink-0 > a.flex.w-fit",
+     "text": "Sterun",
+     "w": 120,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "console-new",
+   "name": "Create a race",
+   "url": "http://localhost:3001/org/new",
+   "width": 390,
+   "widthLabel": "phone",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "Organiser console",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > h1.heading-hero.text-4xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 48,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Connect the wallet you want to organise with. Ev",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > p.mt-3.max-w-xl",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 18,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  },
+  {
+   "page": "console-new",
+   "name": "Create a race",
+   "url": "http://localhost:3001/org/new",
+   "width": 1440,
+   "widthLabel": "laptop",
+   "loaded": true,
+   "consoleErrors": [],
+   "text": [
+    {
+     "sample": "Connect wallet",
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "fg": "#f8f8f8",
+     "bg": "#016985",
+     "px": 14,
+     "weight": 500,
+     "ratio": 5.88,
+     "need": 4.5,
+     "pass": true,
+     "count": 2
+    },
+    {
+     "sample": "Organiser console",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > h1.heading-hero.text-4xl",
+     "fg": "#1e232b",
+     "bg": "#f8f8f8",
+     "px": 48,
+     "weight": 700,
+     "ratio": 14.86,
+     "need": 3,
+     "pass": true,
+     "count": 1
+    },
+    {
+     "sample": "Connect the wallet you want to organise with. Ev",
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > p.mt-3.max-w-xl",
+     "fg": "#515a66",
+     "bg": "#f8f8f8",
+     "px": 18,
+     "weight": 400,
+     "ratio": 6.58,
+     "need": 4.5,
+     "pass": true,
+     "count": 1
+    }
+   ],
+   "overImage": [],
+   "targets": [
+    {
+     "where": "header.border-b.border-n-200 > div.mx-auto.flex > a.flex.items-center",
+     "text": "Sterun home",
+     "w": 124,
+     "h": 40,
+     "fails248": false
+    },
+    {
+     "where": "div.mx-auto.flex > div.flex.flex-col > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    },
+    {
+     "where": "main.flex.flex-1 > div.mx-auto.w-full > button.inline-flex.shrink-0",
+     "text": "Connect wallet",
+     "w": 138,
+     "h": 36,
+     "fails248": false
+    }
+   ],
+   "overflowX": 0,
+   "title": "Sterun",
+   "langAttr": "en",
+   "h1Count": 1,
+   "imgNoAlt": 0,
+   "focus": [
+    {
+     "where": "body.flex.min-h-full > script > nextjs-portal",
+     "text": "",
+     "style": "3px|none|rgb(255, 255, 255)|none|rgb(223, 226, 230)|rgba(0, 0, 0, 0)"
+    }
+   ]
+  }
+ ]
+}
