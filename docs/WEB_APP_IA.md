@@ -166,8 +166,35 @@ per category**, and each has its own price, quota and remaining quota. Remaining
 scarcity the contract genuinely enforces (`reserve_slot` reverts with `QuotaFull(5)`, checking and
 incrementing in one invocation), so that number is honest and worth featuring.
 
-The page for a `Closed`/`Completed` event must still exist — it is the destination of links from a
-runner's profile. The Enter button is replaced by a statement of status.
+The page for a `Closed`/`Completed`/`Cancelled` event must still exist — it is the destination of
+links from a runner's profile. The Enter button is replaced by a statement of status.
+
+**`Closed` and `Cancelled` must never look alike.** Since STE-36 the contract carries a real
+`Cancelled` status (`Draft`/`Open`/`Closed` → `Cancelled`, terminal), and the two say opposite things
+to a runner holding a paid entry:
+
+| Status | What it means | How the page says it |
+| --- | --- | --- |
+| `Closed` | Entries are shut. **The race is still happening.** | Neutral badge, "Registration closed" |
+| `Cancelled` | **The race is not happening.** Terminal — it cannot reopen. | Visually distinct badge, "Race cancelled" |
+
+A `Cancelled` event shows **no Enter button at all**, not a disabled one: `reserve_slot` already
+refuses it with `EventNotOpen(4)`, and a button that leads nowhere invites the click anyway. Before
+STE-36 the two states were displayed the same because only one of them existed; that is no longer
+true and the page must stop implying it.
+
+**The entry fee is not refundable, and the page says so before the money moves.** `enter` transfers
+the fee **straight from the runner to the organiser** (`race_record/src/lib.rs`) — no escrow, so the
+contract never holds the money and cannot return it. Any refund is the organiser sending it back by
+hand. The decision (STE-34) is that this is acceptable for the MVP **only if it is stated up front**,
+so the copy sits above the Enter button, not in a footer and not behind a modal:
+
+> Pendaftaran non-refundable. Kalau event diundur/dipindah, panitia mengumumkan lewat pengumuman
+> bertanda tangan. Refund (kalau ada) adalah kebijakan sukarela panitia, di luar kontrak, dan tidak
+> bisa dipaksakan oleh protokol.
+
+An organiser may add their own voluntary-refund promise alongside it; that promise is theirs, and the
+page must not present it as something Sterun enforces. Implementation: STE-38.
 
 Prices on chain are `i128` with 7 decimals; the page displays them in human form.
 
@@ -425,10 +452,66 @@ hosted at `uri`.
 - `route_geojson` has its place reserved even though the map comes later, so an organiser does not
   have to recreate an event just to add a route.
 - **This document is frozen too** (§2.2): if a race is postponed, its schedule cannot be corrected.
+  What happens instead is §6.1 — the document is never edited, an announcement is added beside it.
 
 The route map (optional, §8): render the GeoJSON with **Leaflet + OpenStreetMap tiles** — no API key,
 no billing. Mapbox and Google both demand a credit card for something that can be free. Because the
 route is hashed too, a route cannot be quietly changed after people have entered.
+
+### 6.1 Announcements — how a frozen event still tells the truth about change
+
+Races are postponed for rain, lose a permit, or move venue. That is normal, not an edge case, and the
+document above cannot be corrected. **The answer is not to make it editable.** If an organiser could
+rewrite the schedule after people paid, that is precisely the fraud this product exists to close —
+the freeze is a feature for the runner, not an oversight.
+
+So the document is never touched. An **announcement** is added beside it (STE-34).
+
+```json
+{
+  "event_id": 17,
+  "published_at": "2026-09-20T14:05+07:00",
+  "body": "Karena izin venue, start dipindah ke Lapangan Banteng. Jadwal tetap.",
+  "signer": "GBQB...O2OR",
+  "signature": "base64..."
+}
+```
+
+Four rules, and each one is doing work:
+
+- **Append-only. No edit, no delete.** A correction is a *new* announcement. A record of change that
+  can itself be changed proves nothing.
+- **Signed by the organiser's wallet**, using the same wallet-signature scheme the API already uses
+  for organiser routes. The server verifies it against `get_organiser(event_id)` **read from the
+  chain**, not from its own database — authority comes from the authoritative copy.
+- **Anyone can re-verify it without trusting us.** The signature plus the on-chain organiser address
+  are enough; the server is a convenience, not the source of truth.
+- **The original document stays visible.** The page renders it first, then the announcements below it,
+  newest first, each with its date. A runner sees both halves: **what they were promised when they
+  paid, and what changed since.** Neither replaces the other.
+
+**What the chain does and does not do here.** It stores no announcement and verifies no signature. It
+supplies exactly one thing — *who the organiser is* — and that is the anchor the whole scheme hangs
+from. Say that plainly rather than implying the announcement is "on chain".
+
+**Three changes must be paired with an announcement**, because each alters something a runner already
+paid against:
+
+| Change | Why it needs saying |
+| --- | --- |
+| Schedule or venue moved | The frozen document now disagrees with reality |
+| Registration close date moved later (STE-45) | The date on the page is no longer the date enforced |
+| Quota raised after a sell-out (STE-55) | The field size the runner signed up to has grown |
+
+**The contract cannot enforce this pairing.** `set_registration_closes` and `increase_quota` only
+check that the caller is the event's organiser. So the rule lives in the console: make each of these
+**one flow that includes the announcement**, never two buttons where the second can be skipped. This
+is an app-level promise, and the documentation should not dress it up as a protocol guarantee.
+
+Implementation: `be/` endpoint in STE-40, `fe/` rendering in the same ticket's follow-up.
+
+**Not in scope, deliberately:** refunds. The contract never holds the entry fee (§3.1), so no
+announcement can move money. An organiser who chooses to refund does it by hand, and the page says so.
 
 ---
 
