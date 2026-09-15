@@ -17,9 +17,9 @@ The mockups are plain HTML and CSS. Every colour, size, radius and shadow is a t
 invented hex or pixel value in the file. Regenerate after a token change:
 
 ```bash
-python docs/design/race-day/tools/gen_tokens_css.py     # mockups/tokens.css
-node docs/design/race-day/tools/export-mockups.cjs      # exports/*.png
-node docs/design/race-day/tools/export-motion.cjs       # exports/motion-*.png
+python docs/design/tools/gen_tokens_css.py                    # every mockups/tokens.css
+node docs/design/tools/export-mockups.cjs mockups/index.html  # exports/*.png
+node docs/design/tools/export-motion.cjs                      # exports/motion-*.png
 ```
 
 The exporter needs `puppeteer-core` and a local Chrome; that is why the PNGs are committed. Reading
