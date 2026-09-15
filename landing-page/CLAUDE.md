@@ -109,8 +109,12 @@ header anyway, so one static position is correct in both phases.
 
 ## Motion
 
-Durations and curves come from the `--motion-*` and `--ease-*` tokens, the same ones the race-day
-and profile designs use. Nothing on this page invents a duration.
+The `--motion-*` and `--ease-*` tokens govern **UI state changes**: a hover, a menu, a button
+settling. Scroll choreography does not use them, and should not: 200ms on a 50px rise triggered by
+scroll reads as a flinch rather than an entrance. Those timings are **measured from the reference
+they came from** and the measurement is recorded in the module that uses it, so the next person can
+check it rather than taste it. `lib/hiwMotion.ts` holds akaru's numbers;
+`modules/product-preview/ProductPreview.tsx` holds nbnzia's.
 
 ### Smooth scroll: Lenis
 
