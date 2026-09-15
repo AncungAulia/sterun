@@ -1,4 +1,7 @@
 import "@testing-library/jest-dom/vitest";
+// jsdom has no IndexedDB, and the entry store (STE-21) is the one place that
+// writes it. An in-memory implementation, so a test never touches disk.
+import "fake-indexeddb/auto";
 
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
