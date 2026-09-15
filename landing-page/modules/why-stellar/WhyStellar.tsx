@@ -69,8 +69,8 @@ export function WhyStellar() {
               <Image
                 src="/third-party/stellar-logo.svg"
                 alt="Stellar"
-                width={800}
-                height={200}
+                width={106}
+                height={26}
                 style={{ height: "calc(var(--cap) * 0.62)", width: "auto" }}
               />
             </span>

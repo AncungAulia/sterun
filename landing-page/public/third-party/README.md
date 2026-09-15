@@ -5,7 +5,7 @@ refer to that organisation, and is never restyled, recoloured or redrawn.
 
 | File | Whose | Where it came from |
 | --- | --- | --- |
-| `stellar-logo.svg` | Stellar Development Foundation | `developers.stellar.org/img/docusaurus/stellar-logo.svg`, fetched 15 Sep 2026 |
+| `stellar-logo.svg` | Stellar Development Foundation | supplied by Nabil, 15 Sep 2026. 106x26, one fill, the current mark |
 
 The Stellar mark appears once, in the Why Stellar section, to name the network
 this protocol runs on. If SDF ever asks for a different treatment, or the brand
