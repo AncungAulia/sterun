@@ -124,7 +124,7 @@ export function ProductPreview() {
          screen of height, so the page is no taller than it was. */
       className="relative z-10 -mt-[100svh] h-[100svh] overflow-hidden bg-teal text-paper [--pp-pt:6rem] sm:[--pp-pt:8rem]"
     >
-      <div className="mx-auto flex h-full max-w-[1500px] flex-col px-5 sm:px-6 lg:px-4">
+      <div className="relative mx-auto flex h-full max-w-[1500px] flex-col px-5 sm:px-6 lg:px-4">
         {/* Title in the left corner, label in the right one, on one row, the way
             the reference composes its hat. */}
         <div
@@ -153,8 +153,8 @@ export function ProductPreview() {
           </span>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-6 pt-8 lg:flex-row lg:items-stretch lg:gap-10 lg:pt-10">
-          <div className="flex flex-col lg:h-full lg:w-[36%] lg:shrink-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 pt-8 lg:pt-10">
+          <div className="flex flex-col lg:h-full lg:w-[36%]">
             <p data-pp="copy" className="max-w-[46ch] text-sm leading-[1.6] text-teal-50">
               The event directory and every event page read straight from the chain. Browse them the
               way a runner would, before you connect anything.
@@ -188,7 +188,10 @@ export function ProductPreview() {
               PLACEHOLDER. Replaced by a screenshot of one real event page once a
               demo event exists: every event in the app today is test data named
               TESTING or e2e, and none has a poster. */}
-          <div data-pp-frame className="ml-auto min-h-0 w-full overflow-hidden lg:h-full lg:w-[43%]">
+          <div
+            data-pp-frame
+            className="ml-auto min-h-0 w-full overflow-hidden lg:absolute lg:bottom-0 lg:right-[6.7%] lg:top-[26.3%] lg:h-auto lg:w-[44.3%]"
+          >
             <div
               data-pp-picture
               className="grid h-full min-h-[34svh] w-full place-items-center bg-paper lg:min-h-0"
