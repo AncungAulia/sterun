@@ -125,6 +125,20 @@ describe("useEntryAttempt", () => {
     );
   });
 
+  it("links the entry inside the attempt, and is not entered until that answers", async () => {
+    // A third approval in the dialog, not a prompt on the success page.
+    const d = deps({ confirm: vi.fn(() => new Promise<void>(() => {})) });
+    const { result } = start(d);
+
+    await waitFor(() => expect(result.current.state.phase).toBe("linking"));
+    expect(d.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ participantId: submitted.participantId, tokenId: 7, txHash: TX }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(result.current.state.phase).toBe("linking");
+    expect(result.current.running).toBe(true);
+  });
+
   it("does not resend details when paying is tried again after a decline", async () => {
     const enter = vi
       .fn()

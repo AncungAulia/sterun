@@ -92,8 +92,8 @@ const stored: StoredEntry = {
   paidStroops: "250000000",
 };
 
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+/** A client can be passed in to render the page twice in one visit, as Back then View my entry does. */
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -221,28 +221,11 @@ describe("EnteredPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not load this entry");
   });
 
-  it("confirms an entry the background call left unconfirmed, once", async () => {
+  it("never asks the wallet to sign anything, even for an entry not yet linked", async () => {
+    // Linking the entry is the Sign and pay dialog's third step now. A prompt
+    // on a page somebody opened to look at their bib is how two popups
+    // appeared over the success page (Ancung, 2026-09-15).
     readEntry.mockResolvedValue({ ...stored, confirmed: false });
-    renderPage();
-    await waitFor(() =>
-      expect(confirmParticipant).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: stored.participantId, tokenId: TOKEN_ID, txHash: stored.txHash, address: stored.runner }),
-      ),
-    );
-    await waitFor(() => expect(markConfirmed).toHaveBeenCalledWith(TOKEN_ID));
-    expect(confirmParticipant).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not confirm again what is already confirmed", async () => {
-    renderPage();
-    await screen.findByRole("heading", { name: "You're in!" });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(confirmParticipant).not.toHaveBeenCalled();
-  });
-
-  it("never asks a wallet other than the owner's to confirm", async () => {
-    readEntry.mockResolvedValue({ ...stored, confirmed: false });
-    useWallet.setState({ address: "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN" });
     renderPage();
     await screen.findByRole("heading", { name: "You're in!" });
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -272,6 +255,22 @@ describe("EnteredPage", () => {
       expect(screen.getByRole("button", { name: "Download receipt" })).toBeInTheDocument();
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(fireConfetti).not.toHaveBeenCalled();
+    });
+
+    it("does not ask again on the way back in during the same visit", async () => {
+      // The bug: the tick was written to the device, but the page kept its first
+      // read of the entry, so Back to the race then View my entry asked again.
+      const user = userEvent.setup();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const first = renderPage(client);
+      await user.click(await screen.findByRole("checkbox", { name: "I've saved my receipt" }));
+      first.unmount();
+
+      readEntry.mockResolvedValue({ ...stored, receiptSaved: true });
+      renderPage(client);
+
+      expect(await screen.findByRole("link", { name: "Back to the race" })).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox", { name: "I've saved my receipt" })).not.toBeInTheDocument();
     });
 
     it("still asks a runner who never confirmed saving it", async () => {

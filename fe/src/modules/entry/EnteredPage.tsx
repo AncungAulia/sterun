@@ -23,14 +23,20 @@
  * (Ancung, 2026-09-15). A runner who never ticked it is still asked. Confetti is
  * likewise for this device's fresh entry only, not for another device.
  *
- * ## Confirming a second time
+ * ## This page never asks for a signature
  *
- * If linking the vault row to the token failed in the background, it is tried
- * once more here. Only for the wallet that owns the entry and is connected now:
- * it needs a signature, and a wallet prompt appearing on a page somebody only
- * opened to look is a prompt they learn to decline.
+ * Linking the vault row to the record is the Sign and pay dialog's third step.
+ * It used to be retried here, and that put wallet popups over a page somebody
+ * opened only to look at their bib, twice (Ancung, 2026-09-15). An entry left
+ * unlinked is repaired from the chain by the backend (STE-59).
+ *
+ * ## The stored entry is read fresh
+ *
+ * Every visit reads it again, and ticking the receipt box updates the page's
+ * copy at once. A read kept for the life of the tab made Back to the race then
+ * View my entry ask about a receipt that had already been saved.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -40,10 +46,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
-import { useWallet } from "@/hooks/useWallet";
 import { fireConfetti } from "@/lib/confetti";
-import { markConfirmed, markReceiptSaved, readEntry } from "@/lib/entry-store";
-import { confirmParticipant } from "@/lib/participants";
+import { markReceiptSaved, readEntry, type StoredEntry } from "@/lib/entry-store";
 import { readClient } from "@/lib/sterun";
 import { formatEventDate } from "@/utils/format";
 
@@ -58,16 +62,17 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
     staleTime: 30_000,
   });
   const race = useEvent(eventId);
+  const storedKey = ["stored-entry", tokenId] as const;
   const stored = useQuery({
-    queryKey: ["stored-entry", tokenId],
+    queryKey: storedKey,
     queryFn: async () => (await readEntry(tokenId)) ?? null,
-    staleTime: Infinity,
+    // Fresh on every visit: see the header.
+    staleTime: 0,
   });
-  const address = useWallet((state) => state.address);
+  const queryClient = useQueryClient();
 
   const [saved, setSaved] = useState(false);
   const celebrated = useRef(false);
-  const confirming = useRef(false);
 
   const belongs = record.data !== undefined && record.data.eventId === eventId;
   const entry = stored.data && stored.data.eventId === eventId ? stored.data : null;
@@ -81,23 +86,6 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
     celebrated.current = true;
     fireConfetti();
   }, [belongs, race.data, fresh]);
-
-  useEffect(() => {
-    if (!entry || entry.confirmed || !entry.participantId || !entry.txHash) return;
-    if (address !== entry.runner || confirming.current) return;
-    confirming.current = true;
-    const { participantId, txHash, runner } = entry;
-    void (async () => {
-      try {
-        const { signMessage } = await import("@/lib/wallet");
-        await confirmParticipant({ participantId, tokenId, txHash, address: runner, sign: signMessage });
-        await markConfirmed(tokenId);
-      } catch {
-        // Left unconfirmed. The entry is real on chain either way, and the
-        // backend sweeps rows that stay unconfirmed (STE-50).
-      }
-    })();
-  }, [entry, address, tokenId]);
 
   if (record.isError || race.isError) {
     return (
@@ -180,7 +168,13 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
                       setSaved(checked === true);
                       // Remembered, so the next visit does not ask again. A
                       // device that will not store it simply asks next time.
-                      if (checked === true) void markReceiptSaved(tokenId).catch(() => {});
+                      if (checked === true) {
+                        void markReceiptSaved(tokenId).catch(() => {});
+                        // The page's own copy too, so coming back does not ask again.
+                        queryClient.setQueryData<StoredEntry | null>(storedKey, (previous) =>
+                          previous ? { ...previous, receiptSaved: true } : previous,
+                        );
+                      }
                     }}
                   />
                   <Label htmlFor="receipt-saved" className="text-base font-normal">

@@ -68,6 +68,18 @@ describe("entry store", () => {
     expect(saved?.salt).toBe(entry.salt);
   });
 
+  it("keeps both flags when the receipt tick and the confirmation land together", async () => {
+    // Both read the entry and write it back. As two separate steps, the later
+    // write put back the flag the earlier one had just set.
+    await saveEntry({ ...entry, tokenId: 47 });
+
+    await Promise.all([markReceiptSaved(47), markConfirmed(47)]);
+
+    const saved = await readEntry(47);
+    expect(saved?.receiptSaved).toBe(true);
+    expect(saved?.confirmed).toBe(true);
+  });
+
   it("does nothing when marking a receipt it does not hold", async () => {
     await expect(markReceiptSaved(4321)).resolves.toBeUndefined();
     expect(await readEntry(4321)).toBeUndefined();

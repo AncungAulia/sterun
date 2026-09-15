@@ -22,7 +22,7 @@ const submitted = {
   totpSecret: "c".repeat(64),
 };
 
-const RUNNING: AttemptState["phase"][] = ["confirming-identity", "paying", "checking"];
+const RUNNING: AttemptState["phase"][] = ["confirming-identity", "paying", "linking", "checking"];
 
 function renderDialog(state: AttemptState, overrides: Partial<PayDialogProps> = {}) {
   const props: PayDialogProps = {
@@ -47,10 +47,10 @@ function renderDialog(state: AttemptState, overrides: Partial<PayDialogProps> = 
 }
 
 describe("while it runs", () => {
-  it("names the race and says the wallet asks twice", () => {
+  it("names the race and says the wallet asks three times", () => {
     renderDialog({ phase: "confirming-identity" });
     expect(screen.getByRole("heading", { name: "Entering Borobudur Marathon" })).toBeInTheDocument();
-    expect(screen.getByText("Your wallet will ask you twice.")).toBeInTheDocument();
+    expect(screen.getByText("Your wallet will ask you three times.")).toBeInTheDocument();
   });
 
   it("asks for the first approval before the payment", () => {
@@ -67,6 +67,23 @@ describe("while it runs", () => {
     const steps = screen.getAllByRole("listitem");
     expect(steps[0]).toHaveTextContent("Signed. Your details are saved securely.");
     expect(steps[1]).toHaveTextContent("Check your wallet.");
+  });
+
+  it("asks for the third approval to link the entry, with the first two done", () => {
+    renderDialog({ phase: "linking", submitted, tokenId: 7, txHash: "d".repeat(64) });
+    const steps = screen.getAllByRole("listitem");
+    expect(steps).toHaveLength(3);
+    expect(steps[0]).toHaveTextContent("Signed. Your details are saved securely.");
+    expect(steps[1]).toHaveTextContent("Paid and entered.");
+    expect(steps[2]).toHaveTextContent("Link your entry to your details");
+    expect(steps[2]).toHaveTextContent("Check your wallet.");
+  });
+
+  it("cannot be closed while linking", async () => {
+    const user = userEvent.setup();
+    const props = renderDialog({ phase: "linking", submitted, tokenId: 7, txHash: "d".repeat(64) });
+    await user.keyboard("{Escape}");
+    expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it("says Enter the race, not pay, for a free entry", () => {

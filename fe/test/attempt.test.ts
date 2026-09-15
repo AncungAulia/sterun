@@ -35,10 +35,35 @@ describe("the happy path", () => {
     expect(nextStep(state)).toBe("enter");
   });
 
-  it("ends entered with the token", () => {
-    const state = run({ type: "start" }, { type: "submitted", submitted }, { type: "entered", tokenId: 7 });
+  it("links the entry to the details as a third approval, before it counts as entered", () => {
+    // Linking the vault row needs a signature. It used to run after the dialog,
+    // where it surfaced as a surprise prompt on the success page, twice
+    // (Ancung, 2026-09-15). Now it is a step the runner can see.
+    const tx = "d".repeat(64);
+    const state = run(
+      { type: "start" },
+      { type: "submitted", submitted },
+      { type: "entered", tokenId: 7, txHash: tx },
+    );
+    expect(state).toEqual({ phase: "linking", submitted, tokenId: 7, txHash: tx });
+    expect(nextStep(state)).toBe("link");
+  });
+
+  it("ends entered once the link is signed", () => {
+    const linking: AttemptState = { phase: "linking", submitted, tokenId: 7, txHash: "d".repeat(64) };
+    const state = attemptReducer(linking, { type: "linked" });
     expect(state).toEqual({ phase: "entered", tokenId: 7 });
     expect(nextStep(state)).toBeNull();
+  });
+
+  it("still ends entered when the link is declined or fails: the entry is already real", () => {
+    const linking: AttemptState = { phase: "linking", submitted, tokenId: 7, txHash: "d".repeat(64) };
+    expect(attemptReducer(linking, { type: "link-failed" })).toEqual({ phase: "entered", tokenId: 7 });
+  });
+
+  it("cannot be started again while linking", () => {
+    const linking: AttemptState = { phase: "linking", submitted, tokenId: 7, txHash: "d".repeat(64) };
+    expect(attemptReducer(linking, { type: "start" })).toBe(linking);
   });
 });
 
@@ -136,7 +161,10 @@ describe("the check", () => {
 
 describe("events that do not belong", () => {
   it("are ignored, returning the same state", () => {
-    expect(attemptReducer(INITIAL_ATTEMPT, { type: "entered", tokenId: 1 })).toBe(INITIAL_ATTEMPT);
+    expect(attemptReducer(INITIAL_ATTEMPT, { type: "entered", tokenId: 1, txHash: "d".repeat(64) })).toBe(
+      INITIAL_ATTEMPT,
+    );
+    expect(attemptReducer(INITIAL_ATTEMPT, { type: "linked" })).toBe(INITIAL_ATTEMPT);
     expect(attemptReducer(INITIAL_ATTEMPT, { type: "found", tokenId: 1 })).toBe(INITIAL_ATTEMPT);
 
     const entered: AttemptState = { phase: "entered", tokenId: 1 };

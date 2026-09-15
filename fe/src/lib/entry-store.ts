@@ -16,11 +16,12 @@
  *
  * ## `confirmed`
  *
- * Linking the vault row to the token is retried in the background, because the
- * entry is already real on chain when that call fails, and blocking a runner
- * who has paid on a backend hiccup would be the wrong way round.
+ * Set when the Sign and pay dialog's third step links the vault row to the
+ * token. A link that fails leaves it false and the entry stands anyway, because
+ * it is already real on chain; nothing on this device retries it, and the
+ * backend is to link such rows from the chain (STE-59).
  */
-import { createStore, get, set, values, type UseStore } from "idb-keyval";
+import { createStore, get, set, update, values, type UseStore } from "idb-keyval";
 
 export interface StoredEntry {
   eventId: number;
@@ -78,16 +79,34 @@ export async function readEntry(tokenId: number): Promise<StoredEntry | undefine
   return get<StoredEntry>(tokenId, entries());
 }
 
+/**
+ * Sets fields on a stored entry inside one transaction.
+ *
+ * Read and write as two separate steps let two updates landing together (the
+ * link after paying and the receipt tick) each put back the flag the other had
+ * just set, so a runner was asked about their receipt again (2026-09-15).
+ * idb-keyval's `update` reads and writes in the same transaction. An entry
+ * this device does not hold is left absent.
+ */
+async function patchEntry(tokenId: number, changes: Partial<StoredEntry>): Promise<void> {
+  await update<StoredEntry | undefined>(
+    tokenId,
+    (entry) => (entry ? { ...entry, ...changes } : entry),
+    entries(),
+  );
+}
+
 export async function markConfirmed(tokenId: number): Promise<void> {
-  const entry = await readEntry(tokenId);
-  if (entry) await saveEntry({ ...entry, confirmed: true });
+  await patchEntry(tokenId, { confirmed: true });
 }
 
 export async function markReceiptSaved(tokenId: number): Promise<void> {
-  const entry = await readEntry(tokenId);
-  if (entry) await saveEntry({ ...entry, receiptSaved: true });
+  await patchEntry(tokenId, { receiptSaved: true });
 }
 
 export async function unconfirmedEntries(): Promise<StoredEntry[]> {
-  return (await values<StoredEntry>(entries())).filter((entry) => !entry.confirmed);
+  // `update` stores `undefined` under a key it was asked about but never held.
+  return (await values<StoredEntry | undefined>(entries())).filter(
+    (entry): entry is StoredEntry => entry !== undefined && !entry.confirmed,
+  );
 }

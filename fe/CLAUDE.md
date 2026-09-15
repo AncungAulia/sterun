@@ -572,7 +572,10 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   kept for the attempt, so a retry never resends details; changing the distance, pack or details
   forgets it. No answer is never "it may have gone through": it is a check for a record, and
   `enter` being atomic makes "not found" mean nothing was charged. A failed check can only be
-  checked again. The dialog cannot be closed while either runs.
+  checked again. The dialog cannot be closed while either runs. Its third step links the vault row
+  to the record (`POST /participants/:id/confirm`), a signed message asked for in the dialog so
+  the wallet never prompts after the runner has left it; a link that fails still ends entered.
+  That step goes when the backend links rows from chain (STE-59).
 - **A refused `enter` is explained from the ledger afterwards** (`enter-failure.ts`): closed, no
   places, an item out of units, a short balance. Never from the error code, which the sUSD token
   shares with EventRegistry. A decline or no answer is read from the error and costs no chain read.
@@ -588,9 +591,10 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   Another device gets the bib and a sentence saying where the receipt is. "Back to the race" waits
   for "I've saved my receipt", once: the tick is remembered on the device (`receiptSaved`), so a
   return visit through View my entry shows no box and no confetti, and confetti never fires on a
-  device that did not enter. A failed background confirm is retried there once, and only for the
-  connected owning wallet, because it needs a signature. An entry found by the no-answer check has
-  no transaction hash to confirm with; STE-50 sweeps it.
+  device that did not enter. The stored entry is read fresh on every visit and the tick updates the
+  page's copy at once; flags are written with idb-keyval `update`, never read-then-save, so two
+  landing together cannot undo each other. **The success page never asks the wallet to sign.** An
+  entry found by the no-answer check has no transaction hash to link with; STE-59 covers it.
 - **The receipt carries no personal details and never the check-in secret** (`receipt.ts`, tested;
   `receipt-pdf.ts` only lays it out, with jspdf loaded on press).
 - **Bib numbers are shown exactly as the contract holds them.** Since STE-54 a bib is unique within

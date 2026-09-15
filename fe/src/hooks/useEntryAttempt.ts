@@ -12,10 +12,12 @@
  * ## What happens when `enter` lands
  *
  * The receipt is written to this device first, because the bib name and the
- * receipt code are nowhere else. Then the vault row is confirmed in the
- * background: the entry is already real on chain, and a runner who has paid is
- * not held on a backend call. A failed confirm leaves the entry `confirmed:
- * false`, and the success page tries once more.
+ * receipt code are nowhere else. Then the vault row is linked to the record as
+ * the dialog's third step (`link`), because it needs a signed message: run in
+ * the background it surfaced as popups over the success page, twice (Ancung,
+ * 2026-09-15). A link that fails or is declined still ends entered, since the
+ * entry is real on chain; the row stays unconfirmed until STE-59 links rows
+ * from the chain and this step can go.
  *
  * ## Injected, so every failure row is testable
  *
@@ -182,27 +184,15 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
         // entry. The entry exists; the success page says the receipt is elsewhere.
         .catch(() => {});
 
-      // `entered` from paying, `found` from checking: the reducer accepts each
-      // only in its own phase.
-      dispatch({ type: via, tokenId });
+      // `entered` from paying moves on to linking; `found` from checking has no
+      // transaction hash to link with, so it ends there.
+      dispatch(
+        via === "entered" && txHash ? { type: "entered", tokenId, txHash } : { type: "found", tokenId },
+      );
 
       void queryClient.invalidateQueries({ queryKey: runnerRecordsKey(p.runner) });
       void queryClient.invalidateQueries({ queryKey: eventKeys.one(p.summary.event.eventId) });
       void queryClient.invalidateQueries({ queryKey: susdKey(p.runner) });
-
-      // Found by the check, there is no transaction hash to confirm with. That
-      // row stays unconfirmed and is swept by the backend (STE-50).
-      if (txHash) {
-        d.confirm({
-          participantId: submitted.participantId,
-          tokenId,
-          txHash,
-          address: p.runner,
-          sign: signMessage,
-        })
-          .then(() => d.markConfirmed(tokenId))
-          .catch(() => {});
-      }
     },
     [queryClient],
   );
@@ -250,6 +240,21 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
             : null;
           dispatch({ type: "enter-failed", failure: classifyEnterFailure(error, after) });
         });
+      return;
+    }
+
+    if (step === "link" && state.phase === "linking") {
+      const { submitted, tokenId, txHash } = state;
+      d.confirm({
+        participantId: submitted.participantId,
+        tokenId,
+        txHash,
+        address: plan.runner,
+        sign: signMessage,
+      })
+        .then(() => d.markConfirmed(tokenId))
+        .then(() => dispatch({ type: "linked" }))
+        .catch(() => dispatch({ type: "link-failed" }));
       return;
     }
 

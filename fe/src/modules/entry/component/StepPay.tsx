@@ -122,7 +122,7 @@ export function PayPanel({
       <Button className="w-full" disabled={busy || waiting || needed > 0n} onClick={onPay}>
         {paid ? `Sign and pay ${formatPrice(total)}` : "Sign and enter"}
       </Button>
-      <p className="text-center text-sm text-n-500">Your wallet will ask you twice.</p>
+      <p className="text-center text-sm text-n-500">Your wallet will ask you three times.</p>
     </div>
   );
 }
