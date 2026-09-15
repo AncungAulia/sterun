@@ -5,29 +5,45 @@
  *
  * Everything else on this page is typography. A reader who has just been told
  * four steps has no reason to believe any of them, and the contract links in
- * Problem send them to stellar.expert, which is a foreign, technical surface.
- * This section sends them into our own working app instead, and the button is
- * the evidence. The screenshot is only the invitation.
+ * Problem send them to stellar.expert, which is a foreign technical surface.
+ * This sends them into our own working app, so the link is the evidence and the
+ * picture is only the invitation.
  *
- * The movement is measured from nbnzia.com's case panels, at 1440x900, sampled
- * every 50px of scroll:
+ * MEASURED FROM nbnzia.com, the CTO Bees panel, at 1440x900, sampled every 30px
+ * of scroll. Do not adjust these by eye; re-measure.
  *
- *   The panel itself does not animate. Its top moves exactly 1px per 1px of
- *   scroll from entering to landing. What reads as a reveal is the panel being
- *   exactly one viewport tall against a hard colour edge, nothing more.
+ * The panel itself does not animate. Its top moves exactly 1px per 1px of
+ * scroll. What reads as a reveal is a panel exactly one viewport tall arriving
+ * against a hard colour edge, over a previous section that is being HELD.
  *
- *   The overlap is the previous section being HELD while this one rises over
- *   it. There it is a GSAP pin with a two-viewport spacer for a one-viewport
- *   panel. Here the How it works stage is already sticky, so it costs one extra
- *   viewport of height on that section and a matching negative margin here.
+ * Geometry, as fractions of their 1425x900 panel:
  *
- *   The heading fades 0 to 1 while rising 50px, on a quadratic ease-out
- *   (power1.out fits the samples to two decimals), triggered when the panel's
- *   top crosses about 77% of the viewport. A second element follows about 100px
- *   of scroll later. Their body paragraph does not animate at all.
+ *   side padding      16px            1.1% of the width
+ *   title row         top 80px        one row, title in the left corner and a
+ *                                     label in the right one
+ *   title             64px / 500      not enormous. The hierarchy is the gap
+ *                                     between it and the copy, not its size
+ *   copy              16px / 500      a quarter of the title, in a 36.5% column
+ *   link              bottom at 847   level with the image's bottom edge
+ *   image             607 square      43% of the panel width, right edge 16px in
  *
- * We have three things to bring in rather than two, so the stagger carries the
- * body and the button as well. It is the same technique, not a new one.
+ * What moves, and how:
+ *
+ *   text    opacity 0 to 1 while rising 50px, both driven by one eased
+ *           progress. power1.out fits their samples to two decimals.
+ *   image   the WRAPPER's clip-path opens downward, inset(0 0 100%) to
+ *           inset(0 0 0%), while the picture inside slides from -12% of the
+ *           wrapper height to 0 on the same progress. That is the wipe: the
+ *           window grows down and the picture arrives into it.
+ *           Its curve is a far stronger ease-in-out than the text (their
+ *           progress is still 0.009 a fifth of the way through) and it runs
+ *           about 1.4x as long: in their samples the title reaches opacity 1
+ *           after roughly 15 of them and the image finishes after roughly 21.
+ *   link    does not animate at all.
+ *
+ * Order of entry, by the panel's top edge when each one starts: title at 730,
+ * label at 640, image at 610, copy at 550. The image begins BEFORE the copy,
+ * which is what stops the left column arriving as one block.
  */
 
 import { useEffect, useRef } from "react";
@@ -36,13 +52,12 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/** Measured from the reference: the rise, the curve, and where it starts. */
-const RISE_PX = 50;
-const DURATION = 0.8;
-const EASE = "power1.out";
-const STAGGER = 0.12;
-/** The panel's top edge, as a fraction of the viewport, when the heading starts. */
-const START = "top 77%";
+const TEXT = { rise: 50, duration: 0.7, ease: "power1.out" };
+const IMAGE = { slide: "-12%", duration: 1.0, ease: "power3.inOut" };
+/** Start times, in the order measured: title, label, image, copy. */
+const AT = { title: 0, label: 0.12, image: 0.16, copy: 0.24 };
+/** The panel's top edge, as a fraction of the viewport, when the title starts. */
+const START = "top 81%";
 
 export function ProductPreview() {
   const rootRef = useRef<HTMLElement>(null);
@@ -53,16 +68,46 @@ export function ProductPreview() {
 
     const mm = gsap.matchMedia();
     mm.add("(prefers-reduced-motion: no-preference)", () => {
-      const items = gsap.utils.toArray<HTMLElement>("[data-pp-rise]", root);
-      gsap.set(items, { opacity: 0, y: RISE_PX });
-      gsap.to(items, {
-        opacity: 1,
-        y: 0,
-        duration: DURATION,
-        ease: EASE,
-        stagger: STAGGER,
-        scrollTrigger: { trigger: root, start: START, once: true },
+      const q = gsap.utils.selector(root);
+
+      const tl = gsap.timeline({
+        paused: true,
+        defaults: { duration: TEXT.duration, ease: TEXT.ease },
       });
+      for (const name of ["title", "label", "copy"] as const) {
+        tl.fromTo(
+          q(`[data-pp="${name}"]`),
+          { opacity: 0, y: TEXT.rise },
+          { opacity: 1, y: 0, stagger: 0.06 },
+          AT[name],
+        );
+      }
+      tl.fromTo(
+        q("[data-pp-frame]"),
+        { clipPath: "inset(0% 0% 100% 0%)" },
+        { clipPath: "inset(0% 0% 0% 0%)", duration: IMAGE.duration, ease: IMAGE.ease },
+        AT.image,
+      ).fromTo(
+        q("[data-pp-picture]"),
+        { y: IMAGE.slide },
+        { y: "0%", duration: IMAGE.duration, ease: IMAGE.ease },
+        AT.image,
+      );
+
+      // It plays again every time the reader comes back down to it, rather than
+      // once for the life of the page.
+      const st = ScrollTrigger.create({
+        trigger: root,
+        start: START,
+        onEnter: () => tl.restart(),
+        onEnterBack: () => tl.restart(),
+        onLeaveBack: () => tl.pause(0),
+      });
+
+      return () => {
+        st.kill();
+        tl.kill();
+      };
     });
 
     return () => mm.revert();
@@ -73,45 +118,56 @@ export function ProductPreview() {
       ref={rootRef}
       id="product"
       data-nav-theme="dark"
-      /* The panel is exactly one screen tall, so it lands filling the viewport
-         the moment it arrives. The negative margin is what makes it rise OVER
-         the held How it works box instead of pushing it: that section carries a
-         matching extra screen of height, so the page is no longer overall. */
-      className="relative z-10 -mt-[100svh] h-[100svh] overflow-hidden bg-ink text-paper [--pp-pt:6rem] sm:[--pp-pt:8rem]"
+      /* Exactly one screen tall, so it lands filling the viewport the moment it
+         arrives. The negative margin is what makes it rise OVER the held How it
+         works box instead of pushing it: that section carries a matching extra
+         screen of height, so the page is no taller than it was. */
+      className="relative z-10 -mt-[100svh] h-[100svh] overflow-hidden bg-teal-800 text-paper [--pp-pt:6rem] sm:[--pp-pt:8rem]"
     >
-      {/* The top padding is the same gap under the fixed header that How it
-          works uses, so the heading does not sit on the logo's line. */}
-      <div
-        className="mx-auto flex h-full max-w-[1400px] flex-col gap-8 px-6 pb-[6vh] sm:px-10 lg:flex-row lg:items-stretch lg:gap-16"
-        style={{ paddingTop: "var(--pp-pt)" }}
-      >
-        <div className="flex flex-col lg:w-[44%] lg:shrink-0">
-          <h2
-            data-pp-rise
-            className="heading-hero text-[clamp(2.25rem,4.6vw,3.75rem)] leading-[0.95] tracking-[-0.01em]"
-          >
-            Open it.
-            <br />
-            No wallet needed.
+      <div className="mx-auto flex h-full max-w-[1500px] flex-col px-5 sm:px-6 lg:px-4">
+        {/* Title in the left corner, label in the right one, on one row, the way
+            the reference composes its hat. */}
+        <div
+          className="flex items-start justify-between gap-6"
+          style={{ paddingTop: "var(--pp-pt)" }}
+        >
+          <h2 className="heading-hero leading-[0.86] tracking-[-0.015em]">
+            <span data-pp="title" className="block text-[clamp(3.5rem,9vw,8.5rem)]">
+              Open it.
+            </span>
+            <span
+              data-pp="title"
+              className="mt-[0.12em] block text-[clamp(1.5rem,3.2vw,3rem)] text-teal-200"
+            >
+              No wallet needed.
+            </span>
           </h2>
 
-          <p
-            data-pp-rise
-            className="mt-6 max-w-[46ch] text-[clamp(1rem,1.25vw,1.25rem)] leading-[1.55] text-n-300"
+          <span
+            data-pp="label"
+            className="mt-[0.6em] shrink-0 text-right text-xs uppercase tracking-[0.14em] text-teal-200"
           >
-            The event directory and every event page read straight from the chain. Browse them the
-            way a runner would, before you connect anything.
-          </p>
+            Live on
+            <br />
+            Stellar testnet
+          </span>
+        </div>
 
-          <div data-pp-rise className="mt-auto pt-10">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 pt-8 lg:flex-row lg:items-stretch lg:gap-10 lg:pt-10">
+          <div className="flex flex-col lg:h-full lg:w-[36%] lg:shrink-0">
+            <p data-pp="copy" className="max-w-[46ch] text-sm leading-[1.6] text-teal-100">
+              The event directory and every event page read straight from the chain. Browse them the
+              way a runner would, before you connect anything.
+            </p>
+
             <a
               href="#"
-              className="wipe-underline inline-flex items-center gap-3 text-[clamp(1rem,1.4vw,1.375rem)] font-medium"
+              className="wipe-underline mt-8 inline-flex w-fit items-center gap-3 text-base font-medium lg:mt-auto lg:mb-[7vh]"
             >
               Browse live events
               <svg
-                width="18"
-                height="18"
+                width="17"
+                height="17"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -124,24 +180,23 @@ export function ProductPreview() {
               </svg>
             </a>
           </div>
-        </div>
 
-        {/* PLACEHOLDER. Replaced by a screenshot of one real event page once a
-            demo event exists: every event in the app today is test data named
-            TESTING or e2e, and none has a poster. The caption stays neutral
-            until then, because a claim about a screenshot is the easiest thing
-            on this page for a reviewer to knock down. */}
-        <figure data-pp-rise className="flex min-h-0 flex-1 flex-col justify-end">
-          <div className="relative w-full overflow-hidden rounded-[var(--radius-lg)] border border-dashed border-n-700 bg-n-950">
-            <div className="aspect-[16/11] w-full" />
-            <div className="absolute inset-0 grid place-items-center">
-              <span className="text-sm text-n-400">Screenshot of an event page</span>
+          {/* The frame is the mask: its clip-path opens downward and the picture
+              slides into the opening. It sits hard against the panel's bottom
+              edge and close to its right one.
+
+              PLACEHOLDER. Replaced by a screenshot of one real event page once a
+              demo event exists: every event in the app today is test data named
+              TESTING or e2e, and none has a poster. */}
+          <div data-pp-frame className="ml-auto min-h-0 w-full overflow-hidden lg:h-full lg:w-[43%]">
+            <div
+              data-pp-picture
+              className="grid h-full min-h-[34svh] w-full place-items-center border border-b-0 border-dashed border-teal-700 bg-teal-700/30 lg:min-h-0"
+            >
+              <span className="text-sm text-teal-200">Screenshot of an event page</span>
             </div>
           </div>
-          <figcaption className="mt-4 max-w-[52ch] text-sm leading-[1.6] text-n-400">
-            An event page in the Sterun app, read from EventRegistry on the Stellar testnet.
-          </figcaption>
-        </figure>
+        </div>
       </div>
     </section>
   );
