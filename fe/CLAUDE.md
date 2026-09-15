@@ -593,7 +593,9 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   no transaction hash to confirm with; STE-50 sweeps it.
 - **The receipt carries no personal details and never the check-in secret** (`receipt.ts`, tested;
   `receipt-pdf.ts` only lays it out, with jspdf loaded on press).
-- **Bib numbers are shown as the contract holds them, from 0**, until STE-53 decides.
+- **Bib numbers are shown exactly as the contract holds them.** Since STE-54 a bib is unique within
+  its race and counts from 1; a race created before that upgrade keeps its per-distance numbers from
+  0. The distance is never part of the number: it is the label beside it (the bib's tabs).
 - **On `/events/[id]`, a connected wallet that already entered gets no way in** (`EventDetail`
   reads its records from chain, `myEntry` on `EventView`). The entry card shows two buttons, **View
   my entry** (the success page) and **Open my pass**, off until round 2 builds `/pass/[tokenId]`

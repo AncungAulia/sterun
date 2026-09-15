@@ -10,8 +10,10 @@
  * One image to a screen reader, named in the order it is read: "Bib 98, BUDI,
  * 10K". The parts inside are decoration for the eye.
  *
- * Bib numbers are shown as the contract holds them, from 0 per distance, until
- * STE-53 decides otherwise.
+ * The number is shown exactly as the contract holds it. Since STE-54 it is unique
+ * within the race and counts from 1; a race created before that upgrade keeps
+ * its per-distance numbers from 0. The distance is never folded into the number,
+ * which is why it rides on the tabs instead.
  */
 import Image from "next/image";
 
