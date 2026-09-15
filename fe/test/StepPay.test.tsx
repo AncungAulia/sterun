@@ -137,7 +137,7 @@ describe("PayPanel", () => {
     const button = screen.getByRole("button", { name: "Sign and pay sUSD 30" });
     expect(button).toBeEnabled();
     expect(button.previousElementSibling).toHaveAttribute("role", "note");
-    expect(button.nextElementSibling).toHaveTextContent("Your wallet will ask you three times.");
+    expect(button.nextElementSibling).toHaveTextContent("Your wallet will ask you twice.");
   });
 
   it("pays when pressed", async () => {

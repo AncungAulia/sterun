@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (importOriginal) => ({
 }));
 
 import { ApiError } from "@/lib/api";
-import { confirmParticipant, submitParticipant } from "@/lib/participants";
+import { submitParticipant } from "@/lib/participants";
 import type { ParticipantBody } from "@/modules/entry/details";
 
 const RUNNER = "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR";
@@ -85,36 +85,5 @@ describe("submitParticipant", () => {
       .mockResolvedValueOnce(CHALLENGE)
       .mockRejectedValueOnce(new ApiError(400, "invalid-date-of-birth", "Check it."));
     await expect(submitParticipant(body, async () => "sig")).rejects.toBeInstanceOf(ApiError);
-  });
-});
-
-describe("confirmParticipant", () => {
-  beforeEach(() => {
-    apiFetch.mockReset();
-  });
-
-  it("links the vault row to the token with a fresh challenge", async () => {
-    apiFetch
-      .mockResolvedValueOnce({ nonce: "n2", expires_at: "x" })
-      .mockResolvedValueOnce({ participant_id: "p1", token_id: 7, enter_tx_hash: "d".repeat(64) });
-
-    await confirmParticipant({
-      participantId: "p1",
-      tokenId: 7,
-      txHash: "d".repeat(64),
-      address: RUNNER,
-      sign: async () => "sig2",
-    });
-
-    expect(apiFetch).toHaveBeenNthCalledWith(2, "/participants/p1/confirm", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-sterun-address": RUNNER,
-        "x-sterun-nonce": "n2",
-        "x-sterun-signature": "sig2",
-      },
-      body: JSON.stringify({ token_id: 7, enter_tx_hash: "d".repeat(64) }),
-    });
   });
 });

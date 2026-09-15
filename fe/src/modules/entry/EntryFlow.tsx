@@ -23,9 +23,9 @@
  * ## The gates decide once
  *
  * Before the form, not during it. An entry that lands refreshes this wallet's
- * records and the race while the Sign and pay dialog still waits on the wallet
- * to link it, and re-deciding then swapped the page for "You're already
- * entered", unmounting the dialog before it could hand the runner their bib
+ * records and the race while the Sign and pay dialog is still on screen, and
+ * re-deciding then swapped the page for "You're already entered", unmounting
+ * the dialog before it could hand the runner their bib
  * (Ancung, 2026-09-15). Anything that changes after the form opened, a place
  * taken or an entry from another tab, is `enter`'s to refuse and the dialog's
  * to explain.

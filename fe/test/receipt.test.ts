@@ -29,7 +29,6 @@ const entry: StoredEntry = {
   txHash: "9c1e".padEnd(64, "0"),
   runner: "GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7",
   enteredAt: "2026-09-15T12:00:00.000Z",
-  confirmed: true,
   racePack: ["Event jersey M", "Finisher medal", "Tumbler"],
   paidStroops: "2000000000",
 };

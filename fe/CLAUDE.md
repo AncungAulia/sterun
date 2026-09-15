@@ -572,10 +572,10 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   kept for the attempt, so a retry never resends details; changing the distance, pack or details
   forgets it. No answer is never "it may have gone through": it is a check for a record, and
   `enter` being atomic makes "not found" mean nothing was charged. A failed check can only be
-  checked again. The dialog cannot be closed while either runs. Its third step links the vault row
-  to the record (`POST /participants/:id/confirm`), a signed message asked for in the dialog so
-  the wallet never prompts after the runner has left it; a link that fails still ends entered.
-  That step goes when the backend links rows from chain (STE-59). **The gates (already entered,
+  checked again. The dialog cannot be closed while either runs. **Two approvals, nothing after
+  `enter`:** the backend links the vault row to the record from the chain (STE-59), so the web app
+  never calls `POST /participants/:id/confirm`. That call needed a third signed message, which
+  surfaced as wallet popups over the success page; do not bring it back. **The gates (already entered,
   closed, sold out) decide once, before the form** (`EntryForm`): the landed entry refreshes the
   records while the dialog is still linking, and re-deciding then unmounted the dialog and stranded
   the runner on "You're already entered" instead of their bib.

@@ -12,12 +12,10 @@
  * ## What happens when `enter` lands
  *
  * The receipt is written to this device first, because the bib name and the
- * receipt code are nowhere else. Then the vault row is linked to the record as
- * the dialog's third step (`link`), because it needs a signed message: run in
- * the background it surfaced as popups over the success page, twice (Ancung,
- * 2026-09-15). A link that fails or is declined still ends entered, since the
- * entry is real on chain; the row stays unconfirmed until STE-59 links rows
- * from the chain and this step can go.
+ * receipt code are nowhere else. Nothing else is asked of the wallet: the
+ * backend links the vault row to the new record from the chain within a poll
+ * (STE-59). The confirm call this used to make needed a third signed message,
+ * which surfaced as wallet popups over the success page (Ancung, 2026-09-15).
  *
  * ## Injected, so every failure row is testable
  *
@@ -30,10 +28,10 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { eventKeys } from "@/hooks/useEvents";
 import { runnerRecordsKey } from "@/hooks/useRunnerRecords";
 import { susdKey } from "@/hooks/useSusdBalance";
-import { markConfirmed, saveEntry } from "@/lib/entry-store";
+import { saveEntry } from "@/lib/entry-store";
 import { friendlyError, isDeclined, isNoAnswer } from "@/lib/errors";
 import type { EventSummary } from "@/lib/events";
-import { confirmParticipant, submitParticipant, type Submitted } from "@/lib/participants";
+import { submitParticipant, type Submitted } from "@/lib/participants";
 import { readClient } from "@/lib/sterun";
 import { readSusdBalance } from "@/lib/susd";
 import { signMessage, signTransaction } from "@/lib/wallet";
@@ -61,12 +59,10 @@ export interface EntryPlan {
 
 export interface EntryAttemptDeps {
   submit: typeof submitParticipant;
-  confirm: typeof confirmParticipant;
   enter: SterunClient["enter"];
   recordsOf: (runner: string) => Promise<SterunRecord[]>;
   chainAfter: (plan: EntryPlan) => Promise<ChainAfter | null>;
   save: typeof saveEntry;
-  markConfirmed: typeof markConfirmed;
   /** How long to look for a record after no answer. */
   checkWindowMs: number;
   checkIntervalMs: number;
@@ -106,12 +102,10 @@ async function readChainAfter(plan: EntryPlan): Promise<ChainAfter> {
 
 const DEFAULTS: EntryAttemptDeps = {
   submit: submitParticipant,
-  confirm: confirmParticipant,
   enter: (args, options) => readClient.enter(args, options),
   recordsOf: (runner) => readClient.recordsOfDetailed(runner),
   chainAfter: readChainAfter,
   save: saveEntry,
-  markConfirmed,
   checkWindowMs: 30_000,
   checkIntervalMs: 3_000,
 };
@@ -175,7 +169,6 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
           txHash: txHash ?? "",
           runner: p.runner,
           enteredAt: new Date().toISOString(),
-          confirmed: false,
           participantId: submitted.participantId,
           racePack,
           paidStroops: p.total.toString(),
@@ -184,11 +177,9 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
         // entry. The entry exists; the success page says the receipt is elsewhere.
         .catch(() => {});
 
-      // `entered` from paying moves on to linking; `found` from checking has no
-      // transaction hash to link with, so it ends there.
-      dispatch(
-        via === "entered" && txHash ? { type: "entered", tokenId, txHash } : { type: "found", tokenId },
-      );
+      // `entered` from paying, `found` from checking: the reducer accepts each
+      // only in its own phase.
+      dispatch({ type: via, tokenId });
 
       void queryClient.invalidateQueries({ queryKey: runnerRecordsKey(p.runner) });
       void queryClient.invalidateQueries({ queryKey: eventKeys.one(p.summary.event.eventId) });
@@ -240,21 +231,6 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
             : null;
           dispatch({ type: "enter-failed", failure: classifyEnterFailure(error, after) });
         });
-      return;
-    }
-
-    if (step === "link" && state.phase === "linking") {
-      const { submitted, tokenId, txHash } = state;
-      d.confirm({
-        participantId: submitted.participantId,
-        tokenId,
-        txHash,
-        address: plan.runner,
-        sign: signMessage,
-      })
-        .then(() => d.markConfirmed(tokenId))
-        .then(() => dispatch({ type: "linked" }))
-        .catch(() => dispatch({ type: "link-failed" }));
       return;
     }
 

@@ -309,8 +309,9 @@ submitted but `enter` failed** — the user has to be able to retry without subm
 How STE-21 settled both (2026-09-15; `fe/CLAUDE.md`, the entry flow):
 
 - **No idempotency key was needed.** The vault's answer (hash, salt, secret) is kept for the whole
-  attempt, so a retry pays with it and never submits again; only editing the details does. Rows
-  that are never confirmed are swept by the backend (STE-50).
+  attempt, so a retry pays with it and never submits again; only editing the details does. The
+  backend links a row to its record from the chain (STE-59), so entering takes two approvals and
+  no confirm call; rows that never get a record are swept (STE-50).
 - **`enter`'s refusals are explained from the chain, not the code.** An error code is a `u32` with no
   contract identity, and `enter` calls the sUSD token, whose errors share EventRegistry's `1..=99`
   band. So after a refusal the page re-reads the race, the distance, the add-on stock and the

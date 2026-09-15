@@ -14,14 +14,13 @@
  * `entry-store.test.ts` checks the shape. Losing the device is recovered in
  * round 2 by re-fetching the secret with the owning wallet (STE-52).
  *
- * ## `confirmed`
+ * ## No link state
  *
- * Set when the Sign and pay dialog's third step links the vault row to the
- * token. A link that fails leaves it false and the entry stands anyway, because
- * it is already real on chain; nothing on this device retries it, and the
- * backend is to link such rows from the chain (STE-59).
+ * Linking the vault row to the token is the backend's, from the chain (STE-59),
+ * so nothing here tracks or retries it. Entries saved before that may still
+ * carry a `confirmed` field; it is ignored.
  */
-import { createStore, get, set, update, values, type UseStore } from "idb-keyval";
+import { createStore, get, set, update, type UseStore } from "idb-keyval";
 
 export interface StoredEntry {
   eventId: number;
@@ -42,8 +41,7 @@ export interface StoredEntry {
   runner: string;
   /** ISO 8601. */
   enteredAt: string;
-  confirmed: boolean;
-  /** The vault row, kept so confirming can be retried. */
+  /** The vault row this entry's details went into. */
   participantId?: string;
   /**
    * What came with the entry, as the receipt prints it: "Event jersey M". The
@@ -80,33 +78,14 @@ export async function readEntry(tokenId: number): Promise<StoredEntry | undefine
 }
 
 /**
- * Sets fields on a stored entry inside one transaction.
- *
- * Read and write as two separate steps let two updates landing together (the
- * link after paying and the receipt tick) each put back the flag the other had
- * just set, so a runner was asked about their receipt again (2026-09-15).
- * idb-keyval's `update` reads and writes in the same transaction. An entry
- * this device does not hold is left absent.
+ * Read and written in one transaction (idb-keyval `update`), so it cannot put
+ * an older copy of the entry back over a write that landed in between. An
+ * entry this device does not hold is left absent.
  */
-async function patchEntry(tokenId: number, changes: Partial<StoredEntry>): Promise<void> {
+export async function markReceiptSaved(tokenId: number): Promise<void> {
   await update<StoredEntry | undefined>(
     tokenId,
-    (entry) => (entry ? { ...entry, ...changes } : entry),
+    (entry) => (entry ? { ...entry, receiptSaved: true } : entry),
     entries(),
-  );
-}
-
-export async function markConfirmed(tokenId: number): Promise<void> {
-  await patchEntry(tokenId, { confirmed: true });
-}
-
-export async function markReceiptSaved(tokenId: number): Promise<void> {
-  await patchEntry(tokenId, { receiptSaved: true });
-}
-
-export async function unconfirmedEntries(): Promise<StoredEntry[]> {
-  // `update` stores `undefined` under a key it was asked about but never held.
-  return (await values<StoredEntry | undefined>(entries())).filter(
-    (entry): entry is StoredEntry => entry !== undefined && !entry.confirmed,
   );
 }

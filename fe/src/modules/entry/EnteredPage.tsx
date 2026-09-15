@@ -25,10 +25,10 @@
  *
  * ## This page never asks for a signature
  *
- * Linking the vault row to the record is the Sign and pay dialog's third step.
- * It used to be retried here, and that put wallet popups over a page somebody
- * opened only to look at their bib, twice (Ancung, 2026-09-15). An entry left
- * unlinked is repaired from the chain by the backend (STE-59).
+ * Linking the vault row to the record used to be retried here with a signed
+ * message, which put wallet popups over a page somebody opened only to look at
+ * their bib, twice (Ancung, 2026-09-15). The backend now links it from the
+ * chain (STE-59), so nothing on this page needs the wallet at all.
  *
  * ## The stored entry is read fresh
  *

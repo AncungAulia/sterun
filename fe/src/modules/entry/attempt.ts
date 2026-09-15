@@ -34,13 +34,6 @@ export type AttemptState =
   | { phase: "ready"; submitted: Submitted | null }
   | { phase: "confirming-identity" }
   | { phase: "paying"; submitted: Submitted }
-  /**
-   * `enter` landed. Linking the vault row to the record needs a third signed
-   * message, asked for here in the dialog rather than on the success page,
-   * where it surfaced as surprise popups (Ancung, 2026-09-15). Goes away when
-   * the backend links rows from chain (STE-59).
-   */
-  | { phase: "linking"; submitted: Submitted; tokenId: number; txHash: string }
   | { phase: "checking"; submitted: Submitted }
   | { phase: "entered"; tokenId: number }
   | { phase: "failed"; submitted: Submitted | null; failure: AttemptFailure }
@@ -51,9 +44,7 @@ export type AttemptEvent =
   | { type: "start" }
   | { type: "submitted"; submitted: Submitted }
   | { type: "submit-failed"; message: string; declined: boolean }
-  | { type: "entered"; tokenId: number; txHash: string }
-  | { type: "linked" }
-  | { type: "link-failed" }
+  | { type: "entered"; tokenId: number }
   | { type: "enter-failed"; failure: EnterFailure }
   | { type: "found"; tokenId: number }
   | { type: "not-found" }
@@ -94,30 +85,16 @@ export function attemptReducer(state: AttemptState, event: AttemptEvent): Attemp
       return state;
 
     case "paying":
-      if (event.type === "entered") {
-        return {
-          phase: "linking",
-          submitted: state.submitted,
-          tokenId: event.tokenId,
-          txHash: event.txHash,
-        };
-      }
+      // Nothing follows `enter`: the backend links the vault row to the record
+      // from the chain (STE-59), so there is no third approval.
+      if (event.type === "entered") return { phase: "entered", tokenId: event.tokenId };
       if (event.type === "enter-failed") {
         if (event.failure.kind === "no-answer") return { phase: "checking", submitted: state.submitted };
         return { phase: "failed", submitted: state.submitted, failure: event.failure };
       }
       return state;
 
-    case "linking":
-      // Either way the entry is real on chain. A link that fails leaves the
-      // vault row unconfirmed, which STE-59 will repair from the chain.
-      if (event.type === "linked" || event.type === "link-failed") {
-        return { phase: "entered", tokenId: state.tokenId };
-      }
-      return state;
-
     case "checking":
-      // Found without an answer, there is no transaction hash to link with.
       if (event.type === "found") return { phase: "entered", tokenId: event.tokenId };
       if (event.type === "not-found") return { phase: "not-through", submitted: state.submitted };
       if (event.type === "check-error") return { phase: "check-failed", submitted: state.submitted };
@@ -145,14 +122,12 @@ export function attemptReducer(state: AttemptState, event: AttemptEvent): Attemp
 }
 
 /** The outside call this state is waiting on, or null when it waits on the runner. */
-export function nextStep(state: AttemptState): "submit" | "enter" | "link" | "check" | null {
+export function nextStep(state: AttemptState): "submit" | "enter" | "check" | null {
   switch (state.phase) {
     case "confirming-identity":
       return "submit";
     case "paying":
       return "enter";
-    case "linking":
-      return "link";
     case "checking":
       return "check";
     default:

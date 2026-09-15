@@ -187,13 +187,12 @@ export function PayDialog({
     }
 
     default: {
-      const paid = state.phase === "linking" || state.phase === "entered";
-      const identityDone = state.phase === "paying" || paid;
+      const identityDone = state.phase === "paying" || state.phase === "entered";
       body = (
         <>
           <DialogHeader>
             <DialogTitle className="heading-strong text-xl text-ink">Entering {raceName}</DialogTitle>
-            <DialogDescription className="text-base text-n-600">Your wallet will ask you three times.</DialogDescription>
+            <DialogDescription className="text-base text-n-600">Your wallet will ask you twice.</DialogDescription>
           </DialogHeader>
           <ol className="flex flex-col gap-3 py-2">
             <Step
@@ -208,21 +207,9 @@ export function PayDialog({
               }
             />
             <Step
-              state={paid ? "done" : state.phase === "paying" ? "running" : "waiting"}
+              state={state.phase === "entered" ? "done" : state.phase === "paying" ? "running" : "waiting"}
               label={total > 0n ? `Pay ${formatPrice(total)} and enter` : "Enter the race"}
-              detail={paid ? "Paid and entered." : state.phase === "paying" ? "Check your wallet." : undefined}
-            />
-            {/* Goes away when the backend links entries from the chain (STE-59). */}
-            <Step
-              state={state.phase === "entered" ? "done" : state.phase === "linking" ? "running" : "waiting"}
-              label="Link your entry to your details"
-              detail={
-                state.phase === "linking"
-                  ? "Check your wallet."
-                  : state.phase === "entered"
-                    ? undefined
-                    : "Free. Connects your details to your race record."
-              }
+              detail={state.phase === "paying" ? "Check your wallet." : undefined}
             />
           </ol>
         </>

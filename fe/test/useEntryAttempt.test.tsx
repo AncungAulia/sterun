@@ -72,12 +72,10 @@ function wrapper({ children }: { children: ReactNode }) {
 function deps(overrides: Partial<EntryAttemptDeps> = {}) {
   return {
     submit: vi.fn(async () => submitted),
-    confirm: vi.fn(async () => {}),
     enter: vi.fn(async () => ({ value: 7, txHash: TX, ledger: 1 })),
     recordsOf: vi.fn(async () => [record]),
     chainAfter: vi.fn(async () => null),
     save: vi.fn(async () => {}),
-    markConfirmed: vi.fn(async () => {}),
     checkWindowMs: 60,
     checkIntervalMs: 10,
     ...overrides,
@@ -91,7 +89,7 @@ function start(d: ReturnType<typeof deps>) {
 }
 
 describe("useEntryAttempt", () => {
-  it("submits, pays with the vault's hash, saves the receipt and confirms", async () => {
+  it("submits, pays with the vault's hash, and saves the receipt", async () => {
     const d = deps();
     const { result } = start(d);
 
@@ -112,31 +110,13 @@ describe("useEntryAttempt", () => {
         salt: "b".repeat(64),
         totpSecret: "c".repeat(64),
         txHash: TX,
-        confirmed: false,
         participantId: submitted.participantId,
         // What the receipt prints (mockup block 6).
         racePack: [],
         paidStroops: "0",
       }),
     );
-    await waitFor(() => expect(d.markConfirmed).toHaveBeenCalledWith(7));
-    expect(d.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ participantId: submitted.participantId, tokenId: 7, txHash: TX }),
-    );
-  });
-
-  it("links the entry inside the attempt, and is not entered until that answers", async () => {
-    // A third approval in the dialog, not a prompt on the success page.
-    const d = deps({ confirm: vi.fn(() => new Promise<void>(() => {})) });
-    const { result } = start(d);
-
-    await waitFor(() => expect(result.current.state.phase).toBe("linking"));
-    expect(d.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ participantId: submitted.participantId, tokenId: 7, txHash: TX }),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(result.current.state.phase).toBe("linking");
-    expect(result.current.running).toBe(true);
+    expect(result.current.running).toBe(false);
   });
 
   it("does not resend details when paying is tried again after a decline", async () => {
@@ -211,8 +191,6 @@ describe("useEntryAttempt", () => {
 
     await waitFor(() => expect(result.current.state).toEqual({ phase: "entered", tokenId: 7 }));
     expect(d.save).toHaveBeenCalledWith(expect.objectContaining({ tokenId: 7, txHash: "" }));
-    // No hash came back, so there is nothing to confirm the vault row with.
-    expect(d.confirm).not.toHaveBeenCalled();
   });
 
   it("says it did not go through when no record appears in time", async () => {
@@ -241,16 +219,6 @@ describe("useEntryAttempt", () => {
     act(() => result.current.checkAgain());
     await waitFor(() => expect(result.current.state).toEqual({ phase: "entered", tokenId: 7 }));
     expect(d.enter).toHaveBeenCalledTimes(1);
-  });
-
-  it("still enters when confirming fails, and leaves the entry unconfirmed", async () => {
-    const d = deps({ confirm: vi.fn(async () => Promise.reject(new Error("api down"))) });
-    const { result } = start(d);
-
-    await waitFor(() => expect(result.current.state.phase).toBe("entered"));
-    await waitFor(() => expect(d.confirm).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(d.markConfirmed).not.toHaveBeenCalled();
   });
 
   it("sends details again after they change", async () => {

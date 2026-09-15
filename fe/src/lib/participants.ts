@@ -15,7 +15,7 @@ import type { MessageSigner } from "./upload";
 import type { ParticipantBody } from "@/modules/entry/details";
 
 export interface Submitted {
-  /** The vault row, needed to confirm it against the token afterwards. */
+  /** The vault row. The backend links it to the record from the chain (STE-59). */
   participantId: string;
   participantHash: string;
   salt: string;
@@ -56,23 +56,4 @@ export async function submitParticipant(body: ParticipantBody, sign: MessageSign
     salt: response.salt,
     totpSecret: response.totp_secret,
   };
-}
-
-/**
- * Link the vault row to the record `enter` minted. Idempotent on the server
- * for the same token id, so a background retry after a dropped answer is safe.
- */
-export async function confirmParticipant(args: {
-  participantId: string;
-  tokenId: number;
-  txHash: string;
-  address: string;
-  sign: MessageSigner;
-}): Promise<void> {
-  const headers = await signedHeaders(args.address, args.sign);
-  await apiFetch(`/participants/${args.participantId}/confirm`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ token_id: args.tokenId, enter_tx_hash: args.txHash }),
-  });
 }

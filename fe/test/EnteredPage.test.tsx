@@ -11,9 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const recordOf = vi.hoisted(() => vi.fn());
 const getEventSummary = vi.hoisted(() => vi.fn());
 const readEntry = vi.hoisted(() => vi.fn());
-const markConfirmed = vi.hoisted(() => vi.fn(async () => {}));
 const markReceiptSaved = vi.hoisted(() => vi.fn(async () => {}));
-const confirmParticipant = vi.hoisted(() => vi.fn(async () => {}));
+const signMessage = vi.hoisted(() => vi.fn());
+const signTransaction = vi.hoisted(() => vi.fn());
 const downloadReceipt = vi.hoisted(() => vi.fn(async () => {}));
 const confetti = vi.hoisted(() => vi.fn());
 /*
@@ -29,16 +29,15 @@ vi.mock("@/lib/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/events")>()),
   getEventSummary,
 }));
-vi.mock("@/lib/entry-store", () => ({ readEntry, markConfirmed, markReceiptSaved }));
-vi.mock("@/lib/participants", () => ({ confirmParticipant }));
+vi.mock("@/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
 vi.mock("@/lib/wallet", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),
   connectWallet: vi.fn(),
   disconnectWallet: vi.fn(),
-  signTransaction: vi.fn(),
-  signMessage: vi.fn(),
+  signTransaction,
+  signMessage,
   walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
 vi.mock("@/modules/entry/receipt-pdf", () => ({ downloadReceipt }));
@@ -86,7 +85,6 @@ const stored: StoredEntry = {
   txHash: "d".repeat(64),
   runner: "GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR",
   enteredAt: "2026-09-15T12:00:00.000Z",
-  confirmed: true,
   participantId: "6f1c9a52-3c1b-4b5e-9d0e-2a1f3b4c5d6e",
   racePack: ["Event jersey M"],
   paidStroops: "250000000",
@@ -101,7 +99,7 @@ function renderPage(client = new QueryClient({ defaultOptions: { queries: { retr
 }
 
 beforeEach(() => {
-  for (const mock of [recordOf, getEventSummary, readEntry, markConfirmed, markReceiptSaved, confirmParticipant, downloadReceipt, confetti, fireConfetti]) {
+  for (const mock of [recordOf, getEventSummary, readEntry, markReceiptSaved, signMessage, signTransaction, downloadReceipt, confetti, fireConfetti]) {
     mock.mockClear();
   }
   recordOf.mockResolvedValue(record());
@@ -121,7 +119,7 @@ beforeEach(() => {
     ],
   });
   readEntry.mockResolvedValue(stored);
-  // The wallet that entered, connected: the only one ever asked to confirm.
+  // The wallet that entered, connected: even it is never asked for anything here.
   useWallet.setState({ address: stored.runner, isRestoring: false, isConnecting: false, error: null });
 });
 
@@ -221,15 +219,15 @@ describe("EnteredPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not load this entry");
   });
 
-  it("never asks the wallet to sign anything, even for an entry not yet linked", async () => {
-    // Linking the entry is the Sign and pay dialog's third step now. A prompt
-    // on a page somebody opened to look at their bib is how two popups
-    // appeared over the success page (Ancung, 2026-09-15).
-    readEntry.mockResolvedValue({ ...stored, confirmed: false });
+  it("never asks the wallet to sign anything", async () => {
+    // A prompt on a page somebody opened to look at their bib is how two
+    // popups appeared over the success page (Ancung, 2026-09-15). The backend
+    // links the entry from the chain now (STE-59).
     renderPage();
     await screen.findByRole("heading", { name: "You're in!" });
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(confirmParticipant).not.toHaveBeenCalled();
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(signTransaction).not.toHaveBeenCalled();
   });
 
   describe("coming back (Ancung, 2026-09-15)", () => {
