@@ -83,6 +83,8 @@ describe("GetTestSusd", () => {
     ["rate-limited", "You already got test sUSD today. Try again tomorrow."],
     ["empty", "Test sUSD has run out. Tell the Sterun team."],
     ["unavailable", "Test sUSD is not available yet."],
+    ["unconfirmed", "Test sUSD was sent but is not confirmed yet. Check your balance in a minute before asking again."],
+    ["no-trustline", "Your wallet cannot hold test sUSD yet. Press Get test sUSD again to set it up."],
   ])("says so when the faucet answers %s, and reports no funding", async (kind, sentence) => {
     const user = userEvent.setup();
     requestTestSusd.mockResolvedValue({ kind });

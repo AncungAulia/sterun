@@ -111,6 +111,13 @@ describe("requestTestSusd", () => {
     [429, "rate-limited", "rate-limited"],
     [429, "http-error", "rate-limited"],
     [503, "faucet-empty", "empty"],
+    // The live route (STE-49, be/src/routes/faucet.ts): no faucet key on this
+    // deployment, or a network that is not testnet.
+    [503, "faucet-unavailable", "unavailable"],
+    [403, "faucet-unavailable", "unavailable"],
+    // Sent, not confirmed. The route will not pay the same wallet twice.
+    [502, "payout-unconfirmed", "unconfirmed"],
+    [409, "no-trustline", "no-trustline"],
   ])("maps a %s %s to %s", async (status, code, kind) => {
     apiFetch.mockResolvedValueOnce(CHALLENGE).mockRejectedValueOnce(new ApiError(status, code, "x"));
     expect(await requestTestSusd(ADDRESS, async () => "sig")).toEqual({ kind });

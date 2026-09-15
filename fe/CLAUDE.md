@@ -578,7 +578,10 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   shares with EventRegistry. A decline or no answer is read from the error and costs no chain read.
 - **`PayPanel` checks the sUSD balance before the button is usable**, and shows neither the notice
   nor the balance for a free entry, where no money moves. **Get test sUSD** (testnet only) opens a
-  trustline when needed and calls `POST /faucet` (STE-49; confirm the path with James). It imports
+  trustline when needed and calls `POST /faucet` (STE-49, `be/src/routes/faucet.ts`, live since
+  2026-09-15; every refusal it documents is mapped in `lib/susd.ts`). As of that day the live API
+  reports `faucet.payoutConfigured: false` in `/config`, so the route answers `faucet-unavailable`
+  and the button says test sUSD is not available yet, until a faucet key is set on the server. It imports
   `lib/wallet` on press: statically it put Stellar Wallets Kit in every page's header graph.
 - **The success page reads the bib, race and distance from chain; the bib name and receipt code from
   this device** (`lib/entry-store.ts`, IndexedDB), which is also what round 2's pass reads offline.

@@ -125,14 +125,20 @@ export type FaucetResult =
   | { kind: "sent" }
   | { kind: "rate-limited" }
   | { kind: "empty" }
-  | { kind: "unavailable" };
+  | { kind: "unavailable" }
+  /** Sent, but not confirmed. The route will not pay this wallet twice, so asking again is pointless. */
+  | { kind: "unconfirmed" }
+  /** The wallet cannot hold sUSD (the trustline was removed between our check and the payout). */
+  | { kind: "no-trustline" };
 
 /**
  * Ask the backend faucet to send test sUSD to the signer (STE-49).
  *
- * The route path is assumed until STE-49 lands: confirm it with James before
- * merging. Until then the route answers 404, which reads as `unavailable`, so
- * the pay step still works for anyone who already holds sUSD.
+ * The route is `be/src/routes/faucet.ts` on main, live since 2026-09-15. Its
+ * refusals, each mapped below: `faucet-unavailable` (503 on a deployment with
+ * no faucet key, 403 off testnet), `no-trustline` (409), `faucet-empty` (503),
+ * `rate-limited` (429), and `payout-unconfirmed` (502). A 404 is kept as
+ * unavailable for a backend that predates the route.
  */
 export async function requestTestSusd(address: string, sign: MessageSigner): Promise<FaucetResult> {
   const challenge = await apiFetch<{ nonce: string; expires_at: string }>("/auth/challenge", {
@@ -158,7 +164,9 @@ export async function requestTestSusd(address: string, sign: MessageSigner): Pro
     if (error instanceof ApiError) {
       if (error.code === "rate-limited" || error.status === 429) return { kind: "rate-limited" };
       if (error.code === "faucet-empty") return { kind: "empty" };
-      if (error.status === 404) return { kind: "unavailable" };
+      if (error.code === "faucet-unavailable" || error.status === 404) return { kind: "unavailable" };
+      if (error.code === "payout-unconfirmed") return { kind: "unconfirmed" };
+      if (error.code === "no-trustline") return { kind: "no-trustline" };
     }
     throw error;
   }
