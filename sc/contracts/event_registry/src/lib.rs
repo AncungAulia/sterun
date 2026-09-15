@@ -3,8 +3,8 @@
 //!
 //! Organiser-facing registry for running events. One deployed instance serves
 //! every event: it stores the event itself, its distance categories (quota,
-//! price, bib sequence) and who may act for the event (organiser + scanner
-//! devices).
+//! price), the event's bib counter, and who may act for the event (organiser +
+//! scanner devices).
 //!
 //! See `docs/SYSTEM_DESIGN.md` section 3.1 for the authoritative design.
 //!
@@ -84,8 +84,12 @@ pub struct EventData {
     pub status: EventStatus,
 }
 
-/// One distance category of an event. `entered_count` doubles as the bib
-/// sequence handed out by [`EventRegistry::reserve_slot`].
+/// One distance category of an event.
+///
+/// `entered_count` is the **quota counter**, and only that: it says how many of
+/// this category's `quota` slots are gone. Until v2.3 it doubled as the bib
+/// sequence, which is what made bibs restart at 0 in every distance — see
+/// [`DataKey::EventEntryCount`] and [`EventRegistry::reserve_slot`].
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CategoryData {
@@ -146,6 +150,23 @@ pub enum DataKey {
     /// append-only rule stopped being advice here and started being the reason
     /// `event_id` 0 still decodes.
     Organiser(Address),
+    /// persistent -> `u32`, keyed by `event_id` (v2.3)
+    ///
+    /// How many entries the event has taken **across all of its distances**,
+    /// and therefore the last bib number handed out by
+    /// [`EventRegistry::reserve_slot`]. A bib is this counter *after* the
+    /// increment, so the first entrant of an event gets `1`.
+    ///
+    /// A key rather than a field on [`EventData`] — and that is not a style
+    /// choice. Adding a required field to a struct that is already stored is
+    /// the one change an in-place upgrade cannot survive: the entries written
+    /// by the old code would stop decoding. Appending a key costs nothing and
+    /// breaks nothing, which is why this table only ever grows.
+    ///
+    /// Absent means zero, so an event created before v2.3 starts this counter
+    /// at 0 the first time it takes an entry under the new code. Its existing
+    /// records keep the per-distance numbers they were issued.
+    EventEntryCount(u32),
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +292,13 @@ pub struct ContractUpgraded {
     pub new_wasm_hash: BytesN<32>,
 }
 
+/// One slot taken. `seq` is the entrant's **bib number**.
+///
+/// The layout has not moved since v2.0 — two topics and one `u32` — but since
+/// v2.3 the value means something different: it is the entrant's position in
+/// the **event**, counting from 1, not their position in the category counting
+/// from 0. An indexer needs no change; a reader that assumed `seq` restarts per
+/// category does.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlotReserved {
@@ -631,7 +659,31 @@ impl EventRegistry {
 
     // -- entry reservation ---------------------------------------------------
 
-    /// Reserves one slot in a category and returns its bib sequence number.
+    /// Reserves one slot in a category and returns the entrant's **bib number**.
+    ///
+    /// The bib is unique within the event and starts at 1 (v2.3). The first
+    /// entrant of an event gets bib 1 whichever distance they picked, the
+    /// second gets 2, and the 10K and the 5K draw from that one sequence — so
+    /// no two runners at a race wear the same number, and nobody wears `0`.
+    ///
+    /// Before v2.3 the bib was the category's `entered_count` *before* the
+    /// increment, which made it per-distance and 0-based: the first 10K entrant
+    /// and the first 5K entrant were both bib `0`. The distance is deliberately
+    /// **not** encoded into the number — a scheme like `category * 1000` caps
+    /// the field at a thousand runners, and a single distance here can hold
+    /// tens of thousands. Distance is a label and a colour in the UI, not
+    /// arithmetic in a `u32`.
+    ///
+    /// **Events created before v2.3 keep the numbers they already issued.**
+    /// Nothing is migrated and nothing is rewritten; their old records read
+    /// back exactly as they were written. What such an event does *not* get is
+    /// retroactive uniqueness: [`DataKey::EventEntryCount`] starts at 0 for it,
+    /// so an entry taken after the upgrade is bib 1, which one of its existing
+    /// per-distance bibs may well be too. The counter cannot be seeded without
+    /// summing every category of the event on the entry path, and an unbounded
+    /// read loop inside `enter` is a worse failure than a duplicate on a
+    /// pre-upgrade race. The backend keeps its duplicate-bib guard for exactly
+    /// these events; new events cannot produce the collision at all.
     ///
     /// **Only the wired RaceRecord contract may call this.** The gate is
     /// invoker-contract authorization: the stored `RaceRecordAddr` must
@@ -641,10 +693,11 @@ impl EventRegistry {
     /// EOA could present for that address either — no one can mint a slot
     /// without going through `RaceRecord.enter`.
     ///
-    /// The quota check and the increment happen in this one invocation, so two
-    /// simultaneous entries can never both take the last slot: the second
+    /// The quota check and both increments happen in this one invocation, so
+    /// two simultaneous entries can never both take the last slot: the second
     /// transaction reads the already-incremented `entered_count` and reverts
-    /// with [`Error::QuotaFull`].
+    /// with [`Error::QuotaFull`]. Quota is still enforced **per distance** —
+    /// the event counter is a numbering device and gates nothing.
     pub fn reserve_slot(env: Env, event_id: u32, category_id: u32) -> Result<u32, Error> {
         let race_record: Address = env
             .storage()
@@ -666,10 +719,11 @@ impl EventRegistry {
             return Err(Error::QuotaFull);
         }
 
-        let seq = category.entered_count;
         // Bounded by the guard above: `entered_count < quota <= u32::MAX`.
-        category.entered_count = seq + 1;
+        category.entered_count += 1;
         write_category(&env, event_id, category_id, &category);
+
+        let seq = next_bib(&env, event_id);
 
         SlotReserved {
             event_id,
@@ -892,6 +946,22 @@ fn write_addon_count(env: &Env, event_id: u32, count: u32) {
     let key = DataKey::AddOnCount(event_id);
     env.storage().persistent().set(&key, &count);
     bump_persistent(env, &key);
+}
+
+/// Advances the event's entry counter and returns the new value, which is the
+/// bib the entrant wears. Absent means zero, so the first entrant of an event
+/// gets 1.
+///
+/// The add is unchecked on purpose. `overflow-checks = true` is on in the
+/// release profile, so entry 2^32 aborts the transaction instead of wrapping
+/// round to a bib that is already on someone's shirt — and reaching it would
+/// take four billion transactions against one event.
+fn next_bib(env: &Env, event_id: u32) -> u32 {
+    let key = DataKey::EventEntryCount(event_id);
+    let seq = env.storage().persistent().get(&key).unwrap_or(0u32) + 1;
+    env.storage().persistent().set(&key, &seq);
+    bump_persistent(env, &key);
+    seq
 }
 
 fn write_category_count(env: &Env, event_id: u32, count: u32) {

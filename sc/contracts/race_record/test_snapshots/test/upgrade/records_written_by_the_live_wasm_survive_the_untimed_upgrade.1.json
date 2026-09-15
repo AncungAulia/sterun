@@ -1946,6 +1946,33 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "EventEntryCount"
+                  },
+                  {
+                    "u32": 0
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 5
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 3110400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "Organiser"
                   },
                   {
@@ -3486,7 +3513,7 @@
                       "symbol": "bib_no"
                     },
                     "val": {
-                      "u32": 0
+                      "u32": 1
                     }
                   },
                   {
@@ -3600,7 +3627,7 @@
                       "symbol": "bib_no"
                     },
                     "val": {
-                      "u32": 1
+                      "u32": 2
                     }
                   },
                   {
@@ -3710,7 +3737,7 @@
                       "symbol": "bib_no"
                     },
                     "val": {
-                      "u32": 2
+                      "u32": 3
                     }
                   },
                   {
@@ -3822,7 +3849,7 @@
                       "symbol": "bib_no"
                     },
                     "val": {
-                      "u32": 3
+                      "u32": 4
                     }
                   },
                   {
@@ -3930,7 +3957,7 @@
                       "symbol": "bib_no"
                     },
                     "val": {
-                      "u32": 4
+                      "u32": 5
                     }
                   },
                   {

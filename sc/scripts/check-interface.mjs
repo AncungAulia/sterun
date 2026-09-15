@@ -2,7 +2,7 @@
 //
 // STE-14 (C3) — the freeze regression guard.
 //
-// `docs/specs/INTERFACE.md` is FROZEN at v2.2.0. A frozen document that nobody
+// `docs/specs/INTERFACE.md` is FROZEN. A frozen document that nobody
 // re-checks is just a document: the wasm can drift away from it in one commit
 // and nothing goes red. This script closes that gap by reading BOTH sides
 // mechanically and diffing them:
@@ -177,6 +177,12 @@ function readWasmSpec(wasmPath) {
 // ---------------------------------------------------------------------------
 
 const MD = readFileSync(INTERFACE_MD, "utf8");
+
+// The freeze version, read from the document's own title rather than kept in a
+// constant here. A gate that names the version it checked has to name the right
+// one, and a hardcoded string goes stale on the first spec bump — silently, in
+// the message a reader trusts precisely when something has gone wrong.
+const FREEZE = /^#\s*INTERFACE\b.*\((v[\d.]+)\)/m.exec(MD)?.[1] ?? "(version not found)";
 
 /** Everything under `### <number> ...` up to the next heading of any level. */
 function section(number) {
@@ -477,7 +483,7 @@ if (problems.length) {
   console.log("==============================================================");
   for (const p of problems) console.log(`  FAIL  ${p}`);
   console.log(
-    "\nThe freeze is v2.2.0 and is NOT edited to match the code. Either revert the\n" +
+    `\nThe freeze is ${FREEZE} and is NOT edited to match the code. Either revert the\n` +
       "contract change, or open a spec-change PR: approval from @Axel + @fable, a new\n" +
       "entry in docs/specs/CHANGELOG.md, and regenerated bindings (see §7 of\n" +
       "docs/specs/INTERFACE.md). Error codes are never renumbered.",
@@ -487,5 +493,5 @@ if (problems.length) {
 
 console.log("==============================================================");
 console.log(" INTERFACE OK — built wasm and generated bindings still match");
-console.log(" the frozen docs/specs/INTERFACE.md v2.2.0.");
+console.log(` the frozen docs/specs/INTERFACE.md ${FREEZE}.`);
 console.log("==============================================================");

@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.2.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.3.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,113 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.3.0] — 2026-09-15
+
+**MINOR — a bib is now unique within its event and starts at 1 (STE-54).** No function was added or
+removed, no signature moved, no event layout moved, no error code was added or renumbered. What
+changed is the **value** `reserve_slot` returns, so this is the rare MINOR that a client must
+actually read before shipping.
+
+### Why
+
+`reserve_slot` returned the category's `entered_count`, which made a bib a position **within a
+distance**, counting from **0**:
+
+| | before (v2.2) | from v2.3 |
+| --- | --- | --- |
+| first 10K entrant | `0` | `1` |
+| first 5K entrant of the same race | `0` | `2` |
+| second 10K entrant | `1` | `3` |
+
+Two runners at one race were issued the same number, and the entry pass draws a physical bib — so
+somebody was going to pin on a bib reading `0`, next to somebody else wearing the same `0`. A bib
+whose job is to identify one runner to a marshal cannot be ambiguous inside the race it is worn at.
+
+Axel's decision (STE-53 → STE-54): fix it **at the source, on chain**, rather than by offsetting the
+number in `fe/`. A display offset would have left the ambiguous value in `RecordData.bib_no`, where
+the scanner, the results CSV and any third party read it.
+
+**The distance is deliberately not encoded into the number.** The obvious alternative,
+`category_id * 1000 + n`, caps a distance at a thousand runners; Merdeka Run 2026 fills 8,100 slots
+in a single distance, so the scheme overflows its own field before the race it was invented for.
+Distance stays a label and a colour in the UI.
+
+### What was added
+
+| | |
+| --- | --- |
+| `DataKey::EventEntryCount(event_id) -> u32` | persistent, appended at the end of the enum; entries taken by the event across all its distances, and therefore the last bib issued |
+
+Nothing else. `entered_count` keeps its job as the **quota counter** — `QuotaFull(5)` still fires
+from exactly the comparison it fired from before, per distance. The new counter numbers entrants and
+gates nothing.
+
+A key rather than a field on `EventData`, and that is the whole reason this upgrade is safe: adding
+a required field to a struct that is already stored is the one change an in-place upgrade cannot
+survive, because the entries written by the running code would stop decoding.
+
+### The one thing a client must read
+
+**Bibs issued before this version are not unique within their event, and are not rewritten.** There
+is no migration: an event created before v2.3 starts the new counter at 0, so the first entry it
+takes *after* the upgrade is bib 1 — which one of its existing per-distance bibs may also be.
+
+Seeding the counter would mean summing every category of the event on the entry path, and an
+unbounded read loop inside `enter` — the call that takes a runner's money — is a worse failure than
+a duplicate on a race that predates the fix. `be/` therefore **keeps** its `ambiguous_bib` /
+`duplicate_bib` guard, which is now precisely a legacy-event safety net. Events created from v2.3
+onwards cannot produce the collision at all.
+
+Also worth stating because it is easy to conflate: **the bib is not the token id.** Token ids are
+global to RaceRecord and count from 0; bibs belong to one race and count from 1.
+
+### Impact on existing data
+
+No stored value changes. `CategoryData`, `EventData` and `AddOnData` are untouched, every `DataKey`
+that existed still means what it meant, and `SlotReserved` keeps its layout — two topics and one
+`seq`, so the STE-16 indexer needs no change to keep filtering it.
+
+Installed by `upgrade` at the **same address**
+(`CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`). Proven before the deploy by
+`bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence`, which deploys the **genuinely live
+wasm** (`cf009033…`, committed in `sc/contracts/event_registry/testdata/`), fills a two-distance
+event with it — reproducing the duplicate `0` — upgrades to the v2.3 build, reads the event, both
+categories and every counter back unchanged, and then shows a new event numbering 1, 2, 3 across its
+distances.
+
+### One stale comment, left stale on purpose
+
+`RecordData.bib_no` in `sc/contracts/race_record/src/lib.rs` is documented as "the category sequence
+handed out by `EventRegistry::reserve_slot`", which v2.3 makes wrong. It is **not** corrected here:
+doc comments travel in the contract spec and therefore in the wasm hash, so the fix would cost an
+`upgrade` transaction against a live contract whose behaviour did not change, plus a new frozen hash
+for C2. `INTERFACE.md` §2.2 carries the right description, and the code comment is corrected at C2's
+next real wasm change.
+
+### Artefacts
+
+| | sha256 | Size |
+| --- | --- | ---: |
+| EventRegistry v2.2.0 (live before) | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
+| EventRegistry v2.3.0 | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
+
+RaceRecord **did not change** (`0e29026d…` still) and its address was not upgraded. The
+event-registry TS bindings were regenerated (`DataKey` gained a variant and `reserve_slot`'s doc
+comment changed); race-record's are byte-identical.
+
+Vectors: no value changed. `HASH_AND_TOTP.md` was untouched.
+
+### Procedure
+
+This spec change was **pre-authorised by Axel (PM)** through the STE-54 build brief ("Axel
+pre-authorises, WITHOUT an ACC gate"; merge to `main` once every e2e is green). The brief was handed
+to the agent in Indonesian and is not committed, since this repository is English-only; the decision,
+the authorisation and the evidence are recorded as a comment on Linear STE-54 instead. It still
+landed through a PR rather than a direct push to `main` — the same arrangement as [2.1.0] and
+[2.2.0].
 
 ---
 

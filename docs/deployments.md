@@ -2249,3 +2249,148 @@ records really entered on testnet:
 The e2e left throwaway entries in the vault: tokens 19 and 20, plus unconfirmed rows the STE-50 sweep
 removes after a day. `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T01:24:59Z.
 
+
+---
+
+## STE-54 — bibs unique within an event, installed by an IN-PLACE `upgrade` (2026-09-15)
+
+**The address did not change.** `EventRegistry` at `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`
+is the same address before and after, and all **18 events / 30 categories** inside it read back through
+the new code (below). `RaceRecord` was **not** upgraded: its wasm did not change by a single byte, and
+`upgrade-testnet.sh` skipped it so the ledger does not record a code change that did not happen.
+
+### Why
+
+`reserve_slot` returned the category's `entered_count`, so a bib was a place **within a distance**,
+counting from **0**: the first 10K entrant and the first 5K entrant of one race were both bib `0`.
+The entry pass draws a physical bib, so somebody was going to pin on a `0` next to somebody else
+wearing the same `0`. From v2.3 the bib is the entrant's place **within the event**, counting from 1.
+
+The distance is deliberately not folded into the number — `category_id * 1000 + n` caps a distance at
+a thousand runners and Merdeka Run 2026 fills 8,100 slots in one. Distance stays a label and a colour
+in `fe/`. The counter is a **new** `DataKey::EventEntryCount(event_id)`, appended last; nothing was
+added to a stored struct, which is the one change an in-place upgrade cannot survive. Interface:
+`docs/specs/INTERFACE.md` **v2.3.0**.
+
+### The wasm — old → new
+
+| | sha256 | Size |
+| --- | --- | ---: |
+| before (v2.2.0) | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
+| after (v2.3.0) | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
+
+Both hashes are read from the chain (`stellar contract info hash --contract-id …`), before and after.
+Toolchain: `stellar 27.0.0`, `soroban-sdk =26.1.1`.
+
+The old wasm is **committed** in `sc/contracts/event_registry/testdata/event_registry_live_pre_bib.wasm`,
+fetched with `stellar contract fetch` before the upgrade — beside the pre-allowlist one from STE-36
+rather than replacing it. The test `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence`
+deploys those bytes, fills a two-distance event with them (reproducing the duplicate `0`), upgrades to
+the v2.3 build, reads the event, both categories and every counter back unchanged, then shows a new
+event numbering 1, 2, 3 across its distances — with no network.
+
+### The upgrade transaction (testnet)
+
+| Step | Ledger | Time (UTC) | Hash |
+| --- | ---: | --- | --- |
+| `upgrade` EventRegistry → `c8b5e82a…` | 4682831 | 2026-09-15T02:02:22Z | [`06ad36b9…`](https://stellar.expert/explorer/testnet/tx/06ad36b93a947238e37905338cfcbad9e98f6d7ab00539491fb407ae5592bfa9) |
+
+Signed by `GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` (sterun-admin, `STERUN_ADMIN` in
+the gitignored `.env`). `bash sc/scripts/upgrade-testnet.sh`:
+
+```
+=== EventRegistry (CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU) ===
+  live  cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0
+  built c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd
+  uploaded c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd
+  Event: ContractUpgraded (contract_upgraded), new_wasm_hash: "c8b5e82a…69cd"
+  now running c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd
+
+=== RaceRecord (CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW) ===
+  live  0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+  built 0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+  identical — skipped, so the ledger records no upgrade that did not happen
+
+=== the non-transferable claim, re-checked on the upgraded code ===
+  0 transfer-ish exports
+```
+
+### Storage survived — every event, not a sample
+
+After the upgrade, `get_event` and `category_count` were read for **all 18** events and `get_category`
+for **all 30** categories: 18/18 and 30/30 decoded. Nothing was orphaned, which is the failure an
+appended `DataKey` variant risks — and it is all-or-nothing, so a full sweep is the honest check.
+
+Five entries were snapshotted **before** the upgrade and re-read after it, byte for byte identical:
+
+```
+event 0     {"metadata_hash":"a4ea685c…65a0","name":"Sterun Testnet Rehearsal",
+             "organiser":"GBGUI5MP…C4TN","starts_at":1789000000,"status":"Open",
+             "uri":"https://sterun.xyz/events/sanity.json"}
+category 0/0  {"code":"10K","distance_m":10000,"entered_count":3,"price_usdc":"50000000","quota":5}
+addon 0/0     {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":2}
+event 16    {"…","name":"Sterun entry rules e2e 2026-09-15","status":"Open"}
+category 16/0 {"code":"R5K","distance_m":5000,"entered_count":2,"price_usdc":"0","quota":10}
+```
+
+**Record 0 still wears bib `0`.** That number cannot be issued by v2.3 at all, so finding it still on
+chain is the positive proof that no bib already handed out was rewritten:
+
+```
+{"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":1788925897,"entered_at":1788925832,
+ "event_id":0,"finish_time_s":3161,"participant_hash":"feb3cea9…fe29","result_at":1788925907,
+ "state":"Finished"}   owner GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR
+```
+
+### On-chain sanity check — `bash sc/scripts/bib-testnet.sh`
+
+A fresh **free** event owned by `sterun-organiser`, so no sUSD moved and no live race's slots were
+spent. Nothing was written to an event that predates the upgrade — those were read only. Every line
+below is an assertion in the script, not a print:
+
+```
+=== target ===
+  live wasm      c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd
+  ✓ the address is running the wasm built from this tree
+  ✓ RaceRecord unchanged by this ticket
+
+=== (b) an event written BEFORE the upgrade, read through the new code ===
+  ✓ decoded unchanged, and record 0 still wears the bib 0 that only the old scheme could issue
+
+=== (a) a NEW event, two distances ===
+  event_id 17           tx 4b216728116ba947826ac27b2f37b7aa521765c6cf5c33979e2406094025218a
+  category 0 FUN10K quota 2  tx baa78d0ad8ae550d08b6d8a6d79929d8994e588f804f5bfb069d9af6efc8ba28
+  category 1 FUN5K  quota 1  tx 4066ce3bec00d57c062861fdb66e35ba9a011df4dde63587af7334ce8b640841
+  Open                     tx 058b2576337879ecc23ae605d1e4b69800565643a5d63f4caa2f632858722d11
+  10K entrant 1  token_id 21  bib 1   tx f74eee9e05448d2ad492963df72d9599ad269b345847c278c6d1abbf8b406c47
+  5K  entrant 1  token_id 22  bib 2   tx 2d42bd7c91620f82c220dddd683cf509bf72f79b9e50fc89a1bd7f96ad06faf1
+  10K entrant 2  token_id 23  bib 3   tx 71a768c85f09f7efa2d2d980d3596a8da207bc241f7c34edd2f029aaff89df35
+  ✓ 1, 2, 3 across two distances — the first runner of each distance is NOT 0
+
+=== (c) the quota still refuses, per distance ===
+  10K 2/2 taken, 5K 1/1 taken — counted per distance, not from the bib sequence
+  ✓ a fourth entry in the full 10K → Error(Contract, #5)
+  ✓ a second entry in the full 5K → Error(Contract, #5)
+  ✓ refused entries changed nothing
+
+=== (b, again) the old event is exactly where it was ===
+  ✓ untouched by a whole race running beside it
+```
+
+The three bibs were read back from `RaceRecord.record_of`, not from the return value alone — so the
+number the registry issued is the number that ended up in the record a scanner reads. Each entry's
+transaction also carried a `slot_reserved` event, whose layout has not moved since v2.0.
+
+Event 17 is left on chain as the evidence: a race whose 10K wears 1 and 3 and whose 5K wears 2.
+
+### What did NOT change, and is worth stating
+
+- **No new function, no new event, no new error code, no changed signature.** The whole ticket is one
+  appended storage key and a different value out of `reserve_slot`.
+- **`be/` and `fe/` were not touched.** `bib_no` is still a `u32`; the backend's `ambiguous_bib` /
+  `duplicate_bib` guard **stays**, and is now precisely a safety net for events created before this
+  upgrade — they were not migrated, so their counter starts at 0 and an entry taken on one of them
+  today is bib 1, which one of their older per-distance bibs may also be. Events created from now on
+  cannot produce the collision at all.
+- **The organiser allowlist was not re-seeded.** `upgrade` replaces code, not storage, so
+  `sterun-organiser` is still on it — the sanity run's `create_event` proves it.

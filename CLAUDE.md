@@ -77,6 +77,7 @@ must **never** be edited by hand.
 | STE-36 | **organiser allowlist** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED** |
 | STE-37 | add-on methods on `SterunClient` | done, live v2 e2e |
 | STE-41 | **untimed finish** (`record_finish_untimed`) in RaceRecord (C2) + `recordFinishUntimed` in the SDK | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer/CSV + `fe/` profile follow-ups are teammates' tickets |
+| STE-54 | **bibs unique within an event, from 1** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` keeps its duplicate-bib guard and `fe/` renders the number as-is (teammates' tickets) |
 | — | event metadata files (`POST /events/files`) | done, live e2e |
 | — | **R2** object storage (`sterun-files`, APAC) | done — the API is stateless, the replica blocker is gone |
 | — | migrate `be/` + `fe/` to the v2 addresses | done — index and vault truncated, v2 e2e passed |
@@ -85,8 +86,9 @@ Contracts are **live on testnet**, and there are now **two pairs**. Addresses an
 evidence live in [`docs/deployments.md`](docs/deployments.md):
 
 ```
-# v2 (STE-35 + STE-36 + STE-41) — paid add-ons, Cancelled, upgradeable, organiser
-# allowlist, untimed finish. Interface: docs/specs/INTERFACE.md v2.2.0
+# v2 (STE-35 + STE-36 + STE-41 + STE-54) — paid add-ons, Cancelled, upgradeable,
+# organiser allowlist, untimed finish, event-wide bibs.
+# Interface: docs/specs/INTERFACE.md v2.3.0
 EVENT_REGISTRY=CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
 RACE_RECORD=CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
 
@@ -131,6 +133,15 @@ key, same address, existing events intact. **STE-41 did it again on RaceRecord**
 `record_finish_untimed` + a new event, zero storage change, same address, all 14 existing records
 read back identical. Since then a `Finished` record may have `finish_time_s == None` — the marker for
 "finished, no official time"; never render it as `0`.
+
+**STE-54 did it a third time on EventRegistry**: `DataKey::EventEntryCount` appended, same address,
+all 18 events and 30 categories read back. A **bib is now unique within its event and counts from
+1** — it used to be the category's `entered_count`, which made the first 10K entrant and the first
+5K entrant of one race both bib `0`. The distance is **not** in the number (a `category × 1000`
+scheme overflows at a thousand runners; one distance here holds 8,100), so `fe/` renders the number
+as it comes and shows the distance as a label and a colour. Events created **before** that upgrade
+were not migrated: they keep their per-distance numbers, their counter starts at 0, and `be/` keeps
+its duplicate-bib guard for exactly them.
 
 The price is one rule no compiler can enforce: **storage keys are append-only, forever** — never
 delete, rename or retype a `DataKey` variant, and never add a required field to a struct that is

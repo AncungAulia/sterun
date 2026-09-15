@@ -1,10 +1,13 @@
-# `testdata/` — the wasm the upgrade replaces
+# `testdata/` — the wasm each upgrade replaced
 
-One file, and it is not a build artifact of this repo:
+Neither file is a build artifact of this repo. Both were fetched from testnet, and both are the
+executable that was genuinely running at `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`
+at the moment the upgrade beside them was written:
 
 | File | sha256 | What it is |
 | --- | --- | --- |
-| `event_registry_live_pre_allowlist.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | EventRegistry v2.0.1, the executable running at `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` before STE-36 |
+| `event_registry_live_pre_allowlist.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | EventRegistry v2.0.1, live before **STE-36** (the organiser allowlist) |
+| `event_registry_live_pre_bib.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | EventRegistry v2.2, live before **STE-54** (bibs unique within an event) |
 
 Fetched from testnet as-is:
 
@@ -12,7 +15,7 @@ Fetched from testnet as-is:
 stellar contract fetch \
   --id CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU \
   --network testnet \
-  --out-file sc/contracts/event_registry/testdata/event_registry_live_pre_allowlist.wasm
+  --out-file sc/contracts/event_registry/testdata/event_registry_live_pre_bib.wasm
 ```
 
 ## Why it is committed rather than fetched when the test runs
@@ -23,16 +26,31 @@ thing STE-36 actually put at risk: that state written by the **old** code is sti
 **new** code. That needs two genuinely different wasm files, and the "old" one has to be the artefact
 that really wrote the events now living on the chain — not a copy of today's build.
 
-The test touches no network (CI's `contracts.yml` has no testnet access, and a test that needs the
-internet is a test that goes red one day because an RPC is down), so the bytes live in the repo.
-`state_written_by_the_live_wasm_survives_the_allowlist_upgrade` verifies for itself that this file is
-genuine: the host hashes it on upload and the result is compared against the hash in the table above
-— the same hash the ledger reports for `CAPB6NQP…` and the one frozen in `docs/specs/INTERFACE.md`
-§0.
+The tests touch no network (CI's `contracts.yml` has no testnet access, and a test that needs the
+internet is a test that goes red one day because an RPC is down), so the bytes live in the repo. Each
+test verifies for itself that its fixture is genuine: the host hashes it on upload and the result is
+compared against the hash in the table above — the same hash the ledger reported for `CAPB6NQP…` and
+the one frozen in `docs/specs/INTERFACE.md` §0.
 
-## When to replace this file
+| Test in `src/test.rs` | Fixture | What only that pair can prove |
+| --- | --- | --- |
+| `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` | pre-allowlist | `DataKey::Organiser` was appended without orphaning `event_id` 0 |
+| `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` | pre-bib | the per-distance bibs already on chain still read back once bibs become event-wide |
 
-Only after the next in-place upgrade has genuinely landed on testnet: fetch it again, and update the
-hash in this table **and** `LIVE_PRE_ALLOWLIST_HASH` in `src/test.rs`. Do not replace it with the
-output of a local `stellar contract build` — the moment this file becomes a copy of the current
-build, the test stops proving anything.
+The second file needed no separate step to be trustworthy: at the time it was fetched, the hash the
+ledger reported for `CAPB6NQP…` (`cf009033…`) was the same hash a local `stellar contract build` of
+`main` produced. That is a coincidence of a branch that had not diverged yet — `stellar contract
+fetch` is still how it was obtained, because a file copied out of `target/` proves nothing about
+what the chain is running.
+
+## Adding the next one
+
+Each in-place upgrade adds a file here rather than overwriting the last: the old fixtures keep
+proving the upgrades they were captured for (`Organiser` was appended safely; the bibs on chain
+before STE-54 still decode), and a test that quietly lost its "before" would go green for the wrong
+reason.
+
+So, after the next upgrade has genuinely landed on testnet: **fetch** the executable that was live
+before it, add a row above, and add its hash as a `LIVE_PRE_<change>_HASH` constant in `src/test.rs`
+next to the others. Never substitute the output of a local `stellar contract build` — the moment one
+of these becomes a copy of the current build, its test stops proving anything.
