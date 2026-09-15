@@ -2604,3 +2604,89 @@ that the number grew, and it records both numbers — that is the whole of it. T
 that nobody reading the evidence above concludes the contract enforces the announcement, because it
 does not, and a grant reviewer should be told which half is code and which half is operational
 discipline.
+
+---
+
+## Confirm checks the chain, and the index counts entrants correctly again (2026-09-15)
+
+### `confirm` verifies the claimed token (`4356eec`)
+
+`POST /participants/:id/confirm` now reads `record_of` and `owner_of` before linking a vault row to a
+token, closing the gap where a row could be pointed at someone else's record (and so put the wrong
+check-in secret on a roster). Shipped with the deploy below.
+
+### The index: entrants per distance, and quota rises (`f5a2bef`, STE-56)
+
+Found by review, confirmed on the production database before touching it: since the v2.3 bib change
+(STE-54) the poller read `slot_reserved.seq` — now an event-wide bib — as a per-distance count.
+
+```
+categories with a wrong entered_count before: 8      (of 38)
+```
+
+For example event 17, category 0: quota 2, 2 records, index said **4** entrants. The v2.4
+`quota_increased` event (STE-55) was also being skipped.
+
+Deployed at `f5a2bef` with a backup first (`/opt/sterun/backups/pre-indexer-counts-20260915T084754Z.sql.gz`),
+then the poller stopped, the index rebuilt from contract state, the poller restarted:
+
+```
+rebuilt in 55460ms: 21 events, 38 categories, 34 records, 56 transitions. Following resumes at ledger 4687806.
+doctor: index matches the chain
+categories with a wrong entered_count after: 0
+sterun-api-1 running restarts=0
+sterun-indexer-1 running restarts=0
+sterun-keeper-1 running restarts=0
+event 17 categories (id, quota, entered_count, rises): [(0, 2, 2, 0), (1, 1, 1, 0)]
+```
+
+`doctor` now compares categories too — it did not before, which is how this went unnoticed — so
+"index matches the chain" above includes every category's quota, count and price.
+
+### A second batch, end to end (STE-56)
+
+`pnpm --filter be e2e:quota https://api-sterun.jameshub.fun`, a throwaway organiser on testnet:
+
+```
+▸ A throwaway organiser publishes a 5K with 2 places
+  event 21, category 0, quota 2
+▸ It sells out and opens a second batch: quota 2 -> 3
+  tx 7f7ddc0179cdcf8ed912645e88a8e2fc153e0b17b117ab1c65ce8afad7347ec8, get_category quota 3
+▸ The same number again is refused: a quota only ever rises
+  reverted 19 QuotaNotIncreased
+▸ The index serves the new quota and the rise as a dated fact (waiting for the poller)
+  quota 3, history 2 -> 3 at 2026-09-15T09:08:37.000Z, ledger 4687946
+✓ a second batch is on chain, refused when it is not a rise, and shown as a dated fact
+```
+
+Raise: [`7f7ddc01…`](https://stellar.expert/explorer/testnet/tx/7f7ddc0179cdcf8ed912645e88a8e2fc153e0b17b117ab1c65ce8afad7347ec8).
+
+## Seven fixes from a backend review, live (`812f1e7`, 2026-09-15)
+
+Rate-limit keying, faucet payouts with an unknown outcome, concurrent faucet payments, duplicate result
+rows, the file store's byte count, the roster's 10,000-record cap, and config values that failed
+silently — the table is in `be/CLAUDE.md`, "Fixed in the 2026-09-15 audit". No migration. Backup
+first: `/opt/sterun/backups/pre-audit-fixes-20260915T085938Z.sql.gz`.
+
+`STERUN_CLIENT_IP_HEADER=cf-connecting-ip` was added to `be/.env.production` (still `root:root 600`)
+before the recreate, so the new rate-limit key trusts Cloudflare's own header from the first request.
+
+```
+code: 812f1e7
+tracked files without group/other read: 0
+ready: {"status":"ready","checks":{"database":"ok"}}
+sterun-api-1 running restarts=0
+sterun-indexer-1 running restarts=0
+sterun-keeper-1 running restarts=0
+```
+
+**The rate-limit bypass is closed, checked from outside.** 32 `POST /auth/challenge` calls (limit 30 a
+minute) through the public URL, each with a different random `X-Forwarded-For`, which is exactly the
+request that used to get a fresh bucket every time:
+
+```
+status codes: 200 ×30, then 429 429      — 2026-09-15T09:09:18Z
+```
+
+`verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T09:08:47Z.
+
