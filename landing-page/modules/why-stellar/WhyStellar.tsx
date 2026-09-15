@@ -18,10 +18,8 @@
  * lettering is a claim about them and their mark is the only accurate way to
  * write it. No question mark: the plate ends the line.
  *
- * Proportions measured from the layout Nabil drew, in units of WHY's cap
- * height: the plate is 1.70 tall, sits 0.41 away, is 2.88 times as wide as it
- * is tall, and is centred on the same line. The plate is what the bar sweeps
- * open.
+ * The gap between the two halves is 0.41 of WHY's cap height, measured from
+ * the layout Nabil drew. The mark itself is what the bar sweeps open.
  *
  * The answer is not here yet. The sentence that answers it, and the treatment
  * it gets, come next.
@@ -48,32 +46,37 @@ export function WhyStellar() {
       className="relative z-0 -mt-[100svh] h-[280svh] bg-n-200 text-ink"
     >
       <div className="sticky top-0 grid h-[100svh] place-items-center overflow-hidden px-5 sm:px-6">
-        {/* One line, and every size on it derives from --why. Cap height in this
-            face is about 0.72em, which is what the measured ratios apply to. */}
+        {/* One line, and every size on it derives from --why. --cap is the ink
+            height of WHY, measured in the browser at 0.80 of the font size, and
+            every other size on this line is a ratio of it. */}
         <h2
-          className="flex items-center justify-center [--cap:calc(var(--why)*0.72)] [--why:clamp(2.6rem,14vw,10rem)]"
+          className="flex items-center justify-center [--cap:calc(var(--why)*0.80)] [--why:clamp(2.6rem,14vw,10rem)]"
           style={{ gap: "calc(var(--cap) * 0.41)" }}
         >
           <span className="heading-hero text-[length:var(--why)] uppercase leading-[0.8] tracking-[-0.015em]">
             Why
           </span>
 
-          <SweepReveal trigger={rootRef} from={0.12} to={0.7} bleed="26%">
-            <span
-              className="flex items-center justify-center bg-paper"
+          {/* No plate: the mark sits on the page. Its own cap height is 0.731
+              of the file's height (measured off the rendered SVG), so drawing it
+              at cap / 0.731 puts the S of Stellar on exactly the line WHY sits
+              on. The two halves then read as one word rather than as a word
+              beside a logo. */}
+          <SweepReveal trigger={rootRef} from={0.12} to={0.7} bleed="14%">
+            <Image
+              src="/third-party/stellar-logo.svg"
+              alt="Stellar"
+              width={106}
+              height={26}
+              /* Centring the two boxes leaves the baselines 1.6% of a cap apart,
+                 because the mark's file has more room under its descender than
+                 over its cap. The nudge is a ratio so it holds at every size. */
               style={{
-                height: "calc(var(--cap) * 1.7)",
-                width: "calc(var(--cap) * 1.7 * 2.88)",
+                height: "calc(var(--cap) / 0.731)",
+                width: "auto",
+                transform: "translateY(calc(var(--cap) * -0.016))",
               }}
-            >
-              <Image
-                src="/third-party/stellar-logo.svg"
-                alt="Stellar"
-                width={106}
-                height={26}
-                style={{ height: "calc(var(--cap) * 0.62)", width: "auto" }}
-              />
-            </span>
+            />
           </SweepReveal>
         </h2>
       </div>
