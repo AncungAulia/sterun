@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EventDetail } from "@/modules/event-detail/EventDetail";
 import type { EventSummary } from "@/lib/events";
 import type { MetadataResult } from "@/lib/metadata";
-import type { EventStatus, SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
+import { useWallet } from "@/hooks/useWallet";
+import type { EventStatus, SterunAddOn, SterunCategory, SterunEvent, SterunRecord } from "@sterunxyz/sdk";
 
 const getEventSummary = vi.hoisted(() => vi.fn());
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
@@ -17,12 +18,24 @@ const fetchEventMetadata = vi.hoisted(() => vi.fn());
  * a public node being slow cannot turn CI red.
  */
 const listAddOns = vi.hoisted(() => vi.fn(async (): Promise<SterunAddOn[]> => []));
+/* STE-21: the page asks the chain whether the connected wallet already entered. */
+const recordsOfDetailed = vi.hoisted(() => vi.fn(async (): Promise<SterunRecord[]> => []));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/events")>()),
   getEventSummary,
 }));
-vi.mock("@/lib/sterun", () => ({ readClient: { listAddOns } }));
+vi.mock("@/lib/sterun", () => ({ readClient: { listAddOns, recordsOfDetailed } }));
+vi.mock("@/lib/wallet", () => ({
+  initWallet: vi.fn(),
+  restoreAddress: vi.fn(async () => null),
+  onWalletStateChange: vi.fn(() => () => {}),
+  connectWallet: vi.fn(),
+  disconnectWallet: vi.fn(),
+  signTransaction: vi.fn(),
+  signMessage: vi.fn(),
+  walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
+}));
 vi.mock("@/lib/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/metadata")>()),
   fetchEventMetadata,
@@ -82,6 +95,9 @@ beforeEach(() => {
   fetchEventMetadata.mockReset();
   fetchEventMetadata.mockResolvedValue(UNAVAILABLE);
   listAddOns.mockResolvedValue([]);
+  recordsOfDetailed.mockReset();
+  recordsOfDetailed.mockResolvedValue([]);
+  useWallet.setState({ address: null, isRestoring: false, isConnecting: false, error: null });
 });
 
 /**
@@ -550,6 +566,86 @@ describe("EventDetail", () => {
       await showTab(/verification/i);
 
       expect(await screen.findByText("The schedule shows a different start time")).toBeInTheDocument();
+    });
+  });
+
+  describe("a runner who already entered (STE-21)", () => {
+    const RUNNER = "GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7";
+
+    function entry(eventId: number, categoryId: number, tokenId = 7): SterunRecord {
+      return {
+        tokenId,
+        eventId,
+        categoryId,
+        bibNo: 3,
+        participantHash: "f".repeat(64),
+        state: "Entered",
+        enteredAt: 0n,
+        claimedAt: null,
+        finishTimeS: null,
+        resultAt: null,
+        addonIds: [],
+      } as SterunRecord;
+    }
+
+    it("offers their entry and their pass instead of a way in", async () => {
+      useWallet.setState({ address: RUNNER });
+      recordsOfDetailed.mockResolvedValue([entry(2, 1)]);
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0), category(1, { code: "5K" })]));
+
+      renderDetail();
+
+      const view = await screen.findByRole("link", { name: "View my entry" });
+      expect(view).toHaveAttribute("href", "/events/2/entered/7");
+      expect(screen.getByRole("button", { name: "Open my pass" })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "Enter this race" })).not.toBeInTheDocument();
+      expect(recordsOfDetailed).toHaveBeenCalledWith(RUNNER);
+    });
+
+    it("marks their distance and offers no entry link on any distance", async () => {
+      useWallet.setState({ address: RUNNER });
+      recordsOfDetailed.mockResolvedValue([entry(2, 1)]);
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0), category(1, { code: "5K" })]));
+
+      renderDetail();
+      await screen.findByRole("link", { name: "View my entry" });
+      await showTab(/distances/i);
+
+      const panel = within(screen.getByRole("tabpanel"));
+      expect(panel.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
+      expect(panel.getByText("Entered")).toBeInTheDocument();
+      // One entry per race, so there is no payment left to warn about.
+      expect(panel.queryByText(/non-refundable/i)).not.toBeInTheDocument();
+    });
+
+    it("still shows their entry once entries have closed", async () => {
+      useWallet.setState({ address: RUNNER });
+      recordsOfDetailed.mockResolvedValue([entry(2, 0)]);
+      getEventSummary.mockResolvedValue(summary({ status: "Closed" }, [category(0)]));
+
+      renderDetail();
+
+      expect(await screen.findByRole("link", { name: "View my entry" })).toBeInTheDocument();
+    });
+
+    it("offers a way in to a wallet whose entries are all in other races", async () => {
+      useWallet.setState({ address: RUNNER });
+      recordsOfDetailed.mockResolvedValue([entry(9, 0)]);
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0)]));
+
+      renderDetail();
+
+      expect(await screen.findByRole("button", { name: "Enter this race" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "View my entry" })).not.toBeInTheDocument();
+    });
+
+    it("asks the chain nothing when no wallet is connected", async () => {
+      getEventSummary.mockResolvedValue(summary({ status: "Open" }, [category(0)]));
+
+      renderDetail();
+
+      expect(await screen.findByRole("button", { name: "Enter this race" })).toBeInTheDocument();
+      expect(recordsOfDetailed).not.toHaveBeenCalled();
     });
   });
 

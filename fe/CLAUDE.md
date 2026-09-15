@@ -589,6 +589,12 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
 - **The receipt carries no personal details and never the check-in secret** (`receipt.ts`, tested;
   `receipt-pdf.ts` only lays it out, with jspdf loaded on press).
 - **Bib numbers are shown as the contract holds them, from 0**, until STE-53 decides.
+- **On `/events/[id]`, a connected wallet that already entered gets no way in** (`EventDetail`
+  reads its records from chain, `myEntry` on `EventView`). The entry card shows two buttons, **View
+  my entry** (the success page) and **Open my pass**, off until round 2 builds `/pass/[tokenId]`
+  rather than a link to nothing; Ancung wanted both, as two forms of proof. The Distances tab marks
+  the entered distance **Entered** and drops every Enter link and the refund notice; the timeline's
+  Enter goes too. No wallet, or a preview, changes nothing.
 - **The calendar's month and year dropdowns are shadcn Selects** (`ui/calendar.tsx`, the
   react-day-picker `Dropdown` slot), and **its nav is `pointer-events-none`**: the nav spans the
   caption row and swallowed every click meant for them. jsdom has no layout, so only a browser
