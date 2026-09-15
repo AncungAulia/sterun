@@ -114,6 +114,9 @@ describe("useEntryAttempt", () => {
         txHash: TX,
         confirmed: false,
         participantId: submitted.participantId,
+        // What the receipt prints (mockup block 6).
+        racePack: [],
+        paidStroops: "0",
       }),
     );
     await waitFor(() => expect(d.markConfirmed).toHaveBeenCalledWith(7));

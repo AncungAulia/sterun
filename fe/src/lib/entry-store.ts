@@ -44,6 +44,14 @@ export interface StoredEntry {
   confirmed: boolean;
   /** The vault row, kept so confirming can be retried. */
   participantId?: string;
+  /**
+   * What came with the entry, as the receipt prints it: "Event jersey M". The
+   * chain holds add-on ids, not names or sizes, so this is the only copy.
+   * Optional, like `paidStroops`, so a receipt still renders without it.
+   */
+  racePack?: string[];
+  /** What `enter` charged, in stroops, as a decimal string. */
+  paidStroops?: string;
 }
 
 let store: UseStore | null = null;

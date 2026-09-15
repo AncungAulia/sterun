@@ -141,6 +141,19 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
         (r) => r.tokenId === tokenId,
       );
       const category = p.summary.categories.find((c) => c.categoryId === p.categoryId);
+      // The receipt's "Race pack" line. The chain keeps add-on ids only, so the
+      // names and sizes the runner picked exist nowhere else after this.
+      const racePack = [
+        ...p.basket.pack.map((item) => {
+          const size = item.sized
+            ? item.options.find((option) => option.addonId === p.selection.sizes[item.name])?.label
+            : undefined;
+          return size ? `${item.name} ${size}` : item.name;
+        }),
+        ...p.basket.extras
+          .filter((extra) => p.selection.extras.includes(extra.addonId))
+          .map((extra) => extra.name),
+      ];
 
       await d
         .save({
@@ -162,6 +175,8 @@ export function useEntryAttempt(plan: EntryPlan | null, overrides: Partial<Entry
           enteredAt: new Date().toISOString(),
           confirmed: false,
           participantId: submitted.participantId,
+          racePack,
+          paidStroops: p.total.toString(),
         })
         // A device that will not store is a missing receipt, not a failed
         // entry. The entry exists; the success page says the receipt is elsewhere.
