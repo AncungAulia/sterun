@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.3.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.4.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,123 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.4.0] — 2026-09-15
+
+**MINOR — an organiser can raise the quota of a distance that sold out (STE-55).** One new
+function, one new event, one new error code taking the next free number in the C1 band. No signature
+moved, no event layout moved, nothing was renumbered, and **no storage key was added**.
+
+### Why
+
+Selling out in hours is the ordinary case at an Indonesian road race, not an edge case. Merdeka Run
+2026 filled **8,100 slots in a day** and opened a second batch the next morning; RRI Fest took 3,000
+in six days; Sukoharjo Spektakuler Run sold out outright.
+
+Until v2.4 the contract had no way to say that. `add_category` only ever creates, there is no
+`update_category`, and so an organiser whose 10K filled had exactly one move left: a **duplicate
+category** under a name invented to tell the two apart. That splits one distance into two everywhere
+downstream — the roster, the results CSV, the finish list a timing crew reads — to work around a
+number the contract simply refused to let anybody change.
+
+Axel's decision (STE-45 question 5 → STE-55): add the increase **on chain**, where the published
+quota lives, rather than letting the console fake it with a second category.
+
+### What was added
+
+| | |
+| --- | --- |
+| `increase_quota(event_id: u32, category_id: u32, new_quota: u32) -> Result<(), Error>` | organiser-gated through the same `auth_organiser` route as `add_category`; writes a larger `quota` into the existing `CategoryData` |
+| `QuotaIncreased` | topics: `"quota_increased"`, `event_id`, `category_id`; data: `current: u32`, `previous: u32` (alphabetical, the `ScMap` wire order) |
+| `QuotaNotIncreased = 19` | `new_quota` is not strictly greater than the category's current `quota` |
+
+`CategoryAdded` is **untouched**, so the quota a category was originally published with stays
+readable as its own event. The next free C1 code is now **20**.
+
+### The rule that is the feature: the quota only ever goes up
+
+`new_quota` must be **strictly greater** than the current one. Equal and smaller both revert with
+`QuotaNotIncreased(19)` — one code, because they are one rule, and a client that needs to know which
+it hit can read `get_category`.
+
+This is not defensive validation around the real feature; it **is** the feature. Runners paid
+against a published number. A quota that could shrink would let an organiser strand entrants who are
+already on chain: `entered_count` would sit above its own `quota`, and `reserve_slot` would then
+report `QuotaFull(5)` for a race that had been rewritten underneath its runners. Stopping
+registration is what `set_event_status(Closed)` is for, and it is reversible. This is not.
+
+Equal is refused for a smaller reason that matters to an indexer: a no-op that still emitted
+`QuotaIncreased` would put a second batch into the ledger that never happened.
+
+### The one thing a client must read
+
+**`quota` is no longer constant for the life of an event.** It could not change before; it can now.
+A client rendering "312 / 500" may find the denominator larger on its next read, so a cached quota
+goes stale. `QuotaIncreased` carries `previous` **and** `current` precisely so that a second batch
+reads as a dated fact rather than as a number that moved between two of a consumer's own reads —
+reporting the latter would be reporting what the indexer last saw, not what the chain did.
+
+### What the contract cannot enforce, and must not be described as enforcing
+
+A published quota is part of what a runner saw when they paid, so raising it is a **real change to
+what they bought**: a bigger field, a busier start pen, a longer queue for the racepack. The console
+must therefore pair every increase with a **signed announcement** (the STE-34 pattern).
+
+That pairing is an **application-level rule**. The contract cannot verify that any announcement
+exists, and nothing in this entry, in `INTERFACE.md`, or in the doc comments should be read as a
+claim that the chain enforces it. What the chain does guarantee is narrower and still worth having:
+the increase is signed by the event's organiser, both numbers are recorded, and the change cannot be
+undone quietly by moving the number back down.
+
+### Impact on existing data
+
+**Zero, and unusually so for an upgrade that adds behaviour: no storage key was added at all.**
+`quota` is a field `CategoryData` has carried since v1.0.0 and this writes a larger value into it.
+No struct gained a field, no `DataKey` variant moved, `entered_count` is neither read nor written,
+and the bib sequence (`DataKey::EventEntryCount`) is not touched — so the entrants of a second batch
+continue the race's numbering rather than restarting it.
+
+Installed by `upgrade` at the **same address**
+(`CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`). Proven before the deploy by
+`a_quota_can_be_raised_on_a_category_the_live_wasm_created`, which deploys the **genuinely live
+wasm** (`c8b5e82a…`, committed in `sc/contracts/event_registry/testdata/` beside the two earlier
+fixtures rather than replacing them), sells a distance out with it, asserts that executable has no
+`increase_quota` to reach for, upgrades to the v2.4 build, reads the event, both categories, the
+add-on and every counter back unchanged, and then raises the quota of a category the **old** code
+created — after which the runners who were refused get in, wearing bibs 4 and 5 rather than 1 and 2
+again.
+
+### No status gate, deliberately
+
+`increase_quota` does not check `EventStatus`. Raising the quota of a `Closed` event is precisely
+the second-batch flow (lift the cap, then re-open), and on a `Cancelled` or `Completed` event the
+larger number sells nothing anyway because `reserve_slot` demands `Open`. A gate would add an error
+every client must handle in exchange for refusing a write that has no effect. `add_category` has
+always taken the same position.
+
+### Artefacts
+
+| | sha256 | Size |
+| --- | --- | ---: |
+| EventRegistry v2.3.0 (live before) | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
+| EventRegistry v2.4.0 | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | 31,770 B |
+
+RaceRecord **did not change** (`0e29026d…` still) and its address was not upgraded. The
+event-registry TS bindings were regenerated and `sdk/vendor/event-registry.ts` refreshed to match;
+race-record's are byte-identical.
+
+Vectors: no value changed. `HASH_AND_TOTP.md` was untouched.
+
+### Procedure
+
+This spec change was **pre-authorised by Axel (PM)** through the STE-55 build brief ("Axel
+pre-authorises, WITHOUT an ACC gate"; merge to `main` once every e2e is green). The brief was handed
+to the agent in Indonesian and is not committed, since this repository is English-only; the decision,
+the authorisation and the evidence are recorded as a comment on Linear STE-55 instead. It still
+landed through a PR rather than a direct push to `main` — the same arrangement as [2.1.0], [2.2.0]
+and [2.3.0].
 
 ---
 

@@ -13,7 +13,8 @@ use soroban_sdk::{
 use crate::{
     AddOnAdded, AddOnData, AddOnReserved, CategoryAdded, CategoryData, DataKey, Error,
     EventCreated, EventData, EventRegistry, EventRegistryClient, EventStatus, EventStatusChanged,
-    ScannerAdded, ScannerRemoved, SlotReserved, BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
+    QuotaIncreased, ScannerAdded, ScannerRemoved, SlotReserved, BUMP_THRESHOLD, BUMP_TO,
+    DAY_IN_LEDGERS,
 };
 
 // ---------------------------------------------------------------------------
@@ -2099,6 +2100,483 @@ mod bib {
 }
 
 // ---------------------------------------------------------------------------
+// Raising a sold-out quota (v2.4, STE-55)
+//
+// Selling out in hours is the ordinary case at an Indonesian road race, so the
+// interesting tests here are not "does the setter set". They are: does a
+// distance that has already refused an entrant start accepting again, does the
+// number refuse to go backwards, and does everything the entrants already have
+// — their count, their bibs — survive being given more company.
+// ---------------------------------------------------------------------------
+mod quota {
+    use super::*;
+
+    /// Fills `category_id` until `reserve_slot` refuses, and returns how many
+    /// entries it took. Asserts the refusal, so a category that never fills is
+    /// a failure rather than a silent loop that ends.
+    fn fill_until_full(
+        caller: &MockRaceRecordClient,
+        registry: &Address,
+        event_id: u32,
+        category_id: u32,
+        expect: u32,
+    ) -> u32 {
+        let mut taken = 0;
+        while caller
+            .try_reserve(registry, &event_id, &category_id)
+            .is_ok()
+        {
+            taken += 1;
+            assert!(taken <= expect, "the category took more than its quota");
+        }
+        assert_eq!(taken, expect, "the category did not take its whole quota");
+        assert_eq!(
+            caller.try_reserve(registry, &event_id, &category_id),
+            Err(Ok(Error::QuotaFull))
+        );
+        taken
+    }
+
+    /// The ticket in one test: a distance sells out, the organiser opens a
+    /// second batch, and the runners who were turned away get in — up to the
+    /// new number and not one past it.
+    #[test]
+    fn a_sold_out_distance_sells_again_once_the_quota_is_raised() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 2);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+        fill_until_full(&caller, &registry, event_id, category_id, 2);
+
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &category_id, &5);
+
+        // Three more get in — 2 already taken, 5 now allowed.
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 3);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 4);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 5);
+        // …and the new number is a real cap, not a suggestion.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::QuotaFull))
+        );
+        assert_eq!(
+            client.get_category(&event_id, &category_id).entered_count,
+            5
+        );
+    }
+
+    /// A third batch. Nothing about the first increase makes the second a
+    /// special case — which is the point of storing the number rather than a
+    /// "has been raised" flag.
+    #[test]
+    fn the_quota_can_be_raised_again_and_again() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 1);
+        env.mock_all_auths();
+
+        client.increase_quota(&event_id, &category_id, &2);
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 2);
+        client.increase_quota(&event_id, &category_id, &3);
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 3);
+        client.increase_quota(&event_id, &category_id, &8_100);
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 8_100);
+    }
+
+    /// The published number never goes down. Equal is refused too: a no-op
+    /// that emitted `QuotaIncreased` would put a second batch in the ledger
+    /// that never happened.
+    #[test]
+    fn a_quota_that_does_not_grow_is_refused() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 50);
+        env.mock_all_auths();
+
+        assert_eq!(
+            client.try_increase_quota(&event_id, &category_id, &50),
+            Err(Ok(Error::QuotaNotIncreased)),
+            "the same number is not an increase"
+        );
+        assert_eq!(
+            client.try_increase_quota(&event_id, &category_id, &49),
+            Err(Ok(Error::QuotaNotIncreased)),
+            "one fewer is a shrink"
+        );
+        assert_eq!(
+            client.try_increase_quota(&event_id, &category_id, &0),
+            Err(Ok(Error::QuotaNotIncreased)),
+            "zero would be a closure dressed as a quota"
+        );
+        // The refusals changed nothing.
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 50);
+        // And one more than the current quota IS an increase — the boundary is
+        // strict, not off by one.
+        client.increase_quota(&event_id, &category_id, &51);
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 51);
+    }
+
+    /// A shrink cannot be used to strand entrants who already paid: a category
+    /// whose `entered_count` sat above its `quota` would read as sold out for a
+    /// race that had been rewritten underneath its runners.
+    #[test]
+    fn a_shrink_below_the_entries_already_taken_is_refused() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 5);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+        caller.reserve(&registry, &event_id, &category_id);
+        caller.reserve(&registry, &event_id, &category_id);
+        caller.reserve(&registry, &event_id, &category_id);
+
+        env.mock_all_auths();
+        assert_eq!(
+            client.try_increase_quota(&event_id, &category_id, &2),
+            Err(Ok(Error::QuotaNotIncreased))
+        );
+        let after = client.get_category(&event_id, &category_id);
+        assert_eq!(after.quota, 5);
+        assert_eq!(after.entered_count, 3);
+    }
+
+    /// Organiser-gated, by the same route as `add_category`: the authority
+    /// comes from `EventData.organiser` in storage, never from the caller.
+    #[test]
+    fn increase_quota_rejects_a_foreign_signer() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+        let impostor = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 10);
+
+        env.mock_auths(&[MockAuth {
+            address: &impostor,
+            invoke: &MockAuthInvoke {
+                contract: &registry,
+                fn_name: "increase_quota",
+                args: (event_id, category_id, 99u32).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert_eq!(
+            client.try_increase_quota(&event_id, &category_id, &99),
+            Err(Err(InvokeError::Abort))
+        );
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 10);
+    }
+
+    /// Unknown ids reuse the errors that already exist. The event is read
+    /// first (by the auth gate), so an unknown event says so even when the
+    /// category id is nonsense too.
+    #[test]
+    fn increase_quota_reverts_on_unknown_ids() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, _category_id) = open_event(&env, &client, &organiser, 10);
+        env.mock_all_auths();
+
+        assert_eq!(
+            client.try_increase_quota(&event_id, &404, &99),
+            Err(Ok(Error::CategoryNotFound))
+        );
+        assert_eq!(
+            client.try_increase_quota(&404, &0, &99),
+            Err(Ok(Error::EventNotFound))
+        );
+        assert_eq!(
+            client.try_increase_quota(&404, &404, &99),
+            Err(Ok(Error::EventNotFound))
+        );
+    }
+
+    /// Only `quota` moves. `entered_count` in particular is the quota counter,
+    /// and rewriting it here would silently hand slots back or take them away.
+    #[test]
+    fn nothing_but_the_quota_changes() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 4);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+        caller.reserve(&registry, &event_id, &category_id);
+        caller.reserve(&registry, &event_id, &category_id);
+        let before = client.get_category(&event_id, &category_id);
+
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &category_id, &900);
+
+        assert_eq!(
+            client.get_category(&event_id, &category_id),
+            CategoryData {
+                quota: 900,
+                ..before.clone()
+            }
+        );
+        assert_eq!(before.entered_count, 2);
+        assert_eq!(client.category_count(&event_id), 1);
+    }
+
+    /// One distance's second batch is that distance's business. The other
+    /// distances of the same race keep the caps they published.
+    #[test]
+    fn raising_one_distance_leaves_the_others_alone() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 3);
+        env.mock_all_auths();
+        let five_k = client.add_category(&event_id, &symbol_short!("5K"), &5_000, &3, &0);
+        let other_event = create_event(&env, &client, &organiser);
+        env.mock_all_auths();
+        let other_cat = client.add_category(&other_event, &symbol_short!("10K"), &10_000, &3, &0);
+
+        client.increase_quota(&event_id, &ten_k, &10);
+
+        assert_eq!(client.get_category(&event_id, &ten_k).quota, 10);
+        assert_eq!(client.get_category(&event_id, &five_k).quota, 3);
+        assert_eq!(client.get_category(&other_event, &other_cat).quota, 3);
+    }
+
+    /// The bib sequence is per event and this function never touches it, so
+    /// the entrants of a second batch carry on the race's numbering: …3, 4,
+    /// not a repeat of 1.
+    #[test]
+    fn bib_numbering_runs_straight_through_an_increase() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, ten_k) = open_event(&env, &client, &organiser, 2);
+        env.mock_all_auths();
+        let five_k = client.add_category(&event_id, &symbol_short!("5K"), &5_000, &1, &0);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 2);
+        assert_eq!(caller.reserve(&registry, &event_id, &five_k), 3);
+        // Both distances are full now.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &ten_k),
+            Err(Ok(Error::QuotaFull))
+        );
+
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &ten_k, &4);
+
+        // The second batch continues the event's sequence.
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 4);
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 5);
+        // The 5K was not raised and is still refusing.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &five_k),
+            Err(Ok(Error::QuotaFull))
+        );
+        assert_eq!(
+            env.as_contract(&registry, || env
+                .storage()
+                .persistent()
+                .get::<_, u32>(&DataKey::EventEntryCount(event_id))
+                .unwrap()),
+            5
+        );
+    }
+
+    /// The second-batch flow as an organiser actually runs it: registration is
+    /// `Closed` while the cap is lifted, then re-opened. There is no status
+    /// gate, so the raise lands on a closed event and the re-open sells.
+    #[test]
+    fn the_quota_can_be_raised_while_registration_is_closed() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 1);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+        fill_until_full(&caller, &registry, event_id, category_id, 1);
+
+        env.mock_all_auths();
+        client.set_event_status(&event_id, &EventStatus::Closed);
+        client.increase_quota(&event_id, &category_id, &3);
+        // Closed still refuses entries, and for the status reason, not the quota.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::EventNotOpen))
+        );
+
+        client.set_event_status(&event_id, &EventStatus::Open);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 2);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 3);
+    }
+
+    /// Raising the quota of a terminal event writes a number that sells
+    /// nothing: `reserve_slot` demands `Open`. Asserted rather than gated —
+    /// see the function's doc comment for why there is no extra error here.
+    #[test]
+    fn a_raise_on_a_cancelled_event_sells_nothing() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 1);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        env.mock_all_auths();
+        client.set_event_status(&event_id, &EventStatus::Cancelled);
+        client.increase_quota(&event_id, &category_id, &500);
+
+        assert_eq!(client.get_category(&event_id, &category_id).quota, 500);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::EventNotOpen))
+        );
+    }
+
+    /// `QuotaIncreased` carries both numbers, so a second batch is a dated
+    /// fact in the ledger rather than a value an indexer has to diff against
+    /// its own last read.
+    #[test]
+    fn emits_quota_increased() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 200);
+
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &category_id, &500);
+
+        assert_eq!(
+            env.events().all(),
+            std::vec![QuotaIncreased {
+                event_id,
+                category_id,
+                previous: 200,
+                current: 500,
+            }
+            .to_xdr(&env, &registry)]
+        );
+
+        // A second batch reports the number it replaced, not the original one.
+        client.increase_quota(&event_id, &category_id, &800);
+        assert_eq!(
+            env.events().all(),
+            std::vec![QuotaIncreased {
+                event_id,
+                category_id,
+                previous: 500,
+                current: 800,
+            }
+            .to_xdr(&env, &registry)]
+        );
+    }
+
+    /// A refused increase emits nothing. The ledger is where a client learns a
+    /// second batch happened, so an event for a batch that did not happen is
+    /// worse than no event at all.
+    #[test]
+    fn a_refused_increase_emits_nothing() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 200);
+
+        env.mock_all_auths();
+        assert!(client
+            .try_increase_quota(&event_id, &category_id, &200)
+            .is_err());
+
+        assert_eq!(env.events().all(), std::vec![]);
+    }
+
+    /// The write pays rent for what it touched, like every other organiser
+    /// mutation: a category whose TTL decayed is extended by being raised.
+    #[test]
+    fn increase_quota_extends_the_persistent_ttl() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 10);
+
+        let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+        env.ledger()
+            .set_sequence_number(env.ledger().sequence() + aged_by);
+
+        let key = DataKey::Category(event_id, category_id);
+        let decayed = persistent_ttl(&env, &registry, key.clone());
+        assert_eq!(decayed, BUMP_TO - aged_by);
+        assert!(decayed < BUMP_THRESHOLD);
+
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &category_id, &20);
+
+        assert_eq!(persistent_ttl(&env, &registry, key), BUMP_TO);
+        // The event entry is refreshed too — the auth gate touches it, and a
+        // category whose event archived is worthless.
+        assert_eq!(
+            persistent_ttl(&env, &registry, DataKey::Event(event_id)),
+            BUMP_TO
+        );
+    }
+
+    /// `u32::MAX` is a legal quota. Nothing here multiplies or adds, so there
+    /// is no arithmetic for an extreme value to overflow — worth an assertion
+    /// rather than an assumption, since `overflow-checks` turns a mistake here
+    /// into a revert on the entry path.
+    #[test]
+    fn an_extreme_quota_is_accepted() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 1);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &category_id, &u32::MAX);
+        assert_eq!(client.get_category(&event_id, &category_id).quota, u32::MAX);
+
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+        assert_eq!(
+            client.try_increase_quota(&event_id, &category_id, &u32::MAX),
+            Err(Ok(Error::QuotaNotIncreased)),
+            "there is nothing above u32::MAX to move to"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // These tests deploy the registry from the BUILT WASM rather than from the
@@ -2161,6 +2639,23 @@ mod upgrade {
     /// for `CAPB6NQP…` before this branch is deployed.
     const LIVE_PRE_BIB_HASH: &str =
         "cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0";
+
+    /// The executable running at the same address when STE-55 was written —
+    /// v2.3, the one STE-54 installed. It is the code that wrote every event
+    /// and every category now on chain, so it is the only "before" that can
+    /// prove a quota can be raised on a category *it* created.
+    ///
+    /// A third fixture rather than a replacement for the two above: each one
+    /// keeps proving the upgrade it was captured for. Provenance:
+    /// `testdata/README.md`.
+    const LIVE_PRE_QUOTA_WASM: &[u8] =
+        include_bytes!("../testdata/event_registry_live_pre_quota.wasm");
+
+    /// sha256 of the artifact above — what the ledger reports for `CAPB6NQP…`
+    /// before this branch is deployed, and the hash INTERFACE.md §0 freezes
+    /// for v2.3.0.
+    const LIVE_PRE_QUOTA_HASH: &str =
+        "c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd";
 
     /// Lowercase hex, so a mismatch prints the two hashes instead of two byte
     /// arrays.
@@ -2509,6 +3004,147 @@ mod upgrade {
         assert_eq!(caller.reserve(&registry, &old_event, &five_k), 1);
         assert_eq!(client.get_category(&old_event, &five_k).entered_count, 2);
         assert_eq!(client.get_category(&old_event, &ten_k), ten_k_before);
+
+        // Still upgradeable — losing that would be permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+    }
+
+    /// STE-55 — the in-place upgrade this branch actually ships, rehearsed
+    /// against the bytes that are live.
+    ///
+    /// The old executable does what the chain has been doing: it creates an
+    /// event, sells a distance out, and then has **no way to take another
+    /// entrant** — `increase_quota` does not exist in it, which the test
+    /// asserts rather than assumes. Then the new code replaces it, and the
+    /// three things that matter are checked in order: everything written
+    /// before still decodes, the sold-out distance sells again once its quota
+    /// is raised, and the new entrants continue the event's bib sequence
+    /// instead of restarting it.
+    ///
+    /// This is OpenZeppelin's upgrade checklist for a live contract — write
+    /// state with V1, upgrade, verify the reads, verify the new behaviour,
+    /// confirm the access control, confirm V2 is still upgradeable — run
+    /// against the exact bytes on testnet rather than against a copy of
+    /// today's build.
+    #[test]
+    fn a_quota_can_be_raised_on_a_category_the_live_wasm_created() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let registry = env.register(LIVE_PRE_QUOTA_WASM, (admin.clone(),));
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+        let scanner = Address::generate(&env);
+
+        // The fixture is the live artifact, not a lookalike: the host hashes
+        // it on upload, and that hash is what the ledger reports for
+        // CAPB6NQP… today.
+        let live_hash = env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&env, LIVE_PRE_QUOTA_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_QUOTA_HASH);
+
+        // -- written by the OLD code: a race that sells out ------------------
+        env.mock_all_auths();
+        client.add_organiser(&organiser);
+        let event_id =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let ten_k = client.add_category(&event_id, &symbol_short!("10K"), &10_000, &2, &50_000_000);
+        let five_k = client.add_category(&event_id, &symbol_short!("5K"), &5_000, &1, &0);
+        let jersey = client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &5);
+        client.set_event_status(&event_id, &EventStatus::Open);
+        client.add_scanner(&event_id, &scanner);
+        let race_record = wire_race_record(&env, &client);
+        let caller = MockRaceRecordClient::new(&env, &race_record);
+
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 2);
+        assert_eq!(caller.reserve(&registry, &event_id, &five_k), 3);
+        // Sold out, and the old code has no way out of that — the whole
+        // ticket, stated as the thing the running contract cannot do.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &ten_k),
+            Err(Ok(Error::QuotaFull))
+        );
+        assert!(client.try_increase_quota(&event_id, &ten_k, &5).is_err());
+
+        let event_before = client.get_event(&event_id);
+        let ten_k_before = client.get_category(&event_id, &ten_k);
+        let five_k_before = client.get_category(&event_id, &five_k);
+        let addon_before = client.get_addon(&event_id, &jersey);
+
+        // -- the upgrade ----------------------------------------------------
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        // -- everything the old code wrote still decodes, byte for byte ------
+        assert_eq!(client.get_event(&event_id), event_before);
+        assert_eq!(client.get_category(&event_id, &ten_k), ten_k_before);
+        assert_eq!(client.get_category(&event_id, &five_k), five_k_before);
+        assert_eq!(client.get_addon(&event_id, &jersey), addon_before);
+        assert_eq!(ten_k_before.entered_count, 2);
+        assert_eq!(ten_k_before.quota, 2);
+        assert_eq!(client.category_count(&event_id), 2);
+        assert_eq!(client.addon_count(&event_id), 1);
+        assert_eq!(client.event_count(), 1);
+        assert_eq!(client.get_admin(), admin);
+        assert_eq!(client.get_race_record(), race_record);
+        assert!(client.is_scanner(&event_id, &scanner));
+        assert!(client.is_organiser(&organiser));
+
+        // -- the new behaviour, on a category the OLD code created ----------
+        env.mock_all_auths();
+        client.increase_quota(&event_id, &ten_k, &4);
+        assert_eq!(
+            client.get_category(&event_id, &ten_k),
+            CategoryData {
+                quota: 4,
+                ..ten_k_before.clone()
+            },
+            "only the quota moved; the entries already sold are untouched"
+        );
+
+        // The runners who were turned away get in, and their bibs continue the
+        // sequence the old code had reached — 4 and 5, not 1 and 2 again.
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 4);
+        assert_eq!(caller.reserve(&registry, &event_id, &ten_k), 5);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &ten_k),
+            Err(Ok(Error::QuotaFull))
+        );
+        // The 5K was not raised, so it is still refusing.
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &five_k),
+            Err(Ok(Error::QuotaFull))
+        );
+        assert_eq!(client.get_category(&event_id, &five_k), five_k_before);
+
+        // -- and the only-up rule is live on that same category -------------
+        assert_eq!(
+            client.try_increase_quota(&event_id, &ten_k, &4),
+            Err(Ok(Error::QuotaNotIncreased))
+        );
+        assert_eq!(
+            client.try_increase_quota(&event_id, &ten_k, &1),
+            Err(Ok(Error::QuotaNotIncreased))
+        );
+
+        // -- the access control, on state the old code wrote ----------------
+        let impostor = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &impostor,
+            invoke: &MockAuthInvoke {
+                contract: &registry,
+                fn_name: "increase_quota",
+                args: (event_id, ten_k, 9_000u32).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        assert_eq!(
+            client.try_increase_quota(&event_id, &ten_k, &9_000),
+            Err(Err(InvokeError::Abort))
+        );
+        assert_eq!(client.get_category(&event_id, &ten_k).quota, 4);
 
         // Still upgradeable — losing that would be permanent.
         env.mock_all_auths();

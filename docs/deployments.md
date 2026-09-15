@@ -2394,3 +2394,213 @@ Event 17 is left on chain as the evidence: a race whose 10K wears 1 and 3 and wh
   cannot produce the collision at all.
 - **The organiser allowlist was not re-seeded.** `upgrade` replaces code, not storage, so
   `sterun-organiser` is still on it — the sanity run's `create_event` proves it.
+
+---
+
+## STE-55 — raising a sold-out quota, installed by an IN-PLACE `upgrade` (2026-09-15)
+
+**The address did not change.** `EventRegistry` at `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`
+is the same address before and after, and all **20 events / 35 categories** inside it read back through
+the new code (below). `RaceRecord` was **not** upgraded: its wasm did not change by a single byte, and
+`upgrade-testnet.sh` skipped it so the ledger does not record a code change that did not happen.
+
+### Why
+
+A distance that sold out could not take another entrant, ever. `add_category` only creates, there is
+no `update_category`, and so an organiser whose 10K filled in an afternoon had exactly one move left:
+a **duplicate category** under a name invented to tell the two apart — which splits one distance into
+two everywhere downstream, in the roster, the results CSV and the finish list a timing crew reads.
+
+Selling out in hours is the ordinary case here, not an edge case: Merdeka Run 2026 filled 8,100 slots
+in a day and opened a second batch the next morning, RRI Fest took 3,000 in six days, Sukoharjo
+Spektakuler Run sold out outright. v2.4 adds `increase_quota`, organiser-gated, and the number only
+ever goes up — equal or smaller is `QuotaNotIncreased(19)`. Interface: `docs/specs/INTERFACE.md`
+**v2.4.0**.
+
+**This upgrade added no storage key at all**, which is unusual for one that adds behaviour and worth
+recording as the reason it was low-risk: `quota` is a field `CategoryData` has carried since v1, and
+`increase_quota` writes a larger value into it. Nothing was added to a stored struct, no `DataKey`
+variant moved, and neither `entered_count` nor the event's bib counter is read or written.
+
+### The wasm — old → new
+
+| | sha256 | Size |
+| --- | --- | ---: |
+| before (v2.3.0) | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
+| after (v2.4.0) | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | 31,770 B |
+
+Both hashes are read from the chain (`stellar contract info hash --contract-id …`), before and after.
+Toolchain: `stellar 27.0.0`, `soroban-sdk =26.1.1`.
+
+The old wasm is **committed** in `sc/contracts/event_registry/testdata/event_registry_live_pre_quota.wasm`,
+fetched with `stellar contract fetch` before the upgrade — beside the pre-allowlist and pre-bib ones
+rather than replacing them. The test `a_quota_can_be_raised_on_a_category_the_live_wasm_created`
+deploys those bytes, sells a distance out with them, **asserts that executable has no
+`increase_quota` to reach for**, upgrades to the v2.4 build, reads the event, both categories, the
+add-on and every counter back unchanged, and then raises the quota of a category the old code created
+— with no network.
+
+### The upgrade transaction (testnet)
+
+| Step | Ledger | Time (UTC) | Hash |
+| --- | ---: | --- | --- |
+| `upgrade` EventRegistry → `33b5e687…` | 4683360 | 2026-09-15T02:46:27Z | [`76f1ba0c…`](https://stellar.expert/explorer/testnet/tx/76f1ba0c676f28910e5f06f771eb21063258f2edfeeae0823367f6cb04005fc0) |
+
+Signed by `GA5CCSCQ564AZL4RVOWGHVVGCJQNSM73X4T5MKNVCRPXANL3MGXEHNYP` (sterun-admin, `STERUN_ADMIN` in
+the gitignored `.env`). `bash sc/scripts/upgrade-testnet.sh`:
+
+```
+=== EventRegistry (CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU) ===
+  live  c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd
+  built 33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890
+  uploaded 33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890
+  Event: ContractUpgraded (contract_upgraded), new_wasm_hash: "33b5e687…f890"
+  now running 33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890
+
+=== RaceRecord (CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW) ===
+  live  0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+  built 0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba
+  identical — skipped, so the ledger records no upgrade that did not happen
+
+=== the non-transferable claim, re-checked on the upgraded code ===
+  0 transfer-ish exports
+```
+
+### Storage survived — every event, not a sample
+
+After the upgrade, `get_event` and `category_count` were read for **all 20** events and `get_category`
+for **all 35** categories: 20/20 and 35/35 decoded. Nothing was orphaned. This upgrade added no
+storage key, so there was less to put at risk than in STE-36 or STE-54 — the sweep is still run in
+full, because "less at risk" is not a measurement.
+
+Read before the upgrade and re-read after it, byte for byte identical:
+
+```
+event 0     {"metadata_hash":"a4ea685c…65a0","name":"Sterun Testnet Rehearsal",
+             "organiser":"GBGUI5MP…C4TN","starts_at":1789000000,"status":"Open",
+             "uri":"https://sterun.xyz/events/sanity.json"}
+category 0/0  {"code":"10K","distance_m":10000,"entered_count":3,"price_usdc":"50000000","quota":5}
+addon 0/0     {"code":"JERSEY","price_usdc":"50000000","quota":2,"reserved_count":2}
+record 0      {"addon_ids":[0,1],"bib_no":0,…,"state":"Finished"}   supply 24
+```
+
+**Category 0/0 still reads `quota: 5`.** That is the negative half of the check and the one easy to
+skip: the upgrade shipped a function that can change a quota, so the evidence that matters is a quota
+it did not change.
+
+### On-chain sanity check — `bash sc/scripts/quota-testnet.sh`
+
+A fresh **free** event owned by `sterun-organiser`, so no sUSD moved and no live race's slots were
+spent. Nothing was written to an event that predates the upgrade — those were read only. Every line
+below is an assertion in the script, not a print:
+
+```
+=== target ===
+  live wasm      33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890
+  ✓ the address is running the wasm built from this tree
+  ✓ RaceRecord unchanged by this ticket
+
+=== (d) an event written BEFORE the upgrade, read through the new code ===
+  ✓ decoded unchanged — including a quota this ticket did not touch
+
+=== (a) a NEW event whose 10K sells out, then opens a second batch ===
+  event_id 19           tx 28b8c13be876a0080385740ae850298f186961055d17c611afd51fe323227ff7
+  category 0 FUN10K quota 2  tx 396c299800acc56aab9c8df46af7dd94307da18faa6bb64620b9b3f633a8b6d7
+  category 1 FUN5K  quota 1  tx 8c28f318a29b246f49749b18f355756906890969f7e0c4b176953b240971f01d
+  Open                     tx d042acf0ee26a6434d2c54f76ddad13155b288b680a80fea970a411a9f12508d
+  10K entrant 1  token_id 27  bib 1   tx 87e752462666903e9922d116004769870672f8d81dd0cf4043c6d17fe545cd26
+  10K entrant 2  token_id 28  bib 2   tx 6f01c67ee01af97b60d42a8410e28f6b7ed0b598df4aa405fc34676a11649aa9
+  5K  entrant 1  token_id 29  bib 3   tx f5d46f8805ccd043bc2a07fb2cc2eda6b321a98bc34ada7e8dbef7286f533c0f
+  ✓ a third entry in the full 10K → Error(Contract, #5)
+  increase_quota 2 -> 4    tx c1e32c786b390709c727434a62f93e111147996f2aaa937ec4fb2be69aefe20f
+  ✓ quota_increased carried previous 2 and current 4
+  10K entrant 3 (second batch)  token_id 30  bib 4   tx 769f1676790855577f0eed0e2601a4c3a2fd76557b8d7afc97da4468510c1462
+  10K entrant 4 (second batch)  token_id 31  bib 5   tx 6032a529950458c2518f25557db0b00973152e593a44ccbf3700a4fb2473fecb
+  ✓ a sold-out distance sells again, and the second batch continues the race's numbering
+
+=== (b) the number only ever goes up ===
+  ✓ increase_quota to the same number (4) → Error(Contract, #19)
+  ✓ increase_quota to a smaller number (3) → Error(Contract, #19)
+  ✓ increase_quota below the entries already taken (1) → Error(Contract, #19)
+  ✓ increase_quota to 0 → Error(Contract, #19)
+  ✓ the refusals changed neither the quota nor the entry count
+  ✓ increase_quota on an unknown category → Error(Contract, #3)
+  ✓ increase_quota on an unknown event → Error(Contract, #2)
+
+=== (c) the new cap is a real cap, and the raise touched nothing else ===
+  ✓ a fifth entry in the raised 10K → Error(Contract, #5)
+  ✓ a second entry in the untouched 5K → Error(Contract, #5)
+  ✓ 10K 4/4 and 5K 1/1 — one distance's second batch is that distance's business
+
+=== (d, again) the old event is exactly where it was ===
+  ✓ untouched by a whole race selling out beside it
+```
+
+The sequence in (a) is the ticket end to end, on a real network: an entrant is refused with
+`QuotaFull(5)`, the organiser raises the cap, and **the next entrant gets in** — wearing bib 4, which
+continues the race's numbering rather than restarting it, because `increase_quota` never reads the bib
+counter. Every bib was read back from `RaceRecord.record_of`, not from the registry's return value
+alone.
+
+Event 19 is left on chain as the evidence: a 10K that sold 2, refused one, then sold 2 more on a
+quota of 4, next to a 5K that was never raised and is still capped at 1.
+
+> Event **18** is an earlier run of the same script and is left on chain too, with its 10K raised to 4
+> and only 3 of those slots taken. The script was correct and the contract behaved; the run stopped at
+> an assertion of mine that grepped the emitted event as JSON (`"previous": 2`) when the CLI renders
+> it as plain text (`previous: 2`). Recorded rather than quietly re-run, because the ledger has the
+> half-finished event in it either way.
+
+### The SDK e2e after the upgrade — `pnpm --filter @sterunxyz/sdk e2e` ✅
+
+`@sterunxyz/sdk` does not expose `increase_quota` — adding it is a teammate's ticket, the way STE-37
+followed STE-35 — so this run proves the other direction, which is the one an upgrade can break: that
+**every method the published package already has still works against the new wasm**.
+
+```
+EventRegistry  CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+event_id            20
+token_id (free)     32  bib 1  Finished 3161s
+createEvent         0b2225d57f48449118bc67f98e3367b37440cec989ca53d47eedd4cb3ee5ef52
+setEventStatus Open 8af461b5cf73d670b118465367774fe675a60c8a5e47a4d2d72a0f5938bc2625
+enter               da5f272717c0ecf28fe8b210bced13ce5293db72c61d95aafd8e0578f158cb7a
+claimRacepack       504e7a7665d36f24788d997470f35aba084203497da10d6c0152cb62e25be105
+recordFinish        20a0dbdae64aa8d97844e481733ff1048d89ba2d2deead3a36a2f626a109c1ba
+token_id (untimed)  33  Finished, finish_time_s null
+recordFinishUntimed c940a462437717db0b40fa0993cb580798e3c0cccff475b21dafe85e7b043efd
+```
+
+Negatives included: `AlreadyClaimed(102)`, `InvalidState(103)` from four directions, and the reads
+re-run through a client with no wallet at all. Event 20's first entrant is bib **1**, so the v2.3
+numbering is intact across this upgrade too.
+
+**The paid-entry leg was SKIPPED**, and that is stated rather than glossed: `SUSD_DISTRIBUTOR_SECRET`
+was not set in this environment, so the SEP-41 transfer inside `enter` did not run. Everything else
+did. That path is unchanged by this ticket — `increase_quota` moves no money and `reserve_slot` was
+not touched — but it was not exercised here.
+
+### What did NOT change, and is worth stating
+
+- **`entered_count` and the bib sequence.** `increase_quota` reads neither. Entries already taken are
+  untouched, and a second batch continues the event's numbering — asserted on chain above.
+- **Quota enforcement.** `reserve_slot` still compares `entered_count` against `quota` per distance
+  and still reverts `QuotaFull(5)` from exactly that comparison, before and after a raise.
+- **`be/` and `fe/` behaviour.** The only change to either is one row added to the hand-maintained
+  error table in `be/src/chain/errors.ts` (and the same in `sdk/src/errors.ts`), which the tests in
+  both packages require: they parse `docs/specs/INTERFACE.md` §1.4 and assert code-for-code. The
+  indexer handler for `QuotaIncreased` and the console's "add capacity" flow are teammates' tickets
+  and were deliberately not started.
+- **The organiser allowlist.** `upgrade` replaces code, not storage, so `sterun-organiser` is still
+  on it — the sanity run's `create_event` proves it.
+
+### The rule the chain cannot enforce
+
+A published quota is part of what a runner saw when they paid, so raising it is a real change to what
+they bought: a bigger field, a busier start pen, a longer racepack queue. The console must pair every
+increase with a **signed announcement** (the STE-34 pattern).
+
+Nothing on chain checks that. `increase_quota` verifies that the caller is the event's organiser and
+that the number grew, and it records both numbers — that is the whole of it. This paragraph is here so
+that nobody reading the evidence above concludes the contract enforces the announcement, because it
+does not, and a grant reviewer should be told which half is code and which half is operational
+discipline.
