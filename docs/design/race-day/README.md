@@ -9,6 +9,7 @@ implemented from, without asking a question per screen.
 | The screens | [`mockups/index.html`](mockups/index.html), openable in a browser, no build step |
 | One PNG per screen | [`exports/`](exports/): `r*` runner, `s*` scanner |
 | The whole board as one image | [`exports/board.png`](exports/board.png) |
+| The transitions | [`mockups/motion.html`](mockups/motion.html): seven studies, each replayable |
 | The rules these screens obey | `docs/specs/HASH_AND_TOTP.md` §4–§5 (FROZEN), `docs/WEB_APP_IA.md` §4 and §5.2 |
 
 The mockups are plain HTML and CSS. Every colour, size, radius and shadow is a token from
@@ -18,6 +19,7 @@ invented hex or pixel value in the file. Regenerate after a token change:
 ```bash
 python docs/design/race-day/tools/gen_tokens_css.py     # mockups/tokens.css
 node docs/design/race-day/tools/export-mockups.cjs      # exports/*.png
+node docs/design/race-day/tools/export-motion.cjs       # exports/motion-*.png
 ```
 
 The exporter needs `puppeteer-core` and a local Chrome; that is why the PNGs are committed. Reading
@@ -141,7 +143,7 @@ time and each row keeps the ledger it landed in (S10). A claim the chain refuses
 
 **What the queue holds is the intent, not a signed transaction.** A queued row is the token id, the
 bib and the moment it was scanned. The transaction is built and signed when it is sent, for two
-reasons given in section 9: an authorisation signature carries the ledger it expires on, and one
+reasons given in section 10: an authorisation signature carries the ledger it expires on, and one
 account can only have one transaction in flight at a time. Pre-signing a morning of claims at the
 desk would produce a pile that expires and cannot be ordered.
 
@@ -152,7 +154,79 @@ a re-check passes.
 
 ---
 
-## 6. Copy deck
+## 6. Motion
+
+Every transition these screens need, at the durations and curves in the token file:
+[`mockups/motion.html`](mockups/motion.html), openable in a browser like the board. Seven studies,
+each replayable on its own, with a switch that shows what a reviewer with reduced motion turned on
+would get. A filmstrip of the verdict arriving is in
+[`exports/`](exports/) as `motion-verdict-*.png`, and the whole board as
+[`exports/motion-board.png`](exports/motion-board.png).
+
+**The rule all of it follows: movement may make a change legible, it may never delay one.** A
+volunteer reading a verdict in the sun is the worst case in this product, so the verdict is readable
+before its own animation has finished, and nothing on either screen waits on an animation to become
+usable.
+
+### 6.1 The scale
+
+| Token | Value | What it is for |
+| --- | --- | --- |
+| `--motion-instant` | 90 ms | a value changing in place: the queue count |
+| `--motion-fast` | 140 ms | something leaving that has already been read |
+| `--motion-base` | 200 ms | the default; anything arriving that has to be read |
+| `--motion-slow` | 320 ms | the one decorative case, on the runner's pass only |
+| `--ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | arriving: fast first, settles |
+| `--ease-in` | `cubic-bezier(0.55, 0, 1, 0.45)` | leaving |
+| `--ease-inout` | `cubic-bezier(0.65, 0, 0.35, 1)` | a value rolling from one state to another |
+
+The tokens live in `landing-page/app/tokens.css` and `fe/app/tokens.css`, identical in both, and
+reach the mockups through the same generator as the colours. Nothing in the motion page invents a
+duration.
+
+### 6.2 What moves, and how
+
+| # | Moment | Movement | Timing |
+| --- | --- | --- | --- |
+| M1 | A verdict arrives | the panel rises over the camera; the word and then the bib follow from behind a mask; the icon scales from 0.92 | `--motion-base`, `--ease-out`, the word at 40 ms and the bib at 80 ms |
+| M2 | A verdict leaves | down and out, on the volunteer's tap | `--motion-fast`, `--ease-in` |
+| M3 | The code rolls over | the six digits roll up one at a time while the QR is swapped on the same tick with no fade | `--motion-base`, `--ease-inout`, 25 ms apart |
+| M4 | The manual fallback opens | a sheet from the bottom edge over a scrim that fades with it, covering the camera rather than replacing it | `--motion-base`, `--ease-out` |
+| M5 | A banner appears | down from the top edge behind a mask, pushing nothing | `--motion-base`, `--ease-out` |
+| M6 | The queue ticks up | one digit rolls in place | `--motion-instant` |
+| M7 | The claim lands | the check draws itself, on the runner's pass only | `--motion-slow`, `--ease-out` |
+
+The word leads the bib in M1 by 40 ms, which is the only ordering in the set that matters: it puts
+the eye on the instruction before the number. It is worth getting right in code too, because it is
+easy to write as a positional rule and get backwards.
+
+### 6.3 What must never animate
+
+1. **The QR itself.** No fade, no scale, no crossfade between one code and the next. A camera
+   pointed at a half-drawn code can read it, and reading it wrong is worse than not reading it.
+2. **The six-character code's value while a scan is in flight.** The roll in M3 shows that the value
+   changed; it does not change what the ±1 step tolerance already allows.
+3. **Anything between a scan and its verdict.** No spinner dressing up a decision that is already
+   computed locally. The verdict panel is the first thing that moves after a scan.
+4. **Position of anything already being read.** The banner in M5 covers dead space rather than
+   pushing the layout down under someone's thumb.
+
+### 6.4 Reduced motion
+
+`prefers-reduced-motion: reduce` turns every duration above to zero. Each screen then cuts straight
+to the state the animation would have ended on, and no screen loses information: the verdict, the
+banner, the sheet and the rolled value are all present without their movement. The motion page has a
+switch that forces this, so the check does not need an operating system setting.
+
+One thing the motion page cannot show honestly: the countdown bar on the pass is a value read off the clock, not an animation. The page fakes it with one, so reduced motion empties it there. In the built screen it keeps counting, because turning motion down must not turn information off.
+
+### 6.5 In code
+
+Transform and opacity only, so nothing here can cost a layout pass on a mid-range Android at a
+finish line. No animation library is needed for any of it: these are CSS keyframes and transitions.
+Whatever runs the camera preview matters far more for frame rate than this does.
+
+## 7. Copy deck
 
 English, short, and addressed to whoever is holding the phone. The volunteer strings are the ones to
 translate first if the desk turns out to be Indonesian-speaking only.
@@ -181,7 +255,7 @@ code expires), and **verified** for a scan (the chain verifies; the scanner chec
 
 ---
 
-## 7. Not designed here
+## 8. Not designed here
 
 - The entry flow and its success screen (STE-21, `WEB_APP_IA.md` §4).
 - The organiser console, including the screen that registers a scanner address (STE-17).
@@ -189,7 +263,7 @@ code expires), and **verified** for a scan (the chain verifies; the scanner chec
 - The polish pass over every flow (STE-23).
 - Anything about how TOTP works: that is frozen in `HASH_AND_TOTP.md` and this design follows it.
 
-## 8. Open, and owned by someone else
+## 9. Open, and owned by someone else
 
 1. **Desk identity.** S5 says "desk 2". Nothing on chain carries a desk name; the nearest thing is
    the scanner address that claimed. Either the console names its scanners (STE-17) or the copy
@@ -201,7 +275,7 @@ code expires), and **verified** for a scan (the chain verifies; the scanner chec
 
 ---
 
-## 9. Checked against the Stellar docs
+## 10. Checked against the Stellar docs
 
 Run through the Stellar Raven MCP on 15 Sep 2026, because a design that assumes the wrong thing
 about the chain fails on race morning rather than in review.
