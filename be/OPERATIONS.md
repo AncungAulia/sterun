@@ -829,6 +829,62 @@ knows which, so run the same stop-poller / rebuild / restart sequence as for 007
 `doctor`, which compares `addon_ids` in order, so a record the default got wrong is reported rather
 than served.
 
+### The web faucet account (STE-49)
+
+`POST /faucet` pays from `STERUN_SUSD_FAUCET_SECRET`: its own account with a small sUSD float,
+**never** the distributor, which stays off this box. The secret is generated **on the production box**
+and written straight into its env file, so it never passes through a laptop, a clipboard, a terminal
+or a chat.
+
+**1. Generate the keypair on the box; print only the public key.**
+
+```bash
+ssh root@192.168.18.42
+cd /opt/sterun
+C="docker compose -f compose.prod.yml -f compose.homelab.yml"
+$C run --rm --no-deps -v /opt/sterun/be:/out api node -e '
+  const { Keypair } = require("@stellar/stellar-sdk");
+  const kp = Keypair.random();
+  require("fs").appendFileSync("/out/.env.production", "\nSTERUN_SUSD_FAUCET_SECRET=" + kp.secret() + "\n");
+  console.log(kp.publicKey());
+'
+```
+
+**2. Create the account and open its trustline**, on the box. `--no-payout` needs no distributor key,
+and `--secret` prints nothing secret:
+
+```bash
+$C run --rm --no-deps api sh -c \
+  'node dist/cli/faucet.js --secret "$(grep ^STERUN_SUSD_FAUCET_SECRET= /app/be/.env.production | cut -d= -f2)" --no-payout'
+```
+
+(If `.env.production` is not visible at that path inside the container, pass the file with the same
+`-v /opt/sterun/be:/out` mount and read `/out/.env.production` instead.)
+
+**3. Send the float from a machine that holds the distributor key** — never copy that key to the box.
+From a checkout whose `be/.env` has `STERUN_SUSD_DISTRIBUTOR_SECRET`, sending to the public key from
+step 1:
+
+```bash
+cd be && node --input-type=module -e '
+  import { loadEnvFile } from "./dist/env.js"; import { loadConfig } from "./dist/config.js";
+  import { StellarClient } from "./dist/stellar.js";
+  loadEnvFile(); const c = loadConfig();
+  const tx = await new StellarClient(c).payoutSusd(c.distributorSecret, process.argv[1], 50000000000n);
+  console.log("float sent, tx", tx);
+' <FAUCET_PUBLIC_KEY>
+```
+
+`50000000000` stroops is 5,000 sUSD. **Size the float to what you are prepared to lose**: it is both
+how long the faucet lasts (the default daily cap is also 5,000 sUSD) and the worst case if this box is
+compromised.
+
+**4. Restart the API** so it reads the variable. `/config` then reports
+`faucet.route.available: true`, and the startup log names the faucet's public address.
+
+**Topping up** is step 3 again. When the float runs out the route answers `faucet-empty` and pays
+nothing — the intended failure, not an outage.
+
 ### Nonces now live in Postgres
 
 Since STE-31, auth nonces live in the `auth_nonces` table rather than in process memory. That is what

@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { RESPONSE_SCHEMAS as DIRECTORY_SCHEMAS } from "../src/routes/directory.js";
+import { RESPONSE_SCHEMAS as FAUCET_SCHEMAS } from "../src/routes/faucet.js";
 import { RESPONSE_SCHEMAS as VAULT_SCHEMAS } from "../src/routes/participants.js";
 import { RESPONSE_SCHEMAS as AUTH_SCHEMAS } from "../src/routes/auth.js";
 import { RESPONSE_SCHEMAS as RESULTS_SCHEMAS } from "../src/routes/results.js";
@@ -23,6 +24,7 @@ const ALL = {
   ...Object.fromEntries(Object.entries(ROSTER_SCHEMAS).map(([k, v]) => [`roster.${k}`, v])),
   ...Object.fromEntries(Object.entries(RESULTS_SCHEMAS).map(([k, v]) => [`results.${k}`, v])),
   ...Object.fromEntries(Object.entries(AUTH_SCHEMAS).map(([k, v]) => [`auth.${k}`, v])),
+  ...Object.fromEntries(Object.entries(FAUCET_SCHEMAS).map(([k, v]) => [`faucet.${k}`, v])),
 };
 
 /** Every property name the schema (or anything nested in it) can emit. */

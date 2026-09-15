@@ -41,6 +41,12 @@ export const RATE_LIMITS = {
    * three times in a minute never meets it.
    */
   files: 12,
+  /**
+   * STE-49, the test sUSD faucet. The real limits are per wallet address and per
+   * day, in Postgres. This per-client ceiling is defence in depth: it stops a
+   * loop minting fresh keypairs from one machine before it reaches the ledger.
+   */
+  faucet: 6,
 } as const;
 
 /**

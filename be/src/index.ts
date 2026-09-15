@@ -12,6 +12,7 @@ import { PostgresNonces } from "./auth-postgres.js";
 import { loadEnvFile } from "./env.js";
 import { ChainReader, RpcContractCaller } from "./chain/reader.js";
 import { loadConfig } from "./config.js";
+import { StellarFaucetPayer } from "./faucet.js";
 import { createPool } from "./db/pool.js";
 import { R2FileStore } from "./files/r2.js";
 import { LocalFileStore } from "./files/store.js";
@@ -83,12 +84,22 @@ const fileStore = config.files.r2
       maxTotalBytes: config.files.maxTotalBytes,
     });
 
+/**
+ * STE-49. Only when a faucet account is configured, and never the distributor:
+ * the route pays from its own float so a compromised box can give away at most
+ * that. Without it the route still mounts and says `faucet-unavailable`.
+ */
+const faucetPayer = config.faucetSecret
+  ? new StellarFaucetPayer(config, config.faucetSecret)
+  : undefined;
+
 const app = buildServer(config, {
   ...(pool ? { pool } : {}),
   fileStore,
   ...(pool && config.vault ? { vault: new Vault(pool, config.vault.keyring) } : {}),
   challenges,
   reader,
+  ...(faucetPayer ? { faucetPayer } : {}),
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -110,6 +121,8 @@ try {
       vault: config.vault ? { activeKeyId: config.vault.keyring.activeKeyId } : "disabled",
       nonces: pool ? "postgres" : "in-memory (single process only)",
       files: config.files.r2 ? `r2:${config.files.r2.bucket}` : `disk:${config.files.root}`,
+      // A public address, never the secret.
+      faucet: faucetPayer ? faucetPayer.address : "not configured",
     },
     "sterun backend ready",
   );

@@ -36,6 +36,21 @@ export interface Config {
   /** Stroops of sUSD handed out per faucet claim. 1 sUSD = 10_000_000 stroops. */
   readonly faucetAmount: bigint;
   /**
+   * STE-49. Secret of the account the HTTP faucet pays from — deliberately NOT
+   * the distributor. The distributor holds the test supply and stays off any
+   * public host (OPERATIONS.md); this account holds a small float topped up by
+   * hand, so the most a compromised API box can give away is that float.
+   * Absent means the route answers `faucet-unavailable`.
+   */
+  readonly faucetSecret: string | undefined;
+  /** One payout per address per this many hours (rolling). */
+  readonly faucetWindowHours: number;
+  /**
+   * Most the route may pay out in any rolling 24 hours, across all addresses.
+   * Keypairs are free, so a per-address limit alone bounds nothing.
+   */
+  readonly faucetDailyCapStroops: bigint;
+  /**
    * Browser origins allowed to call this API.
    *
    * An allow-list, never `*`. Authenticated requests carry a wallet signature
@@ -169,6 +184,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // the prefixed one wins where both are set.
     distributorSecret: env.STERUN_SUSD_DISTRIBUTOR_SECRET ?? env.SUSD_DISTRIBUTOR_SECRET,
     faucetAmount: BigInt(env.FAUCET_AMOUNT_STROOPS ?? "500000000"), // 50 sUSD
+    faucetSecret: env.STERUN_SUSD_FAUCET_SECRET,
+    faucetWindowHours: num(env.FAUCET_WINDOW_HOURS, 24),
+    faucetDailyCapStroops: BigInt(env.FAUCET_DAILY_CAP_STROOPS ?? "50000000000"), // 5,000 sUSD
     webOrigins: (env.STERUN_WEB_ORIGIN ?? "")
       .split(",")
       .map((origin) => origin.trim())

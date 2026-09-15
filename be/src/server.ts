@@ -29,6 +29,8 @@ import { authRoutes } from "./routes/auth.js";
 import { registerErrorHandler } from "./http/errors.js";
 import { loggerOptions, registerHardening } from "./http/hardening.js";
 import { directoryRoutes } from "./routes/directory.js";
+import { faucetAvailability, faucetRoutes } from "./routes/faucet.js";
+import type { FaucetPayer } from "./faucet.js";
 import { filesRoutes, MAX_FILE_BYTES } from "./routes/files.js";
 import { participantRoutes } from "./routes/participants.js";
 import { resultsRoutes } from "./routes/results.js";
@@ -62,6 +64,12 @@ export interface ServerDeps {
    * but a disk can still serve the organiser console's file step.
    */
   fileStore?: FileStore;
+  /**
+   * STE-49. Present when a faucet account is configured. The route is mounted
+   * whenever there is a database (it needs the payout ledger) and answers
+   * `faucet-unavailable` without this, rather than a confusing 404.
+   */
+  faucetPayer?: FaucetPayer;
 }
 
 /** Shared by 200 and 503: the shape does not change, only the verdict does. */
@@ -143,7 +151,14 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
       addresses: config.addresses,
       faucet: {
         amountStroops: config.faucetAmount.toString(),
+        // The CLI's payout key (the distributor). Absent on a public box on purpose.
         payoutConfigured: config.distributorSecret !== undefined,
+        // STE-49, the web app's "Get test sUSD" route. `reason` says why not.
+        route: {
+          ...faucetAvailability(config, deps.faucetPayer),
+          windowHours: config.faucetWindowHours,
+          dailyCapStroops: config.faucetDailyCapStroops.toString(),
+        },
       },
       indexer: {
         // Whether the read endpoints are mounted, not whether a poller is running
@@ -235,7 +250,8 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   // still be able to issue a nonce. Forgetting this is the STE-20 bug where
   // /auth/challenge was the vault's property and the results endpoint could
   // never be reached.
-  if (deps.vault || (deps.pool && deps.reader) || deps.fileStore) {
+  // The faucet (STE-49) authenticates too, and needs only the database.
+  if (deps.vault || deps.pool || deps.fileStore) {
     void app.register(async (instance) => authRoutes(instance, challenges));
   }
 
@@ -247,6 +263,9 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   if (deps.pool) {
     const pool = deps.pool;
     void app.register(async (instance) => directoryRoutes(instance, pool));
+    void app.register(async (instance) =>
+      faucetRoutes(instance, { pool, challenges, config, payer: deps.faucetPayer }),
+    );
   }
 
   if (deps.pool && deps.vault && deps.reader) {

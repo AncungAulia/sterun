@@ -156,6 +156,48 @@ runner can pay.
 > Using it means changing RaceRecord, whose interface is **frozen** — that is a spec-change PR
 > (`docs/specs/CLAUDE.md`), not a backend decision. Recorded as a v2 simplification.
 
+## The HTTP faucet (STE-49)
+
+`POST /faucet` — the web app's **Get test sUSD** button. Wallet-signature auth; pays the
+authenticated address `config.faucetAmount` (50 sUSD by default). The browser opens the trustline
+first, because a trustline is signed by the account that holds it, and this service must never hold a
+runner's key.
+
+**It pays from its own account, never the distributor.** `STERUN_SUSD_FAUCET_SECRET` is a separate
+account holding a small float topped up by hand. The distributor holds the test supply and stays off
+the public box (`OPERATIONS.md`); this key sits on it, so the most a compromised API can give away is
+that float. A float that has run dry is simply `faucet-empty`.
+
+The limits, and where each lives:
+
+| Limit | Where | Why there |
+| --- | --- | --- |
+| testnet only | the route, against the network passphrase; reported in `/config` | a mainnet deployment can never pay even with a key configured by mistake |
+| one payout per address per window (24h) | Postgres, `faucet_payouts` | has to hold across instances |
+| total paid per rolling 24h (5,000 sUSD) | Postgres, `faucet_payouts` | keypairs are free; a per-address rule alone bounds nothing |
+| requests per client per minute | the IP limiter | defence in depth against a keypair-minting loop |
+
+**Two requests for one address are paid once, and that is the design, not luck.** Two separate
+mechanisms, each guarding a different race, and each checked by breaking it on purpose:
+
+- **The reservation comes before the payment.** A claim inserts a `pending` row and commits *before*
+  any money moves, so a request arriving while another is paying sees that row. The route test with two
+  overlapping requests guards this: count only `paid` rows instead of `pending` too, and both get paid.
+- **The claim itself is serialised.** A transaction-scoped advisory lock covers the window check and
+  the insert, so two claims cannot both pass the check in the gap before either inserts. With the lock
+  removed, the ledger test for the daily cap overshoots on **every** run (5, 9, 8 granted against a cap
+  of 3); the same-address ledger test fails only sometimes (1 run in 3). So the daily-cap test is the
+  reliable guard for the lock — do not rely on the same-address one alone.
+
+`failed` payouts do not count against either limit, so a runner whose payment failed can retry.
+`pending` rows do, including one left behind by a crash mid-payment: at worst an address waits out a
+window it should not have, and nobody is paid twice. Trustline and float are checked *before* the claim,
+so neither error costs a window.
+
+Errors a form can show: `no-trustline` (409, with "add the trustline" or "fund the account first"),
+`rate-limited` (429, `Retry-After` + `retry_at`), `faucet-empty` (503), `faucet-unavailable` (403 off
+testnet, 503 with no key).
+
 ## The PII vault (STE-11)
 
 The product rule: **PII goes in and never comes out.** No method on `Vault` returns a name, a
