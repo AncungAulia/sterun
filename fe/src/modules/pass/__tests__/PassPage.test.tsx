@@ -20,6 +20,21 @@ vi.mock("@/modules/pass/components/PassQr", () => ({
   PassQr: ({ payload }: { payload: string }) => <div data-testid="qr">{payload}</div>,
 }));
 /*
+  The real facts, with a counter around them. The pass ticks once a second, and
+  the race, the date and the bib do not change while a runner stands at a desk:
+  this is how the test below can say so rather than hope.
+*/
+const factsRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock("@/modules/pass/components/PassFacts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/pass/components/PassFacts")>();
+  return {
+    PassFacts: (props: Parameters<typeof actual.PassFacts>[0]) => {
+      factsRenders.count += 1;
+      return actual.PassFacts(props);
+    },
+  };
+});
+/*
   The page reaches WalletGate through the screen a phone without the secret
   sees, and WalletGate reads useWallet, which pulls in Stellar Wallets Kit.
   That package cannot be loaded by vitest (fe/CLAUDE.md), and without this the
@@ -144,6 +159,22 @@ describe("the pass", () => {
 
       expect(screen.queryByText("A code that just changed still works")).not.toBeInTheDocument();
       expect(screen.getByText("Or use the code")).toBeInTheDocument();
+    });
+
+    it("ticks the code without re-rendering the rest of the pass", async () => {
+      renderPass();
+      await screen.findByText("Sasando Run 2026");
+      await waitFor(() => expect(screen.getByLabelText("Check-in code 079663")).toBeInTheDocument());
+      const before = factsRenders.count;
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      // The countdown moved, so the clock is running.
+      expect(screen.getByText("New code in 27s")).toBeInTheDocument();
+      // And the facts did not: the clock lives in the part that changes.
+      expect(factsRenders.count).toBe(before);
     });
 
     it("reassures rather than alarms when the signal goes", async () => {

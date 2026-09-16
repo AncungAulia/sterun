@@ -25,19 +25,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { readClient } from "@/lib/chain/sterun";
 import { readEntry, rememberPassFacts } from "@/lib/entry-store";
 
 import { ClaimedPanel } from "./components/ClaimedPanel";
-import { CodeRow } from "./components/CodeRow";
-import { Countdown } from "./components/Countdown";
 import { GetPassHere } from "./components/GetPassHere";
+import { LiveCode } from "./components/LiveCode";
 import { PassFacts } from "./components/PassFacts";
 import { OfflineNotice } from "./components/PassNotices";
-import { PassQr } from "./components/PassQr";
 import { useOnline } from "./hooks/useOnline";
-import { usePassCode } from "./hooks/usePassCode";
 
 
 export function PassPage({ tokenId }: { tokenId: number }) {
@@ -57,7 +53,6 @@ export function PassPage({ tokenId }: { tokenId: number }) {
   });
 
   const entry = stored.data ?? null;
-  const { code, payload, secondsLeft, step } = usePassCode(tokenId, entry?.totpSecret ?? null);
 
   // What the chain said, kept for the next visit, which may have no signal.
   useEffect(() => {
@@ -110,27 +105,13 @@ export function PassPage({ tokenId }: { tokenId: number }) {
 
       {claimed ? (
         <ClaimedPanel eventId={entry.eventId} tokenId={tokenId} claimedAt={claimedAt} />
-      ) : payload && code ? (
-        <>
-          <div className="flex flex-col gap-4 rounded-lg border border-n-200 bg-card p-4">
-            <PassQr payload={payload} />
-            <Countdown secondsLeft={secondsLeft} step={step} />
-          </div>
-          {/*
-            Nothing stands under the code (Ancung, 2026-09-16). The mockup puts
-            two notes there: one reassuring that the pass works without signal,
-            which the offline banner already says when the signal actually
-            goes, and one explaining that a code caught mid-change is still
-            accepted. Neither earns its place on a screen held up at a desk,
-            and the scanner takes the step either side regardless.
-          */}
-          <CodeRow code={code} />
-        </>
       ) : (
-        <ErrorNotice
-          title="We could not make your code on this phone"
-          detail="Open this pass again, or fetch it with the wallet that entered."
-        />
+        /*
+          The clock lives in here, not in this page: a tick a second must not
+          re-render the race, the date and the bib, none of which change while
+          a runner stands at a desk.
+        */
+        <LiveCode tokenId={tokenId} secretHex={entry.totpSecret} />
       )}
     </div>
   );
