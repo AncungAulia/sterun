@@ -86,7 +86,9 @@ fe/
 │   │   ├── (console)/page.tsx            /org                    → modules/organiser/home
 │   │   ├── (console)/events/[eventId]/   /org/events/:id         → modules/organiser/race
 │   │   └── new/page.tsx                  /org/new                → modules/organiser/create
-│   ├── (offline)/pass/, scan/            (planned, STE-21 round 2 and STE-22)
+│   ├── (offline)/
+│   │   ├── pass/[tokenId]/               /pass/:token            → modules/pass
+│   │   └── scan/                         (planned, STE-22)
 │   ├── layout.tsx, providers.tsx, not-found.tsx
 │   ├── globals.css
 │   └── tokens.css                        ← NABIL'S. Do not edit without talking to him.
@@ -131,7 +133,10 @@ fe/
         │   ├── create/      CreateEvent, the Step* components and their fields, useEventRun,
         │   │                event-document, run, preview, missing
         │   └── race/        RaceConsole, the Overview / Entries / Scanners tabs, race, status-action
-        ├── pass/            (planned)
+        ├── pass/             PassPage
+        │   ├── components/   PassQr, Countdown, CodeRow, ClaimedPanel, GetPassHere, …
+        │   ├── hooks/        usePassCode, useOnline
+        │   └── lib/          totp, pass-api
         ├── profile/         (planned)
         └── scanner/         (planned)
 ```

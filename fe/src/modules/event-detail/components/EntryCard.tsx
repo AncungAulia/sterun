@@ -149,11 +149,10 @@ export function EntryCard({
             <Button asChild className="sm:flex-1">
               <Link href={`/events/${event.eventId}/entered/${myEntry.tokenId}`}>View my entry</Link>
             </Button>
-            <Button variant="secondary" disabled className="sm:flex-1">
-              Open my pass
+            <Button variant="secondary" asChild className="sm:flex-1">
+              <Link href={`/pass/${myEntry.tokenId}`}>Open my pass</Link>
             </Button>
           </div>
-          <p className="text-sm text-n-500">Your pass will open here soon.</p>
         </div>
       ) : open ? (
         onEnter ? (

@@ -23,7 +23,9 @@ is what decides the service worker's scope:
 - The QR pass and the scanner **must work fully without a signal** (`SYSTEM_DESIGN.md` §7:
   verification at a venue assumes zero connectivity).
 
-Those two demands are opposed, so no single service worker may own the whole origin.
+Those two demands are opposed, so no single service worker may own the whole origin. Since STE-21
+round 2 that worker exists: `fe/public/pass-sw.js`, registered from the `(offline)` layout and
+scoped to `/pass`. The scanner joins that group in STE-22.
 
 ```
 fe/app/
@@ -293,7 +295,7 @@ statistics and thumbnails are a layer on top — not the foundation, and STE-24 
 | --- | --- | --- |
 | `/events/[id]/enter` | Three steps: distance & race pack → details → review & pay, then **one button with two wallet approvals behind it** (a signed message for the vault, then `enter`). Built in STE-21 round 1; design in `superpowers/specs/2026-09-15-entry-flow-design.md` | STE-21 |
 | `/events/[id]/entered/[tokenId]` | The success page: the bib drawn as a bib, the **receipt code** with a PDF download, and a way on held until the receipt is saved | STE-21 |
-| `/pass/[tokenId]` | A QR regenerating every 30 seconds + a 6-digit code for the manual fallback, the bib, the event name, the state. Installable. Fully functional in airplane mode. | STE-21 (round 2) |
+| `/pass/[tokenId]` | A QR and a 6-character code regenerated every 30 seconds on the phone, the bib, the race, the state. Installable, and loadable with the network off. Built in STE-21 round 2; design in `superpowers/specs/2026-09-16-qr-pass-design.md` | STE-21 |
 | `/profile` | My races + a shortcut to each pass. Thin: its contents are `/runner/[my-address]` (§3.2) | STE-24 |
 
 **The success screen is its own page, not a modal.** The salt receipt appears exactly once in its

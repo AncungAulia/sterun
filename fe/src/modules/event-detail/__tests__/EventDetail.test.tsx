@@ -597,7 +597,7 @@ describe("EventDetail", () => {
 
       const view = await screen.findByRole("link", { name: "View my entry" });
       expect(view).toHaveAttribute("href", "/events/2/entered/7");
-      expect(screen.getByRole("button", { name: "Open my pass" })).toBeDisabled();
+      expect(screen.getByRole("link", { name: "Open my pass" })).toHaveAttribute("href", "/pass/7");
       expect(screen.queryByRole("button", { name: "Enter this race" })).not.toBeInTheDocument();
       expect(recordsOfDetailed).toHaveBeenCalledWith(RUNNER);
     });

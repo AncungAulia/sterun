@@ -620,6 +620,32 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   showed it. `DateTimeField` takes `startMonth`/`endMonth` to switch them on.
 - Blood type and medical history are not asked for: STE-48 is Axel's decision.
 
+### `/pass/[tokenId]` — the runner's pass (STE-21, round 2)
+
+Four states, from `docs/design/race-day/README.md` §2: valid, about to roll over, offline, and race
+pack collected. **The code is computed on the phone** (`modules/pass/lib/totp.ts`) against the
+frozen definition in `docs/specs/HASH_AND_TOTP.md` §4, and tested against
+`docs/specs/vectors/totp.json` rather than against itself, because the backend and the scanner must
+produce the same six characters with no network between them. It is a **6-character string** with
+its leading zero, never a number, and the QR carries `{"t":…,"s":…,"c":"…"}` exactly, with the
+secret in neither. A code is held with the step it belongs to and shown only while both still
+match: plain state let a rollover pair this step's number with the previous step's digits, which a
+scanner refuses and a runner gets blamed for.
+
+**The secret never leaves the device.** A phone that did not enter fetches it once with the wallet
+that owns the record (`GET /records/:tokenId/pass`, STE-52) and stores it; the desk then needs no
+network. The stored entry moved up to `lib/entry-store.ts` when the pass became its second reader,
+and `rememberPassFacts` writes back what the chain said, so the next visit is right with no signal.
+
+**The service worker is scoped to `/pass` and nothing else** (`public/pass-sw.js`, registered by
+`OfflineReady` from the `(offline)` layout). A worker over the origin would cache the directory and
+the race pages, and a cached quota is the one claim this product cannot break. It precaches
+nothing, so the first visit needs signal once, and the page says so.
+
+Once the race pack is collected the pass **stops making codes**: a second scan can only be refused.
+The panel names the time from chain and no desk, because the chain carries a scanner address and no
+name for it.
+
 ## Tests
 
 ```bash

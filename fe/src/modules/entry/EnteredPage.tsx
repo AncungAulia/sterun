@@ -157,7 +157,7 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
           <>
             <ReceiptBox code={receiptEntry.salt} onDownload={() => void downloadReceipt(receiptEntry)} />
             {receiptEntry.receiptSaved ? (
-              <BackToRace eventId={eventId} />
+              <WaysOn eventId={eventId} tokenId={tokenId} />
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -181,12 +181,14 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
                     I&apos;ve saved my receipt
                   </Label>
                 </div>
+                {/* One button throughout: the way on is the pass, and it waits
+                    for the receipt rather than changing its own label. */}
                 {saved ? (
                   <Button asChild>
-                    <Link href={`/events/${eventId}`}>Back to the race</Link>
+                    <Link href={`/pass/${tokenId}`}>Open my pass</Link>
                   </Button>
                 ) : (
-                  <Button disabled>Back to the race</Button>
+                  <Button disabled>Open my pass</Button>
                 )}
               </div>
             )}
@@ -199,6 +201,23 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
         )}
       </div>
     </Page>
+  );
+}
+
+/**
+ * Both ways on, for a runner who has already saved their receipt. The pass
+ * leads: on race morning it is the only one of the two they need.
+ */
+function WaysOn({ eventId, tokenId }: { eventId: number; tokenId: number }) {
+  return (
+    <div className="flex flex-col justify-center gap-3 sm:flex-row">
+      <Button asChild>
+        <Link href={`/pass/${tokenId}`}>Open my pass</Link>
+      </Button>
+      <Button asChild variant="secondary">
+        <Link href={`/events/${eventId}`}>Back to the race</Link>
+      </Button>
+    </div>
   );
 }
 

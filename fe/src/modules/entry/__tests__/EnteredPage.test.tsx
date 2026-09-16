@@ -187,12 +187,14 @@ describe("EnteredPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "Back to the race" })).toBeDisabled();
-    expect(screen.queryByRole("link", { name: "Back to the race" })).not.toBeInTheDocument();
+    // The same button throughout, rather than one label swapped for another:
+    // the way on in round 2 is the pass, and it waits for the receipt.
+    expect(await screen.findByRole("button", { name: "Open my pass" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Open my pass" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: "I've saved my receipt" }));
 
-    expect(screen.getByRole("link", { name: "Back to the race" })).toHaveAttribute("href", `/events/${EVENT_ID}`);
+    expect(screen.getByRole("link", { name: "Open my pass" })).toHaveAttribute("href", `/pass/${TOKEN_ID}`);
   });
 
   it("says where the receipt is when this device did not enter", async () => {
@@ -269,6 +271,20 @@ describe("EnteredPage", () => {
 
       expect(await screen.findByRole("link", { name: "Back to the race" })).toBeInTheDocument();
       expect(screen.queryByRole("checkbox", { name: "I've saved my receipt" })).not.toBeInTheDocument();
+    });
+
+    it("offers the pass and the race on a return visit", async () => {
+      readEntry.mockResolvedValue({ ...stored, receiptSaved: true });
+      renderPage();
+
+      expect(await screen.findByRole("link", { name: "Open my pass" })).toHaveAttribute(
+        "href",
+        `/pass/${TOKEN_ID}`,
+      );
+      expect(screen.getByRole("link", { name: "Back to the race" })).toHaveAttribute(
+        "href",
+        `/events/${EVENT_ID}`,
+      );
     });
 
     it("still asks a runner who never confirmed saving it", async () => {
