@@ -74,11 +74,24 @@ export interface QueuedClaim {
   /** ISO 8601, when the volunteer got GREEN. */
   scannedAt: string;
   status: ClaimStatus;
-  /** Filled in by round 2's sender. */
+  /** Filled in once the chain took it. */
   txHash?: string;
   ledger?: number;
-  reason?: string;
+  /** Why the chain refused it. */
+  reason?: RefusalReason;
+  /**
+   * For `already-claimed`: when the chain says the race pack was collected,
+   * Unix seconds as a decimal string. Absent when that read failed.
+   */
+  claimedAt?: string;
 }
+
+/**
+ * The refusals that are final. Anything else (a declined prompt, no answer, a
+ * wallet that is not a scanner) leaves the row waiting, because trying again
+ * can still succeed.
+ */
+export type RefusalReason = "already-claimed" | "not-found";
 
 let rosters: UseStore | null = null;
 let claims: UseStore | null = null;
@@ -117,10 +130,29 @@ export async function enqueueClaim(claim: QueuedClaim): Promise<void> {
   await update<QueuedClaim | undefined>(claim.tokenId, (existing) => existing ?? claim, claimStore());
 }
 
+/**
+ * Records what happened to a claim when it was sent.
+ *
+ * The merge is read and written in one transaction (idb-keyval `update`), so it
+ * cannot put back an older copy over a write that landed in between. The check
+ * that the row exists comes first and separately, because `update` always
+ * writes: handed `undefined` back, it stores `undefined` under the key, and
+ * that empty row would then crash every listing of the queue.
+ */
+export async function markClaim(
+  tokenId: number,
+  outcome: Pick<QueuedClaim, "status" | "txHash" | "ledger" | "reason" | "claimedAt">,
+): Promise<void> {
+  if (!(await get<QueuedClaim>(tokenId, claimStore()))) return;
+  const given = Object.fromEntries(Object.entries(outcome).filter(([, value]) => value !== undefined));
+  await update<QueuedClaim>(tokenId, (claim) => ({ ...claim!, ...given }), claimStore());
+}
+
 /** This event's claims, in the order they were handed over. */
 export async function listClaims(eventId: number): Promise<QueuedClaim[]> {
-  const all = await values<QueuedClaim>(claimStore());
+  const all = await values<QueuedClaim | undefined>(claimStore());
   return all
-    .filter((claim) => claim.eventId === eventId)
+    // A row that is not a claim cannot be listed, and must not take the rest down with it.
+    .filter((claim): claim is QueuedClaim => typeof claim === "object" && claim !== null && claim.eventId === eventId)
     .sort((a, b) => a.scannedAt.localeCompare(b.scannedAt));
 }

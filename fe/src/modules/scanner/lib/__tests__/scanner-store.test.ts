@@ -9,6 +9,7 @@ import {
   enqueueClaim,
   listClaims,
   listRosters,
+  markClaim,
   readRoster,
   saveRoster,
   type QueuedClaim,
@@ -104,6 +105,33 @@ describe("the claims", () => {
     const rows = await listClaims(12);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ scannedAt: "2026-09-27T01:00:00.000Z", status: "waiting" });
+  });
+
+  it("records what the chain did with a claim, keeping when it was scanned", async () => {
+    await enqueueClaim(claim(13, 1300, "2026-09-27T01:00:00.000Z"));
+    await enqueueClaim(claim(13, 1301, "2026-09-27T01:00:01.000Z"));
+
+    await markClaim(1300, { status: "sent", txHash: "a".repeat(64), ledger: 4_469_902 });
+    await markClaim(1301, { status: "refused", reason: "already-claimed", claimedAt: "1790000000" });
+
+    expect(await listClaims(13)).toEqual([
+      { ...claim(13, 1300, "2026-09-27T01:00:00.000Z"), status: "sent", txHash: "a".repeat(64), ledger: 4_469_902 },
+      {
+        ...claim(13, 1301, "2026-09-27T01:00:01.000Z"),
+        status: "refused",
+        reason: "already-claimed",
+        claimedAt: "1790000000",
+      },
+    ]);
+  });
+
+  it("does not invent a claim this phone never recorded, and the queue still lists", async () => {
+    await enqueueClaim(claim(14, 1400, "2026-09-27T01:00:00.000Z"));
+    await markClaim(9_997_000, { status: "sent" });
+
+    // idb-keyval's update writes whatever its updater returns, undefined too,
+    // and an undefined row used to make this listing throw.
+    expect((await listClaims(14)).map((row) => row.tokenId)).toEqual([1400]);
   });
 
   it("answers an empty list for an event with no claims", async () => {
