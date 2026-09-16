@@ -53,6 +53,11 @@ export const RATE_LIMITS = {
    * phone, a cleared browser.
    */
   pass: 20,
+  /**
+   * STE-40, publishing a signed announcement. An organiser posts a handful per
+   * race; each request is a signature check plus a chain read.
+   */
+  announcements: 10,
 } as const;
 
 /**

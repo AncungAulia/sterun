@@ -34,6 +34,7 @@ import type { FaucetPayer } from "./faucet.js";
 import { filesRoutes, MAX_FILE_BYTES } from "./routes/files.js";
 import { participantRoutes } from "./routes/participants.js";
 import { resultsRoutes } from "./routes/results.js";
+import { announcementRoutes } from "./routes/announcements.js";
 import { passRoutes } from "./routes/pass.js";
 import { rosterRoutes } from "./routes/roster.js";
 import { ALLOWED_CONTENT_TYPES } from "./files/content-type.js";
@@ -291,6 +292,16 @@ export function buildServer(config: Config, deps: ServerDeps = {}): FastifyInsta
   if (deps.pool && deps.reader) {
     const results = { pool: deps.pool, reader: deps.reader, challenges };
     void app.register(async (instance) => resultsRoutes(instance, results));
+
+    // STE-40. The database stores them and the chain says who the organiser
+    // is; without either there is no honest way to accept one.
+    const announcements = {
+      pool: deps.pool,
+      reader: deps.reader,
+      networkPassphrase: config.network.passphrase,
+      eventRegistry: config.addresses.eventRegistry,
+    };
+    void app.register(async (instance) => announcementRoutes(instance, announcements));
   }
 
   // Event metadata files. Needs neither the index nor the chain: the upload

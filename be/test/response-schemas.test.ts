@@ -11,6 +11,7 @@
  * object — so these are security controls, not documentation.
  */
 import { describe, expect, it } from "vitest";
+import { RESPONSE_SCHEMAS as ANNOUNCEMENT_SCHEMAS } from "../src/routes/announcements.js";
 import { RESPONSE_SCHEMAS as DIRECTORY_SCHEMAS } from "../src/routes/directory.js";
 import { RESPONSE_SCHEMAS as FAUCET_SCHEMAS } from "../src/routes/faucet.js";
 import { RESPONSE_SCHEMAS as PASS_SCHEMAS } from "../src/routes/pass.js";
@@ -27,6 +28,7 @@ const ALL = {
   ...Object.fromEntries(Object.entries(AUTH_SCHEMAS).map(([k, v]) => [`auth.${k}`, v])),
   ...Object.fromEntries(Object.entries(FAUCET_SCHEMAS).map(([k, v]) => [`faucet.${k}`, v])),
   ...Object.fromEntries(Object.entries(PASS_SCHEMAS).map(([k, v]) => [`pass.${k}`, v])),
+  ...Object.fromEntries(Object.entries(ANNOUNCEMENT_SCHEMAS).map(([k, v]) => [`announcements.${k}`, v])),
 };
 
 /** Every property name the schema (or anything nested in it) can emit. */

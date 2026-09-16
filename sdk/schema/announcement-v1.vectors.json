@@ -1,0 +1,48 @@
+{
+  "description": "Test vectors for the Sterun signed event announcement, format v1 (STE-40). The signer is derived from a fixed public seed and is NOT a real key. Both be/ and @sterunxyz/sdk are tested against this file.",
+  "format": [
+    "Sterun announcement v1",
+    "network: <network passphrase>",
+    "event_registry: <EventRegistry contract id>",
+    "event_id: <u32, decimal>",
+    "published_at: <UTC, YYYY-MM-DDTHH:MM:SS.sssZ>",
+    "body_sha256: <sha256 of the UTF-8 body, lowercase hex>"
+  ],
+  "format_rules": "Lines joined by a single LF, no trailing newline, UTF-8. A signature is either ed25519 over the message bytes, or SEP-53 (signMessage) over the same message.",
+  "cases": [
+    {
+      "name": "a schedule change, ASCII",
+      "input": {
+        "network_passphrase": "Test SDF Network ; September 2015",
+        "event_registry": "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+        "event_id": 17,
+        "published_at": "2026-09-20T07:05:00.000Z",
+        "body": "Start moved to Lapangan Banteng. Schedule unchanged."
+      },
+      "body_sha256": "d730026196a60136cea800262a41ffa00b9088bf7c53138adfbae61ccd8d007e",
+      "message": "Sterun announcement v1\nnetwork: Test SDF Network ; September 2015\nevent_registry: CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\nevent_id: 17\npublished_at: 2026-09-20T07:05:00.000Z\nbody_sha256: d730026196a60136cea800262a41ffa00b9088bf7c53138adfbae61ccd8d007e",
+      "signer": "GCKRBSSQEQQFLPVAWLM6XINKFKVFCEGYQ52CWL62KKIIN6S4XMFTQYU2",
+      "signature_ed25519": "T4rUveUkyX34EWoryNjSlJDuSKCbSYdQ0klIzCX9otsCzf+o0AY0CixWuYHpYjRbDFoPCKXHEflAAHNSaf5zCA==",
+      "signature_sep53": "irhDyXqrBwNMUSYzUOk00s2SapS+/RqAC+Un+1hjUX2vsSRlfVRkkSzSqOGzO01+RpjK/ZVHkAgxDGCvVfrMBQ=="
+    },
+    {
+      "name": "Indonesian text with a line break and non-ASCII",
+      "input": {
+        "network_passphrase": "Test SDF Network ; September 2015",
+        "event_registry": "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+        "event_id": 0,
+        "published_at": "2026-09-16T00:00:00.000Z",
+        "body": "Karena izin venue, start dipindah ke Lapangan Banteng.\nJadwal tetap — sampai jumpa di garis start!"
+      },
+      "body_sha256": "bc74a1a9b6fe5f486dd39a1542fae4add8b8f0dc82e71c6423497d8afcd09663",
+      "message": "Sterun announcement v1\nnetwork: Test SDF Network ; September 2015\nevent_registry: CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\nevent_id: 0\npublished_at: 2026-09-16T00:00:00.000Z\nbody_sha256: bc74a1a9b6fe5f486dd39a1542fae4add8b8f0dc82e71c6423497d8afcd09663",
+      "signer": "GCKRBSSQEQQFLPVAWLM6XINKFKVFCEGYQ52CWL62KKIIN6S4XMFTQYU2",
+      "signature_ed25519": "Z8b1s6P6u77twe9U0voUjQQo627EFTfL/JUMmbwMhKZUpXyzCkDrftz2oPOuWYIjD2lGbNOarRWloK5sBUuGDg==",
+      "signature_sep53": "urqWNdiXwjKPRBOe+f++blomgvSTSckZDeIwc59MKpeya977FICMqzB0o+yMDTAYab1LhdGfQR7/p4cp4GfRBQ=="
+    }
+  ],
+  "negative": {
+    "name": "the first case's SEP-53 signature does not verify for a different body, another event, another registry, or another signer",
+    "other_signer": "GAVHJLKVKNYYZRGBC32SEISNDALOV56VEMNZ6CG7YYW7P3UHPOTBCBC3"
+  }
+}

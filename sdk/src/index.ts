@@ -87,3 +87,12 @@ export {
 } from "./document.js";
 
 export { FUTURENET, MAINNET, TESTNET, type SterunNetwork } from "./network.js";
+
+export {
+  ANNOUNCEMENT_HEADER,
+  announcementBodySha256,
+  announcementMessage,
+  verifyAnnouncement,
+  type AnnouncementFields,
+  type AnnouncementSignatureScheme,
+} from "./announcement.js";

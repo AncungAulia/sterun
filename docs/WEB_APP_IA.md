@@ -527,6 +527,24 @@ is an app-level promise, and the documentation should not dress it up as a proto
 
 Implementation: `be/` endpoint in STE-40, `fe/` rendering in the same ticket's follow-up.
 
+**As built (STE-40).** `POST /events/:eventId/announcements` takes `{ published_at, body, signer,
+signature }` and `GET` returns them newest first, each with the exact signed `message`. What the wallet
+signs is not the JSON above but this text, so it can be rebuilt byte for byte by anyone:
+
+```
+Sterun announcement v1
+network: <network passphrase>
+event_registry: <EventRegistry contract id>
+event_id: <u32>
+published_at: <YYYY-MM-DDTHH:MM:SS.sssZ>
+body_sha256: <sha256 of the UTF-8 body, lowercase hex>
+```
+
+`published_at` is UTC in exactly that spelling, and the server refuses one more than 10 minutes from its
+own clock. `@sterunxyz/sdk` exports `announcementMessage` to build the text for the wallet and
+`verifyAnnouncement` to check one; the organiser to compare the signer against comes from
+`getEvent(eventId).organiser`, on chain. Full rules: `be/CLAUDE.md`, "Signed event announcements".
+
 **Not in scope, deliberately:** refunds. The contract never holds the entry fee (§3.1), so no
 announcement can move money. An organiser who chooses to refund does it by hand, and the page says so.
 

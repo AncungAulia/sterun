@@ -32,6 +32,17 @@ already in other people's hands.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `announcementMessage(fields)` and `verifyAnnouncement(announcement)` for signed event announcements
+  (STE-40). The first builds the exact text an organiser's wallet signs (`signMessage`); the second
+  checks a signature, ed25519 or SEP-53, without trusting any server. Whether the signer is the
+  organiser is a separate chain read: `getEvent(eventId).organiser`. Browser-safe.
+- `announcementBodySha256(body)` and `ANNOUNCEMENT_HEADER` (`"Sterun announcement v1"`).
+- `schema/announcement-v1.vectors.json`: the test vectors the SDK and the backend are both pinned to.
+
 ## [0.2.0] — 2026-09-15
 
 ### Added
