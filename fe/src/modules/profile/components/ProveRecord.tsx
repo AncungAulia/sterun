@@ -78,7 +78,7 @@ function Field({
   const hintId = `${id}-hint`;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-xs font-normal tracking-[0.08em] text-n-600">
+      <Label htmlFor={id} className="text-xs font-normal text-n-600">
         {label}
       </Label>
       <Input

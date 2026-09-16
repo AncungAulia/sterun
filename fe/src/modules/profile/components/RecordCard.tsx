@@ -64,7 +64,7 @@ function Fact({
         align === "right-from-md" && "md:text-right",
       )}
     >
-      <dt className="self-end text-xs tracking-[0.08em] text-n-600">{label}</dt>
+      <dt className="self-end text-xs text-n-600">{label}</dt>
       <dd className={cn("whitespace-nowrap", absent ? "text-sm text-n-600" : "text-base text-ink tabular-nums")}>
         {value}
       </dd>

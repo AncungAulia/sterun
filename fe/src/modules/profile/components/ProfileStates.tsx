@@ -86,7 +86,7 @@ export function LoadingRecords() {
           <div className="grid grid-cols-3 gap-4">
             {["Category", "Bib", "Finish time"].map((label) => (
               <div key={label} className="flex flex-col gap-1">
-                <span className="text-xs tracking-[0.08em] text-n-600">{label}</span>
+                <span className="text-xs text-n-600">{label}</span>
                 <span className="h-5 w-12 rounded-sm bg-n-200" />
               </div>
             ))}

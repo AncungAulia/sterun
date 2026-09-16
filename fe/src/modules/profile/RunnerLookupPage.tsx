@@ -41,7 +41,7 @@ export function RunnerLookupPage() {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-12">
       <header className="flex flex-col gap-2">
-        <p className="text-xs tracking-[0.08em] text-n-600">Race record</p>
+        <p className="text-xs text-n-600">Race record</p>
         <h1 className="heading-hero text-4xl text-ink">Look up a runner</h1>
         <p className="text-base text-n-600">
           Paste a runner&apos;s address to see every race it has entered. No account needed.

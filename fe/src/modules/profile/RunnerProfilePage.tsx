@@ -24,7 +24,7 @@ import { cleanAddress, isRunnerAddress } from "./lib/runner-address";
 function Stat({ label, value, align = "left" }: { label: string; value: string; align?: "left" | "right" }) {
   return (
     <div className={align === "right" ? "text-right lg:text-left" : undefined}>
-      <p className="text-xs tracking-[0.08em] text-n-600">{label}</p>
+      <p className="text-xs text-n-600">{label}</p>
       <p className="heading-hero mt-1 text-4xl text-ink tabular-nums">{value}</p>
     </div>
   );
@@ -62,7 +62,7 @@ function Profile({ address }: { address: string }) {
     <div className="grid gap-8 lg:grid-cols-[20rem_1fr] lg:gap-12">
       <aside className="flex flex-col gap-6">
         <div className="flex flex-col gap-3">
-          <p className="text-xs tracking-[0.08em] text-n-600">Race record</p>
+          <p className="text-xs text-n-600">Race record</p>
           {/* One line always: split across two, the address read as two
               different strings and pushed the copy button off to the side. */}
           <div className="flex items-center gap-3">
@@ -85,7 +85,7 @@ function Profile({ address }: { address: string }) {
         ) : null}
 
         <div className="hidden flex-col gap-1 lg:flex">
-          <p className="text-xs tracking-[0.08em] text-n-600">Where this comes from</p>
+          <p className="text-xs text-n-600">Where this comes from</p>
           <p className="text-sm text-n-600">
             Read live from the Stellar testnet each time this page opens. Nothing on it is stored by Sterun.
           </p>
