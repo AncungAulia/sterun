@@ -2861,3 +2861,28 @@ with `@sterunxyz/sdk`'s `verifyAnnouncement` plus the organiser read from chain:
 The refused announcements were not stored (the script asserts the count stays 1).
 `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-16T10:35:24Z.
 
+---
+
+## STE-61 — a same-ledger claim race, reproduced on live testnet (2026-09-17)
+
+The SDK fix for a write that simulates cleanly and then fails on the ledger, proven against the real
+network rather than only the fixture. `pnpm --filter be e2e:claim-race`: a throwaway organiser and a
+free race, two allowlisted scanner desks, and one runner claimed by **both desks at the same moment**,
+repeated until the two claims land in the same ledger (it happened on the first runner):
+
+```
+▸ A throwaway organiser, a free race, and two scanner desks
+  event 29, category 0, desks GBVSPN… and GCE3PE…
+▸ Runner 1: enters, then both desks claim the pack at the same moment
+  token 58: one claim won; the other FAILED ON THE LEDGER with AlreadyClaimed (#102)
+  failed tx 713f63a2cd3608f101c22e98953d8a54a7b4a4b5900752b740381eba901d1041, ledger 4711038
+▸ RPC confirms the losing transaction failed on the ledger
+  getTransaction 713f63a2cd36…: FAILED in ledger 4711038
+✓ a desk that loses a same-ledger claim race gets AlreadyClaimed with the failed transaction, not a crash
+```
+
+Failed transaction: [`713f63a2…`](https://stellar.expert/explorer/testnet/tx/713f63a2cd3608f101c22e98953d8a54a7b4a4b5900752b740381eba901d1041).
+The script also asserts exactly one claim won and the record ended `RacepackClaimed`. Before the fix,
+the same losing call threw `SterunNetworkError: claimRacepack could not be simulated: Cannot read
+properties of undefined (reading 'type')` (STE-25 run 2, step 4.3).
+
