@@ -106,9 +106,10 @@ describe("the pass", () => {
       renderPass();
 
       expect(await screen.findByText("Sasando Run 2026")).toBeInTheDocument();
-      expect(screen.getByText("128")).toBeInTheDocument();
-      // The name under the number: what tells a volunteer they have the right
-      // runner, where the number is what they read first.
+      expect(screen.getByText("Bib 128")).toBeInTheDocument();
+      // The name leads, because it is what a volunteer matches to the person in
+      // front of them. The number stays under it: the manual fallback at the
+      // desk asks for the code and the bib number.
       expect(screen.getByText("SARI")).toBeInTheDocument();
       expect(screen.getByText("10K")).toBeInTheDocument();
       expect(screen.getByText("Kupang")).toBeInTheDocument();
@@ -174,7 +175,7 @@ describe("the pass", () => {
       renderPass();
 
       expect(await screen.findByText("Sasando Run 2026")).toBeInTheDocument();
-      expect(screen.getByText("128")).toBeInTheDocument();
+      expect(screen.getByText("Bib 128")).toBeInTheDocument();
       await waitFor(() => expect(screen.getByLabelText("Check-in code 079663")).toBeInTheDocument());
     });
   });
