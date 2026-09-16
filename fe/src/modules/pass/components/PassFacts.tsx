@@ -45,7 +45,14 @@ export function PassFacts({
     <div className="flex flex-col items-center gap-5 text-center">
       <h1 className="heading-strong text-2xl text-ink">{raceName}</h1>
 
-      <dl className="flex flex-wrap items-start justify-center gap-x-8 gap-y-3">
+      {/*
+        Equal columns across the whole width, rather than each one only as wide
+        as its own text (Ancung, 2026-09-16): sized to their contents they sat
+        almost touching in the middle of the card. `auto-cols-fr` with a column
+        flow means this holds whether there are two facts or three, since the
+        city is only there once this device has been online.
+      */}
+      <dl className="grid w-full auto-cols-fr grid-flow-col gap-4">
         {facts.map(([label, value]) => (
           <div key={label}>
             <dt className="text-xs tracking-[0.1em] text-n-600">{label}</dt>
