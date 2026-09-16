@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The receipt as a PDF page, drawn in the browser (STE-21, mockup block 6).
  *
  * What it says comes from `receipt.ts`, which is tested; this file only lays it
@@ -12,7 +12,7 @@
  * Browser only: it needs `document`, a canvas for the logo, and a download.
  */
 import { EXPLORER_BASE } from "@/lib/chain/env";
-import type { StoredEntry } from "@/modules/entry/lib/entry-store";
+import type { StoredEntry } from "@/lib/entry-store";
 
 import { buildReceipt } from "./receipt";
 
@@ -89,7 +89,7 @@ export async function downloadReceipt(entry: StoredEntry): Promise<void> {
   doc.setFillColor(...tealSurface).setDrawColor(...tealBorder).setLineWidth(0.75);
   doc.rect(MARGIN, y, CONTENT, codeHeight, "FD");
   doc.setFont("helvetica", "bold").setFontSize(7.5).setTextColor(...teal);
-  doc.text("RECEIPT CODE · KEEP PRIVATE", MARGIN + 12, y + 15);
+  doc.text("RECEIPT CODE Â· KEEP PRIVATE", MARGIN + 12, y + 15);
   doc.setFont("courier", "normal").setFontSize(9).setTextColor(...ink);
   doc.text(code, MARGIN + 12, y + 29);
   y += codeHeight + 16;
@@ -110,8 +110,8 @@ function fileName(entry: StoredEntry): string {
 function fit(doc: { getTextWidth(text: string): number }, text: string, width: number): string {
   if (doc.getTextWidth(text) <= width) return text;
   let cut = text;
-  while (cut.length > 1 && doc.getTextWidth(`${cut}…`) > width) cut = cut.slice(0, -1);
-  return `${cut}…`;
+  while (cut.length > 1 && doc.getTextWidth(`${cut}â€¦`) > width) cut = cut.slice(0, -1);
+  return `${cut}â€¦`;
 }
 
 /** A token's colour as RGB, or the fallback when it does not resolve to a six-digit hex. */

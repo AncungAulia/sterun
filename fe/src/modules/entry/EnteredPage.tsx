@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * `/events/[id]/entered/[tokenId]`: the entry went through (STE-21, mockup block 5).
@@ -8,7 +8,7 @@
  * The race, its date, the distance and the bib number are read from chain, so a
  * refresh, or this link opened anywhere, still shows them. The name on the bib
  * and the receipt code are on no chain and returned by no route, so they come
- * from this device (`modules/entry/lib/entry-store.ts`) and only appear in the browser that
+ * from this device (`lib/entry-store.ts`) and only appear in the browser that
  * entered. Elsewhere the page says where the receipt is.
  *
  * ## The way on waits for the receipt
@@ -47,7 +47,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
 import { fireConfetti } from "@/lib/confetti";
-import { markReceiptSaved, readEntry, type StoredEntry } from "@/modules/entry/lib/entry-store";
+import { markReceiptSaved, readEntry, type StoredEntry } from "@/lib/entry-store";
 import { readClient } from "@/lib/chain/sterun";
 import { formatEventDate } from "@/utils/format";
 
@@ -141,7 +141,7 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
         </span>
         <h1 className="heading-strong text-3xl text-ink">You&apos;re in!</h1>
         <p className="text-base text-n-500">
-          {summary.event.name} · {formatEventDate(summary.event.startsAt)}
+          {summary.event.name} Â· {formatEventDate(summary.event.startsAt)}
         </p>
       </div>
 

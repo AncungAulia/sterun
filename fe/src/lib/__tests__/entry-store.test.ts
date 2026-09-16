@@ -1,10 +1,16 @@
-/**
+﻿/**
  * What this browser keeps about an entry it made. Backed by fake-indexeddb
  * (test/setup.ts), so the real idb-keyval code runs.
  */
 import { describe, expect, it } from "vitest";
 
-import { markReceiptSaved, readEntry, saveEntry, type StoredEntry } from "@/modules/entry/lib/entry-store";
+import {
+  markReceiptSaved,
+  readEntry,
+  rememberPassFacts,
+  saveEntry,
+  type StoredEntry,
+} from "@/lib/entry-store";
 
 const entry: StoredEntry = {
   eventId: 1,
@@ -60,5 +66,48 @@ describe("entry store", () => {
     for (const forbidden of ["name", "idNumber", "nationalId", "email", "phone", "dateOfBirth"]) {
       expect(keys).not.toContain(forbidden);
     }
+  });
+});
+
+/**
+ * The pass reads this store at a venue with no signal, so what the chain said
+ * the last time there was signal has to survive here (STE-21 round 2).
+ */
+describe("what the pass remembers", () => {
+  it("remembers what the pass needs to draw itself offline", async () => {
+    await saveEntry({ ...entry, tokenId: 51 });
+
+    await rememberPassFacts(51, { state: "RacepackClaimed", claimedAt: "1790548200", city: "Kupang" });
+
+    const saved = await readEntry(51);
+    expect(saved?.state).toBe("RacepackClaimed");
+    expect(saved?.claimedAt).toBe("1790548200");
+    expect(saved?.city).toBe("Kupang");
+    // The entry itself is untouched: the pass only ever adds to it.
+    expect(saved?.totpSecret).toBe(entry.totpSecret);
+  });
+
+  it("leaves out what it was not told, so one online visit cannot erase another's", async () => {
+    await saveEntry({ ...entry, tokenId: 52 });
+
+    await rememberPassFacts(52, { city: "Kupang" });
+    await rememberPassFacts(52, { state: "Entered" });
+
+    const saved = await readEntry(52);
+    expect(saved?.city).toBe("Kupang");
+    expect(saved?.state).toBe("Entered");
+  });
+
+  it("corrects the bib, which the chain owns and this device only copied", async () => {
+    await saveEntry({ ...entry, tokenId: 53, bibNo: -1 });
+
+    await rememberPassFacts(53, { bibNo: 128 });
+
+    expect((await readEntry(53))?.bibNo).toBe(128);
+  });
+
+  it("does nothing for a token this device never entered", async () => {
+    await expect(rememberPassFacts(9999, { state: "Entered" })).resolves.toBeUndefined();
+    expect(await readEntry(9999)).toBeUndefined();
   });
 });

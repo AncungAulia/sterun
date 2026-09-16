@@ -56,6 +56,16 @@ export interface StoredEntry {
    * View my entry does not ask again or celebrate again (Ancung, 2026-09-15).
    */
   receiptSaved?: boolean;
+  /**
+   * What the pass learned from the chain the last time this device had signal
+   * (STE-21 round 2). A venue has none, so the pass draws its state from here
+   * and corrects it whenever a read succeeds.
+   */
+  state?: string;
+  /** Unix seconds, as a decimal string, when the race pack was collected. */
+  claimedAt?: string;
+  /** From the race's document, which round 1 never read. Absent until one online visit. */
+  city?: string;
 }
 
 let store: UseStore | null = null;
@@ -86,6 +96,26 @@ export async function markReceiptSaved(tokenId: number): Promise<void> {
   await update<StoredEntry | undefined>(
     tokenId,
     (entry) => (entry ? { ...entry, receiptSaved: true } : entry),
+    entries(),
+  );
+}
+
+/**
+ * Adds what the pass read from the chain or from the race's document.
+ *
+ * Only the fields it was given: one online visit reads the record and another
+ * reads the document, and neither may undo the other. Written in the same
+ * transaction as the read, like the receipt tick, and an entry this device does
+ * not hold is left absent rather than invented.
+ */
+export async function rememberPassFacts(
+  tokenId: number,
+  facts: { state?: string; claimedAt?: string; city?: string; bibNo?: number },
+): Promise<void> {
+  const given = Object.fromEntries(Object.entries(facts).filter(([, value]) => value !== undefined));
+  await update<StoredEntry | undefined>(
+    tokenId,
+    (entry) => (entry ? { ...entry, ...given } : entry),
     entries(),
   );
 }

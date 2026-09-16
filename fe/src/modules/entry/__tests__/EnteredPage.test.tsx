@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The success page (mockup block 5): the bib from chain, the receipt from this
  * device, and the way on held until the receipt is saved.
  */
@@ -29,7 +29,7 @@ vi.mock("@/lib/event/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/event/events")>()),
   getEventSummary,
 }));
-vi.mock("@/modules/entry/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
+vi.mock("@/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
 vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
@@ -44,7 +44,7 @@ vi.mock("@/modules/entry/lib/receipt-pdf", () => ({ downloadReceipt }));
 vi.mock("canvas-confetti", () => ({ default: confetti }));
 
 import { useWallet } from "@/hooks/useWallet";
-import type { StoredEntry } from "@/modules/entry/lib/entry-store";
+import type { StoredEntry } from "@/lib/entry-store";
 import { EnteredPage } from "@/modules/entry/EnteredPage";
 import type { SterunRecord } from "@sterunxyz/sdk";
 
@@ -127,7 +127,7 @@ describe("EnteredPage", () => {
   it("celebrates with the race and its date", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "You're in!" })).toBeInTheDocument();
-    expect(screen.getByText("Elektro Dash · Nov 5, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Elektro Dash Â· Nov 5, 2026")).toBeInTheDocument();
   });
 
   it("fires the wizard's confetti once", async () => {
@@ -159,7 +159,7 @@ describe("EnteredPage", () => {
   it("hides most of the receipt code until asked", async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByText("a3f1c0d5 •••• •••• b2f3d40e")).toBeInTheDocument();
+    expect(await screen.findByText("a3f1c0d5 â€¢â€¢â€¢â€¢ â€¢â€¢â€¢â€¢ b2f3d40e")).toBeInTheDocument();
     expect(screen.queryByText(SALT)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Show" }));

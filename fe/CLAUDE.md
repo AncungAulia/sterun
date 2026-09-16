@@ -593,7 +593,9 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
   and the button says test sUSD is not available yet, until a faucet key is set on the server. It imports
   `lib/wallet` on press: statically it put Stellar Wallets Kit in every page's header graph.
 - **The success page reads the bib, race and distance from chain; the bib name and receipt code from
-  this device** (`modules/entry/lib/entry-store.ts`, IndexedDB), which is also what round 2's pass reads offline.
+  this device** (`lib/entry-store.ts`, IndexedDB), which is also what round 2's pass reads offline.
+  It sits in the shared `lib/` rather than in the entry module because the pass became its second
+  reader (`guides/ARCHITECTURE.md` §4.2).
   Another device gets the bib and a sentence saying where the receipt is. "Back to the race" waits
   for "I've saved my receipt", once: the tick is remembered on the device (`receiptSaved`), so a
   return visit through View my entry shows no box and no confetti, and confetti never fires on a

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * What the entry receipt says (STE-21, mockup block 6). Pure, so a test can
  * prove what it leaves out.
  *
@@ -15,7 +15,7 @@
  * personal. And never the check-in secret, which would let anyone who holds
  * the file show this runner's pass.
  */
-import type { StoredEntry } from "@/modules/entry/lib/entry-store";
+import type { StoredEntry } from "@/lib/entry-store";
 import { formatEventDate, formatPrice } from "@/utils/format";
 
 export interface ReceiptLine {
@@ -61,13 +61,13 @@ export function buildReceipt(entry: StoredEntry, explorerBase: string): Receipt 
   return {
     issuedOn: `Issued ${formatDay(entry.enteredAt)}`,
     bibNo: entry.bibNo >= 0 ? String(entry.bibNo) : "",
-    headline: [entry.raceName, entry.distanceCode].filter(Boolean).join(" · "),
+    headline: [entry.raceName, entry.distanceCode].filter(Boolean).join(" Â· "),
     subline: [
       /^\d+$/.test(entry.startsAt) ? formatEventDate(BigInt(entry.startsAt)) : "",
       entry.bibName ? `Bib name ${entry.bibName}` : "",
     ]
       .filter(Boolean)
-      .join(" · "),
+      .join(" Â· "),
     lines,
     code: entry.salt,
     fine:
@@ -79,7 +79,7 @@ export function buildReceipt(entry: StoredEntry, explorerBase: string): Receipt 
 
 /** The receipt code as the page shows it before Show is pressed. */
 export function maskCode(salt: string): string {
-  return `${salt.slice(0, 8)} •••• •••• ${salt.slice(-8)}`;
+  return `${salt.slice(0, 8)} â€¢â€¢â€¢â€¢ â€¢â€¢â€¢â€¢ ${salt.slice(-8)}`;
 }
 
 function formatDay(iso: string): string {
