@@ -32,7 +32,7 @@ already in other people's hands.
 
 ---
 
-## [Unreleased]
+## [0.3.1] — 2026-09-17
 
 ### Fixed
 
