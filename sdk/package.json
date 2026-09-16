@@ -1,6 +1,6 @@
 {
   "name": "@sterunxyz/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Sterun SDK — call the Stellar race-record contracts from TypeScript, no Rust required (component C5)",
   "license": "MIT",
