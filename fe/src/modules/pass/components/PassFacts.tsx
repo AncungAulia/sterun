@@ -67,7 +67,7 @@ export function PassFacts({
       <dl className={cn("grid w-full gap-4", columns === 3 ? "grid-cols-3" : "grid-cols-2")}>
         {facts.map(([label, value]) => (
           <div key={label}>
-            <dt className="text-xs tracking-[0.1em] text-n-600">{label}</dt>
+            <dt className="text-xs text-n-600">{label}</dt>
             <dd className="mt-0.5 text-base text-ink tabular-nums">{value}</dd>
           </div>
         ))}
@@ -80,7 +80,7 @@ export function PassFacts({
             Not collected wears the outline chip Draft wears: both mean "not
             yet", nothing is wrong, and there is nothing to act on.
           */}
-          <dt className="text-xs tracking-[0.1em] text-n-600">Race pack</dt>
+          <dt className="text-xs text-n-600">Race pack</dt>
           <dd className="mt-0.5">
             <Badge variant={claimed ? "success" : "outline"}>{claimed ? "Collected" : "Not collected"}</Badge>
           </dd>
@@ -91,7 +91,7 @@ export function PassFacts({
         <p className="heading-hero text-4xl text-ink">{bibName}</p>
       ) : (
         <div>
-          <p className="text-xs tracking-[0.1em] text-n-600">Bib</p>
+          <p className="text-xs text-n-600">Bib</p>
           <p className="heading-hero numeric text-bib text-ink">{bibNo}</p>
         </div>
       )}
