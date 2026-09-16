@@ -190,7 +190,7 @@ describe("the pass", () => {
       expect(await screen.findByText("Race pack collected")).toBeInTheDocument();
       expect(screen.getByText("Race pack claimed")).toBeInTheDocument();
       expect(screen.queryByTestId("qr")).not.toBeInTheDocument();
-      expect(screen.queryByText("Camera not working? Read these out")).not.toBeInTheDocument();
+      expect(screen.queryByText("Or use the code")).not.toBeInTheDocument();
       expect(screen.getByRole("link", { name: "View race record" })).toHaveAttribute(
         "href",
         "/events/13/entered/7",

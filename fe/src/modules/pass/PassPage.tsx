@@ -118,13 +118,13 @@ export function PassPage({ tokenId }: { tokenId: number }) {
             <Countdown secondsLeft={secondsLeft} step={step} />
           </div>
           <CodeRow code={code} />
-          {secondsLeft <= ROLLOVER_SECONDS ? (
-            <RolloverNotice />
-          ) : (
-            <p className="text-center text-sm text-n-600">
-              Works without signal. Keep the screen bright.
-            </p>
-          )}
+          {/*
+            Nothing stands under the code the rest of the time (Ancung,
+            2026-09-16). The mockup reassures that the pass works without
+            signal, which is worth saying when the signal actually goes, and
+            the offline banner says it then.
+          */}
+          {secondsLeft <= ROLLOVER_SECONDS ? <RolloverNotice /> : null}
         </>
       ) : (
         <ErrorNotice

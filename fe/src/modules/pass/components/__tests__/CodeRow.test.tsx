@@ -11,7 +11,7 @@ describe("CodeRow", () => {
   it("shows all six characters, leading zero included", () => {
     render(<CodeRow code="079663" />);
 
-    expect(screen.getByText("Camera not working? Read these out")).toBeInTheDocument();
+    expect(screen.getByText("Or use the code")).toBeInTheDocument();
     expect(screen.getByLabelText("Check-in code 079663")).toHaveTextContent("079663");
   });
 
