@@ -157,3 +157,46 @@ button:not(:disabled),
   --sidebar-border: var(--color-n-800);
   --sidebar-ring: var(--color-teal-400);
 }
+
+/* The pass has exactly two movements (docs/design/race-day/README.md 6.2).
+   Nothing else on that screen moves, and the QR never does: a camera can read
+   a half-drawn code, and reading it wrong is worse than reading nothing. */
+@keyframes pass-roll {
+  from {
+    transform: translateY(-0.45em);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pass-character {
+  display: inline-block;
+  animation: pass-roll var(--motion-base) var(--ease-inout) both;
+}
+
+@keyframes pass-check {
+  from {
+    stroke-dashoffset: 32;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.pass-check path {
+  stroke-dasharray: 32;
+  animation: pass-check var(--motion-slow) var(--ease-out) both;
+}
+
+/* Reduced motion cuts to the state the animation would have ended on. The
+   countdown on the same screen is untouched by this: it is a value read off
+   the clock, and turning motion down must not turn information off (6.4). */
+@media (prefers-reduced-motion: reduce) {
+  .pass-character,
+  .pass-check path {
+    animation-duration: 0s;
+  }
+}

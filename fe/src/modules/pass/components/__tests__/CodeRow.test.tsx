@@ -20,3 +20,31 @@ describe("CodeRow", () => {
     expect(screen.getAllByLabelText(/^Check-in code/)).toHaveLength(1);
   });
 });
+
+/**
+ * The one movement this row is allowed (the design, section 6.2, M3): the six
+ * characters roll in turn when the code changes. It may never delay a reading,
+ * so every character is on screen and correct from the first frame.
+ */
+describe("the roll", () => {
+  it("rolls each character in turn when the code changes", () => {
+    const { rerender } = render(<CodeRow code="079663" />);
+    rerender(<CodeRow code="844761" />);
+
+    const characters = screen.getAllByTestId("code-character");
+    expect(characters).toHaveLength(6);
+    expect(characters.map((c) => c.textContent).join("")).toBe("844761");
+    expect(characters[2]).toHaveStyle({ animationDelay: "50ms" });
+  });
+
+  it("gives each character a key that changes with the code, so the roll runs again", () => {
+    const { rerender } = render(<CodeRow code="079663" />);
+    const before = screen.getAllByTestId("code-character")[0];
+
+    rerender(<CodeRow code="844761" />);
+
+    // A key tied to the position alone updates the text in place and the
+    // animation never restarts, which is a roll nobody ever sees.
+    expect(screen.getAllByTestId("code-character")[0]).not.toBe(before);
+  });
+});
