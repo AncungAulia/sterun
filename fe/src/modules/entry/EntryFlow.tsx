@@ -52,20 +52,20 @@ import { ChevronLeftIcon } from "lucide-react";
 import { useState } from "react";
 import { isSupportedCountry } from "react-phone-number-input";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
-import { Stepper } from "@/components/elements/Stepper";
-import { WalletGate } from "@/components/layouts/WalletGate";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
+import { Stepper } from "@/components/form/Stepper";
+import { WalletGate } from "@/components/wallet/WalletGate";
 import { Button } from "@/components/ui/button";
 import { useArea } from "@/hooks/useArea";
-import { useEntryAttempt, type EntryPlan } from "@/hooks/useEntryAttempt";
+import { useEntryAttempt, type EntryPlan } from "@/modules/entry/hooks/useEntryAttempt";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useRunnerRecords } from "@/hooks/useRunnerRecords";
 import { useWallet } from "@/hooks/useWallet";
-import type { EventSummary } from "@/lib/events";
-import type { EventMetadata } from "@/lib/metadata";
-import { joinAddOns } from "@/modules/event-detail/component/TabAddOns";
-import { focusField } from "@/modules/organiser/missing";
+import type { EventSummary } from "@/lib/event/events";
+import type { EventMetadata } from "@/lib/event/metadata";
+import { joinAddOns } from "@/lib/event/add-ons";
+import { focusField } from "@/utils/missing-field";
 import { formatEventDate } from "@/utils/format";
 import type { SterunAddOn } from "@sterunxyz/sdk";
 
@@ -77,20 +77,20 @@ import {
   sanitizeSelection,
   totalStroops,
   type Selection,
-} from "./basket";
-import { EntrySummary } from "./component/EntrySummary";
-import { GateNotice } from "./component/GateNotice";
-import { PayDialog } from "./component/PayDialog";
-import type { Country } from "./component/PhoneField";
-import { StepDistance } from "./component/StepDistance";
-import { PayPanel, StepPay } from "./component/StepPay";
-import { StepRunner } from "./component/StepRunner";
-import { EMPTY_DETAILS, missingRunnerDetails, participantBody, type RunnerDetails } from "./details";
-import { entryGate } from "./gate";
+} from "./lib/basket";
+import { EntrySummary } from "./components/EntrySummary";
+import { GateNotice } from "./components/GateNotice";
+import { PayDialog } from "./components/PayDialog";
+import type { Country } from "./components/PhoneField";
+import { StepDistance } from "./components/StepDistance";
+import { PayPanel, StepPay } from "./components/StepPay";
+import { StepRunner } from "./components/StepRunner";
+import { EMPTY_DETAILS, missingRunnerDetails, participantBody, type RunnerDetails } from "./lib/details";
+import { entryGate } from "./lib/gate";
 
-export type EntryStep = "distance" | "details" | "pay";
+type EntryStep = "distance" | "details" | "pay";
 
-export const ENTRY_STEPS = [
+const ENTRY_STEPS = [
   { id: "distance", label: "Distance & race pack" },
   { id: "details", label: "Your details" },
   { id: "pay", label: "Review & pay" },

@@ -8,7 +8,7 @@
  * The race, its date, the distance and the bib number are read from chain, so a
  * refresh, or this link opened anywhere, still shows them. The name on the bib
  * and the receipt code are on no chain and returned by no route, so they come
- * from this device (`lib/entry-store.ts`) and only appear in the browser that
+ * from this device (`modules/entry/lib/entry-store.ts`) and only appear in the browser that
  * entered. Elsewhere the page says where the receipt is.
  *
  * ## The way on waits for the receipt
@@ -41,19 +41,19 @@ import Link from "next/link";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
 import { fireConfetti } from "@/lib/confetti";
-import { markReceiptSaved, readEntry, type StoredEntry } from "@/lib/entry-store";
-import { readClient } from "@/lib/sterun";
+import { markReceiptSaved, readEntry, type StoredEntry } from "@/modules/entry/lib/entry-store";
+import { readClient } from "@/lib/chain/sterun";
 import { formatEventDate } from "@/utils/format";
 
-import { Bib } from "./component/Bib";
-import { ReceiptBox } from "./component/ReceiptBox";
-import { downloadReceipt } from "./receipt-pdf";
+import { Bib } from "./components/Bib";
+import { ReceiptBox } from "./components/ReceiptBox";
+import { downloadReceipt } from "./lib/receipt-pdf";
 
 export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: number }) {
   const record = useQuery({

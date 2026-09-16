@@ -20,7 +20,7 @@ import {
   onWalletStateChange,
   restoreAddress,
   walletErrorMessage,
-} from "@/lib/wallet";
+} from "@/lib/wallet/kit";
 
 interface WalletState {
   address: string | null;

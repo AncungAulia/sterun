@@ -21,12 +21,15 @@ How responsibility is split:
 
 | Layer | Contents |
 | --- | --- |
-| `app/` | routing only — no logic, no UI |
-| `src/modules/` | one folder per page: logic + UI |
-| `src/components/` | primitives and layouts used across modules |
-| `src/hooks/` | every hook: reading the chain, writing to it, state |
-| `src/lib/` | chain and backend concerns: clients, TOTP, hashing, storage |
+| `app/` | routing only: no logic, no UI |
+| `src/modules/` | one folder per feature: its pages, components, hooks, logic and tests |
+| `src/components/` | components two or more features use, by purpose: `ui` (shadcn), `form`, `feedback`, `layout`, `wallet` |
+| `src/hooks/` | hooks two or more features use |
+| `src/lib/` | shared chain, wallet, backend and place code, by purpose |
 | `src/utils/` | pure helpers with no side effects |
+
+The rule that decides where a file goes, and why, is in §4. The reasoning for grouping by feature
+is in `docs/superpowers/specs/2026-09-15-fe-folder-structure-design.md`.
 
 ---
 
@@ -66,154 +69,75 @@ What is **not** used, and why:
 
 ## 3. Folder structure
 
+What exists today. Routes and modules marked *(planned)* are the ones STE-21 round 2, STE-22 and
+STE-24 still build; they follow the same shape.
+
 ```
 fe/
-├── app/                              ← ROUTING ONLY. No logic, no UI.
-│   │
-│   ├── (browse)/                     ← network-only; the service worker does not touch this
-│   │   ├── page.tsx                  /              → <Directory />
-│   │   ├── events/[eventId]/
-│   │   │   ├── page.tsx              /events/:id    → <EventDetail />
-│   │   │   └── enter/page.tsx        /events/:id/enter → <Entry />
-│   │   ├── runner/[address]/page.tsx /runner/G…     → <Profile />
-│   │   └── profile/page.tsx          /profile       → <Profile /> (address from the wallet)
-│   │
-│   ├── (organiser)/                  ← wallet-gated, always online
-│   │   └── org/
-│   │       ├── page.tsx              /org
-│   │       ├── new/page.tsx          /org/new
-│   │       └── events/[eventId]/
-│   │           ├── page.tsx          /org/events/:id
-│   │           ├── scanners/page.tsx /org/events/:id/scanners
-│   │           └── results/page.tsx  /org/events/:id/results
-│   │
-│   ├── (offline)/                    ← the PWA. The service worker is scoped ONLY to this.
-│   │   ├── pass/[tokenId]/page.tsx   /pass/:token
-│   │   └── scan/
-│   │       ├── page.tsx              /scan
-│   │       └── [eventId]/
-│   │           ├── page.tsx          /scan/:id
-│   │           └── flagged/page.tsx  /scan/:id/flagged
-│   │
-│   ├── layout.tsx                    ← the root shell: next/font, <Providers>, the header
-│   ├── providers.tsx                 ← Wallets Kit + TanStack Query
-│   ├── globals.css                   ← imports tailwind + the tokens
-│   ├── tokens.css                    ← NABIL'S. Do not edit without talking to him.
-│   ├── manifest.ts                   ← the PWA manifest
-│   └── icon.png / apple-icon.png / favicon.ico
+├── app/                                  ← ROUTING ONLY. No logic, no UI.
+│   ├── (browse)/
+│   │   ├── page.tsx                      /                       → modules/directory
+│   │   ├── events/[eventId]/page.tsx     /events/:id             → modules/event-detail
+│   │   ├── events/[eventId]/enter/       /events/:id/enter       → modules/entry
+│   │   ├── events/[eventId]/entered/[tokenId]/                   → modules/entry
+│   │   ├── preview/done/page.tsx         a preview of the wizard's last step
+│   │   └── runner/[address]/, profile/   (planned, STE-24)
+│   ├── (organiser)/org/
+│   │   ├── (console)/page.tsx            /org                    → modules/organiser/home
+│   │   ├── (console)/events/[eventId]/   /org/events/:id         → modules/organiser/race
+│   │   └── new/page.tsx                  /org/new                → modules/organiser/create
+│   ├── (offline)/pass/, scan/            (planned, STE-21 round 2 and STE-22)
+│   ├── layout.tsx, providers.tsx, not-found.tsx
+│   ├── globals.css
+│   └── tokens.css                        ← NABIL'S. Do not edit without talking to him.
 │
-├── public/
-│   └── brand/logo/                   ← the SVGs from STE-7
-│
-├── guides/
-│   └── ARCHITECTURE.md               ← this file
+├── public/                               brand logos, places/<ISO2>.json
+├── guides/ARCHITECTURE.md                ← this file
+├── test/                                 setup.ts, e2e/, and the checks no one feature owns
 │
 └── src/
     ├── components/
-    │   ├── ui/                       ← shadcn. Generated, but ours: editing is allowed.
-    │   ├── elements/                 ← small primitives, usable anywhere
-    │   │   ├── EventStatusBadge.tsx  ← Draft | Open | Closed | Completed | Cancelled
-    │   │   ├── RecordStateBadge.tsx  ← Entered | RacepackClaimed | Finished | DNF
-    │   │   ├── AddressLink.tsx       ← a truncated address + a stellar.expert link
-    │   │   ├── TxLink.tsx            ← a transaction link
-    │   │   ├── Identicon.tsx         ← a deterministic avatar from an address
-    │   │   ├── EmptyState.tsx
-    │   │   └── ErrorNotice.tsx       ← takes a SterunContractError, not a raw string
-    │   │
-    │   └── layouts/
-    │       ├── PageShell.tsx
-    │       ├── Header.tsx
-    │       ├── WalletButton.tsx      ← connect / disconnect / the active address
-    │       └── OfflineBanner.tsx
-    │
-    ├── modules/                      ← one folder per page
-    │   ├── directory/
-    │   │   ├── Directory.tsx         ← the entry point, rendered by app/(browse)/page.tsx
-    │   │   └── component/
-    │   │       ├── EventCard.tsx
-    │   │       └── DirectorySkeleton.tsx
-    │   ├── event-detail/
-    │   │   ├── EventDetail.tsx
-    │   │   ├── EventView.tsx         ← the page body; the organiser preview reuses it
-    │   │   └── component/
-    │   │       ├── TabCategories.tsx ← price + remaining quota + CTA per category
-    │   │       ├── TabDetails.tsx
-    │   │       ├── TabTimeline.tsx
-    │   │       └── TabProofs.tsx
-    │   ├── entry/
-    │   │   ├── Entry.tsx             ← the stepper: category → PII → review → sign
-    │   │   └── component/
-    │   │       ├── StepCategory.tsx
-    │   │       ├── StepParticipant.tsx
-    │   │       ├── StepReview.tsx
-    │   │       └── EntrySuccess.tsx  ← bib, tx link, salt receipt, recovery code
-    │   ├── pass/
-    │   │   ├── Pass.tsx
-    │   │   └── component/
-    │   │       ├── RotatingQr.tsx
-    │   │       └── RecoveryImport.tsx
-    │   ├── profile/
-    │   │   ├── Profile.tsx           ← used by /runner/[address] AND /profile
-    │   │   └── component/
-    │   │       ├── ProfileStats.tsx
-    │   │       ├── RecordRow.tsx
-    │   │       └── IdentityCheck.tsx ← the hash is computed in the browser, never sent to a server
-    │   ├── organiser/
-    │   │   ├── OrganiserHome.tsx
-    │   │   ├── CreateEvent.tsx
-    │   │   ├── EventDashboard.tsx
-    │   │   ├── Scanners.tsx
-    │   │   ├── Results.tsx
-    │   │   └── component/
-    │   └── scanner/
-    │       ├── ScannerHome.tsx       ← choose an event, download the roster
-    │       ├── Scanning.tsx          ← camera, GREEN/RED, manual entry
-    │       ├── Flagged.tsx
-    │       └── component/
-    │
-    ├── hooks/
-    │   │   ── Reading the chain (via a read-only SterunClient + React Query) ──
-    │   ├── useEvents.ts              ← the event list for the directory
-    │   ├── useEvent.ts               ← one event and its categories
-    │   ├── useEventMetadata.ts       ← download the uri and verify metadata_hash
-    │   ├── useRecordsOf.ts           ← one runner's history
-    │   ├── useEventRecords.ts        ← one event's records (the People tab, the organiser dashboard)
-    │   │
-    │   │   ── Writing to the chain (the wallet signs) ──
-    │   ├── useCreateEvent.ts
-    │   ├── useAddCategory.ts
-    │   ├── useSetEventStatus.ts
-    │   ├── useScannerAllowlist.ts    ← add / remove a scanner
-    │   ├── useEnter.ts               ← one atomic transaction
-    │   ├── useRecordFinish.ts        ← a batch from a CSV
-    │   ├── useClaimQueue.ts          ← the scanner's offline queue → the chain
-    │   │
-    │   │   ── The backend (be/) ──
-    │   ├── useSubmitParticipant.ts   ← POST /participants
-    │   ├── useRoster.ts              ← GET /events/:id/roster (the scanner)
-    │   ├── useResultsPreview.ts      ← POST /events/:id/results/preview
-    │   │
-    │   │   ── App ──
-    │   ├── useWallet.ts              ← Wallets Kit: connect, address, signTransaction
-    │   ├── useTotpCode.ts            ← the running code for the pass
-    │   ├── useOnlineStatus.ts
-    │   └── useClockSkew.ts           ← the banner for a drifted device clock
-    │
+    │   ├── ui/          shadcn. Generated, but ours: editing is allowed.
+    │   ├── form/        Field, Help, DateTimeField, SearchableSelect, Stepper
+    │   ├── feedback/    ErrorNotice, EmptyState, EventStatusBadge, NonRefundableNotice
+    │   ├── layout/      Header, SiteFrame, NotFoundMessage
+    │   └── wallet/      WalletButton, WalletGate, GetTestSusd
+    ├── hooks/           useWallet, useEvents, useEventMetadata, useRunnerRecords, useArea,
+    │                    useNowSeconds, useSusdBalance, useChainWrite, useMediaQuery
     ├── lib/
-    │   ├── sterun.ts                 ← the SterunClient factory (read-only + signing)
-    │   ├── events.ts                 ← the event list from event_count + get_event per id
-    │   ├── env.ts                    ← contract addresses from env, validated at boot
-    │   ├── wallet.ts                 ← the Wallets Kit setup
-    │   ├── api.ts                    ← fetching from the be/ backend
-    │   ├── totp.ts                   ← computing the code per docs/specs/HASH_AND_TOTP.md
-    │   ├── hash.ts                   ← participant_hash, computed in the browser
-    │   ├── identicon.ts              ← address → a deterministic SVG
-    │   ├── db.ts                     ← IndexedDB: pass secrets, rosters, the claim queue
-    │   └── metadata.ts               ← parse + verify the event metadata document
-    │
-    └── utils/
-        └── format.ts                 ← shortAddress, formatPrice, formatDuration, formatDistance
+    │   ├── chain/       sterun (the SterunClient), env
+    │   ├── event/       events, metadata, status-label, add-ons
+    │   ├── wallet/      kit (Stellar Wallets Kit), freighter-mobile, susd
+    │   ├── api/         client (the be/ backend), upload, errors, plain-error
+    │   ├── place/       places, area
+    │   └── confetti.ts
+    ├── data/            places.json (generated by scripts/build-places.mjs)
+    ├── utils/           cn, format, geo, missing-field
+    └── modules/
+        ├── directory/       Directory
+        │   ├── components/  EventCard, FeaturedEvents, FilterDrawer, AreaPicker, …
+        │   ├── hooks/       useEventDocuments, useNearbyPrompt
+        │   └── lib/         browse, filters
+        ├── event-detail/    EventDetail, EventView (the organiser's preview reuses it)
+        │   └── components/  TabDetails, TabTimeline, TabCategories, TabAddOns, …
+        ├── entry/           EntryFlow, EnteredPage
+        │   ├── components/  StepDistance, StepRunner, StepPay, PayDialog, Bib, …
+        │   ├── hooks/       useEntryAttempt
+        │   └── lib/         attempt, basket, details, gate, receipt, entry-store, participants, …
+        ├── organiser/
+        │   ├── shared/      the console frame, NeedsBell, StatCard, NotAllowed,
+        │   │                useOrganiser, useNeeds, useRaceRecords, chart, needs, records, scanners
+        │   ├── home/        OrganiserHome, RacesTable, EntriesComparison, TrendingEntries
+        │   ├── create/      CreateEvent, the Step* components and their fields, useEventRun,
+        │   │                event-document, run, preview, missing
+        │   └── race/        RaceConsole, the Overview / Entries / Scanners tabs, race, status-action
+        ├── pass/            (planned)
+        ├── profile/         (planned)
+        └── scanner/         (planned)
 ```
+
+Inside any folder the shape repeats: the page components at its root, then `components/`,
+`hooks/`, `lib/`, and `__tests__/` holding the tests of the files beside it.
 
 ---
 
@@ -238,36 +162,43 @@ the code belongs in `modules/`.
 Route groups (`(browse)`, `(organiser)`, `(offline)`) **do not change URLs**. They exist for two
 things: giving each surface a different layout, and marking the service worker's boundary.
 
-### 4.2 `src/components/elements/` — primitives
+### 4.2 Where a file goes
 
-Small components usable anywhere.
+**Used by one feature: it lives in that feature's folder.** Its component goes in the module's
+`components/`, its hook in `hooks/`, its logic in `lib/`. **Used by two or more: it moves up**
+to `src/components/`, `src/hooks/` or `src/lib/`, into the folder named for what it is for.
+When a second feature needs something, promote it in the same commit; do not import it from where
+it sits.
 
-The rules:
-- They have variants (`Button`: `primary | secondary | ghost | danger`)
-- **No business logic** — no chain-reading hooks, no SDK calls
-- Driven by props alone
-- Every visual value comes from a token (§6)
+Two deliberate exceptions: `hooks/useChainWrite.ts` is shared with one user today because the
+scanner writes to the chain through it next, and `components/ui/` is shadcn's and stays whole.
 
-### 4.3 `src/components/layouts/` — structure
-
-The header, the page shell, the wallet button. Used across pages, with no feature-specific logic.
-
-### 4.4 `src/modules/` — one folder per page
-
-The main file is the entry point `app/` renders. A component used only inside that module goes in
-its `component/`.
-
-**The promotion rule:** used in one module → it stays in `component/`. Used in two or more → it
-moves up to `components/elements/`. Never import from another module's `component/` — if you need to,
-promote it first.
+**A module never imports another module's `components/`, `hooks/` or `lib/`.** It may render
+another module's page component (the wizard's Review step renders `event-detail/EventView`,
+the public race page, as its preview). Shared code never imports from `modules/`.
 
 **One Sterun-specific rule:** a module in `(offline)` (`pass/`, `scanner/`) **must not import
 anything from a `(browse)` or `(organiser)` module**. Both have to live in a bundle the service
 worker precaches, without dragging in pages that must not be cached.
 
-### 4.5 `src/hooks/` — every hook
+### 4.3 `src/components/` — shared components
 
-The rules:
+- `ui/`: shadcn primitives. `form/`: fields and what builds a form. `feedback/`: notices,
+  badges, empty and error states. `layout/`: the site's chrome. `wallet/`: connecting, gating and
+  topping up a wallet.
+- **No business logic** in `ui/`, `form/` and `feedback/`: no chain-reading hooks, no SDK calls,
+  driven by props alone. `wallet/` is the exception by nature.
+- Every visual value comes from a token (§6).
+
+### 4.4 `src/modules/` — one folder per feature
+
+The page component at the module's root is what `app/` renders. The organiser module is large
+enough to be split once more, into `shared/`, `home/`, `create/` and `race/`, one per page plus
+what they share.
+
+### 4.5 Hooks
+
+The rules, wherever a hook lives:
 - One hook per file, named `use*.ts`
 - **Read hooks** use React Query on top of a read-only `SterunClient`. Do not `fetch` the RPC
   directly from a module.
@@ -275,26 +206,32 @@ The rules:
   wallet) and `isConfirming` (waiting for the chain). Those two states feel very different to a user:
   one is waiting for them, the other for the network.
 - Always guard with `enabled: !!address` before a wallet is connected
-- Zustand stores live here too, named `use*Store.ts`
+- Zustand stores are hooks too, named `use*Store.ts`
 
-### 4.6 `src/lib/` — chain and backend
+### 4.6 `src/lib/` — chain, wallet, backend
 
 Everything that knows about Stellar, the backend, or storage. A component must not know the details.
 
-| File | Contents |
+| Folder | Contents |
 | --- | --- |
-| `sterun.ts` | the `SterunClient` factory — read-only and signing |
-| `events.ts` | `listEvents` / `getEventSummary`, plus the directory's ordering |
-| `env.ts` | `EVENT_REGISTRY`, `RACE_RECORD`, `API_URL` from env, validated at boot |
-| `wallet.ts` | the Wallets Kit setup, the `signTransaction` adapter |
-| `api.ts` | `apiFetch()` to the `be/` backend |
-| `totp.ts` | computing the 6-digit code, **byte-exact** per the frozen spec |
-| `hash.ts` | `participant_hash` = sha256(name ‖ national_id ‖ emergency_contact ‖ salt) |
-| `identicon.ts` | address → SVG, deterministic, computed locally |
-| `db.ts` | IndexedDB: pass secrets, event rosters, the claim queue |
-| `metadata.ts` | download the `uri`, recompute its sha256, compare against `metadata_hash` |
+| `chain/` | `sterun.ts`: the read-only `SterunClient`; `env.ts`: contract addresses and API url from env, validated at boot |
+| `event/` | `events.ts`: the event list and one event's summary; `metadata.ts`: download a race document and check its hash; `status-label.ts`; `add-ons.ts`: joins a document's add-ons to their chain rows |
+| `wallet/` | `kit.ts`: the Wallets Kit setup and signing adapters; `freighter-mobile.ts`; `susd.ts`: balance, trustline, faucet |
+| `api/` | `client.ts`: `apiFetch()` to `be/`; `upload.ts`; `errors.ts`: every error to one sentence; `plain-error.ts` |
+| `place/` | `places.ts`: countries, provinces, cities; `area.ts`: the visitor's area |
 
-### 4.7 `src/utils/` — pure helpers
+A feature's own storage or backend calls live in its module (`entry/lib/entry-store.ts`,
+`entry/lib/participants.ts`, `organiser/shared/lib/records.ts`). TOTP and hashing for the pass and
+the scanner arrive with them.
+
+### 4.7 Tests
+
+A feature's tests sit in `__tests__/` in the folder of the file they test
+(`modules/entry/components/__tests__/PayDialog.test.tsx`). `test/` keeps `setup.ts`, the opt-in
+e2e runs, and the checks no one feature owns (UI rules, the committed `.env`, the route layouts,
+`app/providers.tsx`). `ui-rules.test.ts` does not sweep `__tests__/`: a test's strings are not UI.
+
+### 4.8 `src/utils/` — pure helpers
 
 Functions with no state and no coupling to the chain. `shortAddress()`, `formatPrice()` (7-decimal
 stroops → a human display), `formatDuration()` (seconds → `hh:mm:ss`), `formatDistance()`.
@@ -308,7 +245,7 @@ stroops → a human display), `formatDuration()` (seconds → `hh:mm:ss`), `form
 `EventRegistry` has only `event_count` + `get_event(id)`. A view returning an unbounded vector gets
 slower and more expensive exactly as the protocol succeeds, until one day it crosses a resource limit
 and the directory stops loading for everyone. So the list is assembled client-side
-(`lib/events.ts`): read `event_count`, then `get_event` for each id in parallel.
+(`lib/event/events.ts`): read `event_count`, then `get_event` for each id in parallel.
 
 Two failures there are **not the same**, and the difference is visible on screen:
 
@@ -339,7 +276,7 @@ disagree, the chain is right and the UI must not quietly show the wrong one.
 Public pages **need no wallet at all**:
 
 ```ts
-// src/lib/sterun.ts
+// src/lib/chain/sterun.ts
 import { SterunClient, TESTNET } from "@sterunxyz/sdk";
 import { CONTRACTS } from "./env";
 
@@ -379,7 +316,7 @@ package would quietly point at the old pair. That has already happened once — 
 the v1 pair on 2026-09-09.
 
 The source of truth for addresses: [`docs/deployments.md`](../../docs/deployments.md). In the app
-they arrive through env and are validated in `lib/env.ts` at boot — rather than being checked one by
+they arrive through env and are validated in `lib/chain/env.ts` at boot — rather than being checked one by
 one at each point of use.
 
 ```
@@ -519,7 +456,7 @@ Never use `../../` across folders. Within a single module, relative imports are 
 | Hook files | camelCase, `use` prefix | `useRecordsOf.ts` |
 | Utility / lib files | camelCase | `format.ts`, `totp.ts` |
 | Zustand stores | camelCase, `Store` suffix | `useWalletStore.ts` |
-| Local component folders | lowercase | `component/` |
+| Folders inside a module | lowercase, plural | `components/`, `hooks/`, `lib/`, `__tests__/` |
 | Module folders | kebab-case | `event-detail/` |
 | TypeScript types | PascalCase | `type ScanVerdict = …` |
 | Constants | SCREAMING_SNAKE_CASE | `CONTRACTS`, `TOTP_STEP_SECONDS` |
@@ -539,7 +476,7 @@ pnpm --filter fe lint
 ```
 
 The five setup items STE-8 was to do before the first module — `next/font`, the metadata, creating
-`src/` and repointing the path alias, `lib/env.ts` with boot-time validation, and pinning the Wallets
+`src/` and repointing the path alias, `lib/chain/env.ts` with boot-time validation, and pinning the Wallets
 Kit version — are **all done**. The Wallets Kit outcome is recorded in §2.
 
 ---
@@ -550,14 +487,15 @@ Kit version — are **all done**. The Wallets Kit outcome is recorded in §2.
 - [ ] Chain reads go through a hook in `hooks/`, not a `fetch` from the module
 - [ ] Write hooks expose `isPending` and `isConfirming`
 - [ ] `txHash` is shown and clickable after every successful action
-- [ ] Contract addresses come from `lib/env.ts`, with nothing hardcoded
+- [ ] Contract addresses come from `lib/chain/env.ts`, with nothing hardcoded
 - [ ] Contract errors go through `classifyContractError`, not a raw message
 - [ ] `QuotaFull`, `EventNotOpen`, `AlreadyClaimed`, `InvalidState` each have their own presentation
 - [ ] **No em dash in UI text**
 - [ ] **All UI text in English**
 - [ ] No hex, font names or raw px in a component
 - [ ] `.numeric` is applied to bibs, TOTP codes, times, amounts and addresses
-- [ ] Local components live in their module's `component/`
+- [ ] A file used by one feature lives in that feature; used by two, it moves up (§4.2)
+- [ ] Tests sit in `__tests__/` beside the file they test
 - [ ] Imports use `@/`, not `../../`
 - [ ] `(offline)` modules import nothing from `(browse)` or `(organiser)`
 - [ ] PII is never sent to the chain, and the identity-check hash is computed in the browser

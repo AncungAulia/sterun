@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { RaceConsole } from "@/modules/organiser/RaceConsole";
-import { parseRaceTab } from "@/modules/organiser/race-tab";
+import { RaceConsole } from "@/modules/organiser/race/RaceConsole";
+import { parseRaceTab } from "@/modules/organiser/race/lib/race-tab";
 
 /**
  * One race in the console. Event ids are sequential u32 from zero, so anything

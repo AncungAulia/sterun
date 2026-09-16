@@ -19,7 +19,10 @@ const ROOT = join(import.meta.dirname, "..");
 function walk(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, found);
+    // Tests are not UI: their strings include banned dashes and hex on purpose.
+    if (entry.isDirectory()) {
+      if (entry.name !== "__tests__") walk(full, found);
+    }
     else if (/\.tsx?$/.test(entry.name)) found.push(relative(ROOT, full));
   }
   return found;

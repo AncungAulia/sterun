@@ -7,7 +7,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { readClient } from "@/lib/sterun";
+import { readClient } from "@/lib/chain/sterun";
 import type { SterunRecord } from "@sterunxyz/sdk";
 
 export const runnerRecordsKey = (address: string | null) => ["runner-records", address] as const;

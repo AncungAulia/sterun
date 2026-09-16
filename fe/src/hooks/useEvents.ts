@@ -9,8 +9,8 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { getEventSummary, listEvents, type EventDirectory, type EventSummary } from "@/lib/events";
-import { readClient } from "@/lib/sterun";
+import { getEventSummary, listEvents, type EventDirectory, type EventSummary } from "@/lib/event/events";
+import { readClient } from "@/lib/chain/sterun";
 
 /**
  * How long a read stays fresh.

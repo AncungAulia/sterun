@@ -6,7 +6,7 @@ import {
   storePlace,
   subscribePlace,
   type StoredPlace,
-} from "@/lib/area";
+} from "@/lib/place/area";
 
 /**
  * The server has no localStorage, so its snapshot is the first-visit value and

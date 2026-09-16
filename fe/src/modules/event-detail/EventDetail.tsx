@@ -20,14 +20,14 @@
  */
 import Link from "next/link";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 import { useRunnerRecords } from "@/hooks/useRunnerRecords";
 import { useWallet } from "@/hooks/useWallet";
 
 import { EventView } from "./EventView";
-import { TabProofs } from "./component/TabProofs";
+import { TabProofs } from "./components/TabProofs";
 
 export function EventDetail({ eventId }: { eventId: number }) {
   const { data, isPending, isError, refetch } = useEvent(eventId);

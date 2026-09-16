@@ -14,7 +14,14 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./test/setup.ts"],
-    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
+    // A feature's tests sit in `__tests__/` beside its code; `test/` keeps the
+    // setup, the e2e runs and the checks that belong to no one feature.
+    include: [
+      "src/**/__tests__/**/*.test.ts",
+      "src/**/__tests__/**/*.test.tsx",
+      "test/**/*.test.ts",
+      "test/**/*.test.tsx",
+    ],
     restoreMocks: true,
     /**
      * lib/env.ts throws at import when configuration is missing, and almost

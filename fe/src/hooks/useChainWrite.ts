@@ -21,7 +21,7 @@
  *
  * ## The actor is per call, not per client
  *
- * `lib/sterun.ts` holds one read-only client and is guarded by a test that
+ * `lib/chain/sterun.ts` holds one read-only client and is guarded by a test that
  * fails if it ever learns about the wallet, because every public page reads
  * through it. Writing supplies `publicKey` and `signTransaction` per call
  * instead (ARCHITECTURE.md §5.2). `publicKey` is not decoration: it is the
@@ -33,8 +33,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useWallet } from "@/hooks/useWallet";
-import { PlainError } from "@/lib/plain-error";
-import { signTransaction } from "@/lib/wallet";
+import { PlainError } from "@/lib/api/plain-error";
+import { signTransaction } from "@/lib/wallet/kit";
 
 /** What a caller is waiting for right now. */
 export type WritePhase = "idle" | "signing" | "confirming";

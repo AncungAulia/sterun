@@ -33,15 +33,15 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventMetadata } from "@/lib/event/metadata";
 import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
-import { EntryCard } from "./component/EntryCard";
-import { TabAddOns } from "./component/TabAddOns";
-import { TabCategories } from "./component/TabCategories";
-import { TabDetails } from "./component/TabDetails";
-import { TabTerms } from "./component/TabTerms";
-import { TabTimeline } from "./component/TabTimeline";
+import { EntryCard } from "./components/EntryCard";
+import { TabAddOns } from "./components/TabAddOns";
+import { TabCategories } from "./components/TabCategories";
+import { TabDetails } from "./components/TabDetails";
+import { TabTerms } from "./components/TabTerms";
+import { TabTimeline } from "./components/TabTimeline";
 
 export interface EventViewProps {
   event: SterunEvent;
