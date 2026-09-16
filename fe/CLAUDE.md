@@ -718,7 +718,7 @@ What is settled:
   returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
 - **The runner reads the bib number for typing off their pass**, the first fact in its row.
 
-### `/runner/[address]` — a runner's public race record (STE-24, round 1)
+### `/runner/[address]` — a runner's public race record (STE-24)
 
 `modules/profile/`. Design: `docs/superpowers/specs/2026-09-16-runner-profile-design.md`; screens
 P1 to P12 from `docs/design/profile/`. What is settled:
@@ -744,7 +744,15 @@ P1 to P12 from `docs/design/profile/`. What is settled:
   (only where this device holds the entry, so the runner address is known), and `/runner` to paste
   any address.
 - **`formatLedger` lives in `utils/format.ts`**, moved up from the scanner on this second user.
-- **Not built yet (round 2):** proving a record is yours (P4 to P8).
+- **Proving a record is yours** (`components/ProveRecord.tsx`, round 2). Closed by default on each
+  card. `lib/participant-hash.ts` computes `participant_hash` on Web Crypto, tested against every hash
+  and refusal in `docs/specs/vectors/participant_hash.json` (removing NFC was tried and fails ph-03);
+  only the 32-byte result reaches `verify`. Copy is filtered for a runner, not taken from the
+  handoff as written: **fingerprint**, not hash; **receipt code**, not salt; **Check this record**, not
+  "Check against the contract"; no contract address; the 64-character fingerprint folded behind "See
+  what is checked". The fields live in component state only, clear after every answer (and on
+  Close), and stay put only when the check could not be asked. "Use the receipt code saved on this
+  device" appears when `lib/entry-store.ts` holds the entry, and fills on a press.
 
 ## Tests
 

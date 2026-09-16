@@ -26,6 +26,7 @@ import { useRecordTrail } from "../hooks/useRecordTrail";
 import { formatFactDay, formatRaceDay, lastChangedAt } from "../lib/profile-summary";
 import { recordDocument } from "../lib/record-document";
 import { finishSlot, meaningOf } from "../lib/record-meaning";
+import { ProveRecord } from "./ProveRecord";
 import { RecordChip } from "./RecordChip";
 
 export interface RecordCardProps {
@@ -111,8 +112,10 @@ export function RecordCard({ record, summary, city, owner }: RecordCardProps) {
         />
       </dl>
 
-      <footer className="flex items-center justify-between gap-4 border-t border-n-200 pt-4 text-sm text-n-600 tabular-nums">
-        <span>Last updated {formatFactDay(lastChangedAt(record))}</span>
+      <footer className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-t border-n-200 pt-4 text-sm text-n-600 tabular-nums">
+        <ProveRecord tokenId={record.tokenId} />
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+          <span>Last updated {formatFactDay(lastChangedAt(record))}</span>
         {txHash && EXPLORER_BASE ? (
           <a
             href={`${EXPLORER_BASE}/tx/${txHash}`}
@@ -132,6 +135,7 @@ export function RecordCard({ record, summary, city, owner }: RecordCardProps) {
             Check on Stellar Expert
           </a>
         ) : null}
+        </span>
       </footer>
     </article>
   );
