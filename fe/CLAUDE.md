@@ -632,6 +632,13 @@ secret in neither. A code is held with the step it belongs to and shown only whi
 match: plain state let a rollover pair this step's number with the previous step's digits, which a
 scanner refuses and a runner gets blamed for.
 
+**The pass shows the bib name, not the bib number** (Ancung, 2026-09-16), along with the distance,
+the city and the state. The number is drawn only on a phone that holds no name, where it is the one
+thing identifying the entry. That leaves the frozen manual fallback, which is the code **plus the
+bib number** (`docs/specs/HASH_AND_TOTP.md` §5), without its second field on the runner's side: at a
+pickup desk they do not have a printed bib yet. Settle where the volunteer gets that number when
+the scanner's manual entry is built (STE-22) rather than assuming the pass will show it.
+
 **The secret never leaves the device.** A phone that did not enter fetches it once with the wallet
 that owns the record (`GET /records/:tokenId/pass`, STE-52) and stores it; the desk then needs no
 network. The stored entry moved up to `lib/entry-store.ts` when the pass became its second reader,

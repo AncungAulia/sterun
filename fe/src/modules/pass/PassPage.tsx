@@ -96,7 +96,6 @@ export function PassPage({ tokenId }: { tokenId: number }) {
       <PassFacts
         raceName={entry.raceName}
         distanceCode={entry.distanceCode}
-        startsAt={BigInt(entry.startsAt)}
         city={entry.city}
         bibNo={bibNo}
         bibName={entry.bibName || undefined}

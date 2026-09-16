@@ -1,28 +1,28 @@
 /**
- * Everything above the QR: the race, three facts in a row, and the bib.
+ * Everything above the QR: the race, its facts in a row, and the bib name.
  *
  * Labelled columns rather than one line separated by dots (the design, section
  * 4): facts in fixed positions can be scanned for the one you need, where a
  * flat string has to be read through. Ancung put the state in that row and
- * centred the columns (2026-09-16), which gives the three things a volunteer
- * checks one shape and one place.
+ * centred the columns (2026-09-16).
  *
- * **The name leads and the number stays.** The name is what a volunteer matches
- * to the person in front of them, so it is the large one. The number is small
- * but present, because the manual fallback at the desk is the code plus the
- * bib number (docs/specs/HASH_AND_TOTP.md section 5), and a pass that never
- * shows it leaves a runner with a broken camera unable to check in at all.
+ * **The bib number is not shown** (Ancung, 2026-09-16). It was, small, under
+ * the name, because the manual fallback at a desk is the code plus the bib
+ * number (`docs/specs/HASH_AND_TOTP.md` §5) and a runner collecting a race pack
+ * does not have a printed bib yet. That path now depends on the volunteer
+ * having another way to the number, which is worth settling when the scanner's
+ * manual entry is built (STE-22). The number is still shown on a phone that
+ * holds no name, because then it is the only thing identifying the entry.
  *
- * The city is absent until this device has been online once, because round 1
- * never stored it. A missing fact drops its column rather than showing a dash.
+ * The date is gone for the same reason a runner does not need it here: they are
+ * standing at the race. The city stays when this device has it, because a
+ * series with two towns is the case where a runner checks.
  */
 import { Badge } from "@/components/ui/badge";
-import { formatEventDate } from "@/utils/format";
 
 export function PassFacts({
   raceName,
   distanceCode,
-  startsAt,
   city,
   bibNo,
   bibName,
@@ -30,7 +30,6 @@ export function PassFacts({
 }: {
   raceName: string;
   distanceCode: string;
-  startsAt: bigint;
   city?: string;
   bibNo: number;
   /** What the runner put on their bib. Absent on an entry made before the form asked. */
@@ -39,7 +38,6 @@ export function PassFacts({
 }) {
   const facts: [string, string][] = [
     ["Distance", distanceCode],
-    ["Date", formatEventDate(startsAt)],
     ...(city ? ([["Where", city]] as [string, string][]) : []),
   ];
 
@@ -64,20 +62,14 @@ export function PassFacts({
         </div>
       </dl>
 
-      <div>
-        {bibName ? (
-          <>
-            <p className="heading-hero text-4xl text-ink">{bibName}</p>
-            <p className="numeric mt-1 text-sm text-n-600">Bib {bibNo}</p>
-          </>
-        ) : (
-          /* No name on this device, so the number carries the weight alone. */
-          <>
-            <p className="text-xs tracking-[0.1em] text-n-600">Bib</p>
-            <p className="heading-hero numeric text-bib text-ink">{bibNo}</p>
-          </>
-        )}
-      </div>
+      {bibName ? (
+        <p className="heading-hero text-4xl text-ink">{bibName}</p>
+      ) : (
+        <div>
+          <p className="text-xs tracking-[0.1em] text-n-600">Bib</p>
+          <p className="heading-hero numeric text-bib text-ink">{bibNo}</p>
+        </div>
+      )}
     </div>
   );
 }
