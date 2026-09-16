@@ -1337,6 +1337,54 @@ node -e "import('@sterunxyz/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VER
 > account, and npm does not release a name because somebody else wants it. The package name is
 > therefore `@sterunxyz/sdk` everywhere — in `package.json`, in the imports, and in the README.
 
+
+### 0.2.0 — published 2026-09-15
+
+`@sterunxyz/sdk@0.2.0` is on npm as `latest`, published **2026-09-15 13:29:26 UTC** from the `lin1era`
+account, the only owner of the package (`npm owner ls @sterunxyz/sdk`).
+
+| | |
+| --- | --- |
+| version | `0.2.0` (MINOR: `SterunRecord.addonIds` is a new required field on a returned type) |
+| `dist.shasum` | `b99e1ee6094a66c50310ce3476af296ae97da65a` |
+| files / unpacked | 34 / 265,340 bytes |
+| what is new | `increaseQuota` (contracts v2.4), `SterunRecord.addonIds` (v2 add-ons), `recordFinishUntimed` (v2.2) |
+| release commit | `de7debf` — `sdk/package.json` 0.2.0 and the `[0.2.0]` changelog heading |
+
+Checked against the registry rather than the local build, by downloading the published tarball
+(`npm pack @sterunxyz/sdk@0.2.0`) and reading it:
+
+```
+version in package.json: "version": "0.2.0"
+increaseQuota in dist/client.js: present
+addonIds in dist/types.js: present
+```
+
+**The changelog inside that tarball is the pre-release text.** The upload happened before commit
+`de7debf` renamed `## [Unreleased]` to `## [0.2.0] — 2026-09-15` and removed the "Not published yet"
+note, so the `CHANGELOG.md` shipped in 0.2.0 still carries both. The code is unaffected, the
+repository's `sdk/CHANGELOG.md` is correct, and npm's package page renders the README, not the
+changelog. A published version cannot be replaced and unpublishing is not worth the breakage for a
+text file, so it stays; the next release carries the corrected history.
+
+Two errors met on the way, recorded because both mislead:
+
+- **`E404 Not Found - PUT …/@sterunxyz%2fsdk`** meant *not logged in*. For a scoped package npm
+  answers an unauthenticated publish with 404 rather than 401. `npm whoami` answering `E401` is the
+  real signal; the fix is `npm login` as the owner.
+- **`You cannot publish over the previously published versions: 0.2.0`** on a later run meant the
+  earlier publish had already succeeded. `npm view @sterunxyz/sdk versions time` shows it.
+
+Releasing the next version:
+
+```bash
+# bump sdk/package.json and turn [Unreleased] into the dated version BEFORE publishing
+npm whoami                                  # must print the package owner
+pnpm --filter @sterunxyz/sdk test
+cd sdk && npm publish --access public
+npm view @sterunxyz/sdk version             # confirms what the registry serves
+```
+
 ---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
