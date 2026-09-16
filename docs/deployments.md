@@ -2886,3 +2886,38 @@ The script also asserts exactly one claim won and the record ended `RacepackClai
 the same losing call threw `SterunNetworkError: claimRacepack could not be simulated: Cannot read
 properties of undefined (reading 'type')` (STE-25 run 2, step 4.3).
 
+
+---
+
+## STE-64 — a rebuild keeps transition transaction hashes, live (`0ccf923`, 2026-09-17)
+
+Deployed with a backup first (`backups/pre-ste64-20260916T172155Z.sql.gz`), then the API rebuilt, the
+poller and keeper stopped, `node dist/cli/indexer.js rebuild` run once, and both started again.
+
+| `record_transitions` | before | after the rebuild |
+| --- | --- | --- |
+| rows | 104 | 104 |
+| without `tx_hash` | 59 | 7 |
+| `source = 'event'` | 45 | 97 |
+| `source = 'event'` missing a ledger or hash | 0 | 0 |
+
+```
+rebuilt in 76158ms: 30 events, 49 categories, 59 records, 104 transitions. Following resumes at ledger 4711163.
+doctor: index matches the chain
+```
+
+**The seven left without a hash are correct, not missed.** Tokens 0, 1 and 2 (five transitions) have
+logged events only from the **v1** RaceRecord (`CDWFNF42…`), whose token ids overlap v2's; linking them
+would point a v2 runner at someone else's transaction, which is exactly what the contract filter
+refuses. `14/Finished` and `17/Finished` have no logged event at all (the raw log for v2 starts at
+ledger 4585194 and those finishes were not polled). An earlier count of "57 recoverable" matched on
+token id alone, and so included those five v1 rows.
+
+A restored hash checked against the network rather than trusted: `GET /records/14` now gives
+`Entered` → [`b79a5912…`](https://stellar.expert/explorer/testnet/tx/b79a59128c3c8e56bb9862600a7446a92378e1b3a9f8225e354d7be8ce88ca0b),
+which RPC `getTransaction` reports `SUCCESS` in ledger 4620655, the ledger the index holds, and
+Horizon shows as an `enter` invocation.
+
+After the restart the poller follows both v2 contracts, all three containers run with 0 restarts, a
+second `doctor` reports `"findings": []`, and `verify-deployment.sh` passes 18 of 18
+(2026-09-16T17:27:24Z).
