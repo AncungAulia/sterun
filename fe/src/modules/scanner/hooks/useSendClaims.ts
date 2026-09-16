@@ -43,7 +43,10 @@ export function useSendClaims(eventId: number) {
 
       const stopped = await sendClaims(claims, {
         send: (tokenId) => readClient.claimRacepack(tokenId, address, { publicKey: address, signTransaction }),
-        claimedAtOf: async (tokenId) => (await readClient.recordOf(tokenId)).claimedAt,
+        recordOf: async (tokenId) => {
+          const record = await readClient.recordOf(tokenId);
+          return { state: record.state, claimedAt: record.claimedAt };
+        },
         mark: async (tokenId, outcome) => {
           await markClaim(tokenId, outcome);
           await refresh();

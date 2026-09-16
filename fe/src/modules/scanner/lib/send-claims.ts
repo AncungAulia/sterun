@@ -22,8 +22,22 @@
  *   - `NotAuthorized`: this wallet is not a scanner for the race. Every other
  *     row would fail the same way, so the run stops and the rows keep waiting
  *     for a wallet that is.
- *   - A declined prompt, no answer, or anything else: the run stops and the
- *     row keeps waiting. Trying again can still succeed.
+ *   - A declined prompt or no answer: the run stops and the row keeps
+ *     waiting. Trying again can still succeed.
+ *   - **Anything else is told from the ledger, not from the error** (STE-62).
+ *     The record is read again: if it is no longer `Entered`, another desk got
+ *     there first, so the row moves to Refused and the run carries on. Only a
+ *     record the chain still holds as `Entered` stops the run, since only then
+ *     can trying again succeed.
+ *
+ * That last rule exists because the error cannot always be trusted to say what
+ * happened. In the STE-25 rehearsal two desks claimed one runner in the same
+ * ledger; the losing claim failed on the ledger with `AlreadyClaimed(102)`, but
+ * the SDK threw an unrelated message instead of that code (STE-61). This file
+ * read it as an unknown failure, stopped on the first row, and left the double
+ * handover off the Refused screen and four real check-ins unsent until the
+ * volunteer pressed Send again. The same reasoning as `enter-failure.ts`: when
+ * the error is unclear, the chain's state is the answer.
  *
  * No answer is deliberately NOT read as success. If the transaction did land,
  * the next attempt is refused as already claimed and the row shows in Refused:
@@ -34,7 +48,7 @@ import { SterunContractError } from "@sterunxyz/sdk";
 
 import { friendlyError, isDeclined, isNoAnswer } from "@/lib/api/errors";
 
-import type { QueuedClaim, markClaim } from "./scanner-store";
+import type { QueuedClaim, RecordState, markClaim } from "./scanner-store";
 
 export type SendStop =
   | { kind: "declined" }
@@ -45,8 +59,8 @@ export type SendStop =
 export interface SendDeps {
   /** Build, sign and send one claim. */
   send: (tokenId: number) => Promise<{ txHash: string; ledger: number | null }>;
-  /** When the chain says this record's race pack was collected, for a refused row. */
-  claimedAtOf: (tokenId: number) => Promise<bigint | null>;
+  /** The record as the chain holds it now: its state, and when its race pack was collected. */
+  recordOf: (tokenId: number) => Promise<{ state: RecordState; claimedAt: bigint | null }>;
   mark: typeof markClaim;
   /** The row now being sent, or null when the run is over. */
   onSending?: (tokenId: number | null) => void;
@@ -54,6 +68,14 @@ export interface SendDeps {
 
 function revertOf(error: unknown): SterunContractError | null {
   return error instanceof SterunContractError && error.method === "claimRacepack" ? error : null;
+}
+
+async function markAlreadyClaimed(deps: SendDeps, tokenId: number, claimedAt: bigint | null): Promise<void> {
+  await deps.mark(tokenId, {
+    status: "refused",
+    reason: "already-claimed",
+    claimedAt: claimedAt === null ? undefined : claimedAt.toString(),
+  });
 }
 
 /** Sends every waiting claim, in order. Resolves with why it stopped early, or null. */
@@ -76,12 +98,8 @@ export async function sendClaims(claims: QueuedClaim[], deps: SendDeps): Promise
         const revert = revertOf(error);
 
         if (revert?.is("AlreadyClaimed", "race-record")) {
-          const claimedAt = await deps.claimedAtOf(claim.tokenId).catch(() => null);
-          await deps.mark(claim.tokenId, {
-            status: "refused",
-            reason: "already-claimed",
-            claimedAt: claimedAt === null ? undefined : claimedAt.toString(),
-          });
+          const record = await deps.recordOf(claim.tokenId).catch(() => null);
+          await markAlreadyClaimed(deps, claim.tokenId, record?.claimedAt ?? null);
           continue;
         }
         if (revert?.is("RecordNotFound", "race-record")) {
@@ -91,6 +109,13 @@ export async function sendClaims(claims: QueuedClaim[], deps: SendDeps): Promise
         if (revert?.is("NotAuthorized", "race-record")) return { kind: "not-scanner" };
         if (isNoAnswer(error)) return { kind: "no-answer" };
         if (isDeclined(error)) return { kind: "declined" };
+
+        // An error that says nothing certain: ask the chain what happened.
+        const record = await deps.recordOf(claim.tokenId).catch(() => null);
+        if (record && record.state !== "Entered") {
+          await markAlreadyClaimed(deps, claim.tokenId, record.claimedAt);
+          continue;
+        }
         return { kind: "failed", message: friendlyError(error) };
       }
     }

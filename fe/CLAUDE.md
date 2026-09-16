@@ -720,9 +720,13 @@ What is settled:
   handoff says: every claim opens a wallet prompt, and one appearing over the desk mid-check is worse
   than a button. Rows are sent in the order packs were handed over.
 - **Only `AlreadyClaimed` and `RecordNotFound` from `claimRacepack` itself are final**, and move the
-  row to `/scan/[id]/flagged`. `NotAuthorized`, a declined prompt, no answer or anything else stops
-  the run with the row still waiting. **No answer is never read as sent**: a retry of a claim that did
-  land shows up as refused, a false alarm, where the opposite reading would hide a real second pack.
+  row to `/scan/[id]/flagged`. `NotAuthorized`, a declined prompt or no answer stops the run with the
+  row still waiting. **No answer is never read as sent**: a retry of a claim that did land shows up as
+  refused, a false alarm, where the opposite reading would hide a real second pack. **Any other
+  failure is told from the ledger** (STE-62): the record is read again, and if it is no longer
+  `Entered` the row is refused and the run carries on; only a record still `Entered` stops the run.
+  The STE-25 rehearsal found why: a claim that lost a two-desk race failed on the ledger with `#102`,
+  the SDK threw an unrelated message (STE-61), and the queue stopped on its first row.
 - **The refused list says a second pack may have gone out**, not the handoff's "the system working",
   and it copies as plain lines for the organiser's chat.
 - **`markClaim` checks the row exists first.** idb-keyval's `update` stores whatever its updater

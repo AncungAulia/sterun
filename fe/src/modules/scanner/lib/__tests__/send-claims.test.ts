@@ -9,7 +9,13 @@ import { SterunContractError, classifyContractError } from "@sterunxyz/sdk";
 import { describe, expect, it, vi } from "vitest";
 
 import { sendClaims } from "@/modules/scanner/lib/send-claims";
-import { enqueueClaim, listClaims, markClaim, type QueuedClaim } from "@/modules/scanner/lib/scanner-store";
+import {
+  enqueueClaim,
+  listClaims,
+  markClaim,
+  type QueuedClaim,
+  type RecordState,
+} from "@/modules/scanner/lib/scanner-store";
 
 let nextEvent = 700;
 
@@ -30,10 +36,14 @@ async function queue(eventId: number, tokenIds: number[]): Promise<QueuedClaim[]
   return listClaims(eventId);
 }
 
+type ChainRecord = { state: RecordState; claimedAt: bigint | null };
+
 function deps(send: (tokenId: number) => Promise<{ txHash: string; ledger: number | null }>) {
   return {
     send: vi.fn(send),
-    claimedAtOf: vi.fn(async () => 1_790_000_000n),
+    // By default the chain still holds every record as Entered, which is what a
+    // failure that did not reach the ledger leaves behind.
+    recordOf: vi.fn<(tokenId: number) => Promise<ChainRecord>>(async () => ({ state: "Entered", claimedAt: null })),
     mark: markClaim,
     onSending: vi.fn(),
   };
@@ -56,6 +66,8 @@ describe("sending the queue", () => {
       if (tokenId === 7001) throw revert(102);
       return landed(tokenId);
     });
+
+    d.recordOf.mockResolvedValue({ state: "RacepackClaimed", claimedAt: 1_790_000_000n });
 
     expect(await sendClaims(claims, d)).toBeNull();
 
@@ -86,7 +98,7 @@ describe("sending the queue", () => {
     const d = deps(async () => {
       throw revert(102);
     });
-    d.claimedAtOf.mockRejectedValue(new Error("rpc down"));
+    d.recordOf.mockRejectedValue(new Error("rpc down"));
 
     expect(await sendClaims(claims, d)).toBeNull();
     const [row] = await listClaims(eventId);
@@ -140,6 +152,70 @@ describe("stopping", () => {
 
     expect(await sendClaims(claims, d)).toEqual({ kind: "no-answer" });
     expect((await listClaims(eventId))[0]).toMatchObject({ status: "waiting" });
+  });
+
+  it("tells a lost two-desk race from the ledger when the error does not say so (STE-62)", async () => {
+    // The rehearsal, exactly: this desk's claim for 7901 lost to another desk
+    // in the same ledger, and the SDK threw an unrelated message instead of
+    // AlreadyClaimed (STE-61). Before, the run stopped here with "Something went
+    // wrong", 7901 never reached Refused, and 7902 and 7903 were never sent.
+    const eventId = nextEvent++;
+    const claims = await queue(eventId, [7901, 7902, 7903]);
+    const d = deps(async (tokenId) => {
+      if (tokenId === 7901) {
+        throw new Error("could not be simulated: Cannot read properties of undefined (reading 'type')");
+      }
+      return landed(tokenId);
+    });
+    d.recordOf.mockImplementation(
+      async (tokenId: number): Promise<ChainRecord> =>
+        tokenId === 7901
+          ? { state: "RacepackClaimed", claimedAt: 1_790_000_123n }
+          : { state: "Entered", claimedAt: null },
+    );
+
+    expect(await sendClaims(claims, d)).toBeNull();
+    expect(await listClaims(eventId)).toEqual([
+      expect.objectContaining({ tokenId: 7901, status: "refused", reason: "already-claimed", claimedAt: "1790000123" }),
+      expect.objectContaining({ tokenId: 7902, status: "sent" }),
+      expect.objectContaining({ tokenId: 7903, status: "sent" }),
+    ]);
+    expect(d.recordOf).toHaveBeenCalledWith(7901);
+  });
+
+  it("stops on an unclear failure only when the chain still holds the record as Entered", async () => {
+    const eventId = nextEvent++;
+    const claims = await queue(eventId, [7951, 7952]);
+    const d = deps(async () => {
+      throw new Error("could not be simulated: something else");
+    });
+
+    expect((await sendClaims(claims, d))?.kind).toBe("failed");
+    expect(d.send).toHaveBeenCalledTimes(1);
+    expect((await listClaims(eventId)).map((row) => row.status)).toEqual(["waiting", "waiting"]);
+  });
+
+  it("stops rather than guessing when the record cannot be read either", async () => {
+    const eventId = nextEvent++;
+    const claims = await queue(eventId, [7961]);
+    const d = deps(async () => {
+      throw new Error("could not be simulated: something else");
+    });
+    d.recordOf.mockRejectedValue(new Error("rpc down"));
+
+    expect((await sendClaims(claims, d))?.kind).toBe("failed");
+    expect((await listClaims(eventId))[0]).toMatchObject({ status: "waiting" });
+  });
+
+  it("does not re-read the chain for a declined prompt or no answer", async () => {
+    const eventId = nextEvent++;
+    const claims = await queue(eventId, [7971]);
+    const d = deps(async () => {
+      throw new Error("User declined access");
+    });
+
+    expect(await sendClaims(claims, d)).toEqual({ kind: "declined" });
+    expect(d.recordOf).not.toHaveBeenCalled();
   });
 
   it("stops on anything else with a sentence for the screen, after keeping what already landed", async () => {
