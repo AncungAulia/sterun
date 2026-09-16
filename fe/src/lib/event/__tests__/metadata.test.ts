@@ -282,6 +282,16 @@ describe("reading the timeline's details back", () => {
       expect(document.categories?.[0]?.cutOff).toBeDefined();
     });
 
+    it("reads back the maps links the wizard kept, so Open in Maps opens the place", () => {
+      const document = readEventDocument(written());
+      if (typeof document === "string") throw new Error(document);
+
+      expect(document.location?.mapsUrl).toBe("https://www.google.com/maps/@-7.771,110.377,17z");
+      expect(document.schedule?.find((phase) => phase.phase === "racepack")?.venueMapsUrl).toBe(
+        "https://www.google.com/maps/@-7.77,110.37,17z",
+      );
+    });
+
     it("reads where the race pack desk is, pin and hours included", () => {
       const document = readEventDocument(written());
       if (typeof document === "string") throw new Error(document);
@@ -303,6 +313,22 @@ describe("reading the timeline's details back", () => {
       );
 
       expect(document).toEqual({ categories: [{ code: "5K" }] });
+    });
+
+    it("drops a maps link that is not Google Maps, whoever wrote the document", () => {
+      // The wizard never writes one, but a document is only as careful as its
+      // author, and this becomes a button on a public page.
+      const document = readEventDocument(
+        JSON.stringify({
+          location: { name: "GBK", maps_url: "https://evil.example/maps/place/GBK" },
+          schedule: [{ phase: "racepack", venue: "Hall A", venue_maps_url: "javascript:alert(1)" }],
+        }),
+      );
+
+      expect(document).toEqual({
+        location: { name: "GBK" },
+        schedule: [{ phase: "racepack", venue: "Hall A" }],
+      });
     });
 
     it("keeps a venue whose link had no pin, without inventing coordinates", () => {

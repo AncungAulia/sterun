@@ -43,7 +43,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatEventDateTime, formatEventTime } from "@/utils/format";
-import { mapsLink } from "@/utils/geo";
+import { openInMapsHref } from "@/utils/geo";
 import type { EventMetadata } from "@/lib/event/metadata";
 
 /** The phases in the order they happen, named the way a runner says them. */
@@ -140,7 +140,8 @@ function timelineMoments(document: EventMetadata, startsAt: bigint): Moment[] {
 /** What a moment says underneath its label, and where it can send a runner. */
 interface MomentDetail {
   lines: string[];
-  pin?: { lat: number; lng: number };
+  /** Where "Open in Maps" goes for this moment, when it has a place. */
+  mapHref?: string;
 }
 
 /**
@@ -174,12 +175,12 @@ function momentDetail(
       if (racepack?.dailyOpens && racepack.dailyCloses) {
         lines.push(`Open ${racepack.dailyOpens} to ${racepack.dailyCloses} each day.`);
       }
-      return {
-        lines,
-        ...(typeof racepack?.venueLat === "number" && typeof racepack.venueLng === "number"
-          ? { pin: { lat: racepack.venueLat, lng: racepack.venueLng } }
-          : {}),
-      };
+      const mapHref = openInMapsHref({
+        mapsUrl: racepack?.venueMapsUrl,
+        lat: racepack?.venueLat,
+        lng: racepack?.venueLng,
+      });
+      return { lines, ...(mapHref ? { mapHref } : {}) };
     }
     case "racepack-end":
       return { lines: ["Last chance to collect your race pack."] };
@@ -195,11 +196,8 @@ function momentDetail(
         );
       if (starts.length > 0) lines.push(starts.join(" · "));
       if (document.location?.name) lines.push(document.location.name);
-      const { lat, lng } = document.location ?? {};
-      return {
-        lines,
-        ...(typeof lat === "number" && typeof lng === "number" ? { pin: { lat, lng } } : {}),
-      };
+      const mapHref = document.location ? openInMapsHref(document.location) : undefined;
+      return { lines, ...(mapHref ? { mapHref } : {}) };
     }
     default:
       return { lines: [] };
@@ -247,7 +245,7 @@ export function TabTimeline({
           on the next moment down is for, not a line in the past.
         */
         const enter = !passed && canEnter && onEnter && moment.key === "registration-start";
-        const map = !passed && detail.pin ? mapsLink(detail.pin) : undefined;
+        const map = !passed ? detail.mapHref : undefined;
 
         return (
           <li

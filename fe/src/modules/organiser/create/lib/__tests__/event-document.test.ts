@@ -64,9 +64,10 @@ describe("buildEventDocument", () => {
       expect(document.location).toMatchObject({ lat: -6.2185, lng: 106.8026 });
     });
 
-    it("keeps the place names when the link has no pin in it", () => {
-      // A shortened maps link carries no coordinates, and losing the address
-      // over that would be a worse trade than showing a place with no map.
+    it("keeps a short share link, which opens the place though it has no pin", () => {
+      // A phone's share link carries no coordinates, so there is nothing to
+      // sort by distance with, but it still opens the right place for a runner
+      // (Ancung, 2026-09-17). The names are kept as before.
       const document = JSON.parse(
         buildEventDocument(draft({ locationLink: "https://maps.app.goo.gl/abc" })),
       );
@@ -77,7 +78,24 @@ describe("buildEventDocument", () => {
         province: "DKI Jakarta",
         country: "Indonesia",
         country_code: "ID",
+        maps_url: "https://maps.app.goo.gl/abc",
       });
+    });
+
+    it("keeps both the pin and the link from a full place link", () => {
+      const link =
+        "https://www.google.com/maps/place/Fakultas+Teknik+UGM/@-7.7656,110.3718,17z/data=!4m6!3m5!8m2!3d-7.76539!4d110.37254";
+      const document = JSON.parse(buildEventDocument(draft({ locationLink: link })));
+
+      expect(document.location).toMatchObject({ lat: -7.76539, lng: 110.37254, maps_url: link });
+    });
+
+    it("keeps no link that is not Google Maps, since it becomes a button on a public page", () => {
+      const document = JSON.parse(
+        buildEventDocument(draft({ locationLink: "https://evil.example/maps/place/GBK" })),
+      );
+
+      expect(document.location.maps_url).toBeUndefined();
     });
 
     it("carries the administrative names a directory can group by", () => {

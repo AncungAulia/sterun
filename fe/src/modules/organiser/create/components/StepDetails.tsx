@@ -21,17 +21,19 @@ import { Field, TextAreaField } from "@/components/form/Field";
 import { Section } from "@/modules/organiser/create/components/Section";
 import { FileField } from "@/modules/organiser/create/components/FileField";
 import { EMPTY_PLACE, PlaceFields, type Place } from "@/modules/organiser/create/components/PlaceFields";
-import { parsePin } from "@/utils/geo";
+import { googleMapsUrl, parsePin } from "@/utils/geo";
 
 /**
  * Says whether a pasted link actually yielded a pin, while it is being pasted.
  * The alternative is discovering it on the published event page, where the file
  * is already frozen.
  *
- * Three answers, because there are three outcomes and only two of them used to
- * be told apart. A link that carries nothing but the map view still produces a
- * point, so the old "Pin found." was most reassuring on exactly the paste that
- * lands the start tens of metres away.
+ * Four answers, because there are four outcomes. A link that carries nothing but
+ * the map view still produces a point, so the old "Pin found." was most
+ * reassuring on exactly the paste that lands the start tens of metres away. And
+ * since the link itself is kept (Ancung, 2026-09-17), a short share link from a
+ * phone is a good paste that opens the right place, but has no pin for sorting
+ * races by distance, and says so.
  */
 function PinHint({ link, missing }: { link: string; missing: string }) {
   // Nothing while the field is empty, and no coordinates when it works. Nobody
@@ -39,7 +41,16 @@ function PinHint({ link, missing }: { link: string; missing: string }) {
   // something trains people to stop reading the one that matters.
   if (!link.trim()) return null;
   const pin = parsePin(link);
-  if (!pin) return <span className="text-warning">{missing}</span>;
+  if (!pin) {
+    return googleMapsUrl(link) ? (
+      <span className="text-warning">
+        Link saved, and it opens the right place. It has no map pin, so this race will not be sorted for
+        runners nearby. For that, open the place in a browser and copy the long link instead.
+      </span>
+    ) : (
+      <span className="text-warning">{missing}</span>
+    );
+  }
   if (pin.source === "view") {
     return (
       <span className="text-warning">
@@ -165,10 +176,10 @@ export function StepDetails({
           hint={
             <PinHint
               link={details.locationLink}
-              missing="Paste the full link from your browser's address bar. Short share links do not include the map pin."
+              missing="That is not a Google Maps link. Search for the start in Google Maps, then copy its link."
             />
           }
-          help="Search for the start location and open it so its name is showing, then copy the link. We keep the map pin rather than the link, and we use it to show your start on a map and to help runners find races near them. A link that does not carry the place gives us only roughly where the map was, which can be tens of metres out."
+          help="Search for the start location and open it so its name is showing, then copy the link. Runners open this link to find the start. When it carries a map pin, we also use the pin to show your race to runners near it. A share link from the phone app opens the right place but has no pin."
         />
         <TextAreaField
           id="description"
@@ -253,7 +264,7 @@ export function StepDetails({
             hint={
               <PinHint
                 link={details.racepackVenueLink}
-                missing="Search for the venue, open it, then paste the long link. No pin found in this one yet."
+                missing="That is not a Google Maps link. Search for the venue in Google Maps, then copy its link."
               />
             }
           />

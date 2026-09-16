@@ -18,7 +18,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { EXPLORER_BASE } from "@/lib/chain/env";
 import { formatEventDateTime, shortAddress } from "@/utils/format";
-import { mapsLink } from "@/utils/geo";
+import { openInMapsHref } from "@/utils/geo";
 import type { EventMetadata } from "@/lib/event/metadata";
 
 /**
@@ -66,10 +66,9 @@ export function TabDetails({
   ]
     .filter(Boolean)
     .join(", ");
-  const pin =
-    typeof document?.location?.lat === "number" && typeof document?.location?.lng === "number"
-      ? mapsLink({ lat: document.location.lat, lng: document.location.lng })
-      : undefined;
+  // The organiser's own link when the document has one, which opens the place
+  // by name; a pin from the coordinates for an older document that has only those.
+  const pin = document?.location ? openInMapsHref(document.location) : undefined;
 
   return (
     <div className="flex flex-col gap-8">

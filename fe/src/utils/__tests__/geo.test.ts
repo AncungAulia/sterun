@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { haversineKm, mapsLink, parseCoordinates, parsePin } from "@/utils/geo";
+import { googleMapsUrl, haversineKm, mapsLink, openInMapsHref, parseCoordinates, parsePin } from "@/utils/geo";
 
 describe("parseCoordinates", () => {
   describe("positive", () => {
@@ -157,6 +157,70 @@ describe("mapsLink", () => {
     expect(mapsLink({ lat: -6.2185, lng: 106.8026 })).toBe(
       "https://www.google.com/maps?q=-6.2185,106.8026",
     );
+  });
+});
+
+describe("googleMapsUrl", () => {
+  describe("positive", () => {
+    it("keeps a place link as pasted, so it opens the named place", () => {
+      const link =
+        "https://www.google.com/maps/place/Fakultas+Teknik+UGM/@-7.7656,110.3718,17z/data=!3m1!4b1!4m6!3m5!1s0x2e7a59!8m2!3d-7.76539!4d110.37254!16s";
+      expect(googleMapsUrl(link)).toBe(link);
+    });
+
+    it("keeps a short share link from a phone, which carries no pin at all", () => {
+      expect(googleMapsUrl("  https://maps.app.goo.gl/AbC123xyz  ")).toBe("https://maps.app.goo.gl/AbC123xyz");
+      expect(parsePin("https://maps.app.goo.gl/AbC123xyz")).toBeNull();
+    });
+
+    it("accepts the other shapes Google hands out", () => {
+      for (const link of [
+        "https://goo.gl/maps/AbC123",
+        "https://maps.google.com/?q=-6.2185,106.8026",
+        "https://www.google.co.id/maps/place/Monas",
+        "https://google.com/maps/search/?api=1&query=GBK",
+        "https://www.google.com.sg/maps/@1.29,103.85,15z",
+      ]) {
+        expect(googleMapsUrl(link), link).not.toBeNull();
+      }
+    });
+  });
+
+  describe("negative", () => {
+    it("refuses anything a public page should not link to", () => {
+      for (const link of [
+        "",
+        "not a link",
+        "http://www.google.com/maps/place/Monas", // not https
+        "https://evil.example/maps/place/Monas",
+        "https://google.com.evil.example/maps", // Google's name inside another host
+        "https://www.google.com/search?q=monas", // Google, but not maps
+        "https://goo.gl/AbC123", // a short link that is not a maps one
+        "https://user:pass@www.google.com/maps/place/Monas",
+        "https://www.google.com:8443/maps/place/Monas",
+        "javascript:alert(1)//www.google.com/maps",
+        "https://www.google.com/mapsevil",
+      ]) {
+        expect(googleMapsUrl(link), link).toBeNull();
+      }
+    });
+  });
+});
+
+describe("openInMapsHref", () => {
+  it("prefers the organiser's own link, which opens the place by name", () => {
+    expect(openInMapsHref({ mapsUrl: "https://maps.app.goo.gl/AbC", lat: -7.7, lng: 110.3 })).toBe(
+      "https://maps.app.goo.gl/AbC",
+    );
+  });
+
+  it("falls back to a pin for an event published before links were kept", () => {
+    expect(openInMapsHref({ lat: -6.2185, lng: 106.8026 })).toBe("https://www.google.com/maps?q=-6.2185,106.8026");
+  });
+
+  it("has nowhere to go with neither", () => {
+    expect(openInMapsHref({})).toBeUndefined();
+    expect(openInMapsHref({ lat: -6.2 })).toBeUndefined();
   });
 });
 
