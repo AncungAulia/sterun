@@ -19,6 +19,7 @@
  * series with two towns is the case where a runner checks.
  */
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/utils/cn";
 
 export function PassFacts({
   raceName,
@@ -41,6 +42,9 @@ export function PassFacts({
     ...(city ? ([["Where", city]] as [string, string][]) : []),
   ];
 
+  /** The facts plus the state, which always has a column of its own. */
+  const columns = facts.length + 1;
+
   return (
     <div className="flex flex-col items-center gap-5 text-center">
       <h1 className="heading-strong text-2xl text-ink">{raceName}</h1>
@@ -48,11 +52,12 @@ export function PassFacts({
       {/*
         Equal columns across the whole width, rather than each one only as wide
         as its own text (Ancung, 2026-09-16): sized to their contents they sat
-        almost touching in the middle of the card. `auto-cols-fr` with a column
-        flow means this holds whether there are two facts or three, since the
-        city is only there once this device has been online.
+        almost touching in the middle of the card. The count is written out
+        rather than left to `grid-flow-col`, so what the browser does is the
+        same thing the class says. There are two facts, or three once this
+        device has been online and learned the city.
       */}
-      <dl className="grid w-full auto-cols-fr grid-flow-col gap-4">
+      <dl className={cn("grid w-full gap-4", columns === 3 ? "grid-cols-3" : "grid-cols-2")}>
         {facts.map(([label, value]) => (
           <div key={label}>
             <dt className="text-xs tracking-[0.1em] text-n-600">{label}</dt>
