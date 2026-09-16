@@ -1416,6 +1416,43 @@ as `0.2.0`, while the npm debug log already had the `PUT … 202` and exit 0. Th
 finished propagating. Check again, or read the registry document directly, before concluding a
 publish failed.
 
+### 0.3.1 — published 2026-09-16
+
+`@sterunxyz/sdk@0.3.1` is on npm as `latest`, published **2026-09-16T19:59:31.152Z** from the `lin1era` account.
+
+| | |
+| --- | --- |
+| version | `0.3.1` (PATCH: a fix plus one additive export) |
+| `dist.shasum` | `8b99bf0945c2801b95f4ecc7a0ce42aa462db640` |
+| files / unpacked | 38 / 286,364 bytes |
+| what is new | a write that fails **on the ledger** throws `SterunContractError` with `phase: "ledger"`, `txHash` and `ledger` instead of crashing on `result` (STE-61); `ledgerFailureCode` exported |
+| release commit | `5f6541a` — `sdk/package.json` 0.3.1 and the `[0.3.1]` changelog heading |
+
+Checked against the registry, not against the working tree:
+
+```
+downloaded sdk-0.3.1.tgz: sha1 8b99bf09…, sha512 matches dist.integrity
+contents vs a fresh `npm pack` of main: identical (38 files)
+secret seed pattern in the tarball: none
+changelog heading: ## [0.3.1] — 2026-09-17
+```
+
+Then installed from npm into an empty TypeScript project outside the repository (`strict`,
+`NodeNext`, `skipLibCheck: false`): `tsc` clean, and run against live testnet:
+
+```
+713f63a2cd36… FAILED, ledgerFailureCode = 102      # the STE-61 claim-race e2e
+10e261cf2647… FAILED, ledgerFailureCode = 102      # rehearsal run 3, step 6.1
+recordOf(58): RacepackClaimed, event 29
+getEvent(999999): EventNotFound (#2), phase simulation
+```
+
+The release-day confusion from 0.2.0 happened again, in both directions, so it is worth the two lines:
+the registry showed no 0.3.1 and the tarball URL answered 404 for about two minutes after the upload
+started, and a second `npm publish` then failed with `You cannot publish over the previously published
+versions: 0.3.1`. The first publish had succeeded. `time["0.3.1"]` in the registry document is the
+authority.
+
 ---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
