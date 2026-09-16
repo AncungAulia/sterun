@@ -1028,6 +1028,60 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
     });
   });
 
+  describe("transaction hashes survive a rebuild (STE-64)", () => {
+    const hashesOf = async (tokenId: number) =>
+      (await store.listTransitions(pool, tokenId)).map((t) => [t.toState, t.txHash, t.ledger, t.source]);
+
+    it("gives every rebuilt transition back the hash the poller had logged", async () => {
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      const before0 = await hashesOf(0);
+      const before1 = await hashesOf(1);
+      expect(before0.every(([, hash]) => typeof hash === "string")).toBe(true);
+
+      await indexer.rebuild();
+
+      expect(await hashesOf(0)).toEqual(before0);
+      expect(await hashesOf(1)).toEqual(before1);
+    });
+
+    it("leaves a transition with no logged event NULL rather than guessing", async () => {
+      seedFullRace();
+      await build(new FakeEventSource([])).rebuild();
+      const rows = await store.listTransitions(pool, 0);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((t) => t.txHash === null && t.ledger === null && t.source === "state")).toBe(true);
+    });
+
+    it("never takes a hash from another contract's event with the same token id", async () => {
+      // v1 and v2 token ids overlap; a v1 hash on a v2 record would link a
+      // runner to someone else's transaction.
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      await pool.query("UPDATE chain_events SET contract_id = $1", [ADDRESSES.eventRegistry]);
+
+      await indexer.rebuild();
+
+      expect((await store.listTransitions(pool, 0)).every((t) => t.txHash === null)).toBe(true);
+    });
+
+    it("takes a Finished hash from record_finished_untimed as well", async () => {
+      const { events } = seedFullRace({ untimed: true });
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      const finishedBefore = (await store.listTransitions(pool, 0)).find((t) => t.toState === "Finished");
+      expect(finishedBefore?.txHash).toMatch(/^[0-9a-f]{64}$/);
+
+      await indexer.rebuild();
+
+      const finishedAfter = (await store.listTransitions(pool, 0)).find((t) => t.toState === "Finished");
+      expect(finishedAfter?.txHash).toBe(finishedBefore?.txHash);
+      expect(finishedAfter?.source).toBe("event");
+    });
+  });
+
   describe("rebuild from contract state", () => {
     it("reconstructs everything from state alone, with no events at all", async () => {
       seedFullRace();

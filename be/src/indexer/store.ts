@@ -491,6 +491,40 @@ export async function applyRecordTransition(
  * encodes "a rebuild never beats an event": an event-sourced row overwrites
  * whatever is there, a state-sourced one only fills a gap.
  */
+/**
+ * Give transitions a rebuild wrote from state back the transaction that made
+ * them, from the raw event log (STE-64).
+ *
+ * A rebuild reconstructs each record's transitions from the timestamps in
+ * `RecordData`, which carry no transaction hash, so those rows have NULL
+ * `tx_hash` and `ledger`. `chain_events` survives a rebuild and still holds the
+ * original event. This joins the two: same token, the event name for that
+ * state, and only events emitted by `raceRecord`, because v1 and v2 token ids
+ * overlap and a hash from the wrong contract would link a runner to someone
+ * else's transaction. A transition with no logged event (the index started
+ * after it) stays NULL. Returns how many transitions got their hash back.
+ */
+export async function restoreTransitionProvenance(db: Queryable, raceRecord: string): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE record_transitions t
+        SET tx_hash = e.tx_hash,
+            ledger = e.ledger,
+            source = 'event'
+       FROM chain_events e
+      WHERE t.tx_hash IS NULL
+        AND e.contract_id = $1
+        AND (e.payload->>'tokenId')::int = t.token_id
+        AND e.name = ANY (CASE t.to_state
+              WHEN 'Entered' THEN ARRAY['record_entered']
+              WHEN 'RacepackClaimed' THEN ARRAY['racepack_claimed']
+              WHEN 'Finished' THEN ARRAY['record_finished', 'record_finished_untimed']
+              WHEN 'Dnf' THEN ARRAY['record_dnf']
+            END)`,
+    [raceRecord],
+  );
+  return rowCount ?? 0;
+}
+
 export async function insertTransition(
   db: Queryable,
   t: {

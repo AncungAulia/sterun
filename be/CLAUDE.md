@@ -450,6 +450,16 @@ Five things that confuse people when they are not spelled out:
    breaks `verify` and `records_of`. The keys come from a simulated footprint, not from being
    assembled by hand.
 
+**A rebuild keeps transaction hashes (STE-64).** State has no transaction hashes, so a rebuilt
+transition used to lose its `tx_hash` and `ledger` — and with them the link a runner's profile shows
+for each step (`GET /records/:tokenId` → `transitions[].tx_hash`). Production had 59 of 104 transitions
+without one after the two rebuilds of 2026-09-15. `restoreTransitionProvenance` now refills them from
+`chain_events` at the end of every rebuild: same token, the event name for that state
+(`record_finished` or `record_finished_untimed` for `Finished`), and **only events from the current
+RaceRecord contract**, because v1 and v2 token ids overlap and a hash from the other contract would link
+a runner to someone else's transaction. A refilled row becomes `source = 'event'`. A transition with no
+logged event stays NULL.
+
 The TTL threshold **must match** `BUMP_THRESHOLD` in `sc/contracts/race_record/src/lib.rs` (120
 days). But the extension target is **one ledger below** `BUMP_TO` (3,110,399, not 3,110,400):
 `ExtendFootprintTTLOp` rejects the boundary value as malformed, while the `extend_ttl` host function
@@ -469,7 +479,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-1031 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+1036 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that

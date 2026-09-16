@@ -659,6 +659,10 @@ export class Indexer {
       // STE-59: the same links the poller makes, from state. The vault is not
       // truncated by a rebuild, so this only ever adds links that were missing.
       await store.linkParticipantsFromChain(client);
+      // STE-64: state has no transaction hashes, but the event log a rebuild
+      // keeps does. Without this every rebuilt transition lost the link a
+      // runner's profile shows for it.
+      await store.restoreTransitionProvenance(client, this.contracts.raceRecord);
       // The cursor is cleared and last_ledger pinned to where the walk started:
       // the next poll asks for `fromLedger + 1` onwards. Anything before that is
       // already in the state we just wrote.
