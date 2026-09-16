@@ -82,7 +82,7 @@ must **never** be edited by hand.
 | STE-41 | **untimed finish** (`record_finish_untimed`) in RaceRecord (C2) + `recordFinishUntimed` in the SDK | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer/CSV + `fe/` profile follow-ups are teammates' tickets |
 | STE-54 | **bibs unique within an event, from 1** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` keeps its duplicate-bib guard and `fe/` renders the number as-is (teammates' tickets) |
 | STE-55 | **`increase_quota`** — a sold-out distance can open a second batch (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer handler for `QuotaIncreased` and the `fe/` console flow are teammates' tickets |
-| STE-25 | **mock race rehearsal** on live testnet (C14) | script + evidence done — `docs/rehearsal/`; run 2: 48 PASS · 1 FAIL · 6 MANUAL REQUIRED. The FAIL is the two-desk race (STE-61 SDK, STE-62 scanner); the UI steps wait on STE-32 (no deployed web app) and STE-24 (no profile page) |
+| STE-25 | **mock race rehearsal** on live testnet (C14) | script + evidence done — `docs/rehearsal/`; run 3: **49 PASS · 0 FAIL · 6 MANUAL REQUIRED**. The two-desk race from run 2 is fixed (STE-61 SDK, STE-62 scanner); the UI steps wait on STE-32 (no deployed web app) and the manual walkthrough |
 | — | event metadata files (`POST /events/files`) | done, live e2e |
 | — | **R2** object storage (`sterun-files`, APAC) | done — the API is stateless, the replica blocker is gone |
 | — | migrate `be/` + `fe/` to the v2 addresses | done — index and vault truncated, v2 e2e passed |
@@ -127,11 +127,10 @@ STE-21 entry + pass → STE-22 scanner → STE-24 profile → STE-32 Vercel depl
 
 **STE-25 rehearsed the whole loop on live testnet** (`docs/rehearsal/run.sh`, evidence per run in
 `docs/rehearsal/runs/`): create → 9 paid entries → sold out → second batch → two offline desks →
-results CSV → 9 results → per-runner verification, plus the negative paths. What it found, and what
-nobody should assume works until those tickets close: when two desks claim the same runner in the
-same ledger, the losing claim **fails on the ledger** with `AlreadyClaimed(102)`, but the SDK loses
-that code (STE-61) and the scanner stops its whole queue with "Something went wrong" until the
-volunteer presses Send again (STE-62). No contract bug was found. The web app is **not deployed**
+results CSV → 9 results → per-runner verification, plus the negative paths. What it found: when two desks claim the same runner in the same ledger, the losing claim **fails on
+the ledger** with `AlreadyClaimed(102)`; the SDK used to lose that code (STE-61) and the scanner
+stopped its whole queue (STE-62). Both are fixed, and run 3 shows the losing desk flagging the runner
+and sending the rest with one press. No contract bug was found. The web app is **not deployed**
 (`sterun.xyz` is a parked domain, STE-32), so every UI step is still `MANUAL REQUIRED`.
 
 The backend runs as three processes from one `be/` package: the API (`pnpm dev`), the poller

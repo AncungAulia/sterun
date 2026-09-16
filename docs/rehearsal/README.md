@@ -95,6 +95,7 @@ Every run is committed as it came out, failures included.
 | --- | --- | --- | --- | --- |
 | [`2026-09-16T15-21-11Z`](runs/2026-09-16T15-21-11Z/EVIDENCE.md) | 24 | 31 PASS · 17 FAIL · 6 MANUAL | 47/47 | the two-desk race: the losing desk's claim failed on the ledger with `AlreadyClaimed(102)`, the scanner stopped its whole queue with "Something went wrong" and never flagged it; the script did not press Send again, so 12 later steps failed in cascade, and 5.2 made a first claim it believed was a second |
 | [`2026-09-16T15-40-07Z`](runs/2026-09-16T15-40-07Z/EVIDENCE.md) | 26 | **48 PASS · 1 FAIL · 6 MANUAL** | 61/61 | the same bug reproduced with the other desk losing (step 4.3, the one FAIL); pressing Send again, as the screen says, flagged it and sent the rest; everything after it green |
+| [`2026-09-16T18-02-01Z`](runs/2026-09-16T18-02-01Z/EVIDENCE.md) | 34 | **49 PASS · 0 FAIL · 6 MANUAL** | 61/61 | after STE-61 (SDK) and STE-62 (scanner): both desks pressed Send once, desk-B's claim for R4 failed on the ledger with `AlreadyClaimed(102)` in the winner's ledger (`10e261cf…`), the desk flagged it "Already collected elsewhere" and sent the rest; no desk stopped. Run with the desk fix `d3f20f6` applied before it was committed, hence `+uncommitted` in its header |
 
 ### Run 2 against the nine proofs in the ticket
 
