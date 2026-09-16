@@ -636,7 +636,8 @@ scanner refuses and a runner gets blamed for.
 **The pass shows the bib name large and the bib number as the first fact in the row** beside the
 category and whether the race pack has been collected (Ancung, 2026-09-16). That last column is
 **Race pack: Not collected / Collected**, not "Status: Entered", which told a runner at the desk
-nothing about whether the pass had been used. The column is labelled **Category**, not Distance: a code
+nothing about whether the pass had been used. Not collected wears the outline chip Draft wears (not
+yet, nothing wrong); Collected is green. The column is labelled **Category**, not Distance: a code
 like `3K_FUN_WALK` names what the runner entered rather than a length. The number has to be there: the frozen manual fallback
 is the code **plus the bib number** (`docs/specs/HASH_AND_TOTP.md` §5), the scanner's typing sheet
 asks for exactly that, and a runner at a pickup desk has no printed bib yet. For a few hours the pass

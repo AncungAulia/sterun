@@ -77,10 +77,12 @@ export function PassFacts({
             runner at the desk nothing they were asking: whether this pass has
             already been used to collect. "Collected" is the pass's own word for
             it (ClaimedPanel), and "claimed" is kept for the chain's side.
+            Not collected wears the outline chip Draft wears: both mean "not
+            yet", nothing is wrong, and there is nothing to act on.
           */}
           <dt className="text-xs tracking-[0.1em] text-n-600">Race pack</dt>
           <dd className="mt-0.5">
-            <Badge variant={claimed ? "success" : "accent"}>{claimed ? "Collected" : "Not collected"}</Badge>
+            <Badge variant={claimed ? "success" : "outline"}>{claimed ? "Collected" : "Not collected"}</Badge>
           </dd>
         </div>
       </dl>
