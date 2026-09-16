@@ -3,11 +3,21 @@
  * else, which is why the browser's own events are enough here.
  */
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { useOnline } from "@/modules/pass/hooks/useOnline";
 
-afterEach(() => vi.restoreAllMocks());
+/**
+ * jsdom has no network, so the property the hook reads is redefined and put
+ * back afterwards. Not a spy: restoring a getter jsdom defines as a plain
+ * value is unreliable, and a `navigator.onLine` that throws takes down every
+ * render that follows it.
+ */
+function setOnline(value: boolean) {
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => value });
+}
+
+afterEach(() => setOnline(true));
 
 describe("useOnline", () => {
   it("follows the browser's offline and online events", () => {
@@ -15,20 +25,20 @@ describe("useOnline", () => {
     expect(result.current).toBe(true);
 
     act(() => {
-      vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+      setOnline(false);
       window.dispatchEvent(new Event("offline"));
     });
     expect(result.current).toBe(false);
 
     act(() => {
-      vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+      setOnline(true);
       window.dispatchEvent(new Event("online"));
     });
     expect(result.current).toBe(true);
   });
 
   it("starts from what the browser already knows, not from an assumption", () => {
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    setOnline(false);
     const { result } = renderHook(() => useOnline());
     expect(result.current).toBe(false);
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatClaimedAt,
   formatEventDate,
   formatEventDateTime,
   formatEventDateTimeLong,
@@ -215,6 +216,28 @@ describe("formatEventDateTimeLong", () => {
   describe("edge", () => {
     it("does not crash on a timestamp outside the range a Date can hold", () => {
       expect(formatEventDateTimeLong(99_999_999_999_999n, "UTC")).toBe("Unknown date");
+    });
+  });
+});
+
+/**
+ * The claim line on the QR pass (STE-21 round 2). No year: a runner reads it
+ * minutes after handing over their bib, standing at the desk it happened at.
+ */
+describe("formatClaimedAt", () => {
+  describe("positive", () => {
+    it("writes the day and the clock time, without a year", () => {
+      expect(formatClaimedAt(BigInt(Date.UTC(2026, 8, 27, 9, 41) / 1000), "UTC")).toBe("27 Sep, 09:41");
+    });
+
+    it("keeps a 24-hour clock, so an afternoon pickup is not read as morning", () => {
+      expect(formatClaimedAt(BigInt(Date.UTC(2026, 8, 27, 14, 5) / 1000), "UTC")).toBe("27 Sep, 14:05");
+    });
+  });
+
+  describe("edge", () => {
+    it("does not crash on a timestamp outside the range a Date can hold", () => {
+      expect(formatClaimedAt(99_999_999_999_999n, "UTC")).toBe("Unknown date");
     });
   });
 });
