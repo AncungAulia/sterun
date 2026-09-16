@@ -19,7 +19,24 @@ vi.mock("@/lib/entry-store", () => ({ readEntry, rememberPassFacts }));
 vi.mock("@/modules/pass/components/PassQr", () => ({
   PassQr: ({ payload }: { payload: string }) => <div data-testid="qr">{payload}</div>,
 }));
+/*
+  The page reaches WalletGate through the screen a phone without the secret
+  sees, and WalletGate reads useWallet, which pulls in Stellar Wallets Kit.
+  That package cannot be loaded by vitest (fe/CLAUDE.md), and without this the
+  whole file fails to collect rather than failing a test.
+*/
+vi.mock("@/lib/wallet/kit", () => ({
+  initWallet: vi.fn(),
+  restoreAddress: vi.fn(async () => null),
+  onWalletStateChange: vi.fn(() => () => {}),
+  connectWallet: vi.fn(),
+  disconnectWallet: vi.fn(),
+  signTransaction: vi.fn(),
+  signMessage: vi.fn(),
+  walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
+}));
 
+import { useWallet } from "@/hooks/useWallet";
 import { PassPage } from "@/modules/pass/PassPage";
 
 const SECRET = "4d7b1e93a05c26f8d3407e91b6c258aa0f31d74e69b2085c1a3f6d904e7c2b15";
@@ -74,6 +91,9 @@ beforeEach(() => {
   rememberPassFacts.mockClear();
   readEntry.mockResolvedValue(stored);
   recordOf.mockResolvedValue({ tokenId: 7, eventId: 13, categoryId: 1, bibNo: 128, state: "Entered", claimedAt: null });
+  // The runner's own wallet, connected: the pass itself never asks for it, but
+  // the screen for a phone that did not enter is behind WalletGate.
+  useWallet.setState({ address: stored.runner, isRestoring: false, isConnecting: false, error: null });
 });
 afterEach(() => {
   setOnline(true);
