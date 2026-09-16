@@ -725,7 +725,9 @@ P1 to P12 from `docs/design/profile/`. What is settled:
   turns an `Entered` or collected record into "Race cancelled", but never rewrites a result.
 - **The chain is the truth; the index only adds.** Records from `recordsOfDetailed`, races from
   `getEventSummary` in the same cache entry `/events/[id]` uses, the city from the hash-checked
-  document. `GET /records/:tokenId` adds the latest ledger and a transaction link when it has them;
+  document. A card's footer says **"Last updated"** with the latest of the record's own timestamps,
+  not a ledger number (Ancung, 2026-09-16: a ledger is jargon to a runner). `GET /records/:tokenId`
+  adds a transaction link when it has one;
   with the index down a card links the RaceRecord contract instead and loses nothing else. The
   handoff's "no transaction link" (§9) predates the index storing `tx_hash` per transition.
 - **A failed read is never "No races yet".** P9 (the chain answered with none), P10 (not an

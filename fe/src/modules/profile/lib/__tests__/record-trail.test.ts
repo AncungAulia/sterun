@@ -24,21 +24,21 @@ describe("fetchRecordTrail", () => {
       ],
     });
 
-    expect(await fetchRecordTrail(7)).toEqual({ ledger: 890, txHash: "f".repeat(64) });
+    expect(await fetchRecordTrail(7)).toEqual({ txHash: "f".repeat(64) });
     expect(apiFetch).toHaveBeenCalledWith("/records/7");
   });
 
-  it("keeps the ledger when the index has no transaction for that change", async () => {
+  it("has no link when the index saw no transaction for that change", async () => {
     apiFetch.mockResolvedValue({
       record: { last_ledger: 880 },
       transitions: [{ to_state: "RacepackClaimed", occurred_at: "1789990000", ledger: 880, tx_hash: null }],
     });
-    expect(await fetchRecordTrail(7)).toEqual({ ledger: 880, txHash: null });
+    expect(await fetchRecordTrail(7)).toEqual({ txHash: null });
   });
 
-  it("falls back to the record's own ledger when there are no transitions", async () => {
+  it("has no link when the index lists no transitions", async () => {
     apiFetch.mockResolvedValue({ record: { last_ledger: 612 }, transitions: [] });
-    expect(await fetchRecordTrail(7)).toEqual({ ledger: 612, txHash: null });
+    expect(await fetchRecordTrail(7)).toEqual({ txHash: null });
   });
 
   it("is null, not an error, when the index cannot answer", async () => {

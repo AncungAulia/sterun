@@ -105,10 +105,10 @@ describe("a runner with races", () => {
         expect.stringContaining("/contract/C"),
       ),
     );
-    expect(within(first!).queryByText(/^Ledger/)).not.toBeInTheDocument();
+    expect(within(first!).queryByText(/Ledger/)).not.toBeInTheDocument();
   });
 
-  it("links the transaction and ledger when the index has them", async () => {
+  it("says when the record last changed, from the chain, and links the transaction the index has", async () => {
     apiFetch.mockResolvedValue({
       record: { last_ledger: 59_072_879 },
       transitions: [{ to_state: "Finished", occurred_at: "1790500000", ledger: 59_072_879, tx_hash: "f".repeat(64) }],
@@ -116,10 +116,15 @@ describe("a runner with races", () => {
     renderPage();
     const [first] = await screen.findAllByRole("article");
 
-    await waitFor(() => expect(within(first!).getByText("Ledger 59,072,879")).toBeInTheDocument());
-    expect(within(first!).getByRole("link", { name: "Check on Stellar Expert" })).toHaveAttribute(
-      "href",
-      `https://stellar.expert/explorer/testnet/tx/${"f".repeat(64)}`,
+    // This record has no result time, so its last change is the race pack
+    // collection, late September 2026. No ledger number anywhere.
+    expect(within(first!).getByText(/^Last updated /)).toHaveTextContent(/Sep 2026$/);
+    expect(within(first!).queryByText(/Ledger/)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(first!).getByRole("link", { name: "Check on Stellar Expert" })).toHaveAttribute(
+        "href",
+        `https://stellar.expert/explorer/testnet/tx/${"f".repeat(64)}`,
+      ),
     );
   });
 });

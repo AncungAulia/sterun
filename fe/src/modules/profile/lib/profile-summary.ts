@@ -83,3 +83,17 @@ export function formatRaceDay(seconds: bigint, timeZone?: string): string {
 export function formatFactDay(seconds: bigint, timeZone?: string): string {
   return dayParts(seconds, "short", timeZone);
 }
+
+/**
+ * When the chain last changed this record: the latest of entering, collecting
+ * the race pack and the result. Read from the record itself, so it needs no
+ * index and is true forever. Shown instead of a ledger number (Ancung,
+ * 2026-09-16), which proves the same thing to a person who cannot read one.
+ */
+export function lastChangedAt(record: Pick<SterunRecord, "enteredAt" | "claimedAt" | "resultAt">): bigint {
+  let latest = record.enteredAt;
+  for (const at of [record.claimedAt, record.resultAt]) {
+    if (at !== null && at > latest) latest = at;
+  }
+  return latest;
+}

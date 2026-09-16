@@ -5,6 +5,7 @@ import {
   formatFactDay,
   formatFirstRace,
   formatRaceDay,
+  lastChangedAt,
   newestFirst,
   pageCount,
   pageOf,
@@ -73,5 +74,15 @@ describe("dates", () => {
     // 27 September 2026, 05:30 in Jakarta.
     expect(formatRaceDay(1_790_461_800n, "Asia/Jakarta")).toBe("27 September 2026");
     expect(formatFactDay(1_790_461_800n, "Asia/Jakarta")).toBe("27 Sep 2026");
+  });
+});
+
+describe("lastChangedAt", () => {
+  it("is the latest of entering, collecting and the result", () => {
+    expect(lastChangedAt({ enteredAt: 100n, claimedAt: null, resultAt: null })).toBe(100n);
+    expect(lastChangedAt({ enteredAt: 100n, claimedAt: 300n, resultAt: null })).toBe(300n);
+    expect(lastChangedAt({ enteredAt: 100n, claimedAt: 300n, resultAt: 500n })).toBe(500n);
+    // A no-show's result has no claim before it.
+    expect(lastChangedAt({ enteredAt: 100n, claimedAt: null, resultAt: 400n })).toBe(400n);
   });
 });

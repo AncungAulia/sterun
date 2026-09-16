@@ -4,11 +4,12 @@
  * One race record (P1, P2, P3). A card, not a table row: a table at 390px either
  * scrolls sideways or crushes the finish time.
  *
- * Every fact on it is the chain's, read over RPC. Two additions sit in the
- * footer and are allowed to be missing: the ledger of the latest change, and a
- * link to its transaction, both from the index (`useRecordTrail`). With the
- * index down the footer links the RaceRecord contract instead, which is always
- * true and always reachable.
+ * Every fact on it is the chain's, read over RPC, including the footer's
+ * "Last updated", the latest of the record's own timestamps. That replaced a
+ * ledger number (Ancung, 2026-09-16): it proves the same thing to a person who
+ * cannot read a ledger. The one addition allowed to be missing is the link to
+ * the latest transaction, from the index (`useRecordTrail`); with the index
+ * down the footer links the RaceRecord contract instead, which is always true.
  *
  * The facts row follows the handoff's alignment rule: columns share the width,
  * each at least as wide as its own value, the last one against the right edge,
@@ -20,10 +21,9 @@ import type { SterunRecord } from "@sterunxyz/sdk";
 import { EXPLORER_BASE } from "@/lib/chain/env";
 import type { EventSummary } from "@/lib/event/events";
 import { cn } from "@/utils/cn";
-import { formatLedger } from "@/utils/format";
 
 import { useRecordTrail } from "../hooks/useRecordTrail";
-import { formatFactDay, formatRaceDay } from "../lib/profile-summary";
+import { formatFactDay, formatRaceDay, lastChangedAt } from "../lib/profile-summary";
 import { recordDocument } from "../lib/record-document";
 import { finishSlot, meaningOf } from "../lib/record-meaning";
 import { RecordChip } from "./RecordChip";
@@ -83,7 +83,6 @@ export function RecordCard({ record, summary, city, owner }: RecordCardProps) {
   const category = summary?.categories.find((candidate) => candidate.categoryId === record.categoryId);
 
   const txHash = trail.data?.txHash ?? null;
-  const ledger = trail.data?.ledger ?? null;
 
   return (
     <article
@@ -112,7 +111,8 @@ export function RecordCard({ record, summary, city, owner }: RecordCardProps) {
         />
       </dl>
 
-      <footer className="flex items-center justify-end gap-4 border-t border-n-200 pt-4 text-sm text-n-600 tabular-nums">
+      <footer className="flex items-center justify-between gap-4 border-t border-n-200 pt-4 text-sm text-n-600 tabular-nums">
+        <span>Last updated {formatFactDay(lastChangedAt(record))}</span>
         {txHash && EXPLORER_BASE ? (
           <a
             href={`${EXPLORER_BASE}/tx/${txHash}`}
@@ -132,7 +132,6 @@ export function RecordCard({ record, summary, city, owner }: RecordCardProps) {
             Check on Stellar Expert
           </a>
         ) : null}
-        {ledger ? <span>Ledger {formatLedger(ledger)}</span> : null}
       </footer>
     </article>
   );
