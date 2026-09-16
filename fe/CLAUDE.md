@@ -658,7 +658,7 @@ Once the race pack is collected the pass **stops making codes**: a second scan c
 The panel names the time from chain and no desk, because the chain carries a scanner address and no
 name for it.
 
-### `/scan` — the volunteer's desk (STE-22, round 1)
+### `/scan` — the volunteer's desk (STE-22)
 
 `modules/scanner/`. Design: `docs/superpowers/specs/2026-09-16-scanner-design.md`; plan:
 `docs/superpowers/plans/2026-09-16-scanner.md`; screens S1 to S8 from `docs/design/race-day/`.
@@ -692,8 +692,21 @@ What is settled:
 - **`/scan` lists a race for its organiser or an allowlisted scanner**, the same two the contract and
   the roster route accept, and lists every roster already on the phone with no signal and no wallet.
 - **A verdict vibrates, once for HAND OVER and twice for a refusal. No sound** (Ancung, 2026-09-16).
-- **Not built yet (round 2):** the queue screen, sending claims with `claimRacepack` one at a time,
-  and `/scan/[id]/flagged` for claims the chain refused.
+- **Claims go one transaction, one approval each** (`lib/send-claims.ts`, round 2). A Soroban
+  transaction holds exactly one contract call and the contract has no batch claim, so a desk that
+  handed over 300 packs asks its wallet 300 times. That is the chain, not this screen; a batch claim
+  would be a contract change.
+- **Sending starts on a tap** (`/scan/[id]/claims`), not on its own when signal returns as the
+  handoff says: every claim opens a wallet prompt, and one appearing over the desk mid-check is worse
+  than a button. Rows are sent in the order packs were handed over.
+- **Only `AlreadyClaimed` and `RecordNotFound` from `claimRacepack` itself are final**, and move the
+  row to `/scan/[id]/flagged`. `NotAuthorized`, a declined prompt, no answer or anything else stops
+  the run with the row still waiting. **No answer is never read as sent**: a retry of a claim that did
+  land shows up as refused, a false alarm, where the opposite reading would hide a real second pack.
+- **The refused list says a second pack may have gone out**, not the handoff's "the system working",
+  and it copies as plain lines for the organiser's chat.
+- **`markClaim` checks the row exists first.** idb-keyval's `update` stores whatever its updater
+  returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
 - **Open:** the pass shows the bib name and no number, while the manual fallback needs the number.
   Where a runner at the desk reads it from is still Ancung's call.
 

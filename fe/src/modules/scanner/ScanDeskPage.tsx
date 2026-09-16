@@ -37,13 +37,9 @@ import { useClockDrift } from "./hooks/useClockDrift";
 import { useQrReader } from "./hooks/useQrReader";
 import { vibrateFor } from "./lib/haptics";
 import type { ScannedCode } from "./lib/payload";
+import { scannerQueryKeys } from "./lib/query-keys";
 import { enqueueClaim, listClaims, readRoster } from "./lib/scanner-store";
 import { verdictFor, type Presented, type Verdict } from "./lib/verdict";
-
-const deskKeys = {
-  roster: (eventId: number) => ["scanner", "roster", eventId] as const,
-  claims: (eventId: number) => ["scanner", "claims", eventId] as const,
-};
 
 function queuedLabel(count: number): string {
   return `${count} queued`;
@@ -54,12 +50,12 @@ export function ScanDeskPage({ eventId }: { eventId: number }) {
   const queryClient = useQueryClient();
 
   const roster = useQuery({
-    queryKey: deskKeys.roster(eventId),
+    queryKey: scannerQueryKeys.roster(eventId),
     queryFn: async () => (await readRoster(eventId)) ?? null,
     staleTime: Number.POSITIVE_INFINITY,
   });
   const claims = useQuery({
-    queryKey: deskKeys.claims(eventId),
+    queryKey: scannerQueryKeys.claims(eventId),
     queryFn: () => listClaims(eventId),
     staleTime: 0,
   });
@@ -89,7 +85,7 @@ export function ScanDeskPage({ eventId }: { eventId: number }) {
           scannedAt: new Date().toISOString(),
           status: "waiting",
         });
-        await queryClient.invalidateQueries({ queryKey: deskKeys.claims(eventId) });
+        await queryClient.invalidateQueries({ queryKey: scannerQueryKeys.claims(eventId) });
       }
 
       vibrateFor(next.kind);
@@ -161,7 +157,12 @@ export function ScanDeskPage({ eventId }: { eventId: number }) {
           </span>
           <span className="flex shrink-0 gap-4 text-sm text-n-300">
             <span>{online ? "Online" : "Offline"}</span>
-            <span className="tabular-nums">{queuedLabel(waiting)}</span>
+            <Link
+              href={`/scan/${eventId}/claims`}
+              className="rounded-sm bg-n-800 px-3 py-1 text-n-100 tabular-nums underline-offset-4 hover:underline"
+            >
+              {queuedLabel(waiting)}
+            </Link>
           </span>
         </div>
       ) : null}

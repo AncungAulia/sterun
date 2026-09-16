@@ -385,6 +385,7 @@ must produce a readable message, not a crash.
 | --- | --- |
 | `/scan` | Choose an event, download the roster bundle + an on-chain state snapshot. Needs to be online, once |
 | `/scan/[id]` | Camera + a **GREEN/RED verdict in under 2 seconds**, manual input (6-digit code + bib), a banner if the device clock has drifted, a queue indicator |
+| `/scan/[id]/claims` | The race packs this phone handed over: waiting, sending one at a time with one wallet approval each, and done with the ledger it landed in. Sending starts on a tap |
 | `/scan/[id]/flagged` | Claims that reverted with `AlreadyClaimed(102)` — another desk won. For reconciliation, rather than disappearing quietly |
 
 The organiser can scan their own race: `claim_racepack` accepts the event's organiser **or** an

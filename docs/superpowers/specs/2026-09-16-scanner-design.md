@@ -183,6 +183,16 @@ A row the chain refuses with `AlreadyClaimed(102)` moves to the refused list rat
 dropped or retried: another desk won, the outcome is final, and the only thing left is for a person
 to see it.
 
+*As built (round 2), two departures from the handoff.* **Sending starts on a tap**, at
+`/scan/[eventId]/claims`, rather than by itself when signal returns: each claim is its own
+transaction with its own wallet approval (one `InvokeHostFunctionOp` per transaction, checked
+through Stellar Raven on 2026-09-16), and a prompt opening over the desk while a volunteer checks a
+runner is worse than a button. And **S11 says a second race pack may have gone out** instead of
+"the system working": the chain refused the second claim, but the pack this desk handed over is
+still in someone's hands, and that is what the organiser is checking for. No answer on a send is
+never read as success, so a claim that did land shows up as refused on retry, a false alarm rather
+than a hidden double handover.
+
 The queue count is on every scanner screen. "Did that send?" is then a question nobody has to ask.
 
 ---
