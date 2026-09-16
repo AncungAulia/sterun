@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,16 @@ export function WalletButton() {
         >
           <p className="text-xs text-n-500">Connected account</p>
           <p className="numeric mt-1 break-all text-sm text-n-800">{address}</p>
+          {/*
+            The public race record for this address (STE-24). A link rather
+            than a page of its own: /runner/G... is the URL a runner sends to
+            other people, so their own copy is that same page.
+          */}
+          <Button asChild variant="outline" size="sm" className="mt-3 w-full">
+            <Link href={`/runner/${address}`} onClick={() => setMenuOpen(false)}>
+              My race record
+            </Link>
+          </Button>
           {IS_TESTNET ? (
             <div className="mt-3 border-t border-n-200 pt-3">
               <div className="flex items-baseline justify-between gap-3">

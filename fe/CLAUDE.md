@@ -698,6 +698,9 @@ What is settled:
 - **`/scan` lists a race for its organiser or an allowlisted scanner**, the same two the contract and
   the roster route accept, and lists every roster already on the phone with no signal and no wallet.
 - **A verdict vibrates, once for HAND OVER and twice for a refusal. No sound** (Ancung, 2026-09-16).
+- **No ledger numbers on any scanner screen** (Ancung, 2026-09-16): nobody at a desk can read one.
+  The runner list shows when it was downloaded, a sent claim says "Sent". The ledger is still kept in
+  storage (`snapshotLedger`, `QueuedClaim.ledger`) for anyone reconciling later.
 - **Claims go one transaction, one approval each** (`lib/send-claims.ts`, round 2). A Soroban
   transaction holds exactly one contract call and the contract has no batch claim, so a desk that
   handed over 300 packs asks its wallet 300 times. That is the chain, not this screen; a batch claim
@@ -714,6 +717,42 @@ What is settled:
 - **`markClaim` checks the row exists first.** idb-keyval's `update` stores whatever its updater
   returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
 - **The runner reads the bib number for typing off their pass**, the first fact in its row.
+
+### `/runner/[address]` — a runner's public race record (STE-24)
+
+`modules/profile/`. Design: `docs/superpowers/specs/2026-09-16-runner-profile-design.md`; screens
+P1 to P12 from `docs/design/profile/`. What is settled:
+
+- **Four chain states, seven meanings** (`lib/record-meaning.ts`). `Finished` with a null time is
+  "No official time", never `0`; `Dnf` with no `claimedAt` is "Did not start"; a `Cancelled` event
+  turns an `Entered` or collected record into "Race cancelled", but never rewrites a result.
+- **The chain is the truth; the index only adds.** Records from `recordsOfDetailed`, races from
+  `getEventSummary` in the same cache entry `/events/[id]` uses, the city from the hash-checked
+  document. A card's footer says **"Last updated"** with the latest of the record's own timestamps,
+  not a ledger number (Ancung, 2026-09-16: a ledger is jargon to a runner). `GET /records/:tokenId`
+  adds a transaction link when it has one;
+  with the index down a card links the RaceRecord contract instead and loses nothing else. The
+  handoff's "no transaction link" (§9) predates the index storing `tx_hash` per transition.
+- **A failed read is never "No races yet".** P9 (the chain answered with none), P10 (not an
+  address, checked with `StrKey` before any call), P11 (could not load, with Try again) and P12
+  (loading) are four different screens and a test holds each apart.
+- **Each card's model goes through `buildRaceRecordDocument`**, which validates against JSON Schema
+  v1.0 and throws otherwise; the contract link is read out of that document.
+- **Newest first by `enteredAt`, never by bib; twenty a page, client side.**
+- **Labels in ordinary case**, like the pass, not the handoff's uppercase.
+- **Three ways in:** "My race record" in the wallet menu, "See your race record" on the success page
+  (only where this device holds the entry, so the runner address is known), and `/runner` to paste
+  any address.
+- **`formatLedger` lives in `utils/format.ts`**, moved up from the scanner on this second user.
+- **Proving a record is yours** (`components/ProveRecord.tsx`, round 2). Closed by default on each
+  card. `lib/participant-hash.ts` computes `participant_hash` on Web Crypto, tested against every hash
+  and refusal in `docs/specs/vectors/participant_hash.json` (removing NFC was tried and fails ph-03);
+  only the 32-byte result reaches `verify`. Copy is filtered for a runner, not taken from the
+  handoff as written: **fingerprint**, not hash; **receipt code**, not salt; **Check this record**, not
+  "Check against the contract"; no contract address; the 64-character fingerprint folded behind "See
+  what is checked". The fields live in component state only, clear after every answer (and on
+  Close), and stay put only when the check could not be asked. "Use the receipt code saved on this
+  device" appears when `lib/entry-store.ts` holds the entry, and fills on a press.
 
 ## Tests
 

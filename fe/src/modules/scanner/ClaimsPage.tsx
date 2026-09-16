@@ -28,7 +28,7 @@ import { useWallet } from "@/hooks/useWallet";
 
 import { useSendClaims } from "./hooks/useSendClaims";
 import { scannerQueryKeys } from "./lib/query-keys";
-import { formatClock, formatLedger } from "./lib/roster-facts";
+import { formatClock } from "./lib/roster-facts";
 import { listClaims, readRoster, type QueuedClaim } from "./lib/scanner-store";
 import type { SendStop } from "./lib/send-claims";
 
@@ -64,7 +64,9 @@ function Row({
     detail = ["Sending"];
     badge = <Badge variant="muted">Now</Badge>;
   } else if (claim.status === "sent") {
-    detail = ["Sent", ...(claim.ledger ? [`Ledger ${formatLedger(claim.ledger)}`] : [])];
+    // Sent, and nothing more: the ledger it landed in is kept on the phone for
+    // the record, but it means nothing to the person holding it.
+    detail = ["Sent"];
     badge = <Badge variant="success">Done</Badge>;
   } else {
     detail = [...(name ? [name] : []), formatClock(claim.scannedAt)];

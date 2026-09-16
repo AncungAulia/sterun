@@ -112,6 +112,13 @@ describe("connected", () => {
     expect(screen.getByRole("menu")).toHaveTextContent(ADDRESS);
   });
 
+  it("links this wallet's public race record from the menu (STE-24)", async () => {
+    render(<WalletButton />);
+    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
+
+    expect(screen.getByRole("link", { name: "My race record" })).toHaveAttribute("href", `/runner/${ADDRESS}`);
+  });
+
   it("disconnects from the menu and closes it", async () => {
     render(<WalletButton />);
     await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));

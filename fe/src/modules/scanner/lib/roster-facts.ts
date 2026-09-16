@@ -7,13 +7,6 @@
  */
 import type { StoredRoster } from "./scanner-store";
 
-const GROUPED = new Intl.NumberFormat("en-US");
-
-/** "4,469,811", the ledger the snapshot was read at. */
-export function formatLedger(ledger: number): string {
-  return GROUPED.format(ledger);
-}
-
 /**
  * "09:02", on this phone's clock and in its own timezone, which is the clock the
  * volunteer is looking at when they ask "is this download from this morning?".

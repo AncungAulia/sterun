@@ -23,7 +23,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 
-import { distanceOf, formatClock, formatLedger } from "../lib/roster-facts";
+import { distanceOf, formatClock } from "../lib/roster-facts";
 import type { StoredRoster } from "../lib/scanner-store";
 import type { Verdict } from "../lib/verdict";
 
@@ -168,9 +168,10 @@ export function VerdictPanel({ verdict, roster, waitingCount, onNext, onType }: 
             <Button className={primary} onClick={onNext}>
               Next runner
             </Button>
-            <p className="flex justify-center gap-6 text-sm text-n-300">
-              <span>Roster {formatClock(roster.downloadedAt)}</span>
-              <span>Ledger {formatLedger(roster.snapshotLedger)}</span>
+            {/* How old the list is, in the volunteer's own clock. No ledger
+                number: nobody at a desk can read one (Ancung, 2026-09-16). */}
+            <p className="text-center text-sm text-n-300">
+              Runner list downloaded at {formatClock(roster.downloadedAt)}
             </p>
           </ActionBar>
         </section>

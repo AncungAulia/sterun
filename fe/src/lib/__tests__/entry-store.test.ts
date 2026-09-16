@@ -1,4 +1,4 @@
-﻿/**
+/**
  * What this browser keeps about an entry it made. Backed by fake-indexeddb
  * (test/setup.ts), so the real idb-keyval code runs.
  */

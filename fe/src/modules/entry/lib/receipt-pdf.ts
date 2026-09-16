@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The receipt as a PDF page, drawn in the browser (STE-21, mockup block 6).
  *
  * What it says comes from `receipt.ts`, which is tested; this file only lays it
@@ -17,6 +17,26 @@ import type { StoredEntry } from "@/lib/entry-store";
 import { buildReceipt } from "./receipt";
 
 type Rgb = [number, number, number];
+
+/** How tall the lockup is drawn on the page, in points. */
+const LOGO_HEIGHT_PT = 16;
+
+/**
+ * How many pixels tall the lockup is painted before it goes into the PDF.
+ *
+ * 16 pt is 0.22 inch, so 67 px already prints it at 300 dpi; 96 px leaves room
+ * for a zoomed screen. The canvas used to be four times the SVG's own size,
+ * 4980 by 1600 pixels, and a receipt carrying it weighed 30 MB (Ancung, 2026-09-17).
+ * Measured in jspdf with an image of each size: 22.8 MB at the old size with or
+ * without compression, 0.09 MB at this one.
+ */
+export const LOGO_RASTER_HEIGHT_PX = 96;
+
+/** The canvas size for the lockup: its own proportions, at `LOGO_RASTER_HEIGHT_PX` tall. */
+export function logoRasterSize(naturalWidth: number, naturalHeight: number): { width: number; height: number } {
+  const height = LOGO_RASTER_HEIGHT_PX;
+  return { width: Math.max(1, Math.round((naturalWidth / naturalHeight) * height)), height };
+}
 
 /** A5, in points. */
 const PAGE_WIDTH = 419.53;
@@ -39,8 +59,11 @@ export async function downloadReceipt(entry: StoredEntry): Promise<void> {
 
   // Header: the lockup on the left, the title and date on the right.
   if (logo) {
-    const height = 16;
-    doc.addImage(logo.data, "PNG", MARGIN, y, (logo.width / logo.height) * height, height);
+    const height = LOGO_HEIGHT_PT;
+    // The size of the raster is what keeps this file small (see
+    // LOGO_RASTER_HEIGHT_PX). "FAST" asks jspdf to compress the image stream
+    // as well, which costs nothing at this size.
+    doc.addImage(logo.data, "PNG", MARGIN, y, (logo.width / logo.height) * height, height, undefined, "FAST");
   } else {
     doc.setFont("helvetica", "bold").setFontSize(14).setTextColor(...ink).text("STERUN", MARGIN, y + 13);
   }
@@ -89,7 +112,7 @@ export async function downloadReceipt(entry: StoredEntry): Promise<void> {
   doc.setFillColor(...tealSurface).setDrawColor(...tealBorder).setLineWidth(0.75);
   doc.rect(MARGIN, y, CONTENT, codeHeight, "FD");
   doc.setFont("helvetica", "bold").setFontSize(7.5).setTextColor(...teal);
-  doc.text("RECEIPT CODE Â· KEEP PRIVATE", MARGIN + 12, y + 15);
+  doc.text("RECEIPT CODE · KEEP PRIVATE", MARGIN + 12, y + 15);
   doc.setFont("courier", "normal").setFontSize(9).setTextColor(...ink);
   doc.text(code, MARGIN + 12, y + 29);
   y += codeHeight + 16;
@@ -110,8 +133,8 @@ function fileName(entry: StoredEntry): string {
 function fit(doc: { getTextWidth(text: string): number }, text: string, width: number): string {
   if (doc.getTextWidth(text) <= width) return text;
   let cut = text;
-  while (cut.length > 1 && doc.getTextWidth(`${cut}â€¦`) > width) cut = cut.slice(0, -1);
-  return `${cut}â€¦`;
+  while (cut.length > 1 && doc.getTextWidth(`${cut}…`) > width) cut = cut.slice(0, -1);
+  return `${cut}…`;
 }
 
 /** A token's colour as RGB, or the fallback when it does not resolve to a six-digit hex. */
@@ -123,8 +146,9 @@ function token(name: string, fallback: Rgb = [0, 0, 0]): Rgb {
 
 /**
  * The black lockup as a PNG. jspdf cannot draw SVG, so the file is painted onto
- * a canvas at four times its size first. Returns null on any failure, and the
- * header falls back to the word.
+ * a canvas first, at the size `logoRasterSize` gives, not at the SVG's own
+ * pixel size. Returns null on any failure, and the header falls back to the
+ * word.
  */
 async function logoPng(): Promise<{ data: string; width: number; height: number } | null> {
   try {
@@ -133,10 +157,10 @@ async function logoPng(): Promise<{ data: string; width: number; height: number 
     await image.decode();
     if (!image.naturalWidth || !image.naturalHeight) return null;
 
-    const scale = 4;
+    const size = logoRasterSize(image.naturalWidth, image.naturalHeight);
     const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth * scale;
-    canvas.height = image.naturalHeight * scale;
+    canvas.width = size.width;
+    canvas.height = size.height;
     const context = canvas.getContext("2d");
     if (!context) return null;
     context.drawImage(image, 0, 0, canvas.width, canvas.height);

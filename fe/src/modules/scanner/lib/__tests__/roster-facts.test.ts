@@ -5,14 +5,9 @@ import {
   distanceOf,
   driftLimitSeconds,
   formatClock,
-  formatLedger,
 } from "@/modules/scanner/lib/roster-facts";
 
 describe("roster facts", () => {
-  it("groups a ledger the way the design prints it", () => {
-    expect(formatLedger(4_469_811)).toBe("4,469,811");
-  });
-
   it("reads a time on a 24-hour clock in the given zone", () => {
     expect(formatClock("2026-09-27T02:02:00.000Z", "Asia/Jakarta")).toBe("09:02");
     expect(formatClock("2026-09-27T06:41:00.000Z", "Asia/Jakarta")).toBe("13:41");
