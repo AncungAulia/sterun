@@ -23,7 +23,9 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 
-import { distanceOf, formatClock, formatLedger } from "../lib/roster-facts";
+import { formatLedger } from "@/utils/format";
+
+import { distanceOf, formatClock } from "../lib/roster-facts";
 import type { StoredRoster } from "../lib/scanner-store";
 import type { Verdict } from "../lib/verdict";
 

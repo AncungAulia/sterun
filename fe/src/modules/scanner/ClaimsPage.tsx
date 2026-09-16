@@ -28,7 +28,9 @@ import { useWallet } from "@/hooks/useWallet";
 
 import { useSendClaims } from "./hooks/useSendClaims";
 import { scannerQueryKeys } from "./lib/query-keys";
-import { formatClock, formatLedger } from "./lib/roster-facts";
+import { formatLedger } from "@/utils/format";
+
+import { formatClock } from "./lib/roster-facts";
 import { listClaims, readRoster, type QueuedClaim } from "./lib/scanner-store";
 import type { SendStop } from "./lib/send-claims";
 

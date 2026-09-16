@@ -208,3 +208,12 @@ export function formatClaimedAt(claimedAt: bigint, timeZone?: string): string {
 
   return `${day}, ${time}`;
 }
+
+/**
+ * A whole number grouped for reading: a ledger sequence ("4,469,811") or a
+ * count. For plain integers only; money goes through `formatAmount`, which
+ * keeps the 7-decimal rule.
+ */
+export function formatLedger(ledger: number): string {
+  return GROUPED.format(ledger);
+}

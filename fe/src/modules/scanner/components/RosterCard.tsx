@@ -17,7 +17,9 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { formatClock, formatLedger } from "../lib/roster-facts";
+import { formatLedger } from "@/utils/format";
+
+import { formatClock } from "../lib/roster-facts";
 import type { StoredRoster } from "../lib/scanner-store";
 
 export interface RosterCardProps {

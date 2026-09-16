@@ -715,6 +715,32 @@ What is settled:
   returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
 - **The runner reads the bib number for typing off their pass**, the first fact in its row.
 
+### `/runner/[address]` — a runner's public race record (STE-24, round 1)
+
+`modules/profile/`. Design: `docs/superpowers/specs/2026-09-16-runner-profile-design.md`; screens
+P1 to P12 from `docs/design/profile/`. What is settled:
+
+- **Four chain states, seven meanings** (`lib/record-meaning.ts`). `Finished` with a null time is
+  "No official time", never `0`; `Dnf` with no `claimedAt` is "Did not start"; a `Cancelled` event
+  turns an `Entered` or collected record into "Race cancelled", but never rewrites a result.
+- **The chain is the truth; the index only adds.** Records from `recordsOfDetailed`, races from
+  `getEventSummary` in the same cache entry `/events/[id]` uses, the city from the hash-checked
+  document. `GET /records/:tokenId` adds the latest ledger and a transaction link when it has them;
+  with the index down a card links the RaceRecord contract instead and loses nothing else. The
+  handoff's "no transaction link" (§9) predates the index storing `tx_hash` per transition.
+- **A failed read is never "No races yet".** P9 (the chain answered with none), P10 (not an
+  address, checked with `StrKey` before any call), P11 (could not load, with Try again) and P12
+  (loading) are four different screens and a test holds each apart.
+- **Each card's model goes through `buildRaceRecordDocument`**, which validates against JSON Schema
+  v1.0 and throws otherwise; the contract link is read out of that document.
+- **Newest first by `enteredAt`, never by bib; twenty a page, client side.**
+- **Labels in ordinary case**, like the pass, not the handoff's uppercase.
+- **Three ways in:** "My race record" in the wallet menu, "See your race record" on the success page
+  (only where this device holds the entry, so the runner address is known), and `/runner` to paste
+  any address.
+- **`formatLedger` lives in `utils/format.ts`**, moved up from the scanner on this second user.
+- **Not built yet (round 2):** proving a record is yours (P4 to P8).
+
 ## Tests
 
 ```bash

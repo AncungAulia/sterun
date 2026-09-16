@@ -285,6 +285,11 @@ describe("EnteredPage", () => {
         "href",
         `/events/${EVENT_ID}`,
       );
+      // STE-24: the public record this entry joined, for the runner to send on.
+      expect(screen.getByRole("link", { name: "See your race record" })).toHaveAttribute(
+        "href",
+        `/runner/${stored.runner}`,
+      );
     });
 
     it("still asks a runner who never confirmed saving it", async () => {
