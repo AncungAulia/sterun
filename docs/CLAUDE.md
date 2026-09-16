@@ -9,6 +9,7 @@
 | `social/` | drafts of public content before it goes out, plus its URL afterwards | yes |
 | `WEB_APP_IA.md` | information architecture for `fe/`: the page map, the data limits per page, the shape of the event metadata document, the build order | yes, same rules as `SYSTEM_DESIGN.md` |
 | `specs/` | the **FROZEN** handoff contract (C4) | has its own rules → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
+| `rehearsal/` | the STE-25 mock race: `run.sh`, its sources, and one directory of evidence per run under `runs/` | the script yes; a run directory **never** — it is what the run wrote, failures included. Re-run instead |
 | `superpowers/` | design specs and implementation plans written before the code, one file per piece of work, dated | append a new file; leave the old ones as they were |
 
 ## `superpowers/` — the reasoning behind a piece of work

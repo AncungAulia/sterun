@@ -1,0 +1,1990 @@
+{
+  "meta": {
+    "started": "2026-09-16T15:40:08.201Z",
+    "network": "Stellar testnet",
+    "api": "https://api-sterun.jameshub.fun",
+    "EventRegistry": "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+    "RaceRecord": "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
+    "sUSD SAC": "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU",
+    "git": "1c4db6f",
+    "findings filed": "STE-61 (SDK, James), STE-62 (scanner, Ancung), STE-63 (console wording, Ancung); pre-existing: STE-32 (deploy), STE-24 (profile), STE-58 (results screen), STE-60 (batch results)",
+    "organiser": "GB7WZPXMLE6J5IFEV6DFUYXXXFZTKZUBKFLDTOJR75RDFRJ5B6KQVBQK",
+    "outsider (never allowlisted)": "GCPDQXBRG4T23INKEBMO2DBSMHA4PPFO46YMMWI2IHZ6TGIOQU4IEPX6",
+    "desk-A scanner": "GB5PG4KL3GF6LUICWN2KSRMJEXTOLMRVHMOAHVUECEOTGUX27BUWNQZS",
+    "desk-B scanner": "GBF4IXLU3N4VT72WLMQO3OH2LLGU5XVENHWIRO4X3IH4KORXXEILHI5G",
+    "runners": "R1 GC342BI3NVE2Z4JOLTGMZIW4YFGY5SJEYGC2Z5IN65IHWJTTTO3QBCVW, R2 GBPGHGV5YQ2DTFQ7UF6GWQ6AKAYMOO42PQNG3PSH6NAHQZ63E6LIDZEK, R3 GBRCI3O5FF3IEOZT77RHIGECZVNB66WOAT6O326E5EJUZMXEDIJY6PXI, R4 GDC36LZYWEERZDXL2FP2NPCD2BXS2ZOOYUUQBXYVBHNO3NDU5FYUIGX7, R5 GDDHOVCPU7DCOVRZT3WG3AA4LNXFFSOKU5FCBH5H5PQ43VEHTBNWV7FP, R6 GBSYIVPYRHMDRYWTAT2S4DUAPBSYQ7KQGJ25UNXVZOYYSFDYN464MYCF, R7 GDKMYTBNO4PFDOG7IRVZBQ2QJM6TSLTCSBDAI27VQJDS6L25QC7LECHQ, R8 GDMLW7LKZS5HHVFRCQGQWQXCH2GKUDDTIYTSZRVOVU5ZKDPKQTS7ALON, R9 GDTALIM57TEHSUYI2OOVK4IP4STRFKQL7422S75Y7APWOWPDZNVZBDV4",
+    "event_id": 26,
+    "finished": "2026-09-16T15:53:20.831Z",
+    "link check": "61/61 tx links resolve on Horizon and the stellar.expert API",
+    "failed txs on the ledger (expected only for 6.1's losing desk, if any)": "0fbb36a2db78e33bfad3cee731c821d97cb47f84139e499f6c17a50a74b7ec07"
+  },
+  "steps": [
+    {
+      "id": "S.1",
+      "proof": "S",
+      "title": "The live backend answers and serves the contracts in docs/deployments.md",
+      "driver": "API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:40:08.209Z",
+      "endedAt": "2026-09-16T15:40:10.421Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /health",
+          "url": "https://api-sterun.jameshub.fun/health",
+          "status": 200
+        },
+        {
+          "label": "GET /config",
+          "url": "https://api-sterun.jameshub.fun/config",
+          "status": 200
+        },
+        {
+          "label": "GET /indexer/status",
+          "url": "https://api-sterun.jameshub.fun/indexer/status",
+          "status": 200
+        },
+        {
+          "label": "EventRegistry",
+          "url": "https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+          "status": 200
+        },
+        {
+          "label": "RaceRecord",
+          "url": "https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "addresses match docs/deployments.md; vault true, indexer true, roster true, results true, faucet route true",
+        "indexer last_ledger 4709923, updated 2026-09-16T15:40:03.889Z"
+      ]
+    },
+    {
+      "id": "S.2",
+      "proof": "S",
+      "title": "Find the live web app and landing page",
+      "driver": "repo search + HTTP",
+      "status": "MANUAL REQUIRED",
+      "startedAt": "2026-09-16T15:40:10.422Z",
+      "endedAt": "2026-09-16T15:40:10.769Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "https://sterun.xyz",
+          "url": "https://sterun.xyz",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "the only web origin named in the repo besides the API is sterun.xyz (used in fixture uris); it answers 200 with a Hostinger 'Parked Domain' page, not the app",
+        "no Vercel URL for fe/ or landing-page/ exists anywhere in the repo or docs/deployments.md; STE-32 (Vercel deploy) is still Backlog",
+        "MANUAL REQUIRED (Ancung): deploy fe/ and landing-page/ (STE-32), then repeat proofs 1, 2, 4 and 9 through the UI with a browser wallet, and record the URLs here"
+      ],
+      "owner": "Ancung",
+      "ticket": "STE-32"
+    },
+    {
+      "id": "S.3",
+      "proof": "S",
+      "title": "Fund 13 fresh testnet accounts (organiser, outsider, 2 desks, 9 runners)",
+      "driver": "Friendbot",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:40:10.770Z",
+      "endedAt": "2026-09-16T15:41:23.592Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "organiser",
+          "url": "https://stellar.expert/explorer/testnet/account/GB7WZPXMLE6J5IFEV6DFUYXXXFZTKZUBKFLDTOJR75RDFRJ5B6KQVBQK",
+          "status": 200
+        },
+        {
+          "label": "outsider",
+          "url": "https://stellar.expert/explorer/testnet/account/GCPDQXBRG4T23INKEBMO2DBSMHA4PPFO46YMMWI2IHZ6TGIOQU4IEPX6",
+          "status": 200
+        },
+        {
+          "label": "desk-A",
+          "url": "https://stellar.expert/explorer/testnet/account/GB5PG4KL3GF6LUICWN2KSRMJEXTOLMRVHMOAHVUECEOTGUX27BUWNQZS",
+          "status": 200
+        },
+        {
+          "label": "desk-B",
+          "url": "https://stellar.expert/explorer/testnet/account/GBF4IXLU3N4VT72WLMQO3OH2LLGU5XVENHWIRO4X3IH4KORXXEILHI5G",
+          "status": 200
+        },
+        {
+          "label": "R1",
+          "url": "https://stellar.expert/explorer/testnet/account/GC342BI3NVE2Z4JOLTGMZIW4YFGY5SJEYGC2Z5IN65IHWJTTTO3QBCVW",
+          "status": 200
+        },
+        {
+          "label": "R2",
+          "url": "https://stellar.expert/explorer/testnet/account/GBPGHGV5YQ2DTFQ7UF6GWQ6AKAYMOO42PQNG3PSH6NAHQZ63E6LIDZEK",
+          "status": 200
+        },
+        {
+          "label": "R3",
+          "url": "https://stellar.expert/explorer/testnet/account/GBRCI3O5FF3IEOZT77RHIGECZVNB66WOAT6O326E5EJUZMXEDIJY6PXI",
+          "status": 200
+        },
+        {
+          "label": "R4",
+          "url": "https://stellar.expert/explorer/testnet/account/GDC36LZYWEERZDXL2FP2NPCD2BXS2ZOOYUUQBXYVBHNO3NDU5FYUIGX7",
+          "status": 200
+        },
+        {
+          "label": "R5",
+          "url": "https://stellar.expert/explorer/testnet/account/GDDHOVCPU7DCOVRZT3WG3AA4LNXFFSOKU5FCBH5H5PQ43VEHTBNWV7FP",
+          "status": 200
+        },
+        {
+          "label": "R6",
+          "url": "https://stellar.expert/explorer/testnet/account/GBSYIVPYRHMDRYWTAT2S4DUAPBSYQ7KQGJ25UNXVZOYYSFDYN464MYCF",
+          "status": 200
+        },
+        {
+          "label": "R7",
+          "url": "https://stellar.expert/explorer/testnet/account/GDKMYTBNO4PFDOG7IRVZBQ2QJM6TSLTCSBDAI27VQJDS6L25QC7LECHQ",
+          "status": 200
+        },
+        {
+          "label": "R8",
+          "url": "https://stellar.expert/explorer/testnet/account/GDMLW7LKZS5HHVFRCQGQWQXCH2GKUDDTIYTSZRVOVU5ZKDPKQTS7ALON",
+          "status": 200
+        },
+        {
+          "label": "R9",
+          "url": "https://stellar.expert/explorer/testnet/account/GDTALIM57TEHSUYI2OOVK4IP4STRFKQL7422S75Y7APWOWPDZNVZBDV4",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "all 13 accounts are throwaway keys created by this run; only the admin key comes from .env"
+      ]
+    },
+    {
+      "id": "S.4",
+      "proof": "S",
+      "title": "Organiser and runners open an sUSD trustline",
+      "driver": "classic changeTrust",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:41:23.593Z",
+      "endedAt": "2026-09-16T15:42:13.222Z",
+      "txs": [
+        {
+          "label": "organiser changeTrust",
+          "hash": "336fd23509c7de0aa331b8c6ceb73c81d63fbc87a1a03d6f5634422b5468aac7",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709940
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R1 changeTrust",
+          "hash": "a225bbfcbd7ea3fff9538e7fd225bf06584872f56974d0f4f427a0de50ccdf28",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709941
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R2 changeTrust",
+          "hash": "8e341381e06ddeb58f3034d9871ed58574f0a59600882d4ea34be7adc07d5d80",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709942
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R3 changeTrust",
+          "hash": "af2ac3e9d33f3f855b61e654e22aee8b5a9da519fafed508e488fe9a0dcc21e4",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709943
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R4 changeTrust",
+          "hash": "46a2351fe7ca6c437222be8883c54062542469c585a1214c0048ba75bc10b55f",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709944
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R5 changeTrust",
+          "hash": "9bb7c27b70104e85ee79974d2213f5dbed771e12a26baf603f65b00e0f2a9a04",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709945
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R6 changeTrust",
+          "hash": "4b23c8cde53a96001c5e9ba4a793360096c4e932ea1a3c09768247bcb87dc0ba",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709946
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R7 changeTrust",
+          "hash": "52672970d32bb89551f48fe0b63ac909e99e7d4b75d85d492ee2df3244356f62",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709947
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R8 changeTrust",
+          "hash": "7f55657a601a5c0b0e2a3f7408a7aa14737c6c23f8a5c33b2d332f65288b0773",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709948
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R9 changeTrust",
+          "hash": "041fc81f59cb59b563026680c3a1dd1729463065f38dd3ae4658714c56b1eea0",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709949
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": []
+    },
+    {
+      "id": "S.5",
+      "proof": "S",
+      "title": "Each runner gets test sUSD from the web app's faucet route (POST /faucet)",
+      "driver": "API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:42:13.224Z",
+      "endedAt": "2026-09-16T15:45:03.961Z",
+      "txs": [
+        {
+          "label": "R1 faucet 50 sUSD",
+          "hash": "f7e8d865a2cd8b0977167187e204086f5298c0a96c9f456968757b77d45b20cb",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709951
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R2 faucet 50 sUSD",
+          "hash": "2206026ff90d40ad32c3f0bf15f2783862a4b71d381eabaa60421f9a2fc1e9cf",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709955
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R3 faucet 50 sUSD",
+          "hash": "33d0aa0c6c5121c945beae577f4c1528835dc68aa1bf90926b97a41e1dde9cd5",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709959
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R4 faucet 50 sUSD",
+          "hash": "cae1bbd5291317e080f3daaa1041974b854c45b373572731008e4bfc566ad63a",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709962
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R5 faucet 50 sUSD",
+          "hash": "3ab0d4f2383e7b2a4851237582bdf5a4ca811b254f6896b5dec0709119fed95f",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709966
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R6 faucet 50 sUSD",
+          "hash": "bdfe72c544dfa64d08f1c388e729703696514efe7c6f2db43169253d02c249e8",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709970
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R7 faucet 50 sUSD",
+          "hash": "fec4c67cb7fa5a498cfd275e9cbb46315951ef2651278ec03f7735f715edfaa2",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709974
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R8 faucet 50 sUSD",
+          "hash": "c378665893543cc87672b7e871ca1d36d9bf241bddbe1df8d781bcea6cf1f165",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709978
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "R9 faucet 50 sUSD",
+          "hash": "7e450b8235f61cf910fce4107a8c56cb789e106c24af3001d6e305538e5daa7b",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709981
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /faucet",
+          "url": "https://api-sterun.jameshub.fun/faucet"
+        }
+      ],
+      "observations": []
+    },
+    {
+      "id": "1.1",
+      "proof": "1",
+      "title": "Admin allowlists the organiser (STE-36)",
+      "driver": "SDK",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:03.964Z",
+      "endedAt": "2026-09-16T15:45:09.030Z",
+      "txs": [
+        {
+          "label": "add_organiser",
+          "hash": "1008767b518e3c245b5bccba62c13a88f265ddeb8cd718d592d3075d94c06c45",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709984
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": []
+    },
+    {
+      "id": "N.1",
+      "proof": "N",
+      "title": "A non-allowlisted wallet tries to create a race",
+      "driver": "web app readClient + friendlyError",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:09.030Z",
+      "endedAt": "2026-09-16T15:45:09.777Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "refused: createEvent reverted with NotAllowlistedOrganiser (#18, event-registry)",
+        "sentence the web app shows: \"This wallet cannot publish races yet. Send its address to the Sterun team to be added.\"",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence"
+      ]
+    },
+    {
+      "id": "1.2",
+      "proof": "1",
+      "title": "Organiser creates the race: 2 categories with quota and sUSD price, then opens entries",
+      "driver": "SDK (console equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:09.778Z",
+      "endedAt": "2026-09-16T15:45:28.405Z",
+      "txs": [
+        {
+          "label": "create_event → event 26",
+          "hash": "c30847d9cfe5e63063bec4e9a6fc73c9b92d3c73b574cac89b4f00e8c3b86d3f",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709985
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "add_category R10K quota 4 @ 10 sUSD → 0",
+          "hash": "80eb9f255cf94f3564b99f8a7183751e26a6b8c7918bd6eb07b9ccfcf07ac269",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709986
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "add_category R5K quota 4 @ 5 sUSD → 1",
+          "hash": "1ce69e87d43f0158b38ca0a3fb056f3f4b6a62aed16c7b767749313cb5d5fc60",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709987
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Open",
+          "hash": "424abaad4ed24fef422995fc6616382aa13dbb43967c5697fa2def69029cb9c6",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709988
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "GET /events/26",
+          "url": "https://api-sterun.jameshub.fun/events/26",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "driven through @sterunxyz/sdk, the client the console uses; the console screens themselves are a separate MANUAL step (M.1)"
+      ]
+    },
+    {
+      "id": "N.2",
+      "proof": "N",
+      "title": "A wallet that is not this race's organiser tries to modify it",
+      "driver": "web app readClient + friendlyError",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:28.405Z",
+      "endedAt": "2026-09-16T15:45:32.766Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "addCategory: refused — addCategory could not be simulated: Transaction requires signatures from GB7WZPXMLE6J5IFEV6DFUYXXXFZTKZUBKFLDTOJR75RDFRJ5B6KQVBQK. See `needsNonInvokerSigningBy` for details.",
+        "addCategory: web app sentence \"Something went wrong. Please try again.\"",
+        "setEventStatus: refused — setEventStatus could not be simulated: Transaction requires signatures from GB7WZPXMLE6J5IFEV6DFUYXXXFZTKZUBKFLDTOJR75RDFRJ5B6KQVBQK. See `needsNonInvokerSigningBy` for details.",
+        "setEventStatus: web app sentence \"Something went wrong. Please try again.\"",
+        "increaseQuota: refused — increaseQuota could not be simulated: Transaction requires signatures from GB7WZPXMLE6J5IFEV6DFUYXXXFZTKZUBKFLDTOJR75RDFRJ5B6KQVBQK. See `needsNonInvokerSigningBy` for details.",
+        "increaseQuota: web app sentence \"Something went wrong. Please try again.\"",
+        "addScanner: refused — addScanner could not be simulated: Transaction requires signatures from GB7WZPXMLE6J5IFEV6DFUYXXXFZTKZUBKFLDTOJR75RDFRJ5B6KQVBQK. See `needsNonInvokerSigningBy` for details.",
+        "addScanner: web app sentence \"Something went wrong. Please try again.\"",
+        "chain state re-read afterwards: nothing changed. Refused at simulation (auth), so no transaction exists"
+      ]
+    },
+    {
+      "id": "2.R1",
+      "proof": "2",
+      "title": "R1 enters R10K through the entry flow and pays 10 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:32.766Z",
+      "endedAt": "2026-09-16T15:45:47.396Z",
+      "txs": [
+        {
+          "label": "enter → token 48",
+          "hash": "8283677cfcf7cda85a4fe55648450e49fc8d0b62f03caa1ff235cc345a8730a5",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709991
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash 74dc594f4a3e…)",
+          "url": "https://api-sterun.jameshub.fun/participants/28827824-422c-4f90-bbf6-7d644c017272"
+        }
+      ],
+      "observations": [
+        "bib 1, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 400000000 stroops, organiser 0 → 100000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R2",
+      "proof": "2",
+      "title": "R2 enters R10K through the entry flow and pays 10 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:47.398Z",
+      "endedAt": "2026-09-16T15:45:56.023Z",
+      "txs": [
+        {
+          "label": "enter → token 49",
+          "hash": "4a0785315648cd56e7b4d731f49d68f96bb8f04a760618092a4cc7279a330576",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709993
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash 7729ed8e3e2f…)",
+          "url": "https://api-sterun.jameshub.fun/participants/90d8256e-75e3-428a-a26f-eb7c6ef18162"
+        }
+      ],
+      "observations": [
+        "bib 2, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 400000000 stroops, organiser 100000000 → 200000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R3",
+      "proof": "2",
+      "title": "R3 enters R10K through the entry flow and pays 10 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:45:56.024Z",
+      "endedAt": "2026-09-16T15:46:06.474Z",
+      "txs": [
+        {
+          "label": "enter → token 50",
+          "hash": "ac67da15874fede54a90492a0750dfd83b62254a275f281c92ce7ca895d801ed",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709995
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash 62c9721c0943…)",
+          "url": "https://api-sterun.jameshub.fun/participants/153c62f3-9c73-4fca-b25a-9876df18286f"
+        }
+      ],
+      "observations": [
+        "bib 3, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 400000000 stroops, organiser 200000000 → 300000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R4",
+      "proof": "2",
+      "title": "R4 enters R10K through the entry flow and pays 10 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:46:06.477Z",
+      "endedAt": "2026-09-16T15:46:16.936Z",
+      "txs": [
+        {
+          "label": "enter → token 51",
+          "hash": "31a580ca9cb9c776326cac3dcf3ca487b2c5b7c8243139cc5582ec2ec2d38338",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709997
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash 868825fddcf9…)",
+          "url": "https://api-sterun.jameshub.fun/participants/7d1ab46b-92d0-40a7-84e2-6ebe621cd37d"
+        }
+      ],
+      "observations": [
+        "bib 4, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 400000000 stroops, organiser 300000000 → 400000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R5",
+      "proof": "2",
+      "title": "R5 enters R5K through the entry flow and pays 5 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:46:16.939Z",
+      "endedAt": "2026-09-16T15:46:26.537Z",
+      "txs": [
+        {
+          "label": "enter → token 52",
+          "hash": "d66117e4399d3dfc86482e44bb7e9cd00107792df01cc3d2cf4b97fa66353166",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4709999
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash ce56ade04214…)",
+          "url": "https://api-sterun.jameshub.fun/participants/d8a2f160-7bfe-485b-aa51-1998b202b78c"
+        }
+      ],
+      "observations": [
+        "bib 5, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 450000000 stroops, organiser 400000000 → 450000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R6",
+      "proof": "2",
+      "title": "R6 enters R5K through the entry flow and pays 5 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:46:26.538Z",
+      "endedAt": "2026-09-16T15:46:43.428Z",
+      "txs": [
+        {
+          "label": "enter → token 53",
+          "hash": "2a8f022bc29342e14b482fd330d254d998e03559b312cff15f2afeff572418b6",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710002
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash fa7d2b738bbc…)",
+          "url": "https://api-sterun.jameshub.fun/participants/8f875392-c6c4-4bd5-8014-7bd946824acc"
+        }
+      ],
+      "observations": [
+        "bib 6, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 450000000 stroops, organiser 450000000 → 500000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R7",
+      "proof": "2",
+      "title": "R7 enters R5K through the entry flow and pays 5 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:46:43.429Z",
+      "endedAt": "2026-09-16T15:46:56.605Z",
+      "txs": [
+        {
+          "label": "enter → token 54",
+          "hash": "7d81d6890c9ab36615460fc463b5a749652de288d2469b4508d10f6c6a0ec7d0",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710005
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash 201fbec8024d…)",
+          "url": "https://api-sterun.jameshub.fun/participants/38de7f64-db5f-4d7b-8c65-4baaa0e01b2c"
+        }
+      ],
+      "observations": [
+        "bib 7, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 450000000 stroops, organiser 500000000 → 550000000 stroops"
+      ]
+    },
+    {
+      "id": "2.R8",
+      "proof": "2",
+      "title": "R8 enters R5K through the entry flow and pays 5 sUSD",
+      "driver": "API + SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:46:56.607Z",
+      "endedAt": "2026-09-16T15:47:12.606Z",
+      "txs": [
+        {
+          "label": "enter → token 55",
+          "hash": "0493d4975a69be1a366205be5411130475736cdc5474497526996272b869bf63",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710008
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "POST /participants → 201 (participant_hash 98b893ec1d64…)",
+          "url": "https://api-sterun.jameshub.fun/participants/506d8b7b-1c85-4a6e-ba5f-e890b8a5c529"
+        }
+      ],
+      "observations": [
+        "bib 8, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 450000000 stroops, organiser 550000000 → 600000000 stroops"
+      ]
+    },
+    {
+      "id": "3.1",
+      "proof": "3",
+      "title": "R9 tries to enter R10K after it sold out (4/4)",
+      "driver": "API + web app readClient + classifyEnterFailure",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:12.607Z",
+      "endedAt": "2026-09-16T15:47:17.423Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "R10K entered_count 4 of quota 4",
+        "refused: enter reverted with QuotaFull (#5, event-registry)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "entry flow classification: {\"kind\":\"sold-out\"}",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence"
+      ]
+    },
+    {
+      "id": "Q.1",
+      "proof": "Q",
+      "title": "Organiser opens a second batch: R10K quota 4 → 5 (STE-55)",
+      "driver": "SDK",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:17.426Z",
+      "endedAt": "2026-09-16T15:47:25.380Z",
+      "txs": [
+        {
+          "label": "increase_quota 4 → 5",
+          "hash": "b83508470609b018cd1217f7edf66ecdd7eca606e041ec14f70579f51c514170",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710011
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "refused: increaseQuota reverted with QuotaNotIncreased (#19, event-registry)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence"
+      ]
+    },
+    {
+      "id": "Q.2",
+      "proof": "Q",
+      "title": "R9 enters R10K in the second batch, and the bib numbering continues",
+      "driver": "SDK (entry flow equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:25.381Z",
+      "endedAt": "2026-09-16T15:47:36.414Z",
+      "txs": [
+        {
+          "label": "enter → token 56",
+          "hash": "c768a331c56c289563882aebcad8a52f3626356e519c9a903f2e6fd66c7928a4",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710013
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "bib 9, state Entered, owner_of = runner",
+        "sUSD runner 500000000 → 400000000 stroops, organiser 600000000 → 700000000 stroops"
+      ]
+    },
+    {
+      "id": "Q.3",
+      "proof": "Q",
+      "title": "The index shows the new quota and the rise as a dated fact (STE-56)",
+      "driver": "API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:36.416Z",
+      "endedAt": "2026-09-16T15:47:41.886Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /events/26",
+          "url": "https://api-sterun.jameshub.fun/events/26",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "index: quota 5, entered 5, history [[4,5]]"
+      ]
+    },
+    {
+      "id": "B.1",
+      "proof": "B",
+      "title": "Bibs are unique within the event and count from 1 (STE-54): chain vs API",
+      "driver": "SDK + API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:41.887Z",
+      "endedAt": "2026-09-16T15:47:41.975Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /events/26/records",
+          "url": "https://api-sterun.jameshub.fun/events/26/records",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain bibs in entry order: R1=1, R2=2, R3=3, R4=4, R5=5, R6=6, R7=7, R8=8, R9=9",
+        "API /events/:id/records agrees with chain get_record for every bib"
+      ]
+    },
+    {
+      "id": "N.3",
+      "proof": "N",
+      "title": "Entries close; a runner tries to enter the Closed race",
+      "driver": "SDK + web app readClient + classifyEnterFailure",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:41.977Z",
+      "endedAt": "2026-09-16T15:47:50.888Z",
+      "txs": [
+        {
+          "label": "set_event_status Closed",
+          "hash": "890a21b5810d4eba72bb9d2dc85ef56b5dabb201d5707f054fce2b2393c05b1c",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710016
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "refused: enter reverted with EventNotOpen (#4, event-registry)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "entry flow classification: {\"kind\":\"closed\"}",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence",
+        "participant_hash here is random: the vault's one-entry-per-person rule would refuse a second submit first, and what is under test is the contract gate"
+      ]
+    },
+    {
+      "id": "N.4",
+      "proof": "N",
+      "title": "A second race is cancelled; a runner tries to enter it",
+      "driver": "SDK + web app readClient + classifyEnterFailure",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:47:50.889Z",
+      "endedAt": "2026-09-16T15:48:16.421Z",
+      "txs": [
+        {
+          "label": "create_event → event 27",
+          "hash": "06242b9f8cc44c612d72a1c0ea257dd069f9cde2c9bb8972e9c21937001f56b8",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710018
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "add_category R5K",
+          "hash": "68682a770161cdad0736ad6c35a1f720ae5b7fdc047e85866bc5429d71dc8f3d",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710019
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Open",
+          "hash": "96b312ca17b574558784d51c14f3cd95462b846fc77d93bcf8a4db3e35180d22",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710020
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Cancelled",
+          "hash": "11fbf3992d5b2bac0fe73a0b2cd52b9057ad6d2eb4ad59cd0ea852ec1de50975",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710021
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "refused: enter reverted with EventNotOpen (#4, event-registry)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "entry flow classification: {\"kind\":\"closed\"}",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence",
+        "entry flow classification for a cancelled race: {\"kind\":\"closed\"}",
+        "reopening refused: setEventStatus reverted with InvalidStatus (#11, event-registry)"
+      ]
+    },
+    {
+      "id": "4.0",
+      "proof": "4",
+      "title": "Organiser adds two scanner wallets, one per desk",
+      "driver": "SDK (console equivalent)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:48:16.424Z",
+      "endedAt": "2026-09-16T15:48:28.435Z",
+      "txs": [
+        {
+          "label": "add_scanner desk-A",
+          "hash": "3b58af71c62bf996b7f932ae0cd6c3c2791e1e0f0c49c0326d86c24a2707f47d",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710023
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "add_scanner desk-B",
+          "hash": "7d91b28f84599f2ed07d8e2a8ac41f07d0b1b4bcfc11a9caf2d1fc39b516c8ae",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710024
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": []
+    },
+    {
+      "id": "N.5",
+      "proof": "N",
+      "title": "A wallet that is not a scanner tries to claim a race pack",
+      "driver": "web app readClient",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:48:28.438Z",
+      "endedAt": "2026-09-16T15:48:29.167Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "refused: claimRacepack reverted with NotAuthorized (#104, race-record)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence"
+      ]
+    },
+    {
+      "id": "X.1",
+      "proof": "2",
+      "title": "Every runner's pass is restorable from the vault, linked from chain without a confirm call (STE-52/59)",
+      "driver": "API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:48:29.170Z",
+      "endedAt": "2026-09-16T15:48:33.653Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/:tokenId/pass (wallet-signed)",
+          "url": "https://api-sterun.jameshub.fun/records/48/pass"
+        }
+      ],
+      "observations": [
+        "all 9 passes answered 200 to their own wallet with the secret shown once at submit"
+      ]
+    },
+    {
+      "id": "4.1",
+      "proof": "4",
+      "title": "Both desks download the roster while online",
+      "driver": "desk processes: fe fetchRoster + saveRoster",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:48:33.658Z",
+      "endedAt": "2026-09-16T15:48:38.105Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /events/26/roster (scanner-signed)",
+          "url": "https://api-sterun.jameshub.fun/events/26/roster"
+        }
+      ],
+      "observations": [
+        "desk-A: 9 entries, snapshot ledger 4710025, missing_from_index 0, clock drift 0s",
+        "desk-B: 9 entries, snapshot ledger 4710025, missing_from_index 0, clock drift 0s",
+        "B: roster bib_no equals chain bib for all 9 runners on both desks"
+      ]
+    },
+    {
+      "id": "4.2",
+      "proof": "4",
+      "title": "Both desks lose signal; R4 shows the pass at BOTH desks, others at one",
+      "driver": "desk processes (offline: fetch disabled)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:48:38.107Z",
+      "endedAt": "2026-09-16T15:48:38.145Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "desk-A scans R4: GREEN, screen shows bib 4 (chain bib 4)",
+        "desk-B scans R4: GREEN, screen shows bib 4 (chain bib 4)",
+        "desk-A scans R1: GREEN, screen shows bib 1 (chain bib 1)",
+        "desk-A scans R2: GREEN, screen shows bib 2 (chain bib 2)",
+        "desk-A scans R3: GREEN, screen shows bib 3 (chain bib 3)",
+        "desk-A scans R5: GREEN, screen shows bib 5 (chain bib 5)",
+        "desk-B scans R6: GREEN, screen shows bib 6 (chain bib 6)",
+        "desk-B scans R7: GREEN, screen shows bib 7 (chain bib 7)",
+        "desk-B scans R9: GREEN, screen shows bib 9 (chain bib 9)",
+        "R8 never comes to a desk: the no-show"
+      ]
+    },
+    {
+      "id": "5.1",
+      "proof": "5",
+      "title": "Double claim at the same desk: desk-A scans R2 again, still offline",
+      "driver": "desk process: fe verdictFor",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:48:38.145Z",
+      "endedAt": "2026-09-16T15:48:38.146Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "desk-A scans R2: CLAIMED, screen shows bib 2 (chain bib 2), claimed at this desk"
+      ]
+    },
+    {
+      "id": "4.3",
+      "proof": "4 + 6",
+      "title": "Signal returns: both desks press Send at the same moment",
+      "driver": "desk processes: fe sendClaims → claim_racepack",
+      "status": "FAIL",
+      "startedAt": "2026-09-16T15:48:38.147Z",
+      "endedAt": "2026-09-16T15:49:08.375Z",
+      "txs": [
+        {
+          "label": "desk-A claim_racepack R4 (bib 4)",
+          "hash": "feb19afb0e922e8f5ab8d0759d5e913281e97778cb6f1132e5cd9652793b315a",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710028
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-A claim_racepack R1 (bib 1)",
+          "hash": "970183daba7815f023301847584000d24d0ed681c46eecd746151f368602caac",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710029
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-A claim_racepack R2 (bib 2)",
+          "hash": "18c21bb4086ca88c6baaa838a5af9e594469a06a1a0d40e2a0733a11acbcfbba",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710030
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-A claim_racepack R3 (bib 3)",
+          "hash": "166d997ec82ceec0bf1e459c84a7d8835d66ae09dfa750ab7aef5ef5946cc6bd",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710031
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-A claim_racepack R5 (bib 5)",
+          "hash": "d5ac14049578969be463dfae249e7f4b8d6655d88dbb21f6ca8d97d6b952e72a",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710032
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "network calls attempted while offline: desk-A 0, desk-B 0",
+        "desk-A started 2026-09-16T15:48:41.149Z, stop reason null",
+        "desk-A row R4: sent",
+        "desk-A row R1: sent",
+        "desk-A row R2: sent",
+        "desk-A row R3: sent",
+        "desk-A row R5: sent",
+        "desk-B started 2026-09-16T15:48:41.149Z, stop reason {\"kind\":\"failed\",\"message\":\"Something went wrong. Please try again.\"}",
+        "desk-B raw error sending R4: SterunNetworkError: claimRacepack could not be simulated: Cannot read properties of undefined (reading 'type')",
+        "desk-B row R4: waiting",
+        "desk-B row R6: waiting",
+        "desk-B row R7: waiting",
+        "desk-B row R9: waiting"
+      ],
+      "error": "Error: expected: both desks finish their queue in one press; stopped: desk-B {\"kind\":\"failed\",\"message\":\"Something went wrong. Please try again.\"}",
+      "owner": "James (SDK) + Ancung (scanner)",
+      "ticket": "STE-61, STE-62"
+    },
+    {
+      "id": "4.4",
+      "proof": "4",
+      "title": "A desk whose run stopped does what its screen says: presses Send again",
+      "driver": "desk processes: fe sendClaims",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:08.380Z",
+      "endedAt": "2026-09-16T15:49:26.485Z",
+      "txs": [
+        {
+          "label": "desk-B claim_racepack R6 (bib 6)",
+          "hash": "abf2e4136d8926a1af5955619afe178c3e4e66f70cfda9af8eb87b5330ca6f6d",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710033
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-B claim_racepack R7 (bib 7)",
+          "hash": "a98e5c15f8b5d383ea9cd36acb01e7d5b1509d17189cff7d933fc34cbd41cbd0",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710034
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-B claim_racepack R9 (bib 9)",
+          "hash": "b23c832efa50a5d8bed826d844abe1aa41731e89927ffbffcc59264df7d38f3c",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710035
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "desk-B showed \"Something went wrong. Please try again.\"; the volunteer presses Send again",
+        "desk-B started 2026-09-16T15:49:08.383Z, stop reason null",
+        "desk-B raw error sending R4: SterunContractError: claimRacepack reverted with AlreadyClaimed (#102, race-record)",
+        "desk-B row R4: refused (already-claimed)",
+        "desk-B row R6: sent",
+        "desk-B row R7: sent",
+        "desk-B row R9: sent",
+        "chain: all 8 runners who came are RacepackClaimed; R8 is still Entered"
+      ]
+    },
+    {
+      "id": "6.1",
+      "proof": "6",
+      "title": "Two offline desks claimed R4: the chain keeps one, the other desk flags it",
+      "driver": "desk processes + chain + RPC + Horizon",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:26.488Z",
+      "endedAt": "2026-09-16T15:49:34.697Z",
+      "txs": [
+        {
+          "label": "winner desk-A claim_racepack R4",
+          "hash": "feb19afb0e922e8f5ab8d0759d5e913281e97778cb6f1132e5cd9652793b315a",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710028
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "desk-B claim that FAILED on the ledger",
+          "hash": "0fbb36a2db78e33bfad3cee731c821d97cb47f84139e499f6c17a50a74b7ec07",
+          "horizon": {
+            "status": 200,
+            "successful": false,
+            "ledger": 4710028
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "desk-B transactions incl. failed (Horizon)",
+          "url": "https://horizon-testnet.stellar.org/accounts/GBF4IXLU3N4VT72WLMQO3OH2LLGU5XVENHWIRO4X3IH4KORXXEILHI5G/transactions?include_failed=true&order=asc&limit=50",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "desk-A R4 row: {\"tokenId\":51,\"bibNo\":4,\"eventId\":26,\"scannedAt\":\"2026-09-16T15:48:38.121Z\",\"status\":\"sent\",\"txHash\":\"feb19afb0e922e8f5ab8d0759d5e913281e97778cb6f1132e5cd9652793b315a\",\"ledger\":4710028}",
+        "desk-B R4 row: {\"tokenId\":51,\"bibNo\":4,\"eventId\":26,\"scannedAt\":\"2026-09-16T15:48:38.125Z\",\"status\":\"refused\",\"reason\":\"already-claimed\",\"claimedAt\":\"1789573727\"}",
+        "chain: R4 RacepackClaimed, claimed_at 1789573727; one pack is recorded, the second handover is what the flag is for",
+        "0fbb36a2…: status FAILED, ledger 4710028 (winner in ledger 4710028), diagnostic host_fn_failed contract error 102 = AlreadyClaimed",
+        "desk-B Flagged screen: [\"Already collected elsewhere at 22:48\"]",
+        "desk-B \"copy for organiser\": \"Refused claims for STE-25 Rehearsal Run 2026-09-16\\nBib 4: Already collected elsewhere at 22:48. Handed over at this desk at 22:48.\"",
+        "two desks = two OS processes, each with its own IndexedDB and queue, running the web app's scanner code; the two-phone repeat is M.3"
+      ]
+    },
+    {
+      "id": "5.2",
+      "proof": "5",
+      "title": "Double claim on chain: desk-A sends a claim for R2 again",
+      "driver": "web app readClient",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:34.698Z",
+      "endedAt": "2026-09-16T15:49:35.745Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "refused: claimRacepack reverted with AlreadyClaimed (#102, race-record)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence"
+      ]
+    },
+    {
+      "id": "N.6",
+      "proof": "N",
+      "title": "Organiser tries to record a finish for the no-show R8 (never claimed)",
+      "driver": "web app readClient",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:35.747Z",
+      "endedAt": "2026-09-16T15:49:36.399Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "refused: recordFinish reverted with InvalidState (#103, race-record)",
+        "sentence the web app shows: \"Something went wrong. Please try again.\"",
+        "refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence"
+      ]
+    },
+    {
+      "id": "X.2",
+      "proof": "4",
+      "title": "The index shows the claims and each desk's check-in count (STE-43)",
+      "driver": "API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:36.401Z",
+      "endedAt": "2026-09-16T15:49:37.524Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /events/26/scanners",
+          "url": "https://api-sterun.jameshub.fun/events/26/scanners",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "scanners: [{\"address\":\"GB5PG4KL3GF6LUICWN2KSRMJEXTOLMRVHMOAHVUECEOTGUX27BUWNQZS\",\"added_ledger\":4710023,\"added_at\":\"1789573702\",\"scans\":5},{\"address\":\"GBF4IXLU3N4VT72WLMQO3OH2LLGU5XVENHWIRO4X3IH4KORXXEILHI5G\",\"added_ledger\":4710024,\"added_at\":\"1789573707\",\"scans\":3}]"
+      ]
+    },
+    {
+      "id": "7.1",
+      "proof": "7",
+      "title": "Results CSV with a deliberate anomaly is held at preview",
+      "driver": "API (organiser-signed)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:37.526Z",
+      "endedAt": "2026-09-16T15:49:38.786Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "POST /events/26/results/preview",
+          "url": "https://api-sterun.jameshub.fun/events/26/results/preview"
+        }
+      ],
+      "observations": [
+        "CSV rows: 1,0:52:41,finished | 2,0:55:20,finished | 3,,dnf | 4,1:05:05,finished | 5,0:27:30,finished | 6,0:02:10,finished | 7,,untimed | 8,,dns | 9,1:07:00,finished | 999,0:45:00,finished",
+        "source_sha256 a04c6a3c9a7813d97174fd8fb0d2e4908f228a6dcb2d4ccc8f961ab1ff6fdd3d; counts {\"total\":10,\"publishable\":8,\"malformed_row\":0,\"unknown_bib\":1,\"ambiguous_bib\":0,\"duplicate_bib\":0,\"not_claimed\":0,\"already_final\":0,\"impossible_time\":1}",
+        "held: line 7 bib 6 → impossible_time/wrong: 130s over 5000m is 38.5 m/s, faster than any human over this distance — a time like 52:41 read as 5241 seconds does this",
+        "held: line 11 bib 999 → unknown_bib/reverts: no entry with bib 999 in this event"
+      ]
+    },
+    {
+      "id": "7.2",
+      "proof": "7",
+      "title": "The organiser corrects R6's time; the corrected file previews clean",
+      "driver": "API (organiser-signed)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:38.787Z",
+      "endedAt": "2026-09-16T15:49:40.631Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "POST /events/26/results/preview",
+          "url": "https://api-sterun.jameshub.fun/events/26/results/preview"
+        }
+      ],
+      "observations": [
+        "source_sha256 d8d93a1f1615f995ee0bf688aa18b059d2f74bada4d82fbca5fdbfc96b671dd6; counts {\"total\":9,\"publishable\":9,\"malformed_row\":0,\"unknown_bib\":0,\"ambiguous_bib\":0,\"duplicate_bib\":0,\"not_claimed\":0,\"already_final\":0,\"impossible_time\":0}"
+      ]
+    },
+    {
+      "id": "8.1",
+      "proof": "8",
+      "title": "Organiser records the 9 results, one transaction each",
+      "driver": "SDK (what the console would send)",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:49:40.636Z",
+      "endedAt": "2026-09-16T15:50:27.794Z",
+      "txs": [
+        {
+          "label": "record_finish 0:52:41 R1 (bib 1)",
+          "hash": "6a5f7477d9ea8e4ce809a5be7a1dcf981e95ecb3d775fd6d4b91d1698177a53d",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710040
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_finish 0:55:20 R2 (bib 2)",
+          "hash": "7cd405d3eeab0007c98c32ca8bd094589db9a8f08e63986dcf573c47cc6985e9",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710041
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_dnf R3 (bib 3)",
+          "hash": "cc81d648ed64eda4f3bf363996be73f3fe4159d21d3f3b1d580daedb62be03d9",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710042
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_finish 1:05:05 R4 (bib 4)",
+          "hash": "169236ea08e27d9703740e27f83e44991a1f17e34b0ed630930d1edb3a4aaa6c",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710043
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_finish 0:27:30 R5 (bib 5)",
+          "hash": "5f1160faa85f8657117327da1d61a5f3d86e0c68114717408a985ffa3cbcb8da",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710044
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_finish 0:29:59 R6 (bib 6)",
+          "hash": "2b89c1cdec21110de026295cddb118c2c34c3978480e2f43e7d251701071732a",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710045
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_finish_untimed R7 (bib 7)",
+          "hash": "8380b202f711b4427cd79877e911b38bee3db779c9f9cce039ad8818f0ebebf9",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710046
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_dnf R8 (bib 8)",
+          "hash": "588f87a3128f5605cea511af0a0645a639f9829aaaa79877513974826a282787",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710047
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "record_finish 1:07:00 R9 (bib 9)",
+          "hash": "2a63cd792864269d1ea7c3dd43b30338d01ce9f2ebbfba0bbdafec6447fd5958",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710048
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": [
+        "'batch' is nine signatures: the contract has no multi-result call yet (STE-60), and the console's CSV upload screen is STE-58 (Backlog)"
+      ]
+    },
+    {
+      "id": "N.7",
+      "proof": "N",
+      "title": "Re-uploading the same CSV after publishing: every row is held as already_final",
+      "driver": "API",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:27.797Z",
+      "endedAt": "2026-09-16T15:50:34.003Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "counts {\"total\":9,\"publishable\":0,\"malformed_row\":0,\"unknown_bib\":0,\"ambiguous_bib\":0,\"duplicate_bib\":0,\"not_claimed\":0,\"already_final\":9,\"impossible_time\":0}"
+      ]
+    },
+    {
+      "id": "9.R1",
+      "proof": "9",
+      "title": "Anyone can verify R1's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:34.007Z",
+      "endedAt": "2026-09-16T15:50:36.041Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/48",
+          "url": "https://api-sterun.jameshub.fun/records/48",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R1/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GC342BI3NVE2Z4JOLTGMZIW4YFGY5SJEYGC2Z5IN65IHWJTTTO3QBCVW/records",
+          "status": 200
+        },
+        {
+          "label": "R1 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GC342BI3NVE2Z4JOLTGMZIW4YFGY5SJEYGC2Z5IN65IHWJTTTO3QBCVW",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 1, finish_time_s 3161, claimed_at 1789573732, result_at 1789573787",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":48,\"owner\":\"GC342BI3NVE2Z4JOLTGMZIW4YFGY5SJEYGC2Z5IN65IHWJTTTO3QBCVW\",\"bib_no\":1,\"participant_hash\":\"74dc594f4a3e0e36148bd90654212c202f1b8747dbacdc9649e6"
+      ]
+    },
+    {
+      "id": "9.R2",
+      "proof": "9",
+      "title": "Anyone can verify R2's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:36.043Z",
+      "endedAt": "2026-09-16T15:50:38.263Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/49",
+          "url": "https://api-sterun.jameshub.fun/records/49",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R2/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GBPGHGV5YQ2DTFQ7UF6GWQ6AKAYMOO42PQNG3PSH6NAHQZ63E6LIDZEK/records",
+          "status": 200
+        },
+        {
+          "label": "R2 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GBPGHGV5YQ2DTFQ7UF6GWQ6AKAYMOO42PQNG3PSH6NAHQZ63E6LIDZEK",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 2, finish_time_s 3320, claimed_at 1789573737, result_at 1789573792",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":49,\"owner\":\"GBPGHGV5YQ2DTFQ7UF6GWQ6AKAYMOO42PQNG3PSH6NAHQZ63E6LIDZEK\",\"bib_no\":2,\"participant_hash\":\"7729ed8e3e2fbafd1699c689fa17f1d8d4033357128f1d7318ad"
+      ]
+    },
+    {
+      "id": "9.R3",
+      "proof": "9",
+      "title": "Anyone can verify R3's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:38.264Z",
+      "endedAt": "2026-09-16T15:50:40.169Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/50",
+          "url": "https://api-sterun.jameshub.fun/records/50",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R3/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GBRCI3O5FF3IEOZT77RHIGECZVNB66WOAT6O326E5EJUZMXEDIJY6PXI/records",
+          "status": 200
+        },
+        {
+          "label": "R3 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GBRCI3O5FF3IEOZT77RHIGECZVNB66WOAT6O326E5EJUZMXEDIJY6PXI",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Dnf, bib 3, finish_time_s null, claimed_at 1789573742, result_at 1789573797",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":50,\"owner\":\"GBRCI3O5FF3IEOZT77RHIGECZVNB66WOAT6O326E5EJUZMXEDIJY6PXI\",\"bib_no\":3,\"participant_hash\":\"62c9721c09431d3ddf7c393cb720a02fa78b397cad291e457e11"
+      ]
+    },
+    {
+      "id": "9.R4",
+      "proof": "9",
+      "title": "Anyone can verify R4's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:40.171Z",
+      "endedAt": "2026-09-16T15:50:42.406Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/51",
+          "url": "https://api-sterun.jameshub.fun/records/51",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R4/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GDC36LZYWEERZDXL2FP2NPCD2BXS2ZOOYUUQBXYVBHNO3NDU5FYUIGX7/records",
+          "status": 200
+        },
+        {
+          "label": "R4 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GDC36LZYWEERZDXL2FP2NPCD2BXS2ZOOYUUQBXYVBHNO3NDU5FYUIGX7",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 4, finish_time_s 3905, claimed_at 1789573727, result_at 1789573802",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":51,\"owner\":\"GDC36LZYWEERZDXL2FP2NPCD2BXS2ZOOYUUQBXYVBHNO3NDU5FYUIGX7\",\"bib_no\":4,\"participant_hash\":\"868825fddcf9462a0be8f9b82dc301d58bf7280b003d3d8dabeb"
+      ]
+    },
+    {
+      "id": "9.R5",
+      "proof": "9",
+      "title": "Anyone can verify R5's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:42.408Z",
+      "endedAt": "2026-09-16T15:50:44.340Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/52",
+          "url": "https://api-sterun.jameshub.fun/records/52",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R5/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GDDHOVCPU7DCOVRZT3WG3AA4LNXFFSOKU5FCBH5H5PQ43VEHTBNWV7FP/records",
+          "status": 200
+        },
+        {
+          "label": "R5 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GDDHOVCPU7DCOVRZT3WG3AA4LNXFFSOKU5FCBH5H5PQ43VEHTBNWV7FP",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 5, finish_time_s 1650, claimed_at 1789573747, result_at 1789573807",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":52,\"owner\":\"GDDHOVCPU7DCOVRZT3WG3AA4LNXFFSOKU5FCBH5H5PQ43VEHTBNWV7FP\",\"bib_no\":5,\"participant_hash\":\"ce56ade04214d1965ee0e2c7a03ad966f6cc26d253d0a2e830f8"
+      ]
+    },
+    {
+      "id": "9.R6",
+      "proof": "9",
+      "title": "Anyone can verify R6's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:44.342Z",
+      "endedAt": "2026-09-16T15:50:46.475Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/53",
+          "url": "https://api-sterun.jameshub.fun/records/53",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R6/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GBSYIVPYRHMDRYWTAT2S4DUAPBSYQ7KQGJ25UNXVZOYYSFDYN464MYCF/records",
+          "status": 200
+        },
+        {
+          "label": "R6 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GBSYIVPYRHMDRYWTAT2S4DUAPBSYQ7KQGJ25UNXVZOYYSFDYN464MYCF",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 6, finish_time_s 1799, claimed_at 1789573752, result_at 1789573812",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":53,\"owner\":\"GBSYIVPYRHMDRYWTAT2S4DUAPBSYQ7KQGJ25UNXVZOYYSFDYN464MYCF\",\"bib_no\":6,\"participant_hash\":\"fa7d2b738bbcad92b56b4fa3d6d51d51530e78427f4067651d57"
+      ]
+    },
+    {
+      "id": "9.R7",
+      "proof": "9 + U",
+      "title": "Anyone can verify R7's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:46.478Z",
+      "endedAt": "2026-09-16T15:50:48.599Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/54",
+          "url": "https://api-sterun.jameshub.fun/records/54",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R7/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GDKMYTBNO4PFDOG7IRVZBQ2QJM6TSLTCSBDAI27VQJDS6L25QC7LECHQ/records",
+          "status": 200
+        },
+        {
+          "label": "R7 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GDKMYTBNO4PFDOG7IRVZBQ2QJM6TSLTCSBDAI27VQJDS6L25QC7LECHQ",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 7, finish_time_s null, claimed_at 1789573757, result_at 1789573817",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":54,\"owner\":\"GDKMYTBNO4PFDOG7IRVZBQ2QJM6TSLTCSBDAI27VQJDS6L25QC7LECHQ\",\"bib_no\":7,\"participant_hash\":\"201fbec8024d5ea6f84b0b3e00755688381d48496ca5c125e87f"
+      ]
+    },
+    {
+      "id": "9.R8",
+      "proof": "9",
+      "title": "Anyone can verify R8's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:48.602Z",
+      "endedAt": "2026-09-16T15:50:50.425Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/55",
+          "url": "https://api-sterun.jameshub.fun/records/55",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R8/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GDMLW7LKZS5HHVFRCQGQWQXCH2GKUDDTIYTSZRVOVU5ZKDPKQTS7ALON/records",
+          "status": 200
+        },
+        {
+          "label": "R8 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GDMLW7LKZS5HHVFRCQGQWQXCH2GKUDDTIYTSZRVOVU5ZKDPKQTS7ALON",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Dnf, bib 8, finish_time_s null, claimed_at null, result_at 1789573822",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":55,\"owner\":\"GDMLW7LKZS5HHVFRCQGQWQXCH2GKUDDTIYTSZRVOVU5ZKDPKQTS7ALON\",\"bib_no\":8,\"participant_hash\":\"98b893ec1d64d1aeb4b484330cc00823afb17287711941060d73"
+      ]
+    },
+    {
+      "id": "9.R9",
+      "proof": "9",
+      "title": "Anyone can verify R9's final record from chain and API, without a wallet",
+      "driver": "SDK read + API + spec reference hash",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:50.427Z",
+      "endedAt": "2026-09-16T15:50:52.328Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /records/56",
+          "url": "https://api-sterun.jameshub.fun/records/56",
+          "status": 200
+        },
+        {
+          "label": "GET /runners/R9/records",
+          "url": "https://api-sterun.jameshub.fun/runners/GDTALIM57TEHSUYI2OOVK4IP4STRFKQL7422S75Y7APWOWPDZNVZBDV4/records",
+          "status": 200
+        },
+        {
+          "label": "R9 on stellar.expert",
+          "url": "https://stellar.expert/explorer/testnet/account/GDTALIM57TEHSUYI2OOVK4IP4STRFKQL7422S75Y7APWOWPDZNVZBDV4",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "chain: state Finished, bib 9, finish_time_s 4020, claimed_at 1789573762, result_at 1789573827",
+        "recomputed hash matches; a one-character change does not verify",
+        "public JSON (C6): {\"schema_version\":\"1.0.0\",\"network\":{\"passphrase\":\"Test SDF Network ; September 2015\",\"event_registry\":\"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU\",\"race_record\":\"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW\"},\"token_id\":56,\"owner\":\"GDTALIM57TEHSUYI2OOVK4IP4STRFKQL7422S75Y7APWOWPDZNVZBDV4\",\"bib_no\":9,\"participant_hash\":\"c4fdfd749958a436b2092bb8e96839458eca1d9f8609ac2cdd51"
+      ]
+    },
+    {
+      "id": "X.3",
+      "proof": "X",
+      "title": "The race is marked Completed",
+      "driver": "SDK",
+      "status": "PASS",
+      "startedAt": "2026-09-16T15:50:52.331Z",
+      "endedAt": "2026-09-16T15:50:59.317Z",
+      "txs": [
+        {
+          "label": "set_event_status Completed",
+          "hash": "fd7806aa4a9f4f2a48ec519c8cf3ff74447cbd5a8cd6b65a28a8481864a09e96",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4710054
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [],
+      "observations": []
+    },
+    {
+      "id": "M.1",
+      "proof": "1",
+      "title": "Create the race through the organiser console UI",
+      "driver": "human + browser wallet",
+      "status": "MANUAL REQUIRED",
+      "startedAt": "2026-09-16T15:50:59.320Z",
+      "endedAt": "2026-09-16T15:50:59.320Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "MANUAL REQUIRED (Ancung): open /org/new on a deployed web app (none exists: S.2), connect an allowlisted wallet, create a race with two distances, quota and sUSD price, open it; record the event id and the tx hashes the wallet shows"
+      ],
+      "owner": "Ancung",
+      "ticket": "STE-32"
+    },
+    {
+      "id": "M.2",
+      "proof": "2",
+      "title": "Enter a race and pay through the entry flow UI with a browser wallet",
+      "driver": "human + browser wallet",
+      "status": "MANUAL REQUIRED",
+      "startedAt": "2026-09-16T15:50:59.322Z",
+      "endedAt": "2026-09-16T15:50:59.322Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "MANUAL REQUIRED (Ancung): on the deployed app, as a runner: Get test sUSD, fill the form, sign enter in Freighter; confirm the pass shows the same bib as GET /records/:id; repeat with a second wallet after the distance sells out and check the sold-out sentence"
+      ],
+      "owner": "Ancung",
+      "ticket": "STE-32"
+    },
+    {
+      "id": "M.3",
+      "proof": "6",
+      "title": "Two physical phones as offline desks, one runner at both",
+      "driver": "humans + 2 phones + camera",
+      "status": "MANUAL REQUIRED",
+      "startedAt": "2026-09-16T15:50:59.324Z",
+      "endedAt": "2026-09-16T15:50:59.324Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "MANUAL REQUIRED (Axel (coordination) + Ancung): two volunteers open /scan on two phones, connect two scanner wallets, download the roster, then switch BOTH to airplane mode; one runner shows the same pass QR to both cameras (both must show HAND OVER); turn signal back on and press Send on both phones within the same few seconds; record both phones' claims lists, the flagged screen on the losing phone, and the winner's tx hash. 6.1 ran the same code in two processes; this is the device-level repeat"
+      ],
+      "owner": "Axel (coordination) + Ancung",
+      "ticket": "STE-32"
+    },
+    {
+      "id": "M.4",
+      "proof": "9",
+      "title": "Public runner profile page",
+      "driver": "human + browser",
+      "status": "MANUAL REQUIRED",
+      "startedAt": "2026-09-16T15:50:59.326Z",
+      "endedAt": "2026-09-16T15:50:59.326Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "MANUAL REQUIRED (Ancung): build the public profile (STE-24, Backlog), open it for each rehearsal runner address in the evidence header and check state, finish time ('no official time' for R7, never 0) and the verify-hash panel"
+      ],
+      "owner": "Ancung",
+      "ticket": "STE-24"
+    },
+    {
+      "id": "M.5",
+      "proof": "M",
+      "title": "Screen footage, the team walkthrough, the demo video",
+      "driver": "Axel",
+      "status": "MANUAL REQUIRED",
+      "startedAt": "2026-09-16T15:50:59.327Z",
+      "endedAt": "2026-09-16T15:50:59.327Z",
+      "txs": [],
+      "urls": [],
+      "observations": [
+        "MANUAL REQUIRED (Axel): out of scope for this ticket by the brief: record screen footage, schedule the team walkthrough with every owner, and cut the demo video (STE-28)"
+      ],
+      "owner": "Axel",
+      "ticket": "STE-28"
+    }
+  ]
+}
