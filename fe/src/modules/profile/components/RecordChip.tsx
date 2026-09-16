@@ -3,11 +3,12 @@
  * then colour (docs/design/profile/README.md §4).
  *
  * Green against red is 1.41:1, so to a colour blind reader two chips side by
- * side are the same grey. Every meaning therefore carries its own shape: a ring
- * for entered, a box for the race pack, a tick, a cross, a single bar for a
+ * side are the same grey. Every meaning therefore carries its own shape: a
+ * ticket for entered (the handoff drew an empty ring, which read as a radio
+ * button or a spinner; Ancung, 2026-09-17), a box for the race pack, a tick, a cross, a single bar for a
  * runner who never started, and an alert for a race called off.
  */
-import { Check, CircleAlert, Circle, Minus, Package, X, type LucideIcon } from "lucide-react";
+import { Check, CircleAlert, Minus, Package, Ticket, X, type LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/utils/cn";
@@ -15,7 +16,7 @@ import { cn } from "@/utils/cn";
 import { CHIP_WORD, type MeaningKind } from "../lib/record-meaning";
 
 const LOOK: Record<MeaningKind, { icon: LucideIcon; className: string }> = {
-  entered: { icon: Circle, className: "border-teal-200 bg-teal-50 text-teal-700" },
+  entered: { icon: Ticket, className: "border-teal-200 bg-teal-50 text-teal-700" },
   collected: { icon: Package, className: "border-n-300 bg-n-200 text-n-700" },
   finished: { icon: Check, className: "border-success-border bg-success-surface text-success" },
   "finished-untimed": { icon: Check, className: "border-success-border bg-success-surface text-success" },
