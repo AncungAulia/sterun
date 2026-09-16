@@ -1385,6 +1385,37 @@ cd sdk && npm publish --access public
 npm view @sterunxyz/sdk version             # confirms what the registry serves
 ```
 
+
+### 0.3.0 — published 2026-09-16
+
+`@sterunxyz/sdk@0.3.0` is on npm as `latest`, published **2026-09-16T16:32:13.577Z** from the `lin1era` account.
+
+| | |
+| --- | --- |
+| version | `0.3.0` (MINOR: additive only, nothing a 0.2.0 consumer relies on changed) |
+| `dist.shasum` | `a4d109a4492ad014de159bb2adf5270a5f430b94` |
+| files / unpacked | 38 / 276,316 bytes |
+| what is new | signed event announcements (STE-40): `announcementMessage`, `verifyAnnouncement`, `announcementBodySha256`, `ANNOUNCEMENT_HEADER`, and `schema/announcement-v1.vectors.json` |
+| release commit | `d59989d` — `sdk/package.json` 0.3.0 and the `[0.3.0]` changelog heading |
+
+Checked against the registry by downloading the published tarball (`npm pack @sterunxyz/sdk@0.3.0`):
+
+```
+changelog heading: ## [0.3.0] — 2026-09-16
+verifyAnnouncement exported from dist/index.js: yes
+announcementMessage defined in dist/announcement.js: yes
+schema/announcement-v1.vectors.json: present, 2 cases
+increaseQuota (0.2.0) still present: yes
+```
+
+Unlike 0.2.0, the changelog inside this tarball is right: the release commit dated the heading **before**
+the upload, which is the order the release steps above now require.
+
+One thing worth knowing for next time: `npm view` a minute after the publish still showed `latest`
+as `0.2.0`, while the npm debug log already had the `PUT … 202` and exit 0. The registry had not
+finished propagating. Check again, or read the registry document directly, before concluding a
+publish failed.
+
 ---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
