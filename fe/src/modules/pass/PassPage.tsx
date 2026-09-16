@@ -59,7 +59,7 @@ export function PassPage({ tokenId }: { tokenId: number }) {
   });
 
   const entry = stored.data ?? null;
-  const { code, payload, secondsLeft } = usePassCode(tokenId, entry?.totpSecret ?? null);
+  const { code, payload, secondsLeft, step } = usePassCode(tokenId, entry?.totpSecret ?? null);
 
   // What the chain said, kept for the next visit, which may have no signal.
   useEffect(() => {
@@ -73,7 +73,7 @@ export function PassPage({ tokenId }: { tokenId: number }) {
 
   if (stored.isPending) {
     return (
-      <div className="mx-auto w-full max-w-md px-5 py-6">
+      <div className="mx-auto my-auto w-full max-w-md px-5 py-6">
         <div
           role="status"
           aria-label="Opening your pass"
@@ -91,7 +91,13 @@ export function PassPage({ tokenId }: { tokenId: number }) {
   const bibNo = record.data?.bibNo ?? entry.bibNo;
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-5 py-6">
+    /*
+      Centred both ways (Ancung, 2026-09-16). `my-auto` rather than a centring
+      container: it centres while there is room and behaves like ordinary
+      padding once the pass is taller than the screen, so nothing is ever cut
+      off the top on a small phone.
+    */
+    <div className="mx-auto my-auto flex w-full max-w-md flex-col gap-6 px-5 py-6">
       {!online && !claimed ? <OfflineNotice /> : null}
 
       <PassFacts
@@ -109,7 +115,7 @@ export function PassPage({ tokenId }: { tokenId: number }) {
         <>
           <div className="flex flex-col gap-4 rounded-lg border border-n-200 bg-card p-4">
             <PassQr payload={payload} />
-            <Countdown secondsLeft={secondsLeft} />
+            <Countdown secondsLeft={secondsLeft} step={step} />
           </div>
           <CodeRow code={code} />
           {secondsLeft <= ROLLOVER_SECONDS ? (

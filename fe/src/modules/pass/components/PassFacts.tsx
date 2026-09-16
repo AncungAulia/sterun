@@ -39,7 +39,7 @@ export function PassFacts({
       <dl className="flex flex-wrap gap-x-6 gap-y-3">
         {facts.map(([label, value]) => (
           <div key={label}>
-            <dt className="text-xs tracking-[0.1em] text-n-600 uppercase">{label}</dt>
+            <dt className="text-xs tracking-[0.1em] text-n-600">{label}</dt>
             <dd className="text-base text-ink">{value}</dd>
           </div>
         ))}
@@ -47,7 +47,7 @@ export function PassFacts({
 
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs tracking-[0.1em] text-n-600 uppercase">Bib</p>
+          <p className="text-xs tracking-[0.1em] text-n-600">Bib</p>
           <p className="heading-hero numeric text-bib text-ink">{bibNo}</p>
         </div>
         <Badge variant={claimed ? "success" : "accent"}>

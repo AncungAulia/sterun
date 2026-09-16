@@ -200,3 +200,21 @@ button:not(:disabled),
     animation-duration: 0s;
   }
 }
+
+/* The countdown on the pass. Transform rather than width, so the compositor
+   does the work on a mid-range phone, and one second of linear glide rather
+   than a jump per tick: the duration is the length of a tick, not a style
+   choice, which is why it is not one of the --motion-* tokens.
+
+   Reduced motion drops the glide, and the bar then steps once a second. The
+   information is still there, which is the rule for this bar (6.4). */
+.pass-countdown {
+  transform-origin: left;
+  transition: transform 1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pass-countdown {
+    transition: none;
+  }
+}
