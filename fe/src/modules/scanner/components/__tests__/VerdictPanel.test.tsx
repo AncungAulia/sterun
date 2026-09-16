@@ -129,7 +129,8 @@ describe("NOT ON ROSTER", () => {
     const panel = screen.getByRole("alert", { name: "Not on roster" });
     expect(panel).toHaveTextContent("512");
     expect(panel).toHaveTextContent("This bib is not in the download for this race.");
-    expect(panel).toHaveTextContent("Ledger 4,469,811");
+    expect(panel).toHaveTextContent("Runner list downloaded at");
+    expect(panel).not.toHaveTextContent("Ledger");
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Next runner"]);
   });
 

@@ -13,7 +13,6 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CONTRACTS } from "@/lib/chain/env";
 import { shortAddress } from "@/utils/format";
 
 import { CouldNotLoad, LoadingRecords, NoRaces, NotAnAddress } from "./components/ProfileStates";
@@ -60,13 +59,15 @@ function Profile({ address }: { address: string }) {
   const pages = pageCount(list.length);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[18rem_1fr] lg:gap-12">
+    <div className="grid gap-8 lg:grid-cols-[20rem_1fr] lg:gap-12">
       <aside className="flex flex-col gap-6">
         <div className="flex flex-col gap-3">
           <p className="text-xs tracking-[0.08em] text-n-600">Race record</p>
+          {/* One line always: split across two, the address read as two
+              different strings and pushed the copy button off to the side. */}
           <div className="flex items-center gap-3">
-            <h1 className="heading-hero text-4xl text-ink" title={address}>
-              {shortAddress(address, 6, 5)}
+            <h1 className="heading-hero text-4xl whitespace-nowrap text-ink" title={address}>
+              {shortAddress(address, 4, 4)}
             </h1>
             <CopyAddress address={address} />
           </div>
@@ -86,9 +87,7 @@ function Profile({ address }: { address: string }) {
         <div className="hidden flex-col gap-1 lg:flex">
           <p className="text-xs tracking-[0.08em] text-n-600">Where this comes from</p>
           <p className="text-sm text-n-600">
-            Read live from the race record contract on the Stellar testnet,{" "}
-            <span className="numeric text-n-700">{shortAddress(CONTRACTS.raceRecord, 6, 4)}</span>. Nothing on
-            this page is stored by Sterun.
+            Read live from the Stellar testnet each time this page opens. Nothing on it is stored by Sterun.
           </p>
         </div>
       </aside>

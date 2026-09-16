@@ -698,6 +698,9 @@ What is settled:
 - **`/scan` lists a race for its organiser or an allowlisted scanner**, the same two the contract and
   the roster route accept, and lists every roster already on the phone with no signal and no wallet.
 - **A verdict vibrates, once for HAND OVER and twice for a refusal. No sound** (Ancung, 2026-09-16).
+- **No ledger numbers on any scanner screen** (Ancung, 2026-09-16): nobody at a desk can read one.
+  The runner list shows when it was downloaded, a sent claim says "Sent". The ledger is still kept in
+  storage (`snapshotLedger`, `QueuedClaim.ledger`) for anyone reconciling later.
 - **Claims go one transaction, one approval each** (`lib/send-claims.ts`, round 2). A Soroban
   transaction holds exactly one contract call and the contract has no batch claim, so a desk that
   handed over 300 packs asks its wallet 300 times. That is the chain, not this screen; a batch claim

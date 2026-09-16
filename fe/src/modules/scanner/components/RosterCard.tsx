@@ -4,9 +4,10 @@
  * One race on S1: what it is, whether this phone holds its roster, and the one
  * thing to do next.
  *
- * Downloaded: the time and the ledger it was taken at, because that is the
- * only honest answer to "how current is what this desk checks against?", and
- * a way into the desk. Not downloaded: one button, and nothing else to read.
+ * Downloaded: the time it was taken, because that is the honest answer to
+ * "how current is what this desk checks against?", and a way into the desk.
+ * The snapshot's ledger number is kept in storage but not shown: a volunteer
+ * cannot read one (Ancung, 2026-09-16). Not downloaded: one button, and nothing else to read.
  *
  * Labels sit over their values in ordinary case, the way the pass lays out its
  * facts (Ancung dropped the uppercase labels there on 2026-09-16).
@@ -70,7 +71,6 @@ export function RosterCard({
         {roster ? (
           <>
             <Fact label="Downloaded" value={formatClock(roster.downloadedAt)} />
-            <Fact label="Ledger" value={formatLedger(roster.snapshotLedger)} />
           </>
         ) : null}
       </dl>

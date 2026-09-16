@@ -172,7 +172,7 @@ describe("downloading", () => {
     expect(await within(card).findByRole("link", { name: "Open scanner" })).toBeInTheDocument();
     // Once as the badge and once as the label over the time.
     expect(within(card).getAllByText("Downloaded")).toHaveLength(2);
-    expect(within(card).getByText("4,469,811")).toBeInTheDocument();
+    expect(within(card).queryByText(/Ledger|4,469,811/)).not.toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Download again" })).toBeInTheDocument();
   });
 

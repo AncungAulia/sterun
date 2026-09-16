@@ -106,7 +106,7 @@ describe("sending", () => {
     expect(await screen.findByRole("heading", { name: "No claims waiting" })).toBeInTheDocument();
     expect(chain.claimRacepack).toHaveBeenCalledWith(9228, wallet.address, expect.objectContaining({ publicKey: wallet.address }));
     expect(screen.getByText("Done")).toBeInTheDocument();
-    expect(screen.getByText("Ledger 4,469,902")).toBeInTheDocument();
+    expect(screen.queryByText(/Ledger/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "1 claim was refused" })).toHaveAttribute("href", `/scan/${eventId}/flagged`);
     expect((await listClaims(eventId)).map((row) => row.status)).toEqual(["sent", "refused"]);
   });
