@@ -198,7 +198,10 @@ const handlers: Record<string, (msg: Message) => Promise<unknown>> = {
           throw error;
         }
       },
-      claimedAtOf: async (tokenId) => (await readClient.recordOf(tokenId)).claimedAt,
+      recordOf: async (tokenId) => {
+        const record = await readClient.recordOf(tokenId);
+        return { state: record.state, claimedAt: record.claimedAt };
+      },
       mark: markClaim,
     });
 
