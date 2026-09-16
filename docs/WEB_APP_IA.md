@@ -407,7 +407,7 @@ hosted at `uri`.
 ```json
 {
   "poster_url": "https://...",
-  "location": { "name": "GBK, Jakarta", "lat": -6.218, "lng": 106.802 },
+  "location": { "name": "GBK, Jakarta", "lat": -6.218, "lng": 106.802, "maps_url": "https://maps.app.goo.gl/..." },
   "route_geojson": { "type": "LineString", "coordinates": [] },
   "schedule": [
     { "phase": "registration", "starts_at": "2026-09-01T00:00+07:00", "ends_at": "2026-09-20T23:59+07:00" },
@@ -449,10 +449,21 @@ hosted at `uri`.
   obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates until
   followed, and following one from a browser is blocked cross-origin — the console says so plainly
   at paste time, rather than after the event is frozen, and it says so a third way when a link
-  yielded only the map view. What is stored is **the two numbers**, not the URL: links go stale,
-  coordinates do not.
-- The `racepack` phase may carry `venue_lat` / `venue_lng` under the same rule. `venue` stays a string
-  so STE-13's reader does not change meaning.
+  yielded only the map view.
+  **Since 2026-09-17 the link is stored as well, as `maps_url`** (Ancung). This paragraph used to end
+  "what is stored is the two numbers, not the URL: links go stale, coordinates do not", and that was
+  the wrong trade. Two numbers open a nameless dropped pin, so "Fakultas Teknik UGM" pasted as a
+  place link reached runners as a point with no name; and a short share link from a phone, the most
+  common paste there, has no numbers to keep at all. So both are kept: `maps_url` is what "Open in
+  Maps" opens, and `lat` / `lng`, when the link carries them, are what sorting by distance uses. A
+  short link is accepted, and the console says it will not be sorted by distance. `maps_url` must be
+  an https Google Maps link (`google.<tld>/maps`, `maps.google.<tld>`, `maps.app.goo.gl`,
+  `goo.gl/maps`) with no credentials or port, checked by `googleMapsUrl` in `fe/src/utils/geo.ts`
+  when the document is written **and again when it is read**, since it becomes a button on a public
+  page. A document with coordinates and no `maps_url` (everything published before this) still opens
+  a pin built from them.
+- The `racepack` phase may carry `venue_lat` / `venue_lng` and `venue_maps_url` under the same rules.
+  `venue` stays a string so STE-13's reader does not change meaning.
 - **`cut_off` is a time**, the last moment a finish still counts — and **the contract does not enforce
   it at all**. `record_finish` accepts whatever time the organiser sends. The page and the form must
   present it as information, not as a rule.

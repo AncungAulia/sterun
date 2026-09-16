@@ -221,6 +221,17 @@ Form validation has two classes that appear at different times (`modules/organis
 other) appears immediately. An empty field is not necessarily wrong; contradictory dates certainly
 are.
 
+### Venue maps links (2026-09-17)
+
+**The wizard keeps the Google Maps link as pasted (`location.maps_url`, `racepack.venue_maps_url`)
+as well as the pin.** Before, only `lat`/`lng` were kept and "Open in Maps" built `?q=lat,lng`, which
+opens a nameless point: Ancung pasted Fakultas Teknik UGM and got a pin with no name. A short share
+link from the phone app (`maps.app.goo.gl`) has no pin but is now accepted, and `PinHint` says it will
+not be sorted by distance. `googleMapsUrl` (`utils/geo.ts`) is the one gate, run when the document is
+written and again in `lib/event/metadata.ts` when it is read: https only, Google map hosts only, no
+credentials or port. `openInMapsHref` prefers the link and falls back to the pin for older documents.
+Shape and reasoning: `docs/WEB_APP_IA.md` §6.
+
 ### `/` — the poster-first directory (2026-09-11)
 
 `modules/directory/`. Design: `docs/superpowers/specs/2026-09-11-directory-redesign-design.md`.

@@ -136,6 +136,38 @@ describe("TabTimeline", () => {
       );
     });
 
+    it("opens the organiser's own maps link when the document kept one, not a nameless pin", () => {
+      render(
+        <TabTimeline
+          document={{
+            schedule: [
+              {
+                phase: "racepack",
+                startsAt: "2026-11-18T09:00:00+07:00",
+                endsAt: "2026-11-20T21:00:00+07:00",
+                venue: "GOR UGM, Hall A",
+                venueLat: -7.77,
+                venueLng: 110.37,
+                venueMapsUrl: "https://maps.app.goo.gl/GorUgm",
+              },
+            ],
+            location: { name: "Fakultas Teknik UGM", lat: -7.765, lng: 110.372, mapsUrl: "https://maps.app.goo.gl/FtUgm" },
+          }}
+          startsAt={RACE_DAY}
+          now={BEFORE_ANYTHING}
+        />,
+      );
+
+      expect(within(item("Race pack collection opens")).getByRole("link", { name: /open in maps/i })).toHaveAttribute(
+        "href",
+        "https://maps.app.goo.gl/GorUgm",
+      );
+      expect(within(item("Race day")).getByRole("link", { name: /open in maps/i })).toHaveAttribute(
+        "href",
+        "https://maps.app.goo.gl/FtUgm",
+      );
+    });
+
     it("says when each distance goes off on race day, and where", () => {
       render(<TabTimeline document={RICH} startsAt={RACE_DAY} now={BEFORE_ANYTHING} />);
 

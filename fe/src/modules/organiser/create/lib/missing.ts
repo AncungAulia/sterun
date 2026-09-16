@@ -23,7 +23,7 @@
  * separately and shown as it happens, while `missingDetails` — which includes
  * it — is what Continue is judged against.
  */
-import { parseCoordinates } from "@/utils/geo";
+import { googleMapsUrl, parseCoordinates } from "@/utils/geo";
 import type { Missing } from "@/utils/missing-field";
 
 import type { EventDetails } from "../components/StepDetails";
@@ -50,13 +50,14 @@ export function missingDetails(details: EventDetails): Missing[] {
   if (!details.place.city) {
     missing.push({ field: "city", focusId: "city", message: "Pick a city." });
   }
-  if (!parseCoordinates(details.locationLink)) {
+  // A Google Maps link, or a pin on its own. The link opens the place for a
+  // runner; the pin, when the link carries one, is what orders races by distance.
+  // A short share link with no pin is accepted, and the field says what it costs.
+  if (!googleMapsUrl(details.locationLink) && !parseCoordinates(details.locationLink)) {
     missing.push({
       field: "locationLink",
       focusId: "location-link",
-      // The pin is what a "races near me" search uses, so a race without one
-      // is a race nobody finds by being close to it.
-      message: "Paste a Google Maps link with a pin in it, so runners can find the start.",
+      message: "Paste a Google Maps link for the start, so runners can find it.",
     });
   }
   if (!details.description.trim()) {

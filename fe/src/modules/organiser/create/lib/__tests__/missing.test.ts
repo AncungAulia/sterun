@@ -58,12 +58,17 @@ describe("missingDetails", () => {
       ]);
     });
 
-    it("rejects a maps link with no pin in it", () => {
-      // A shortened link carries no coordinates until it is followed, and
-      // following it from a browser is blocked.
+    it("accepts a short share link, which opens the place though it has no pin", () => {
+      // Kept as a link since 2026-09-17; the field's hint says what the missing
+      // pin costs, but the start is findable, so it does not block Continue.
       const shortened = details({ locationLink: "https://maps.app.goo.gl/abc" });
 
-      expect(fields(shortened)).toEqual(["locationLink"]);
+      expect(fields(shortened)).toEqual([]);
+    });
+
+    it("rejects a link that is not Google Maps at all", () => {
+      expect(fields(details({ locationLink: "https://example.com/where" }))).toEqual(["locationLink"]);
+      expect(fields(details({ locationLink: "somewhere near the stadium" }))).toEqual(["locationLink"]);
     });
   });
 

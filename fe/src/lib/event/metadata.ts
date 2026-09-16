@@ -22,6 +22,7 @@
  * `crypto.subtle` needs a secure context: HTTPS or localhost. Both deployments
  * qualify, and a page served over plain HTTP has larger problems than a poster.
  */
+import { googleMapsUrl } from "@/utils/geo";
 
 /** The parts of the document this app reads. Everything is optional. */
 export interface EventMetadata {
@@ -34,6 +35,8 @@ export interface EventMetadata {
     countryCode?: string;
     lat?: number;
     lng?: number;
+    /** The organiser's Google Maps link for the start, when the document has one that passes `googleMapsUrl`. */
+    mapsUrl?: string;
   };
   description?: string;
   waiverUrl?: string;
@@ -93,6 +96,8 @@ export interface MetadataPhase {
   /** Where that venue is, when the organiser pasted a link with a pin in it. */
   venueLat?: number;
   venueLng?: number;
+  /** The organiser's Google Maps link for the venue, when it passes `googleMapsUrl`. */
+  venueMapsUrl?: string;
   /** `HH:mm` opening hours that apply to each day of the phase. */
   dailyOpens?: string;
   dailyCloses?: string;
@@ -290,6 +295,7 @@ function parsePhase(raw: Record<string, unknown>): MetadataPhase {
     ...str(raw.venue, "venue"),
     ...(typeof raw.venue_lat === "number" ? { venueLat: raw.venue_lat } : {}),
     ...(typeof raw.venue_lng === "number" ? { venueLng: raw.venue_lng } : {}),
+    ...mapsUrl(raw.venue_maps_url, "venueMapsUrl"),
     ...str(raw.daily_opens, "dailyOpens"),
     ...str(raw.daily_closes, "dailyCloses"),
   };
@@ -311,7 +317,18 @@ function parseLocation(raw: Record<string, unknown>): NonNullable<EventMetadata[
     ...str(raw.country_code, "countryCode"),
     ...(typeof raw.lat === "number" ? { lat: raw.lat } : {}),
     ...(typeof raw.lng === "number" ? { lng: raw.lng } : {}),
+    ...mapsUrl(raw.maps_url, "mapsUrl"),
   };
+}
+
+/**
+ * A maps link from a document, checked again on the way in. The wizard only
+ * writes links that pass `googleMapsUrl`, but a document is only as careful as
+ * whoever wrote it, and this one becomes a button on a public page.
+ */
+function mapsUrl<K extends string>(value: unknown, key: K): Record<K, string> | Record<string, never> {
+  const url = typeof value === "string" ? googleMapsUrl(value) : null;
+  return url ? ({ [key]: url } as Record<K, string>) : {};
 }
 
 function str<K extends string>(value: unknown, key: K): Record<K, string> | Record<string, never> {

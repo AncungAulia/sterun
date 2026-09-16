@@ -23,7 +23,7 @@
  * event page will refuse to show it from then on (WEB_APP_IA.md §2.2). The
  * wizard therefore shows the finished document before anything is signed.
  */
-import { parseCoordinates } from "@/utils/geo";
+import { googleMapsUrl, parseCoordinates } from "@/utils/geo";
 
 /** One distance, as the document records it. Times are `HH:mm` on the race day. */
 export interface DocumentCategory {
@@ -124,6 +124,8 @@ interface Phase {
   venue?: string;
   venue_lat?: number;
   venue_lng?: number;
+  /** The organiser's Google Maps link for the venue, as pasted. */
+  venue_maps_url?: string;
   gun_start?: string;
   cut_off?: string;
 }
@@ -180,6 +182,8 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
       racepack.venue_lat = venuePin.lat;
       racepack.venue_lng = venuePin.lng;
     }
+    const venueMapsUrl = googleMapsUrl(draft.racepackVenueLink);
+    if (venueMapsUrl) racepack.venue_maps_url = venueMapsUrl;
     schedule.push(racepack);
   }
   schedule.push(raceDay);
@@ -194,6 +198,10 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
    * with only a city is still placed; a race with only coordinates is still
    * findable. The pin is what a "races near me" search would use, and the names
    * are what a person reads.
+   *
+   * The link is kept as well as the pin (Ancung, 2026-09-17): the pin alone
+   * opens a nameless point, the link opens the place, and a short share link
+   * from a phone has no pin to keep at all. See `googleMapsUrl` in utils/geo.
    */
   const pin = parseCoordinates(draft.locationLink);
   const location: Record<string, unknown> = {};
@@ -208,6 +216,8 @@ export function buildEventDocument(draft: EventDocumentDraft): string {
     location.lat = pin.lat;
     location.lng = pin.lng;
   }
+  const mapsUrl = googleMapsUrl(draft.locationLink);
+  if (mapsUrl) location.maps_url = mapsUrl;
   if (Object.keys(location).length > 0) document.location = location;
   document.schedule = schedule;
   if (draft.description) document.description = draft.description;
