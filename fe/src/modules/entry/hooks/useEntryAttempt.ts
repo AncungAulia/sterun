@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /**
  * Runs `modules/entry/lib/attempt.ts` against the vault, the wallet and the chain (STE-21).

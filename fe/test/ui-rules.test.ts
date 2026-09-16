@@ -176,6 +176,50 @@ describe("the manifest's two hex values", () => {
   });
 });
 
+describe("no text broken by a wrong encoding", () => {
+  /**
+   * A file rewritten through a tool that read UTF-8 as Windows-1252 turns every
+   * non-ASCII character into two or three Latin ones: the receipt code's mask
+   * showed three Latin letters for each of its four dots, and the success page's separator
+   * showed two. It shipped because the tests were rewritten by the same tool
+   * and asserted the broken text. The same rewrite left a byte-order mark at the
+   * top of each file, which is the second thing checked here.
+   *
+   * The markers are written as escapes so this file cannot trip its own sweep.
+   * The sweep covers tests too, since a test that agrees with a broken string is
+   * how the first one hid.
+   */
+  const MOJIBAKE = /\u00e2\u20ac|\u00c2[\u00a0-\u00bf]|\u00c3[\u0080-\u00bf]/;
+
+  function everyFile(dir: string, found: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) everyFile(full, found);
+      else if (/\.(tsx?|css)$/.test(entry.name)) found.push(relative(ROOT, full));
+    }
+    return found;
+  }
+
+  it("finds no mis-decoded characters and no byte-order mark in app/, src/ or test/", () => {
+    const offenders: string[] = [];
+    for (const file of [...everyFile(join(ROOT, "app")), ...everyFile(join(ROOT, "src")), ...everyFile(join(ROOT, "test"))]) {
+      const text = readFileSync(join(ROOT, file), "utf8");
+      if (text.charCodeAt(0) === 0xfeff) offenders.push(`${file}: starts with a byte-order mark`);
+      text.split(/\r?\n/).forEach((line, index) => {
+        if (MOJIBAKE.test(line)) offenders.push(`${file}:${index + 1} ${line.trim()}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("recognises the two strings that actually shipped, and leaves real characters alone", () => {
+    expect(MOJIBAKE.test("a3f1c0d5 \u00e2\u20ac\u00a2\u00e2\u20ac\u00a2 b2f3d40e")).toBe(true);
+    expect(MOJIBAKE.test("Elektro Dash \u00c2\u00b7 Nov 5, 2026")).toBe(true);
+    expect(MOJIBAKE.test("a3f1c0d5 \u2022\u2022\u2022\u2022 b2f3d40e")).toBe(false);
+    expect(MOJIBAKE.test("Jos\u00e9 Nu\u00f1ez, 10K \u00b7 Bib 128\u2026")).toBe(false);
+  });
+});
+
 describe("no custom property points at itself", () => {
   /**
    * `--radius-md: var(--radius-md)` inside `@theme inline` is a cycle. CSS does

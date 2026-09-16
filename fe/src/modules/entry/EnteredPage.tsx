@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /**
  * `/events/[id]/entered/[tokenId]`: the entry went through (STE-21, mockup block 5).
@@ -141,7 +141,7 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
         </span>
         <h1 className="heading-strong text-3xl text-ink">You&apos;re in!</h1>
         <p className="text-base text-n-500">
-          {summary.event.name} Â· {formatEventDate(summary.event.startsAt)}
+          {summary.event.name} · {formatEventDate(summary.event.startsAt)}
         </p>
       </div>
 
