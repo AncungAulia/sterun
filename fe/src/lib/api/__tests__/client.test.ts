@@ -74,6 +74,25 @@ describe("apiFetch", () => {
       await expect(apiFetch("/x")).rejects.toBeInstanceOf(ApiError);
     });
 
+    it("says the server could not be reached when the request never arrives", async () => {
+      // No signal, a dropped connection, or a browser refusing the response
+      // because this page's origin is not one the API accepts. fetch rejects
+      // with a bare TypeError for all of them, which used to reach the screen
+      // as "Something went wrong" with no hint that the fix is a better signal.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          throw new TypeError("Failed to fetch");
+        }),
+      );
+
+      const failure = await apiFetch("/auth/challenge").catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(ApiError);
+      expect(failure).toMatchObject({ status: 0, code: "unreachable" });
+      expect((failure as Error).message).toBe("Could not reach our server. Check your signal and try again.");
+    });
+
     it("survives an error body that is not the documented shape", async () => {
       // A proxy in front of the API can return HTML, and a client that assumes
       // JSON turns a 502 into a parse error nobody can act on.

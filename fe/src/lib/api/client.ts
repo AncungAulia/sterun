@@ -34,10 +34,20 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new ApiError(0, "no-api-url", "Sterun is not available right now. Please try again later.");
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { Accept: "application/json", ...init?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { Accept: "application/json", ...init?.headers },
+    });
+  } catch {
+    // The request never got an answer: no signal, a dropped connection, or a
+    // browser refusing the response because this page's origin is not one the
+    // API accepts. fetch says all of them with the same bare TypeError, so
+    // there is no telling them apart here. What the reader can do about the
+    // common one, at a race desk above all, is find a better signal.
+    throw new ApiError(0, "unreachable", "Could not reach our server. Check your signal and try again.");
+  }
 
   if (!response.ok) {
     // A proxy in front of the API can answer with HTML, so the documented

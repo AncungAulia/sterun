@@ -623,7 +623,8 @@ plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
 ### `/pass/[tokenId]` — the runner's pass (STE-21, round 2)
 
 Four states, from `docs/design/race-day/README.md` §2: valid, about to roll over, offline, and race
-pack collected. **The code is computed on the phone** (`modules/pass/lib/totp.ts`) against the
+pack collected. **The code is computed on the phone** (`lib/totp.ts`, shared with the scanner since
+STE-22) against the
 frozen definition in `docs/specs/HASH_AND_TOTP.md` §4, and tested against
 `docs/specs/vectors/totp.json` rather than against itself, because the backend and the scanner must
 produce the same six characters with no network between them. It is a **6-character string** with
@@ -644,14 +645,70 @@ that owns the record (`GET /records/:tokenId/pass`, STE-52) and stores it; the d
 network. The stored entry moved up to `lib/entry-store.ts` when the pass became its second reader,
 and `rememberPassFacts` writes back what the chain said, so the next visit is right with no signal.
 
-**The service worker is scoped to `/pass` and nothing else** (`public/pass-sw.js`, registered by
-`OfflineReady` from the `(offline)` layout). A worker over the origin would cache the directory and
-the race pages, and a cached quota is the one claim this product cannot break. It precaches
-nothing, so the first visit needs signal once, and the page says so.
+**The service worker is scoped to `/pass` on the pass and to `/scan` on the desk, and nothing else**
+(`public/offline-sw.js`, registered once per screen by `components/layout/OfflineReady.tsx` from
+the `(offline)` layout; it was `pass-sw.js` until STE-22, and `OfflineReady` unregisters that one).
+A worker over the origin would cache the directory and the race pages, and a cached quota is the one
+claim this product cannot break. `test/offline-sw.test.ts` runs the worker file itself and holds the
+line. It precaches nothing, so the first visit needs signal once, and the page says so. No
+`Service-Worker-Allowed` header: a worker at the origin root may already claim any scope below it,
+and the header an earlier version sent did nothing.
 
 Once the race pack is collected the pass **stops making codes**: a second scan can only be refused.
 The panel names the time from chain and no desk, because the chain carries a scanner address and no
 name for it.
+
+### `/scan` — the volunteer's desk (STE-22)
+
+`modules/scanner/`. Design: `docs/superpowers/specs/2026-09-16-scanner-design.md`; plan:
+`docs/superpowers/plans/2026-09-16-scanner.md`; screens S1 to S8 from `docs/design/race-day/`.
+What is settled:
+
+- **The decision is one pure function** (`lib/verdict.ts`) over what was presented, the roster and
+  this phone's claims. **Already claimed is checked before the code**: a valid code changes nothing
+  about a pack already handed over, and a stale code on a claimed record must still say claimed.
+  Claimed has two sources and both count, the roster's snapshot state and this phone's own claims.
+- **Codes are checked against the `verification` vectors** in `docs/specs/vectors/totp.json`
+  (`lib/verify.ts`), the set the backend answers too. A QR carries its step and the pair is checked as
+  a pair; a typed code has none and the whole window is tried. The tolerance comes from the roster
+  response, never a constant.
+- **A typed bib can match two runners** on an event created before STE-54. The code picks the runner
+  in that one case; everywhere else the order above holds.
+- **The QR is read by `BarcodeDetector` where it reads QR, and `jsQR` otherwise** (`lib/decoder.ts`).
+  Test support with `getSupportedFormats()`, not the constructor: desktop Chrome on Windows has the
+  constructor and no formats. `jsQR` is plain JavaScript, loaded only when needed, and its test reads
+  a real QR drawn by `qrcode` from a frozen payload.
+- **The camera stays mounted under the verdict and the typing sheet**, since its `<video>` holds the
+  stream, and it is `inert` while covered. A refused or missing camera opens straight on typing.
+- **A HAND OVER writes its claim before the verdict renders** (`lib/scanner-store.ts`, IndexedDB,
+  keyed by token, first write wins). What is queued is intent, not a signed transaction; round 2
+  sends it.
+- **The clock banner fires past one step (30 s), not the handoff's 90 s.** The ±1 step window is 90
+  seconds for a code, not for a clock: with the scanner d seconds off, scans start failing past 30
+  and all fail from 60 (`lib/roster-facts.ts`, `driftLimitSeconds`). Measured against this app's own
+  `Date` header with signal, against a true time learned earlier in the visit plus
+  `performance.now()` without, and otherwise from the drift stored at download. When nothing can
+  measure, "check again" takes the volunteer's word.
+- **`/scan` lists a race for its organiser or an allowlisted scanner**, the same two the contract and
+  the roster route accept, and lists every roster already on the phone with no signal and no wallet.
+- **A verdict vibrates, once for HAND OVER and twice for a refusal. No sound** (Ancung, 2026-09-16).
+- **Claims go one transaction, one approval each** (`lib/send-claims.ts`, round 2). A Soroban
+  transaction holds exactly one contract call and the contract has no batch claim, so a desk that
+  handed over 300 packs asks its wallet 300 times. That is the chain, not this screen; a batch claim
+  would be a contract change.
+- **Sending starts on a tap** (`/scan/[id]/claims`), not on its own when signal returns as the
+  handoff says: every claim opens a wallet prompt, and one appearing over the desk mid-check is worse
+  than a button. Rows are sent in the order packs were handed over.
+- **Only `AlreadyClaimed` and `RecordNotFound` from `claimRacepack` itself are final**, and move the
+  row to `/scan/[id]/flagged`. `NotAuthorized`, a declined prompt, no answer or anything else stops
+  the run with the row still waiting. **No answer is never read as sent**: a retry of a claim that did
+  land shows up as refused, a false alarm, where the opposite reading would hide a real second pack.
+- **The refused list says a second pack may have gone out**, not the handoff's "the system working",
+  and it copies as plain lines for the organiser's chat.
+- **`markClaim` checks the row exists first.** idb-keyval's `update` stores whatever its updater
+  returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
+- **Open:** the pass shows the bib name and no number, while the manual fallback needs the number.
+  Where a runner at the desk reads it from is still Ancung's call.
 
 ## Tests
 

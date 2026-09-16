@@ -23,9 +23,11 @@ is what decides the service worker's scope:
 - The QR pass and the scanner **must work fully without a signal** (`SYSTEM_DESIGN.md` §7:
   verification at a venue assumes zero connectivity).
 
-Those two demands are opposed, so no single service worker may own the whole origin. Since STE-21
-round 2 that worker exists: `fe/public/pass-sw.js`, registered from the `(offline)` layout and
-scoped to `/pass`. The scanner joins that group in STE-22.
+Those two demands are opposed, so no single service worker may own the whole origin. The worker is
+`fe/public/offline-sw.js`, registered from the `(offline)` layout once per screen: scoped to
+`/pass` on the runner's pass (STE-21 round 2) and to `/scan` on the volunteer's desk (STE-22). Each
+registration caches only its own path and the build's assets, so neither ever keeps a race page,
+and `fe/test/offline-sw.test.ts` holds that line.
 
 ```
 fe/app/
@@ -383,11 +385,13 @@ must produce a readable message, not a crash.
 | --- | --- |
 | `/scan` | Choose an event, download the roster bundle + an on-chain state snapshot. Needs to be online, once |
 | `/scan/[id]` | Camera + a **GREEN/RED verdict in under 2 seconds**, manual input (6-digit code + bib), a banner if the device clock has drifted, a queue indicator |
+| `/scan/[id]/claims` | The race packs this phone handed over: waiting, sending one at a time with one wallet approval each, and done with the ledger it landed in. Sending starts on a tap |
 | `/scan/[id]/flagged` | Claims that reverted with `AlreadyClaimed(102)` — another desk won. For reconciliation, rather than disappearing quietly |
 
-An organiser is **not** automatically a scanner: `claim_racepack` demands an address on the
-`is_scanner` allowlist. An organiser who wants to scan registers their own address through the
-console.
+The organiser can scan their own race: `claim_racepack` accepts the event's organiser **or** an
+address on the `is_scanner` allowlist (`sc/contracts/race_record/src/lib.rs`), and the roster
+route lets the same two in. This section used to say the opposite; the contract was checked on
+2026-09-16. `/scan` therefore lists a race for a wallet that organises it or is allowlisted for it.
 
 TOTP verification happens locally with ±1 step tolerance; claims are queued in IndexedDB and sent
 when connectivity returns.

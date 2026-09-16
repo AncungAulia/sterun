@@ -5,7 +5,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { useOnline } from "@/modules/pass/hooks/useOnline";
+import { useOnline } from "@/hooks/useOnline";
 
 /**
  * jsdom has no network, so the property the hook reads is redefined and put

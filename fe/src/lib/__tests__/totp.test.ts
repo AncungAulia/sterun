@@ -7,10 +7,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { codeAt, qrPayload, secondsLeft, timeStepOf } from "@/modules/pass/lib/totp";
+import { codeAt, qrPayload, secondsLeft, timeStepOf } from "@/lib/totp";
 
 const vectors = JSON.parse(
-  readFileSync(join(import.meta.dirname, "../../../../../../docs/specs/vectors/totp.json"), "utf8"),
+  readFileSync(join(import.meta.dirname, "../../../../docs/specs/vectors/totp.json"), "utf8"),
 ) as {
   vectors: {
     id: string;

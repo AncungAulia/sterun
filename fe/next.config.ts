@@ -11,21 +11,26 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["tendentiously-impalpable-dede.ngrok-free.dev"],
 
   /**
-   * The pass's service worker (STE-21 round 2).
+   * The offline worker for the pass and the desk (STE-21 round 2, STE-22).
    *
    * A cached service worker is a bug that outlives the deploy that caused it:
    * the browser would keep serving the old one, and with it an old cache, on a
-   * screen somebody is holding up at a desk. `Service-Worker-Allowed` is what
-   * lets a file served from the origin root claim the narrower `/pass` scope.
+   * screen somebody is holding up at a desk. Hence no-store.
+   *
+   * No `Service-Worker-Allowed`. An earlier version sent one, with a comment
+   * saying it was what let this file claim `/pass`. It was not: a worker's
+   * maximum scope defaults to its script's own directory, which for a file at
+   * the origin root is already `/`. The header only matters for a scope above
+   * the script, and the narrow scope is set where the worker is registered
+   * (`components/layout/OfflineReady.tsx`).
    */
   async headers() {
     return [
       {
-        source: "/pass-sw.js",
+        source: "/offline-sw.js",
         headers: [
           { key: "Content-Type", value: "application/javascript; charset=utf-8" },
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-          { key: "Service-Worker-Allowed", value: "/pass" },
         ],
       },
     ];
