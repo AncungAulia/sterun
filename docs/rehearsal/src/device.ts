@@ -182,13 +182,27 @@ const handlers: Record<string, (msg: Message) => Promise<unknown>> = {
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     const startedAt = new Date().toISOString();
 
+    // The raw error behind a stop, for the evidence only: sendClaims itself
+    // decides exactly as it does on a phone.
+    const errors: { tokenId: number; name: string; message: string }[] = [];
     const stop = await sendClaims(claims, {
-      send: (tokenId) => readClient.claimRacepack(tokenId, address, SterunClient.as(kp)),
+      send: async (tokenId) => {
+        try {
+          return await readClient.claimRacepack(tokenId, address, SterunClient.as(kp));
+        } catch (error) {
+          errors.push({
+            tokenId,
+            name: error instanceof Error ? error.name : typeof error,
+            message: (error instanceof Error ? error.message : String(error)).slice(0, 400),
+          });
+          throw error;
+        }
+      },
       claimedAtOf: async (tokenId) => (await readClient.recordOf(tokenId)).claimedAt,
       mark: markClaim,
     });
 
-    return { startedAt, finishedAt: new Date().toISOString(), stop, claims: await listClaims(eventId) };
+    return { startedAt, finishedAt: new Date().toISOString(), stop, errors, claims: await listClaims(eventId) };
   },
 
   /**

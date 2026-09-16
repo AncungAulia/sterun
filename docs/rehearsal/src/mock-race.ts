@@ -303,6 +303,7 @@ async function main(): Promise<void> {
   ev.meta.RaceRecord = deployments.raceRecord;
   ev.meta["sUSD SAC"] = deployments.susdSac;
   ev.meta.git = process.env.REHEARSAL_GIT ?? "unknown";
+  ev.meta["findings filed"] = "STE-61 (SDK, James), STE-62 (scanner, Ancung), STE-63 (console wording, Ancung); pre-existing: STE-32 (deploy), STE-24 (profile), STE-58 (results screen), STE-60 (batch results)";
 
   const organiser = newAccount();
   const outsider = newAccount(); // never allowlisted, never a scanner
@@ -737,71 +738,123 @@ async function main(): Promise<void> {
       s.check(claims.filter((c) => c.tokenId === r2.tokenId).length === 1, "the queue still holds R2 once");
     });
 
-    let syncA: { stop: unknown; claims: { tokenId: number; bibNo: number; status: string; txHash?: string; reason?: string }[]; startedAt: string } | undefined;
-    let syncB: typeof syncA;
-    await ev.step("4.3", "4", "Signal returns: both desks sync their queues at the same moment", "desk processes: fe sendClaims → claim_racepack", async (s) => {
+    type SyncResult = {
+      stop: { kind: string; message?: string } | null;
+      errors: { tokenId: number; name: string; message: string }[];
+      claims: { tokenId: number; bibNo: number; status: string; txHash?: string; reason?: string }[];
+      startedAt: string;
+    };
+    const syncs: Record<"desk-A" | "desk-B", SyncResult[]> = { "desk-A": [], "desk-B": [] };
+    const noteSync = (s: StepContext, name: string, sync: SyncResult) => {
+      s.note(`${name} started ${sync.startedAt}, stop reason ${JSON.stringify(sync.stop)}`);
+      for (const e of sync.errors) {
+        const r = runners.find((x) => x.tokenId === e.tokenId);
+        s.note(`${name} raw error sending ${r?.label}: ${e.name}: ${e.message}`);
+      }
+      for (const claim of sync.claims) {
+        const r = runners.find((x) => x.tokenId === claim.tokenId);
+        s.note(`${name} row ${r?.label}: ${claim.status}${claim.reason ? ` (${claim.reason})` : ""}`);
+      }
+    };
+    const recordSentTxs = (s: StepContext, name: string, before: SyncResult | undefined, after: SyncResult) => {
+      for (const claim of after.claims) {
+        const already = before?.claims.find((c) => c.tokenId === claim.tokenId)?.txHash;
+        if (claim.txHash && claim.txHash !== already) {
+          const r = runners.find((x) => x.tokenId === claim.tokenId);
+          s.tx(`${name} claim_racepack ${r?.label} (bib ${claim.bibNo})`, claim.txHash);
+        }
+      }
+    };
+
+    await ev.step("4.3", "4 + 6", "Signal returns: both desks press Send at the same moment", "desk processes: fe sendClaims → claim_racepack", async (s) => {
       const id = need(eventId, "event");
       const a = await deskA.call<{ offlineCallsBlocked: number }>("online");
       const b = await deskB.call<{ offlineCallsBlocked: number }>("online");
       s.note(`network calls attempted while offline: desk-A ${a.offlineCallsBlocked}, desk-B ${b.offlineCallsBlocked}`);
       const goAt = Date.now() + 3_000;
-      [syncA, syncB] = await Promise.all([
-        deskA.call<NonNullable<typeof syncA>>("sync", { eventId: id, goAt }),
-        deskB.call<NonNullable<typeof syncA>>("sync", { eventId: id, goAt }),
+      const [syncA, syncB] = await Promise.all([
+        deskA.call<SyncResult>("sync", { eventId: id, goAt }),
+        deskB.call<SyncResult>("sync", { eventId: id, goAt }),
       ]);
+      syncs["desk-A"].push(syncA);
+      syncs["desk-B"].push(syncB);
       for (const [name, sync] of [["desk-A", syncA], ["desk-B", syncB]] as const) {
-        s.note(`${name} started ${sync.startedAt}, stop reason ${JSON.stringify(sync.stop)}`);
-        for (const claim of sync.claims) {
-          const r = runners.find((x) => x.tokenId === claim.tokenId);
-          if (claim.txHash) s.tx(`${name} claim_racepack ${r?.label} (bib ${claim.bibNo})`, claim.txHash);
-          s.note(`${name} row ${r?.label}: ${claim.status}${claim.reason ? ` (${claim.reason})` : ""}`);
-        }
+        recordSentTxs(s, name, undefined, sync);
+        noteSync(s, name, sync);
       }
-      const expected = [r1, r2, r3, r4, r5, r6, r7, r9];
-      for (const r of expected) {
+      const stopped = ([["desk-A", syncA], ["desk-B", syncB]] as const).filter(([, sync]) => sync.stop !== null);
+      if (stopped.length > 0) {
+        s.owner = "James (SDK) + Ancung (scanner)";
+        s.ticket = "STE-61, STE-62";
+      }
+      s.check(stopped.length === 0, `both desks finish their queue in one press; stopped: ${stopped.map(([n, x]) => `${n} ${JSON.stringify(x.stop)}`).join("; ")}`);
+    });
+
+    await ev.step("4.4", "4", "A desk whose run stopped does what its screen says: presses Send again", "desk processes: fe sendClaims", async (s) => {
+      const id = need(eventId, "event");
+      let pressed = 0;
+      for (const [name, desk] of [["desk-A", deskA], ["desk-B", deskB]] as const) {
+        const last = syncs[name].at(-1);
+        if (!last || last.stop === null) continue;
+        pressed += 1;
+        s.note(`${name} showed "${last.stop.message ?? last.stop.kind}"; the volunteer presses Send again`);
+        const again = await desk.call<SyncResult>("sync", { eventId: id, goAt: 0 });
+        syncs[name].push(again);
+        recordSentTxs(s, name, last, again);
+        noteSync(s, name, again);
+        s.check(again.stop === null, `${name}'s second press finishes the queue`);
+      }
+      if (pressed === 0) s.note("no desk stopped, so nobody had to press Send twice");
+      for (const r of [r1, r2, r3, r4, r5, r6, r7, r9]) {
         const record = await sterun.recordOf(need(r.tokenId, "token"));
         s.check(record.state === "RacepackClaimed", `${r.label} RacepackClaimed on chain, got ${record.state}`);
       }
       s.check((await sterun.recordOf(need(r8.tokenId, "R8"))).state === "Entered", "R8 (no-show) still Entered");
-      const sentUncontested = [...syncA.claims, ...syncB.claims].filter((c) => c.tokenId !== r4.tokenId && c.status === "sent").length;
-      s.check(sentUncontested === 7, `7 uncontested claims sent, got ${sentUncontested}`);
+      s.note("chain: all 8 runners who came are RacepackClaimed; R8 is still Entered");
     });
 
-    await ev.step("6.1", "6", "Two offline desks claimed R4: the chain picks one winner, the other desk flags it", "desk processes + chain + Horizon", async (s) => {
-      const a = need(syncA, "desk-A sync").claims.find((c) => c.tokenId === r4.tokenId);
-      const b = need(syncB, "desk-B sync").claims.find((c) => c.tokenId === r4.tokenId);
+    await ev.step("6.1", "6", "Two offline desks claimed R4: the chain keeps one, the other desk flags it", "desk processes + chain + RPC + Horizon", async (s) => {
+      const finalRow = (name: "desk-A" | "desk-B") => syncs[name].at(-1)?.claims.find((c) => c.tokenId === r4.tokenId);
+      const a = finalRow("desk-A");
+      const b = finalRow("desk-B");
       s.note(`desk-A R4 row: ${JSON.stringify(a)}`);
       s.note(`desk-B R4 row: ${JSON.stringify(b)}`);
-      const rows = [a, b];
-      const winners = rows.filter((c) => c?.status === "sent");
-      const losers = rows.filter((c) => c?.status === "refused");
-      s.check(winners.length === 1 && losers.length === 1, `exactly one sent and one refused, got ${rows.map((c) => c?.status).join("/")}`);
+      const winners = [a, b].filter((c) => c?.status === "sent");
+      const losers = [a, b].filter((c) => c?.status === "refused");
+      s.check(winners.length === 1 && losers.length === 1, `exactly one sent and one refused, got ${[a, b].map((c) => c?.status).join("/")}`);
       const winnerName = a?.status === "sent" ? "desk-A" : "desk-B";
       const loserName = winnerName === "desk-A" ? "desk-B" : "desk-A";
       s.tx(`winner ${winnerName} claim_racepack R4`, winners[0]!.txHash!);
       s.check(losers[0]!.reason === "already-claimed", "loser refused as already-claimed");
       const record = await sterun.recordOf(need(r4.tokenId, "R4"));
-      s.note(`chain: R4 ${record.state}, claimed_at ${record.claimedAt}`);
+      s.note(`chain: R4 ${record.state}, claimed_at ${record.claimedAt}; one pack is recorded, the second handover is what the flag is for`);
 
-      // Did the loser's transaction reach the ledger (and fail there), or was it refused at simulation?
       const loserKey = loserName === "desk-A" ? deskKeys.A : deskKeys.B;
-      const history = await (await fetch(`${HORIZON}/accounts/${loserKey.publicKey()}/transactions?include_failed=true&order=desc&limit=20`)).json() as { _embedded: { records: { hash: string; successful: boolean; created_at: string }[] } };
+      const historyUrl = `${HORIZON}/accounts/${loserKey.publicKey()}/transactions?include_failed=true&order=asc&limit=50`;
+      const history = (await (await fetch(historyUrl)).json()) as { _embedded: { records: { hash: string; successful: boolean; ledger: number }[] } };
       const failed = history._embedded.records.filter((t) => !t.successful);
-      s.url(`${loserName} transactions incl. failed (Horizon)`, `${HORIZON}/accounts/${loserKey.publicKey()}/transactions?include_failed=true&order=desc&limit=20`);
-      if (failed.length > 0) {
-        for (const t of failed) s.tx(`${loserName} FAILED on-chain claim (AlreadyClaimed)`, t.hash);
-        s.note(`${loserName}'s claim reached the ledger and failed there: both desks simulated against the same Entered state and the ledger applied one first`);
-      } else {
-        s.note(`${loserName}'s claim for R4 was refused at simulation (AlreadyClaimed): the winner's transaction had already closed by the time it simulated, so no failed transaction exists on the ledger`);
+      s.url(`${loserName} transactions incl. failed (Horizon)`, historyUrl);
+      const winnerTx = await server.getTransaction(winners[0]!.txHash!);
+      for (const t of failed) {
+        s.tx(`${loserName} claim that FAILED on the ledger`, t.hash);
+        const got = await server.getTransaction(t.hash);
+        const diagnostics = JSON.stringify(got.status === rpc.Api.GetTransactionStatus.FAILED ? got.diagnosticEventsXdr ?? [] : []);
+        const code = /"host_fn_failed"\},\{"error":\{"contract":(\d+)\}/.exec(diagnostics)?.[1];
+        s.note(`${t.hash.slice(0, 8)}…: status ${got.status}, ledger ${t.ledger} (winner in ledger ${"ledger" in winnerTx ? winnerTx.ledger : "?"}), diagnostic host_fn_failed contract error ${code ?? "not found"}${code === "102" ? " = AlreadyClaimed" : ""}`);
+      }
+      if (failed.length === 0) {
+        s.note(`${loserName}'s claim never reached the ledger: it was refused at simulation because the winner's transaction had already closed`);
       }
       const flagged = await (loserName === "desk-A" ? deskA : deskB).call<{ lines: string[]; copied: string }>("flagged", { eventId: need(eventId, "event") });
-      s.note(`${loserName} flagged screen: ${JSON.stringify(flagged.lines)}`);
-      s.note(`${loserName} "copy for organiser" text: ${JSON.stringify(flagged.copied)}`);
+      s.note(`${loserName} Flagged screen: ${JSON.stringify(flagged.lines)}`);
+      s.note(`${loserName} "copy for organiser": ${JSON.stringify(flagged.copied)}`);
       s.check(flagged.lines.length === 1 && /Already collected elsewhere/.test(flagged.lines[0]!), "the flag appears on the losing desk");
-      s.note("two desks = two OS processes, each with its own IndexedDB and queue, running the web app's scanner code; the physical two-phone run is M.3");
+      s.note("two desks = two OS processes, each with its own IndexedDB and queue, running the web app's scanner code; the two-phone repeat is M.3");
     });
 
     await ev.step("5.2", "5", "Double claim on chain: desk-A sends a claim for R2 again", "web app readClient", async (s) => {
+      const before = await sterun.recordOf(need(r2.tokenId, "R2"));
+      if (before.state !== "RacepackClaimed") throw new BlockedError(`R2 is ${before.state}, not RacepackClaimed, so a second claim would be a first one`);
       const result = await consoleDevice.call("attempt", { secret: deskKeys.A.secret(), method: "claimRacepack", args: [need(r2.tokenId, "R2"), deskKeys.A.publicKey()] });
       expectRevert(s, result, { code: 102, variant: "AlreadyClaimed" });
     });
