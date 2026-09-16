@@ -107,6 +107,9 @@ describe("the pass", () => {
 
       expect(await screen.findByText("Sasando Run 2026")).toBeInTheDocument();
       expect(screen.getByText("128")).toBeInTheDocument();
+      // The name under the number: what tells a volunteer they have the right
+      // runner, where the number is what they read first.
+      expect(screen.getByText("SARI")).toBeInTheDocument();
       expect(screen.getByText("10K")).toBeInTheDocument();
       expect(screen.getByText("Kupang")).toBeInTheDocument();
       expect(screen.getByText("Entered")).toBeInTheDocument();
@@ -128,17 +131,18 @@ describe("the pass", () => {
   });
 
   describe("edge", () => {
-    it("says a code that just changed still works, only in the last five seconds", async () => {
+    it("keeps the code and nothing else under the QR, through a rollover", async () => {
       renderPass();
       await screen.findByText("Sasando Run 2026");
-      expect(screen.queryByText("A code that just changed still works")).not.toBeInTheDocument();
 
-      // The step has just begun, so 26 seconds leaves four.
+      // The step has just begun, so 26 seconds leaves four: the last stretch,
+      // where the mockup put a note about codes caught mid-change.
       await act(async () => {
         vi.advanceTimersByTime(26_000);
       });
 
-      expect(await screen.findByText("A code that just changed still works")).toBeInTheDocument();
+      expect(screen.queryByText("A code that just changed still works")).not.toBeInTheDocument();
+      expect(screen.getByText("Or use the code")).toBeInTheDocument();
     });
 
     it("reassures rather than alarms when the signal goes", async () => {

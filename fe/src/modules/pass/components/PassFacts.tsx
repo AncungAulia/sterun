@@ -17,6 +17,7 @@ export function PassFacts({
   startsAt,
   city,
   bibNo,
+  bibName,
   claimed,
 }: {
   raceName: string;
@@ -24,6 +25,8 @@ export function PassFacts({
   startsAt: bigint;
   city?: string;
   bibNo: number;
+  /** What the runner put on their bib. Absent on a phone that fetched the pass before the form asked. */
+  bibName?: string;
   claimed: boolean;
 }) {
   const facts: [string, string][] = [
@@ -46,9 +49,18 @@ export function PassFacts({
       </dl>
 
       <div className="flex items-end justify-between gap-4">
-        <div>
+        {/*
+          The number leads and the name sits under it (Ancung, 2026-09-16).
+          The number is what a volunteer reads first and what the manual
+          fallback asks for beside the code, so it keeps the large type; the
+          name is what tells them they are looking at the right runner.
+        */}
+        <div className="min-w-0">
           <p className="text-xs tracking-[0.1em] text-n-600">Bib</p>
           <p className="heading-hero numeric text-bib text-ink">{bibNo}</p>
+          {bibName ? (
+            <p className="heading-strong truncate text-lg tracking-wide text-ink">{bibName}</p>
+          ) : null}
         </div>
         <Badge variant={claimed ? "success" : "accent"}>
           {claimed ? "Race pack claimed" : "Entered"}

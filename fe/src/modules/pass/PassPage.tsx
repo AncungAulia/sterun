@@ -34,13 +34,11 @@ import { CodeRow } from "./components/CodeRow";
 import { Countdown } from "./components/Countdown";
 import { GetPassHere } from "./components/GetPassHere";
 import { PassFacts } from "./components/PassFacts";
-import { OfflineNotice, RolloverNotice } from "./components/PassNotices";
+import { OfflineNotice } from "./components/PassNotices";
 import { PassQr } from "./components/PassQr";
 import { useOnline } from "./hooks/useOnline";
 import { usePassCode } from "./hooks/usePassCode";
 
-/** The last five seconds of a step, where the rollover note belongs. */
-const ROLLOVER_SECONDS = 5;
 
 export function PassPage({ tokenId }: { tokenId: number }) {
   const online = useOnline();
@@ -106,6 +104,7 @@ export function PassPage({ tokenId }: { tokenId: number }) {
         startsAt={BigInt(entry.startsAt)}
         city={entry.city}
         bibNo={bibNo}
+        bibName={entry.bibName || undefined}
         claimed={claimed}
       />
 
@@ -117,14 +116,15 @@ export function PassPage({ tokenId }: { tokenId: number }) {
             <PassQr payload={payload} />
             <Countdown secondsLeft={secondsLeft} step={step} />
           </div>
-          <CodeRow code={code} />
           {/*
-            Nothing stands under the code the rest of the time (Ancung,
-            2026-09-16). The mockup reassures that the pass works without
-            signal, which is worth saying when the signal actually goes, and
-            the offline banner says it then.
+            Nothing stands under the code (Ancung, 2026-09-16). The mockup puts
+            two notes there: one reassuring that the pass works without signal,
+            which the offline banner already says when the signal actually
+            goes, and one explaining that a code caught mid-change is still
+            accepted. Neither earns its place on a screen held up at a desk,
+            and the scanner takes the step either side regardless.
           */}
-          {secondsLeft <= ROLLOVER_SECONDS ? <RolloverNotice /> : null}
+          <CodeRow code={code} />
         </>
       ) : (
         <ErrorNotice
