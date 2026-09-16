@@ -2784,3 +2784,49 @@ Migration 012's checksum is pinned in `be/test/migrate.test.ts`.
 The pass route serves confirmed rows only, so its 200 is the client-visible proof that the indexer
 linked the row. `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T12:36:58Z.
 
+---
+
+## STE-40 — signed event announcements, live (2026-09-16)
+
+`POST` and `GET /events/:eventId/announcements` on `https://api-sterun.jameshub.fun`, deployed at `99222a6`.
+Backup first: `/opt/sterun/backups/pre-announcements-20260916T102501Z.sql.gz`.
+
+```
+migrations: 012_chain_linked_participants.sql:6d392f01c0d71870 013_event_announcements.sql:ad3aac8ea8947730
+append-only triggers: event_announcements_no_update_or_delete event_announcements_no_truncate
+sterun-api-1 running restarts=0
+sterun-indexer-1 running restarts=0
+sterun-keeper-1 running restarts=0
+GET /events/0/announcements: {"event_id":0,"announcements":[],"count":0} [200]
+```
+
+Migration 013's checksum is pinned in `be/test/migrate.test.ts`; the local file matched production's
+recorded prefix before it was pinned.
+
+### End to end, against the public URL
+
+`pnpm --filter be e2e:announcements https://api-sterun.jameshub.fun` — a throwaway organiser on testnet,
+the announcement signed with `signMessage` (SEP-53) exactly as a browser wallet signs it, and re-verified
+with `@sterunxyz/sdk`'s `verifyAnnouncement` plus the organiser read from chain:
+
+```
+▸ A throwaway organiser creates a race
+  event 23, organiser GBAQOV7SWFELOMHMG5Y4EF2NSGMYFKQT7OBGLLMZFVYVOOPLAJWEFHXS
+▸ The organiser publishes an announcement, signed like a browser wallet signs
+  201, announcement 1, scheme sep53
+▸ The same signed announcement again is the same announcement
+  200, id 1
+▸ Anyone reads it, and re-verifies it without trusting the API
+  public list: 1; signature valid (sep53); signer is getEvent(23).organiser
+▸ A stranger's announcement is refused
+  403
+▸ A back-dated announcement is refused
+  400 stale-announcement
+▸ A tampered body is refused
+  401 bad-signature
+✓ an organiser's announcement is published once, verifiable by anyone, and nobody else's is
+```
+
+The refused announcements were not stored (the script asserts the count stays 1).
+`verify-deployment.sh`: 18 passed, 0 failed — 2026-09-16T10:35:24Z.
+
