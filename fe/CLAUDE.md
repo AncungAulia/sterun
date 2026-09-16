@@ -633,12 +633,18 @@ secret in neither. A code is held with the step it belongs to and shown only whi
 match: plain state let a rollover pair this step's number with the previous step's digits, which a
 scanner refuses and a runner gets blamed for.
 
-**The pass shows the bib name, not the bib number** (Ancung, 2026-09-16), along with the distance,
-the city and the state. The number is drawn only on a phone that holds no name, where it is the one
-thing identifying the entry. That leaves the frozen manual fallback, which is the code **plus the
-bib number** (`docs/specs/HASH_AND_TOTP.md` §5), without its second field on the runner's side: at a
-pickup desk they do not have a printed bib yet. Settle where the volunteer gets that number when
-the scanner's manual entry is built (STE-22) rather than assuming the pass will show it.
+**The pass shows the bib name large and the bib number as the first fact in the row** beside the
+category and whether the race pack has been collected (Ancung, 2026-09-16). That last column is
+**Race pack: Not collected / Collected**, not "Status: Entered", which told a runner at the desk
+nothing about whether the pass had been used. Not collected wears the outline chip Draft wears (not
+yet, nothing wrong); Collected is green. The column is labelled **Category**, not Distance: a code
+like `3K_FUN_WALK` names what the runner entered rather than a length. The number has to be there: the frozen manual fallback
+is the code **plus the bib number** (`docs/specs/HASH_AND_TOTP.md` §5), the scanner's typing sheet
+asks for exactly that, and a runner at a pickup desk has no printed bib yet. For a few hours the pass
+showed the name alone, and a volunteer would have been asking for a number the runner could not
+read. Three facts sit in one row; four, once the city is known, wrap into two rows of two, because a
+quarter of a phone is too narrow for "Not collected". On a phone that holds no name the number
+is already the large thing and is not repeated.
 
 **The secret never leaves the device.** A phone that did not enter fetches it once with the wallet
 that owns the record (`GET /records/:tokenId/pass`, STE-52) and stores it; the desk then needs no
@@ -707,8 +713,7 @@ What is settled:
   and it copies as plain lines for the organiser's chat.
 - **`markClaim` checks the row exists first.** idb-keyval's `update` stores whatever its updater
   returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
-- **Open:** the pass shows the bib name and no number, while the manual fallback needs the number.
-  Where a runner at the desk reads it from is still Ancung's call.
+- **The runner reads the bib number for typing off their pass**, the first fact in its row.
 
 ## Tests
 

@@ -122,13 +122,15 @@ describe("the pass", () => {
 
       expect(await screen.findByText("Sasando Run 2026")).toBeInTheDocument();
       expect(screen.getByText("SARI")).toBeInTheDocument();
-      // No number and no date (Ancung, 2026-09-16): the name identifies the
-      // runner, and somebody at the race does not need to be told its date.
-      expect(screen.queryByText(/^Bib/)).not.toBeInTheDocument();
+      // The number is in the facts row, because the desk's typing fallback
+      // needs it; no date, because somebody at the race does not need it
+      // (Ancung, 2026-09-16).
+      expect(screen.getByText("Bib")).toBeInTheDocument();
+      expect(screen.getByText("128")).toBeInTheDocument();
       expect(screen.queryByText("Sep 27, 2026")).not.toBeInTheDocument();
       expect(screen.getByText("10K")).toBeInTheDocument();
       expect(screen.getByText("Kupang")).toBeInTheDocument();
-      expect(screen.getByText("Entered")).toBeInTheDocument();
+      expect(screen.getByText("Not collected")).toBeInTheDocument();
       await waitFor(() => expect(screen.getByLabelText("Check-in code 079663")).toBeInTheDocument());
       expect(screen.getByTestId("qr")).toHaveTextContent('{"t":7,"s":59070111,"c":"079663"}');
     });
@@ -224,7 +226,7 @@ describe("the pass", () => {
       renderPass();
 
       expect(await screen.findByText("Race pack collected")).toBeInTheDocument();
-      expect(screen.getByText("Race pack claimed")).toBeInTheDocument();
+      expect(screen.getByText("Collected")).toBeInTheDocument();
       expect(screen.queryByTestId("qr")).not.toBeInTheDocument();
       expect(screen.queryByText("Or use the code")).not.toBeInTheDocument();
       expect(screen.getByRole("link", { name: "View race record" })).toHaveAttribute(
