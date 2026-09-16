@@ -18,6 +18,8 @@ import {
 function rosterFor(eventId: number, bibs: number[]): StoredRoster {
   return {
     eventId,
+    raceName: "Sasando Run 2026",
+    categories: [{ categoryId: 0, code: "10K" }],
     snapshotLedger: 612_400,
     generatedAt: "2026-09-27T00:10:00.000Z",
     downloadedAt: "2026-09-27T00:10:02.000Z",
@@ -65,8 +67,9 @@ describe("the roster", () => {
     await saveRoster(rosterFor(4, [1]));
     const stored = await readRoster(4);
 
-    // Every key at every depth. `nameFragment` is the reduced form and is
-    // allowed; a bare `name`, `fullName` or `bibName` is not.
+    // Every key at every depth. `nameFragment` is the reduced form and
+    // `raceName` names a race, not a person; a bare `name`, `fullName` or
+    // `bibName` is not allowed.
     const keys: string[] = [];
     const walk = (value: unknown) => {
       if (Array.isArray(value)) value.forEach(walk);
@@ -79,7 +82,7 @@ describe("the roster", () => {
     };
     walk(stored);
 
-    expect(keys.filter((key) => /name/i.test(key) && key !== "nameFragment")).toEqual([]);
+    expect(keys.filter((key) => /name/i.test(key) && !["nameFragment", "raceName"].includes(key))).toEqual([]);
   });
 });
 

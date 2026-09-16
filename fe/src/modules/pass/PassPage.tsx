@@ -33,7 +33,7 @@ import { GetPassHere } from "./components/GetPassHere";
 import { LiveCode } from "./components/LiveCode";
 import { PassFacts } from "./components/PassFacts";
 import { OfflineNotice } from "./components/PassNotices";
-import { useOnline } from "./hooks/useOnline";
+import { useOnline } from "@/hooks/useOnline";
 
 
 export function PassPage({ tokenId }: { tokenId: number }) {

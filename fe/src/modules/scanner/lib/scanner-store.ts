@@ -42,6 +42,14 @@ export interface RosterEntry {
 
 export interface StoredRoster {
   eventId: number;
+  /**
+   * The race's name and its distances, read from the chain at download time.
+   * The roster itself carries a category id and nothing else, and the desk has
+   * no signal to look a distance up with, so the label a volunteer reads on
+   * HAND OVER has to travel with the roster.
+   */
+  raceName: string;
+  categories: { categoryId: number; code: string }[];
   /** The ledger the states above were read at. */
   snapshotLedger: number;
   /** ISO 8601, the backend's clock. */

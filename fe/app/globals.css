@@ -218,3 +218,68 @@ button:not(:disabled),
     transition: none;
   }
 }
+
+/* The scanner's verdict (docs/design/race-day/README.md 3 and 6.2, M1).
+
+   Every refusal is striped and HAND OVER is flat, so the two differ by more
+   than colour: success-strong and danger-strong are 1.26:1 apart in
+   brightness, which a volunteer in the sun, or one who cannot tell red from
+   green, cannot rely on. The stripes are the two danger tokens, and paper text
+   over them is never below text-2xl (4.05:1 on the lighter stripe). */
+.verdict-refused {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-danger-strong) 0 1.75rem,
+    var(--color-danger) 1.75rem 3.5rem
+  );
+}
+
+/* M1: the panel rises over the camera; the word follows, then the bib, 40 ms
+   apart, and the icon settles from 0.92. The word leads so the eye lands on
+   the instruction before the number. Every step starts visible enough to read,
+   because movement may make a change legible and never delay one (6). */
+@keyframes verdict-rise {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes verdict-settle {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.verdict-panel {
+  animation: verdict-rise var(--motion-base) var(--ease-out) both;
+}
+
+.verdict-icon {
+  animation: verdict-settle var(--motion-base) var(--ease-out) both;
+}
+
+.verdict-word {
+  animation: verdict-rise var(--motion-base) var(--ease-out) 40ms both;
+}
+
+.verdict-bib {
+  animation: verdict-rise var(--motion-base) var(--ease-out) 80ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict-panel,
+  .verdict-icon,
+  .verdict-word,
+  .verdict-bib {
+    animation-duration: 0s;
+    animation-delay: 0s;
+  }
+}

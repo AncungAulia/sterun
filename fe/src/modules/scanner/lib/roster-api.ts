@@ -39,8 +39,11 @@ interface RosterResponse {
   missing_from_index?: number;
 }
 
+/** The roster as the backend sends it. The race's name and distances are added from the chain. */
+export type RosterDownload = Omit<StoredRoster, "raceName" | "categories">;
+
 export interface DownloadedRoster {
-  roster: StoredRoster;
+  roster: RosterDownload;
   /** Entries the backend holds but has not indexed yet. Shown, never hidden. */
   missingFromIndex: number;
 }
