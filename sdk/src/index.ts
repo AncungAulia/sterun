@@ -65,7 +65,7 @@ export {
   type ContractErrorVariant,
 } from "./errors.js";
 
-export { type SentResult } from "./tx.js";
+export { ledgerFailureCode, type SentResult } from "./tx.js";
 
 export {
   RACE_RECORD_SCHEMA_VERSION,

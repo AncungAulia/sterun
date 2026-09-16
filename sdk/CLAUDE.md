@@ -172,6 +172,31 @@ here, where a caller can see it, instead of hidden in a helper.
 purpose; that one word differs because a category sells a place in a race and an add-on sells a
 thing off a shelf, and calling a jersey a "slot" reads as a copy-paste rather than a decision.
 
+## A write can fail after a clean simulation (STE-61)
+
+Simulating first catches most refusals before anything is signed, but not a **race**: two scanner
+desks claiming one race pack, or two runners taking the last place, both simulate against the same
+state, both submit, and the loser **fails on the ledger**. Found by the STE-25 rehearsal on live
+testnet.
+
+For a FAILED transaction, stellar-sdk 17 still sets `returnValue: undefined` on the parsed
+`getTransactionResponse`, and `SentTransaction.result` then crashes with `Cannot read properties of
+undefined (reading 'type')`. That is why `runWrite` checks `getTransactionResponse.status === "FAILED"`
+**before** it touches `result`, and reads the reason from the diagnostic events instead:
+
+```
+topics: [ symbol "host_fn_failed", error { contract: 102 } ]   // AlreadyClaimed
+```
+
+`host_fn_failed` wins over the frame-exit `error` events before it. The events are read through their
+JSON form, because the XDR objects stellar-sdk 17 produces expose fields rather than the accessor
+methods older versions had.
+
+What a caller gets: `SterunContractError` with `phase: "ledger"`, `txHash` and `ledger`, so an app can
+tell "refused before submitting" from "submitted, lost the race, fee charged" and link the transaction.
+`test/fixtures/failed-claim-already-claimed.rpc.json` is the real losing transaction from the rehearsal,
+run through stellar-sdk's own RPC parser in the tests.
+
 ## Signed event announcements (STE-40)
 
 `announcementMessage` builds the exact text an organiser signs; `verifyAnnouncement` checks one. The

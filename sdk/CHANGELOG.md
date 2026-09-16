@@ -32,6 +32,25 @@ already in other people's hands.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A write that simulated cleanly and then failed on the ledger now throws the contract error it
+  failed with** (STE-61). Two scanner desks claiming one race pack in the same ledger, or two runners
+  taking the last place, used to throw `SterunNetworkError: ... could not be simulated: Cannot read
+  properties of undefined (reading 'type')`: stellar-sdk 17 leaves `returnValue: undefined` on a
+  FAILED transaction and its `result` getter crashes on it, so the `AlreadyClaimed` / `QuotaFull` the
+  ledger recorded was lost. `runWrite` now checks for `FAILED` before reading the result and decodes
+  the error from the transaction's diagnostic events (`host_fn_failed`).
+
+### Added
+
+- `SterunContractError.phase` (`"simulation"` or `"ledger"`), `.txHash` and `.ledger`. A ledger failure
+  is a real, fee-charged transaction you can link to; a simulation refusal submitted nothing.
+- `SterunNetworkError.txHash`, for a ledger failure whose reason the RPC response does not carry.
+- `ledgerFailureCode(diagnosticEvents)`: the contract error code in a failed transaction's events.
+
 ## [0.3.0] — 2026-09-16
 
 ### Added

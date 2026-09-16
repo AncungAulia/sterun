@@ -179,6 +179,19 @@ export class SterunContractError extends SterunError {
   readonly code: number;
   readonly source: ContractErrorSource;
   readonly variant: ContractErrorVariant | null;
+  /**
+   * Where the refusal came from. `"simulation"`: the call was refused before
+   * anything was submitted, and nothing is on chain. `"ledger"`: the call
+   * simulated cleanly, was submitted, and **failed on the ledger** — a
+   * transaction exists (see {@link txHash}) and its fee was charged. The
+   * second is what a race looks like: two desks claiming one race pack, two
+   * runners taking the last place, in the same ledger.
+   */
+  readonly phase: "simulation" | "ledger";
+  /** The failed transaction, when {@link phase} is `"ledger"`. */
+  readonly txHash: string | undefined;
+  /** The ledger it failed in, when the RPC reported one. */
+  readonly ledger: number | null;
 
   constructor(
     info: ContractErrorInfo,
@@ -187,15 +200,23 @@ export class SterunContractError extends SterunError {
     /** The untouched host error string the RPC returned. */
     readonly raw: string,
     options?: ErrorOptions,
+    /** Present when the transaction was submitted and failed on the ledger. */
+    ledgerFailure?: { txHash: string; ledger: number | null },
   ) {
     super(
-      `${method} reverted with ${info.variant ?? "an unnamed error"} ` +
-        `(#${info.code}, ${info.source})`,
+      ledgerFailure
+        ? `${method} failed on the ledger with ${info.variant ?? "an unnamed error"} ` +
+            `(#${info.code}, ${info.source}) in transaction ${ledgerFailure.txHash}`
+        : `${method} reverted with ${info.variant ?? "an unnamed error"} ` +
+            `(#${info.code}, ${info.source})`,
       options,
     );
     this.code = info.code;
     this.source = info.source;
     this.variant = info.variant;
+    this.phase = ledgerFailure ? "ledger" : "simulation";
+    this.txHash = ledgerFailure?.txHash;
+    this.ledger = ledgerFailure?.ledger ?? null;
   }
 
   /**
@@ -227,12 +248,17 @@ export class SterunContractError extends SterunError {
  * network failure is the absence of an answer, and retrying is exactly right.
  */
 export class SterunNetworkError extends SterunError {
+  /** The transaction involved, when there was one (a ledger failure with no readable reason). */
+  readonly txHash: string | undefined;
+
   constructor(
     message: string,
     readonly method: string,
     options?: ErrorOptions,
+    evidence?: { txHash?: string },
   ) {
     super(message, options);
+    this.txHash = evidence?.txHash;
   }
 }
 
