@@ -597,7 +597,7 @@ describe("EventDetail", () => {
 
       const view = await screen.findByRole("link", { name: "View my entry" });
       expect(view).toHaveAttribute("href", "/events/2/entered/7");
-      expect(screen.getByRole("button", { name: "Open my pass" })).toBeDisabled();
+      expect(screen.getByRole("link", { name: "Open my pass" })).toHaveAttribute("href", "/pass/7");
       expect(screen.queryByRole("button", { name: "Enter this race" })).not.toBeInTheDocument();
       expect(recordsOfDetailed).toHaveBeenCalledWith(RUNNER);
     });
@@ -676,8 +676,13 @@ describe("EventDetail", () => {
       // rows, each once: the published fingerprint is the event's own
       // metadata_hash, so a third generic row printed the same 64 characters
       // again under a label that explained nothing.
-      expect(screen.getByText("Show technical details")).toBeInTheDocument();
-      expect(screen.getByText("Published fingerprint")).toBeInTheDocument();
+      // Closed, the accordion builds none of it, which is the difference from
+      // the <details> this used to be: opening it is now part of the test.
+      expect(screen.queryByText("Published fingerprint")).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Show technical details" }));
+
+      expect(await screen.findByText("Published fingerprint")).toBeInTheDocument();
       expect(screen.getByText("Current fingerprint")).toBeInTheDocument();
       expect(screen.queryByText("Fingerprint")).not.toBeInTheDocument();
       expect(screen.getByText("a".repeat(64))).toBeInTheDocument();

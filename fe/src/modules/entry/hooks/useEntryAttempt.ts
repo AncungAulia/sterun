@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * Runs `modules/entry/lib/attempt.ts` against the vault, the wallet and the chain (STE-21).
@@ -28,7 +28,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { eventKeys } from "@/hooks/useEvents";
 import { runnerRecordsKey } from "@/hooks/useRunnerRecords";
 import { susdKey } from "@/hooks/useSusdBalance";
-import { saveEntry } from "@/modules/entry/lib/entry-store";
+import { saveEntry } from "@/lib/entry-store";
 import { friendlyError, isDeclined, isNoAnswer } from "@/lib/api/errors";
 import type { EventSummary } from "@/lib/event/events";
 import { submitParticipant, type Submitted } from "@/modules/entry/lib/participants";

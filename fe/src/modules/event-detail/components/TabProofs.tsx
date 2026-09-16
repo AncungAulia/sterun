@@ -25,6 +25,12 @@
  */
 import type { ReactNode } from "react";
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { CONTRACTS, EXPLORER_BASE } from "@/lib/chain/env";
 import { gunStartConflict, type MetadataResult } from "@/lib/event/metadata";
@@ -155,13 +161,24 @@ export function TabProofs({
         ) : null}
 
         {/*
-          A native <details>: it opens with a keyboard, it is in the tab order
-          without anything being wired up, and a page that prints fingerprints
-          is the last place to reimplement a disclosure badly.
+          The shadcn accordion, which is Radix underneath (Ancung, 2026-09-16).
+          It was a native <details>, chosen because it opens with a keyboard and
+          sits in the tab order with nothing wired up; the accordion does both
+          as well, and it looks like every other disclosure in the app rather
+          than like the browser's own.
+
+          One difference worth knowing: a closed <details> keeps its contents in
+          the document, and a closed accordion does not build them at all. The
+          fingerprints are therefore absent until somebody opens this, which is
+          what the test now does before looking for them.
         */}
-        <details className="mt-4 rounded-lg border border-n-200 px-5 py-3">
-          <summary className="cursor-pointer text-sm text-n-600">Show technical details</summary>
-          <dl className="mt-2">
+        <Accordion type="single" collapsible className="mt-4 rounded-lg border border-n-200 px-5">
+          <AccordionItem value="technical" className="border-b-0">
+            <AccordionTrigger className="text-sm text-n-600 hover:no-underline">
+              Show technical details
+            </AccordionTrigger>
+            <AccordionContent>
+              <dl>
             {/*
               One fingerprint per line and no line that repeats another. The
               published fingerprint IS `metadataHash`, so drawing the generic
@@ -198,8 +215,10 @@ export function TabProofs({
                 </a>
               </Row>
             ) : null}
-          </dl>
-        </details>
+              </dl>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </section>
 
       <section>

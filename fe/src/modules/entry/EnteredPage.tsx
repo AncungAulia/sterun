@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * `/events/[id]/entered/[tokenId]`: the entry went through (STE-21, mockup block 5).
@@ -8,7 +8,7 @@
  * The race, its date, the distance and the bib number are read from chain, so a
  * refresh, or this link opened anywhere, still shows them. The name on the bib
  * and the receipt code are on no chain and returned by no route, so they come
- * from this device (`modules/entry/lib/entry-store.ts`) and only appear in the browser that
+ * from this device (`lib/entry-store.ts`) and only appear in the browser that
  * entered. Elsewhere the page says where the receipt is.
  *
  * ## The way on waits for the receipt
@@ -47,7 +47,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useEvent } from "@/hooks/useEvents";
 import { fireConfetti } from "@/lib/confetti";
-import { markReceiptSaved, readEntry, type StoredEntry } from "@/modules/entry/lib/entry-store";
+import { markReceiptSaved, readEntry, type StoredEntry } from "@/lib/entry-store";
 import { readClient } from "@/lib/chain/sterun";
 import { formatEventDate } from "@/utils/format";
 
@@ -141,7 +141,7 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
         </span>
         <h1 className="heading-strong text-3xl text-ink">You&apos;re in!</h1>
         <p className="text-base text-n-500">
-          {summary.event.name} · {formatEventDate(summary.event.startsAt)}
+          {summary.event.name} Â· {formatEventDate(summary.event.startsAt)}
         </p>
       </div>
 
@@ -157,7 +157,7 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
           <>
             <ReceiptBox code={receiptEntry.salt} onDownload={() => void downloadReceipt(receiptEntry)} />
             {receiptEntry.receiptSaved ? (
-              <BackToRace eventId={eventId} />
+              <WaysOn eventId={eventId} tokenId={tokenId} />
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -181,12 +181,14 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
                     I&apos;ve saved my receipt
                   </Label>
                 </div>
+                {/* One button throughout: the way on is the pass, and it waits
+                    for the receipt rather than changing its own label. */}
                 {saved ? (
                   <Button asChild>
-                    <Link href={`/events/${eventId}`}>Back to the race</Link>
+                    <Link href={`/pass/${tokenId}`}>Open my pass</Link>
                   </Button>
                 ) : (
-                  <Button disabled>Back to the race</Button>
+                  <Button disabled>Open my pass</Button>
                 )}
               </div>
             )}
@@ -199,6 +201,23 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
         )}
       </div>
     </Page>
+  );
+}
+
+/**
+ * Both ways on, for a runner who has already saved their receipt. The pass
+ * leads: on race morning it is the only one of the two they need.
+ */
+function WaysOn({ eventId, tokenId }: { eventId: number; tokenId: number }) {
+  return (
+    <div className="flex flex-col justify-center gap-3 sm:flex-row">
+      <Button asChild>
+        <Link href={`/pass/${tokenId}`}>Open my pass</Link>
+      </Button>
+      <Button asChild variant="secondary">
+        <Link href={`/events/${eventId}`}>Back to the race</Link>
+      </Button>
+    </div>
   );
 }
 

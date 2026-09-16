@@ -134,7 +134,13 @@ describe("no raw design values in components", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles()) {
-      // tokens.css is the one place hex belongs, and it is not a .ts/.tsx file.
+      /*
+        tokens.css is the one place hex belongs, and it is not a .ts/.tsx file.
+        The web app manifest is the one exception in code: an operating system
+        reads it before any stylesheet exists, so it cannot name a custom
+        property. The test below holds those two values to the tokens instead.
+      */
+      if (file.replace(/\\/g, "/").endsWith("app/manifest.ts")) continue;
       const lines = readFileSync(join(ROOT, file), "utf8").split(/\r?\n/);
       lines.forEach((line, index) => {
         const withoutComment = stripComments(line);
@@ -145,6 +151,28 @@ describe("no raw design values in components", () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the manifest's two hex values", () => {
+  /**
+   * The install screen is the one surface that cannot read a token, so the two
+   * colours are written out. Exempting them from the sweep without this test
+   * would let them drift from the palette they are copies of, and the drift
+   * would only show on somebody's home screen.
+   */
+  it("are still the paper and teal from tokens.css", () => {
+    const manifest = readFileSync(join(ROOT, "app/manifest.ts"), "utf8");
+    const tokens = readFileSync(join(ROOT, "app/tokens.css"), "utf8");
+
+    const valueOf = (source: string, pattern: RegExp) => pattern.exec(source)?.[1]?.toLowerCase();
+
+    expect(valueOf(manifest, /background_color:\s*"(#[0-9a-fA-F]{3,8})"/)).toBe(
+      valueOf(tokens, /--color-paper:\s*(#[0-9a-fA-F]{3,8})/),
+    );
+    expect(valueOf(manifest, /theme_color:\s*"(#[0-9a-fA-F]{3,8})"/)).toBe(
+      valueOf(tokens, /--color-teal:\s*(#[0-9a-fA-F]{3,8})/),
+    );
   });
 });
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The success page (mockup block 5): the bib from chain, the receipt from this
  * device, and the way on held until the receipt is saved.
  */
@@ -29,7 +29,7 @@ vi.mock("@/lib/event/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/event/events")>()),
   getEventSummary,
 }));
-vi.mock("@/modules/entry/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
+vi.mock("@/lib/entry-store", () => ({ readEntry, markReceiptSaved }));
 vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
@@ -44,7 +44,7 @@ vi.mock("@/modules/entry/lib/receipt-pdf", () => ({ downloadReceipt }));
 vi.mock("canvas-confetti", () => ({ default: confetti }));
 
 import { useWallet } from "@/hooks/useWallet";
-import type { StoredEntry } from "@/modules/entry/lib/entry-store";
+import type { StoredEntry } from "@/lib/entry-store";
 import { EnteredPage } from "@/modules/entry/EnteredPage";
 import type { SterunRecord } from "@sterunxyz/sdk";
 
@@ -127,7 +127,7 @@ describe("EnteredPage", () => {
   it("celebrates with the race and its date", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "You're in!" })).toBeInTheDocument();
-    expect(screen.getByText("Elektro Dash · Nov 5, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Elektro Dash Â· Nov 5, 2026")).toBeInTheDocument();
   });
 
   it("fires the wizard's confetti once", async () => {
@@ -159,7 +159,7 @@ describe("EnteredPage", () => {
   it("hides most of the receipt code until asked", async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByText("a3f1c0d5 •••• •••• b2f3d40e")).toBeInTheDocument();
+    expect(await screen.findByText("a3f1c0d5 â€¢â€¢â€¢â€¢ â€¢â€¢â€¢â€¢ b2f3d40e")).toBeInTheDocument();
     expect(screen.queryByText(SALT)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Show" }));
@@ -187,12 +187,14 @@ describe("EnteredPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "Back to the race" })).toBeDisabled();
-    expect(screen.queryByRole("link", { name: "Back to the race" })).not.toBeInTheDocument();
+    // The same button throughout, rather than one label swapped for another:
+    // the way on in round 2 is the pass, and it waits for the receipt.
+    expect(await screen.findByRole("button", { name: "Open my pass" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Open my pass" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: "I've saved my receipt" }));
 
-    expect(screen.getByRole("link", { name: "Back to the race" })).toHaveAttribute("href", `/events/${EVENT_ID}`);
+    expect(screen.getByRole("link", { name: "Open my pass" })).toHaveAttribute("href", `/pass/${TOKEN_ID}`);
   });
 
   it("says where the receipt is when this device did not enter", async () => {
@@ -269,6 +271,20 @@ describe("EnteredPage", () => {
 
       expect(await screen.findByRole("link", { name: "Back to the race" })).toBeInTheDocument();
       expect(screen.queryByRole("checkbox", { name: "I've saved my receipt" })).not.toBeInTheDocument();
+    });
+
+    it("offers the pass and the race on a return visit", async () => {
+      readEntry.mockResolvedValue({ ...stored, receiptSaved: true });
+      renderPage();
+
+      expect(await screen.findByRole("link", { name: "Open my pass" })).toHaveAttribute(
+        "href",
+        `/pass/${TOKEN_ID}`,
+      );
+      expect(screen.getByRole("link", { name: "Back to the race" })).toHaveAttribute(
+        "href",
+        `/events/${EVENT_ID}`,
+      );
     });
 
     it("still asks a runner who never confirmed saving it", async () => {

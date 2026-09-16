@@ -1,10 +1,10 @@
-/**
+﻿/**
  * What the receipt says (mockup block 6). Pure, so a test can prove what it
  * leaves out: no personal details, and never the check-in secret.
  */
 import { describe, expect, it } from "vitest";
 
-import type { StoredEntry } from "@/modules/entry/lib/entry-store";
+import type { StoredEntry } from "@/lib/entry-store";
 import { buildReceipt, maskCode } from "@/modules/entry/lib/receipt";
 
 const EXPLORER = "https://stellar.expert/explorer/testnet";
@@ -42,8 +42,8 @@ describe("buildReceipt", () => {
   it("heads the page with the bib and the race", () => {
     expect(receipt.issuedOn).toBe("Issued Sep 15, 2026");
     expect(receipt.bibNo).toBe("98");
-    expect(receipt.headline).toBe("Fun Run Sleman · 10K");
-    expect(receipt.subline).toBe("Nov 5, 2026 · Bib name BUDI");
+    expect(receipt.headline).toBe("Fun Run Sleman Â· 10K");
+    expect(receipt.subline).toBe("Nov 5, 2026 Â· Bib name BUDI");
   });
 
   it("lists the record in the mockup's order", () => {
@@ -104,6 +104,6 @@ describe("buildReceipt", () => {
 
 describe("maskCode", () => {
   it("shows the first and last eight characters", () => {
-    expect(maskCode(SALT)).toBe("a3f1c0d5 •••• •••• b2f3d40e");
+    expect(maskCode(SALT)).toBe("a3f1c0d5 â€¢â€¢â€¢â€¢ â€¢â€¢â€¢â€¢ b2f3d40e");
   });
 });
