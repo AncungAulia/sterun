@@ -81,6 +81,12 @@ fe/src/modules/scanner/
     ManualEntry.tsx  ClockBanner.tsx  QueueChip.tsx
 ```
 
+*As built, two things differ from the tree above.* The store is
+`modules/scanner/lib/scanner-store.ts`, not `src/lib`, because nothing but the scanner reads it
+(ARCHITECTURE.md §4.2). And the hooks are `useScannerEvents`, `useDownloadRoster`, `useCamera`,
+`useQrReader` and `useClockDrift`, with the decoder a plain `lib/decoder.ts` so it can be tested
+against a real QR without React. `fe/CLAUDE.md` has the current layout.
+
 **`totp.ts` moves up on its first second user**, which is the rule in `fe/guides/ARCHITECTURE.md`
 §4.2 and is exactly this commit. The pass generates codes with it and the scanner checks them with
 it; two copies would be two implementations of a frozen document, and the one that drifts would
@@ -150,9 +156,15 @@ is a scanner that silently disagrees the day they change. `lib/totp.ts` keeps 30
 the verdict takes the tolerance it was given.
 
 **The clock.** At download, the device's clock is compared with `generated_at` and the difference is
-stored with the roster. Beyond ±90 s — the tolerance the spec allows, so beyond it every scan fails
-for a reason invisible to the volunteer — S8's amber banner appears with the drift in plain words
-("4 minutes fast") and the fix. It is re-checked on every fresh download, and it never blocks a
+stored with the roster. Beyond one step (30 s with today's numbers) S8's amber banner appears with
+the drift in plain words ("4 minutes fast") and the fix.
+
+*Corrected during the build, from ±90 s.* The handoff and the first draft of this section put the
+banner at ±90 s, reading the spec's ±1 step as a limit on the clock. It is a 90-second window for a
+code. With the scanner d seconds off, a current code is checked against step floor((t + d) / 30):
+always within one step up to 30 s, two steps away for part of every half minute from 31 to 59 s, and
+refused every time from 60 s. A 90 s banner would stay quiet over a desk that had already refused
+everyone. It is re-checked on every fresh download, and it never blocks a
 scan: a phone whose clock is wrong can still type a code that another phone's clock agrees with.
 
 ---
