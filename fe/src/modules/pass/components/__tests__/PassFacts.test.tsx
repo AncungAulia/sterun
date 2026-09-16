@@ -16,7 +16,7 @@ describe("PassFacts", () => {
   it("puts the bib number first in the row, beside the distance and the state", () => {
     render(<PassFacts raceName="Sasando Run 2026" distanceCode="10K" bibNo={128} bibName="SARI" claimed={false} />);
 
-    expect(terms()).toEqual(["Bib", "Distance", "Status"]);
+    expect(terms()).toEqual(["Bib", "Category", "Status"]);
     expect(screen.getByText("128")).toBeInTheDocument();
     expect(screen.getByText("SARI")).toBeInTheDocument();
     expect(document.querySelector("dl")).toHaveClass("grid-cols-3");
@@ -27,7 +27,7 @@ describe("PassFacts", () => {
       <PassFacts raceName="Sasando Run 2026" distanceCode="10K" city="Kupang" bibNo={128} bibName="SARI" claimed />,
     );
 
-    expect(terms()).toEqual(["Bib", "Distance", "Where", "Status"]);
+    expect(terms()).toEqual(["Bib", "Category", "Where", "Status"]);
     expect(document.querySelector("dl")).toHaveClass("grid-cols-2");
     expect(screen.getByText("Race pack claimed")).toBeInTheDocument();
   });
@@ -35,7 +35,7 @@ describe("PassFacts", () => {
   it("shows the number once, large, on a phone that holds no bib name", () => {
     render(<PassFacts raceName="Sasando Run 2026" distanceCode="10K" bibNo={128} claimed={false} />);
 
-    expect(terms()).toEqual(["Distance", "Status"]);
+    expect(terms()).toEqual(["Category", "Status"]);
     expect(screen.getAllByText("128")).toHaveLength(1);
   });
 });

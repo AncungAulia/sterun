@@ -10,7 +10,9 @@
  * It has to be on the pass: the manual fallback at a desk is the code plus the
  * bib number (`docs/specs/HASH_AND_TOTP.md` §5, and the scanner's typing sheet
  * in STE-22), and a runner collecting a race pack does not have a printed bib
- * yet. For one morning it was dropped, with the name alone under the row; that
+ * yet. The distance is labelled **Category**, not Distance (Ancung,
+ * 2026-09-16): a code like `3K_FUN_WALK` names the category a runner entered,
+ * and reads oddly under a word that promises a length. For one morning it was dropped, with the name alone under the row; that
  * left a volunteer asking for a number the runner had nowhere to read. A fact in
  * the row keeps the name as the large thing on the pass. On a phone that holds
  * no name the number is already the large thing, so it is not repeated.
@@ -43,7 +45,7 @@ export function PassFacts({
 }) {
   const facts: [string, string][] = [
     ...(bibName ? ([["Bib", String(bibNo)]] as [string, string][]) : []),
-    ["Distance", distanceCode],
+    ["Category", distanceCode],
     ...(city ? ([["Where", city]] as [string, string][]) : []),
   ];
 

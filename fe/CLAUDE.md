@@ -634,7 +634,8 @@ match: plain state let a rollover pair this step's number with the previous step
 scanner refuses and a runner gets blamed for.
 
 **The pass shows the bib name large and the bib number as the first fact in the row** beside the
-distance and the state (Ancung, 2026-09-16). The number has to be there: the frozen manual fallback
+category and the state (Ancung, 2026-09-16). The column is labelled **Category**, not Distance: a code
+like `3K_FUN_WALK` names what the runner entered rather than a length. The number has to be there: the frozen manual fallback
 is the code **plus the bib number** (`docs/specs/HASH_AND_TOTP.md` §5), the scanner's typing sheet
 asks for exactly that, and a runner at a pickup desk has no printed bib yet. For a few hours the pass
 showed the name alone, and a volunteer would have been asking for a number the runner could not
