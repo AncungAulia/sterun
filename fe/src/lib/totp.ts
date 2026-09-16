@@ -1,11 +1,19 @@
 /**
- * The check-in code, computed on the runner's phone (docs/specs/HASH_AND_TOTP.md §4).
+ * The check-in code (docs/specs/HASH_AND_TOTP.md §4).
  *
  * Byte-exact by specification: the backend puts the same secret in the
  * scanner's roster, and both sides must produce the same six characters with no
  * network between them. Every rule here is the frozen document's, not ours, and
  * `__tests__/totp.test.ts` checks it against that document's vectors rather
  * than against this file's own output.
+ *
+ * ## Why this is not inside a feature
+ *
+ * It has two users that must never disagree: the pass generates a code with it
+ * (STE-21) and the scanner checks one with it (STE-22). Two copies would be two
+ * implementations of a frozen document, and the day one drifted would be a race
+ * morning at a desk with no signal to debug from. ARCHITECTURE.md §4.2 asks for
+ * the move on the second user, which is the commit this comment arrived in.
  *
  * The code is a STRING, always six characters, left-padded with zero. Holding it
  * as a number drops that zero for about one runner in ten, and that failure

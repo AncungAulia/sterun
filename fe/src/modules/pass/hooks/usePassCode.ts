@@ -15,7 +15,7 @@
  */
 import { useEffect, useState } from "react";
 
-import { codeAt, qrPayload, secondsLeft as leftInStep, timeStepOf } from "../lib/totp";
+import { codeAt, qrPayload, secondsLeft as leftInStep, timeStepOf } from "@/lib/totp";
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
