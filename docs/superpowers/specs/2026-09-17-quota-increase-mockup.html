@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sterun, adding places mockup (STE-57)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f8f8f8; --ink:#1e232b; --teal:#016985; --white:#ffffff;
+  --n100:#eef0f2; --n200:#dfe2e6; --n300:#c7ccd3; --n400:#9ba3ad; --n500:#6f7883; --n600:#515a66; --n700:#3a424c;
+  --teal50:#e8f4f8; --teal100:#cbe8f0; --teal200:#97d0e1; --teal300:#59b1cb; --teal600:#015872;
+  --success:#067a38; --success-surface:#e6f6ec; --success-border:#a8dcbc;
+  --danger:#a31c11; --danger-surface:#fceae8; --danger-border:#f0b3aa;
+  --warning:#8f5200; --warning-surface:#fdf3e2; --warning-border:#edc07a;
+  --r-sm:4px; --r-md:8px; --r-lg:16px;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
+  --shadow-card:0 1px 2px rgb(30 35 43 / .06),0 4px 12px rgb(30 35 43 / .06);
+  --shadow-lifted:0 2px 4px rgb(30 35 43 / .08),0 12px 28px rgb(30 35 43 / .1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+.intro h1{font-style:italic;font-weight:600;font-size:28px;margin:0 0 8px}
+.intro p{margin:0 0 10px;color:var(--n600);font-size:15px;max-width:82ch;line-height:1.6}
+.intro p b{color:var(--ink);font-weight:500}
+.block{margin-top:48px}
+.block > h2{font-size:13px;font-weight:600;color:var(--teal);margin:0 0 4px}
+.block > h3{font-style:italic;font-weight:600;font-size:21px;margin:0 0 6px}
+.block > p{margin:0 0 16px;color:var(--n600);font-size:14px;max-width:82ch;line-height:1.6}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.screen{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden;position:relative}
+.cap{font-size:12.5px;color:var(--n500);margin:8px 2px 0}
+
+/* console chrome */
+.chead{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--n200);background:#fff}
+.chead .t{font-style:italic;font-weight:600;font-size:18px}
+.tabs{display:flex;gap:22px;padding:0 22px;background:#fff;border-bottom:1px solid var(--n200);font-size:14px}
+.tabs span{padding:10px 0;color:var(--n500)}
+.tabs span.on{color:var(--ink);font-weight:500;box-shadow:inset 0 -2px 0 var(--teal)}
+.body{padding:20px 22px}
+.card{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:16px 18px}
+.card h4{margin:0 0 10px;font-weight:600;font-size:14px}
+.pill{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:999px;border:1px solid}
+.pill.warn{background:var(--warning-surface);color:var(--warning);border-color:var(--warning-border)}
+.pill.ok{background:var(--success-surface);color:var(--success);border-color:var(--success-border)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border:0;border-radius:var(--r-md);background:var(--teal);color:#fff;font-family:var(--sans);font-size:14.5px;font-weight:500;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--n300)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.dis{background:var(--n300)}
+
+/* rings stand-in */
+.rings{height:120px;display:grid;place-items:center;color:var(--n400);font-size:12px;border-bottom:1px dashed var(--n200);margin-bottom:6px}
+.drow{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--n100);font-size:14px}
+.drow:first-of-type{border-top:0}
+.sw{width:10px;height:10px;border-radius:3px}
+.drow .code{font-weight:500}
+.drow .n{color:var(--n600);font-variant-numeric:tabular-nums;font-size:13.5px}
+
+/* entries strip */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.stat{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:12px 14px}
+.stat .l{font-size:12.5px;color:var(--n500)}
+.stat .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;color:var(--n500);font-weight:400}
+.places{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.place{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:12px 14px}
+.place .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.place .top b{font-weight:600}
+.bar{height:6px;border-radius:99px;background:var(--n100);overflow:hidden;margin:6px 0 10px}
+.bar i{display:block;height:100%;background:var(--teal)}
+.bar.full i{background:var(--warning)}
+.place .foot{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--n600);font-variant-numeric:tabular-nums}
+.ghostrows{height:70px;border:1px dashed var(--n200);border-radius:var(--r-lg);margin-top:12px;display:grid;place-items:center;color:var(--n400);font-size:12px}
+
+/* header action */
+.hact{margin-left:auto;display:flex;gap:10px;align-items:center;position:relative}
+.menu{position:absolute;right:0;top:48px;width:280px;background:#fff;border:1px solid var(--n200);border-radius:var(--r-md);box-shadow:var(--shadow-lifted);padding:6px;z-index:2}
+.menu .mh{font-size:12px;color:var(--n500);padding:6px 10px 4px}
+.mi{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 10px;border-radius:6px;font-size:14px}
+.mi.hover{background:var(--n100)}
+.mi b{font-weight:500}
+.mi .n{grid-column:1;font-size:12.5px;color:var(--n500);font-variant-numeric:tabular-nums}
+.mi .pill{grid-row:1 / span 2;grid-column:2}
+.caret{font-size:11px;margin-left:2px}
+.tall{min-height:320px}
+.statecap{font-size:12px;color:var(--n500);margin:0 0 6px 2px}
+
+/* dialog */
+.scrim{background:rgba(20,24,30,.45);padding:28px;display:grid;place-items:center;min-height:100%}
+.dlg{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lifted);width:460px;max-width:100%;padding:22px 24px}
+.dlg h5{margin:0 0 4px;font-style:italic;font-weight:600;font-size:19px}
+.dlg .lead{margin:0 0 16px;font-size:14px;color:var(--n600);line-height:1.55}
+.now{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.now div{background:var(--n100);border-radius:var(--r-md);padding:10px 12px}
+.now .l{font-size:12.5px;color:var(--n500)}
+.now .v{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:13.5px;font-weight:500;margin-bottom:6px}
+.in{height:42px;border:1px solid var(--n300);border-radius:var(--r-md);background:#fff;display:flex;align-items:center;padding:0 12px;font-size:15px;font-variant-numeric:tabular-nums}
+.in.err{border-color:var(--danger)}
+.ta{min-height:64px;border:1px solid var(--n300);border-radius:var(--r-md);padding:10px 12px;font-size:14px;color:var(--ink);line-height:1.5}
+.ta.ph{color:var(--n400)}
+.h{font-size:12.5px;color:var(--n500);margin-top:5px}
+.e{font-size:12.5px;color:var(--danger);margin-top:5px}
+.fixed{background:var(--teal50);border:1px solid var(--teal200);border-radius:var(--r-md);padding:10px 12px;font-size:14px;line-height:1.5}
+.fixed .l{font-size:12px;color:var(--teal600);margin-bottom:2px}
+.note{border:1px solid var(--warning-border);background:var(--warning-surface);color:var(--warning);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;line-height:1.5;margin-top:14px}
+.acts{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.steps{list-style:none;margin:6px 0 4px;padding:0;display:flex;flex-direction:column;gap:12px}
+.steps li{display:flex;gap:12px;align-items:flex-start;font-size:14.5px}
+.ic{width:24px;height:24px;border-radius:50%;flex:0 0 24px;display:grid;place-items:center;font-size:12px;font-weight:600}
+.ic.done{background:var(--success);color:#fff}
+.ic.run{border:2.5px solid var(--teal100);border-top-color:var(--teal)}
+.ic.wait{border:1.5px solid var(--n300);color:var(--n400)}
+.ic.fail{background:var(--danger);color:#fff}
+.steps .s{font-size:12.5px;color:var(--n500);margin-top:1px}
+.alert{border:1px solid var(--danger-border);background:var(--danger-surface);color:var(--danger);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;line-height:1.5;margin-top:12px}
+
+/* public page */
+.pub{padding:22px}
+.dcard{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:16px 18px}
+.dcard + .dcard{margin-top:12px}
+.dcard .top{display:flex;justify-content:space-between;align-items:baseline}
+.dcard .k{font-style:italic;font-weight:600;font-size:20px}
+.dcard .pr{font-weight:500;font-variant-numeric:tabular-nums}
+.dcard .m{font-size:13.5px;color:var(--n600);margin-top:4px;font-variant-numeric:tabular-nums}
+.raised{display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding-top:10px;border-top:1px solid var(--n100);font-size:13.5px;color:var(--n700)}
+.raised .ico{color:var(--teal);font-weight:600}
+.upd h4{font-weight:600;font-size:16px;margin:0 0 12px}
+.item{border-left:2px solid var(--teal200);padding:2px 0 2px 14px}
+.item + .item{margin-top:16px}
+.item .d{font-size:12.5px;color:var(--n500);font-variant-numeric:tabular-nums}
+.item .b{font-size:14.5px;line-height:1.55;margin-top:2px}
+.item .b p{margin:0}
+.it<!-- 1. placement -->
+<div class="block">
+  <h2>1. Where the button lives</h2>
+  <h3>In the race header, top right, as a menu of distances</h3>
+  <p>The header's action changes with the race's status. Close entries has to stay: until entries close on
+  their own at the registration end date (STE-46, not built yet), it is the only thing that stops registration.
+  So an open race shows two buttons, and adding places is the main one.</p>
+  <div class="pair">
+    <div>
+      <p class="statecap">Open race, menu open</p>
+      <div class="screen tall">
+        <div class="chead"><span class="t">Merdeka Run 2026</span><span class="pill ok">Open</span>
+          <div class="hact">
+            <button class="btn ghost sm">Close entries</button>
+            <button class="btn sm">Add places <span class="caret">&#9662;</span></button>
+            <div class="menu">
+              <div class="mh">Which distance?</div>
+              <div class="mi hover"><b>10K</b><span class="pill warn">Full</span><span class="n">500 of 500</span></div>
+              <div class="mi"><b>5K</b><span></span><span class="n">312 of 400</span></div>
+              <div class="mi"><b>3K_FUN_WALK</b><span></span><span class="n">88 of 150</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs"><span class="on">Overview</span><span>Entries</span><span>Scanners</span></div>
+        <div class="body"><div class="ghostrows" style="margin-top:0;height:180px">(Overview, as today)</div></div>
+      </div>
+      <p class="cap">Picking a distance opens the dialog below. A race with one distance skips the menu and opens the dialog straight away.</p>
+    </div>
+    <div>
+      <p class="statecap">Draft race</p>
+      <div class="screen">
+        <div class="chead"><span class="t">Merdeka Run 2026</span><span class="pill" style="border-color:var(--n300);color:var(--n600)">Draft</span>
+          <div class="hact"><button class="btn sm">Open entries</button></div>
+        </div>
+        <div class="tabs"><span class="on">Overview</span><span>Entries</span><span>Scanners</span></div>
+        <div class="body"><div class="ghostrows" style="margin-top:0;height:60px">(Overview)</div></div>
+      </div>
+      <p class="cap">Nothing to add places to before entries open, so only Open entries.</p>
+      <p class="statecap" style="margin-top:18px">Closed race</p>
+      <div class="screen">
+        <div class="chead"><span class="t">Merdeka Run 2026</span><span class="pill warn">Closed</span>
+          <div class="hact"><button class="btn ghost sm">Reopen entries</button><button class="btn sm">Add places <span class="caret">&#9662;</span></button></div>
+        </div>
+        <div class="tabs"><span class="on">Overview</span><span>Entries</span><span>Scanners</span></div>
+        <div class="body"><div class="ghostrows" style="margin-top:0;height:60px">(Overview)</div></div>
+      </div>
+      <p class="cap">Places can be added while closed, ready for when entries reopen.</p>
+    </div>
+  </div>
+</div>
+
+/div></div>
+          </div>
+          <div class="places">
+            <div class="place"><div class="top"><b>10K</b><span class="pill warn">Full</span></div><div class="bar full"><i style="width:100%"></i></div><div class="foot"><span>500 of 500</span><button class="btn sm">Add places</button></div></div>
+            <div class="place"><div class="top"><b>5K</b></div><div class="bar"><i style="width:78%"></i></div><div class="foot"><span>312 of 400</span><button class="btn ghost sm">Add places</button></div></div>
+          </div>
+          <div class="ghostrows">(search, filters and the entries table, as today)</div>
+        </div>
+      </div>
+      <p class="cap">B. A "Places" strip between the numbers and the table, one card per distance with a bar.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 2. dialog form -->
+<div class="block">
+  <h2>2. The dialog</h2>
+  <h3>One form: the new number and the announcement together</h3>
+  <p>The first line of the announcement is written by the page from the numbers, so it always matches what
+  changes. The organiser can add a note under it. Nothing is sent until "Add places and announce".</p>
+  <div class="pair">
+    <div>
+      <div class="screen"><div class="scrim"><div class="dlg">
+        <h5>Add places to 10K</h5>
+        <p class="lead">Places can only go up. Every runner sees the announcement on the race page.</p>
+        <div class="now"><div><div class="l">Places now</div><div class="v">500</div></div><div><div class="l">Entered</div><div class="v">500</div></div></div>
+        <div class="fld"><label>New number of places</label><div class="in">800</div><div class="h">300 more places. Bib numbers carry on from the last one.</div></div>
+        <div class="fld"><label>Announcement</label>
+          <div class="fixed"><div class="l">Written for you</div>Places for 10K raised from 500 to 800.</div>
+        </div>
+        <div class="fld"><label>Add a note (optional)</label><div class="ta">Second batch opens because the first sold out in a day. Race pack collection is unchanged.</div></div>
+        <div class="acts"><button class="btn ghost">Cancel</button><button class="btn">Add places and announce</button></div>
+      </div></div></div>
+      <p class="cap">Filled in.</p>
+    </div>
+    <div>
+      <div class="screen"><div class="scrim"><div class="dlg">
+        <h5>Add places to 10K</h5>
+        <p class="lead">Places can only go up. Every runner sees the announcement on the race page.</p>
+        <div class="now"><div><div class="l">Places now</div><div class="v">500</div></div><div><div class="l">Entered</div><div class="v">500</div></div></div>
+        <div class="fld"><label>New number of places</label><div class="in err">500</div><div class="e">Enter a number above 500. Places cannot go down or stay the same.</div></div>
+        <div class="fld"><label>Announcement</label>
+          <div class="fixed"><div class="l">Written for you</div>Places for 10K raised from 500 to <b>?</b></div>
+        </div>
+        <div class="fld"><label>Add a note (optional)</label><div class="ta ph">For example, why a second batch is opening</div></div>
+        <div class="acts"><button class="btn ghost">Cancel</button><button class="btn dis">Add places and announce</button></div>
+      </div></div></div>
+      <p class="cap">A number that is not higher is refused before anything is signed.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 3. running -->
+<div class="block">
+  <h2>3. After pressing</h2>
+  <h3>Two approvals in the wallet, then the announcement goes up</h3>
+  <p>The announcement is approved first, before the places change, so the raise and its announcement never
+  drift apart. The dialog cannot be closed while it runs.</p>
+  <div class="pair">
+    <div>
+      <div class="screen"><div class="scrim"><div class="dlg">
+        <h5>Adding places to 10K</h5>
+        <p class="lead">Your wallet will ask you 2 times.</p>
+        <ul class="steps">
+          <li><span class="ic done">&#10003;</span><div>Approve the announcement</div></li>
+          <li><span class="ic run"></span><div>Approve the new places<div class="s">Check your wallet</div></div></li>
+          <li><span class="ic wait">3</span><div>Publish the announcement</div></li>
+        </ul>
+      </div></div></div>
+      <p class="cap">Running.</p>
+    </div>
+    <div>
+      <div class="screen"><div class="scrim"><div class="dlg">
+        <h5>Places added, announcement not published</h5>
+        <p class="lead">10K now has 800 places. The announcement did not go up, so runners cannot see why yet.</p>
+        <ul class="steps">
+          <li><span class="ic done">&#10003;</span><div>Approve the announcement</div></li>
+          <li><span class="ic done">&#10003;</span><div>Approve the new places</div></li>
+          <li><span class="ic fail">!</span><div>Publish the announcement<div class="s">Could not reach our server</div></div></li>
+        </ul>
+        <div class="acts"><button class="btn">Publish the announcement</button></div>
+      </div></div></div>
+      <p class="cap">If only the last step fails, the one way out is to publish. There is no Close.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 4. done -->
+<div class="block">
+  <h2>4. Done</h2>
+  <div class="pair">
+    <div>
+      <div class="screen"><div class="scrim"><div class="dlg">
+        <h5>10K now has 800 places</h5>
+        <p class="lead">Entries are open again for 10K, and the announcement is on the race page.</p>
+        <ul class="steps">
+          <li><span class="ic done">&#10003;</span><div>Approve the announcement</div></li>
+          <li><span class="ic done">&#10003;</span><div>Approve the new places</div></li>
+          <li><span class="ic done">&#10003;</span><div>Publish the announcement</div></li>
+        </ul>
+        <div class="acts"><button class="btn ghost">See the race page</button><button class="btn">Done</button></div>
+      </div></div></div>
+    </div>
+    <div></div>
+  </div>
+</div>
+
+<!-- 5. runners -->
+<div class="block">
+  <h2>5. What runners see on /events/[id]</h2>
+  <h3>The raise on the distance, and an Updates list</h3>
+  <p>The distance card says when places were added and from what. The Details tab gets an Updates section
+  with every announcement, newest first. A tick says the organiser really signed it; if it cannot be
+  confirmed, it says so rather than hiding the announcement.</p>
+  <div class="pair">
+    <div>
+      <div class="screen"><div class="tabs"><span>Details</span><span>Terms</span><span>Timeline</span><span class="on">Distances</span><span>Race pack</span></div>
+        <div class="pub">
+          <div class="dcard">
+            <div class="top"><span class="k">10K</span><span class="pr">sUSD 250</span></div>
+            <div class="m">300 places left of 800</div>
+            <div class="raised"><span class="ico">+</span><span>Places raised from 500 to 800 on 18 Sep 2026</span></div>
+          </div>
+          <div class="dcard">
+            <div class="top"><span class="k">5K</span><span class="pr">sUSD 150</span></div>
+            <div class="m">88 places left of 400</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Distances tab. Only a raised distance gets the extra line; several raises list oldest first.</p>
+    </div>
+    <div>
+      <div class="screen"><div class="tabs"><span class="on">Details</span><span>Terms</span><span>Timeline</span><span>Distances</span><span>Race pack</span></div>
+        <div class="pub upd">
+          <h4>Updates</h4>
+          <div class="item">
+            <div class="d">18 Sep 2026, 08:12</div>
+            <div class="b"><p>Places for 10K raised from 500 to 800.</p><p>Second batch opens because the first sold out in a day. Race pack collection is unchanged.</p></div>
+            <div class="sig">&#10003; Signed by the organiser</div>
+          </div>
+          <div class="item">
+            <div class="d">10 Sep 2026, 19:40</div>
+            <div class="b"><p>Start moved to Lapangan Banteng. Schedule unchanged.</p></div>
+            <div class="sig bad">! Could not confirm the organiser signed this</div>
+          </div>
+          <div class="doc">The race details above are what the organiser published when the race was created. Updates never change them; they are added beside them.</div>
+        </div>
+      </div>
+      <p class="cap">Details tab, under General information. Hidden entirely when a race has no updates.</p>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
