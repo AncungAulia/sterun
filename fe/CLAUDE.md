@@ -634,13 +634,15 @@ match: plain state let a rollover pair this step's number with the previous step
 scanner refuses and a runner gets blamed for.
 
 **The pass shows the bib name large and the bib number as the first fact in the row** beside the
-category and the state (Ancung, 2026-09-16). The column is labelled **Category**, not Distance: a code
+category and whether the race pack has been collected (Ancung, 2026-09-16). That last column is
+**Race pack: Not collected / Collected**, not "Status: Entered", which told a runner at the desk
+nothing about whether the pass had been used. The column is labelled **Category**, not Distance: a code
 like `3K_FUN_WALK` names what the runner entered rather than a length. The number has to be there: the frozen manual fallback
 is the code **plus the bib number** (`docs/specs/HASH_AND_TOTP.md` §5), the scanner's typing sheet
 asks for exactly that, and a runner at a pickup desk has no printed bib yet. For a few hours the pass
 showed the name alone, and a volunteer would have been asking for a number the runner could not
 read. Three facts sit in one row; four, once the city is known, wrap into two rows of two, because a
-quarter of a phone is too narrow for "Race pack claimed". On a phone that holds no name the number
+quarter of a phone is too narrow for "Not collected". On a phone that holds no name the number
 is already the large thing and is not repeated.
 
 **The secret never leaves the device.** A phone that did not enter fetches it once with the wallet

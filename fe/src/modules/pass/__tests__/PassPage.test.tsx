@@ -130,7 +130,7 @@ describe("the pass", () => {
       expect(screen.queryByText("Sep 27, 2026")).not.toBeInTheDocument();
       expect(screen.getByText("10K")).toBeInTheDocument();
       expect(screen.getByText("Kupang")).toBeInTheDocument();
-      expect(screen.getByText("Entered")).toBeInTheDocument();
+      expect(screen.getByText("Not collected")).toBeInTheDocument();
       await waitFor(() => expect(screen.getByLabelText("Check-in code 079663")).toBeInTheDocument());
       expect(screen.getByTestId("qr")).toHaveTextContent('{"t":7,"s":59070111,"c":"079663"}');
     });
@@ -226,7 +226,7 @@ describe("the pass", () => {
       renderPass();
 
       expect(await screen.findByText("Race pack collected")).toBeInTheDocument();
-      expect(screen.getByText("Race pack claimed")).toBeInTheDocument();
+      expect(screen.getByText("Collected")).toBeInTheDocument();
       expect(screen.queryByTestId("qr")).not.toBeInTheDocument();
       expect(screen.queryByText("Or use the code")).not.toBeInTheDocument();
       expect(screen.getByRole("link", { name: "View race record" })).toHaveAttribute(

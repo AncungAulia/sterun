@@ -18,7 +18,7 @@
  * no name the number is already the large thing, so it is not repeated.
  *
  * Three facts sit in one row. Four (once the city is known) wrap into two rows
- * of two: a quarter of a phone is too narrow for "Race pack claimed".
+ * of two: a quarter of a phone is too narrow for "Not collected".
  *
  * The date is gone for the same reason a runner does not need it here: they are
  * standing at the race. The city stays when this device has it, because a
@@ -72,11 +72,15 @@ export function PassFacts({
           </div>
         ))}
         <div>
-          <dt className="text-xs tracking-[0.1em] text-n-600">Status</dt>
+          {/*
+            "Race pack", not "Status" (Ancung, 2026-09-16). "Entered" told a
+            runner at the desk nothing they were asking: whether this pass has
+            already been used to collect. "Collected" is the pass's own word for
+            it (ClaimedPanel), and "claimed" is kept for the chain's side.
+          */}
+          <dt className="text-xs tracking-[0.1em] text-n-600">Race pack</dt>
           <dd className="mt-0.5">
-            <Badge variant={claimed ? "success" : "accent"}>
-              {claimed ? "Race pack claimed" : "Entered"}
-            </Badge>
+            <Badge variant={claimed ? "success" : "accent"}>{claimed ? "Collected" : "Not collected"}</Badge>
           </dd>
         </div>
       </dl>
