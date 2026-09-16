@@ -32,7 +32,7 @@ already in other people's hands.
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-09-15
 
 ### Added
 
@@ -63,8 +63,6 @@ already in other people's hands.
 - A `Finished` `SterunRecord` may now have `finishTimeS === null`. Code that
   formatted every finished record's time must handle that case and must never
   render it as `0`.
-- Not published yet: needs the live contract upgraded to v2.2 (done at the same
-  address — see `docs/deployments.md`) and a version bump by the package owner.
 
 ---
 
