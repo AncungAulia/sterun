@@ -396,6 +396,22 @@ export class Indexer {
         return 0;
       }
 
+      case "registration_closes_set": {
+        // No hydration and no cross-check against get_registration_closes: the
+        // date may legitimately have moved again since this page, and a later
+        // registration_closes_set in the stream carries that. The contract
+        // emits nothing for a no-op, so every one of these is a real move.
+        const updated = await store.setRegistrationCloses(db, event.eventId, event.current, at);
+        if (!updated) {
+          this.log("warn", "close date for an event that is not indexed", {
+            eventId: event.eventId,
+            eventRef: envelope.id,
+          });
+          return 1;
+        }
+        return 0;
+      }
+
       // `mint` is redundant with `record_entered` — same token, same owner, one
       // ledger apart at most (INTERFACE.md §2.3 fixes the order). It is kept in
       // chain_events for the audit trail and materialises nothing.
@@ -605,8 +621,13 @@ export class Indexer {
     const eventCount = await this.reader.eventCount();
     const events: ChainEvent[] = [];
     const categories: ChainCategory[] = [];
+    // v2.5 (STE-46). Read from state like everything else here; only a date
+    // that exists is kept, so a pre-v2.5 contract costs one failed read per event.
+    const closeDates = new Map<number, bigint>();
     for (let eventId = 0; eventId < eventCount; eventId += 1) {
       events.push(await this.reader.getEvent(eventId));
+      const closesAt = await this.reader.registrationCloses(eventId);
+      if (closesAt !== null) closeDates.set(eventId, closesAt);
       const categoryCount = await this.reader.categoryCount(eventId);
       for (let categoryId = 0; categoryId < categoryCount; categoryId += 1) {
         categories.push(await this.reader.getCategory(eventId, categoryId));
@@ -644,6 +665,9 @@ export class Indexer {
       await store.clearMaterialisedTables(client);
       const at = { source: "state" as const, ledger: fromLedger };
       for (const event of events) await store.upsertEvent(client, event, at);
+      for (const [eventId, closesAt] of closeDates) {
+        await store.setRegistrationCloses(client, eventId, closesAt, at);
+      }
       for (const category of categories) await store.upsertCategory(client, category, at);
       // After the events, because event_scanners references them.
       for (const scanner of stillAllowed) {
@@ -733,6 +757,12 @@ export class Indexer {
         row.name !== onChain.name ? `name ${JSON.stringify(row.name)} != ${JSON.stringify(onChain.name)}` : "",
         row.startsAt !== onChain.startsAt ? `starts_at ${row.startsAt} != ${onChain.startsAt}` : "",
       ].filter(Boolean);
+      const closesAt = await this.reader.registrationCloses(eventId);
+      if (row.registrationClosesAt !== closesAt) {
+        differences.push(
+          `registration_closes_at ${row.registrationClosesAt ?? "none"} != ${closesAt ?? "none"}`,
+        );
+      }
       if (differences.length > 0) {
         findings.push({ kind: "event-differs", detail: `event ${eventId}: ${differences.join("; ")}` });
       }

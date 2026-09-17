@@ -39,6 +39,7 @@ import {
   scannerRemoved,
   slotReserved,
   quotaIncreased,
+  registrationClosesSet,
   toidCursor,
 } from "./helpers/fake-events.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
@@ -1025,6 +1026,104 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
       }
       expect((await row(mine.participantId))?.token_id).toBeNull();
       expect((await row(other.participantId))?.token_id).toBe(0);
+    });
+  });
+
+  describe("registration close dates (STE-46)", () => {
+    const CLOSES = 1_790_000_000n;
+    const U64_MAX = 2n ** 64n - 1n;
+
+    function seedEvent(closesAt: bigint | null = null) {
+      chain.addEvent({ eventId: 0, organiser: ORGANISER, status: "Open", registrationClosesAt: closesAt });
+      return [
+        eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+        eventStatusChanged({ ...registry, ledger: 101 }, 0, "Open"),
+      ];
+    }
+
+    const closesAt = async (eventId = 0) => (await store.getEvent(pool, eventId))?.registrationClosesAt;
+
+    it("stores the date a registration_closes_set carries, and each later move", async () => {
+      const page = seedEvent(CLOSES + 86_400n);
+      const indexer = build(
+        new FakeEventSource([
+          page,
+          [registrationClosesSet({ ...registry, ledger: 200 }, 0, null, CLOSES)],
+          [registrationClosesSet({ ...registry, ledger: 210 }, 0, CLOSES, CLOSES + 86_400n)],
+        ]),
+      );
+      await indexer.pollOnce();
+      expect(await closesAt()).toBeNull();
+
+      await indexer.pollOnce();
+      expect(await closesAt()).toBe(CLOSES);
+
+      await indexer.pollOnce();
+      expect(await closesAt()).toBe(CLOSES + 86_400n);
+      expect((await store.getEvent(pool, 0))?.lastLedger).toBe(210);
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("stores u64::MAX, a legal 'never' that a bigint column would refuse", async () => {
+      const page = seedEvent(U64_MAX);
+      await build(
+        new FakeEventSource([[...page, registrationClosesSet({ ...registry, ledger: 200 }, 0, null, U64_MAX)]]),
+      ).pollOnce();
+      expect(await closesAt()).toBe(U64_MAX);
+    });
+
+    it("counts a close date for an event that is not indexed as an orphan", async () => {
+      const result = await build(
+        new FakeEventSource([[registrationClosesSet({ ...registry, ledger: 200 }, 7, null, CLOSES)]]),
+      ).pollOnce();
+      expect(result.orphans).toBe(1);
+      expect(warnings).toContain("close date for an event that is not indexed");
+    });
+
+    it("rebuilds the date from state, including one the poller never saw", async () => {
+      // The date was set while the index was down: no event, only state.
+      const page = seedEvent(CLOSES);
+      chain.addEvent({ eventId: 1, organiser: ORGANISER });
+      const indexer = build(new FakeEventSource([[...page, eventCreated({ ...registry, ledger: 102 }, 1, ORGANISER)]]));
+      await indexer.pollOnce();
+      expect(await closesAt()).toBeNull();
+
+      await indexer.rebuild();
+
+      expect(await closesAt(0)).toBe(CLOSES);
+      expect(await closesAt(1)).toBeNull();
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("has doctor report a date that disagrees with the chain", async () => {
+      const page = seedEvent(CLOSES);
+      const indexer = build(
+        new FakeEventSource([[...page, registrationClosesSet({ ...registry, ledger: 200 }, 0, null, CLOSES)]]),
+      );
+      await indexer.pollOnce();
+      chain.events.get(0)!.registrationClosesAt = CLOSES + 60n;
+
+      const report = await indexer.doctor();
+      expect(report.ok).toBe(false);
+      expect(report.findings).toEqual([
+        {
+          kind: "event-differs",
+          detail: `event 0: registration_closes_at ${CLOSES} != ${CLOSES + 60n}`,
+        },
+      ]);
+    });
+
+    it("rebuilds and doctors against an EventRegistry that predates v2.5", async () => {
+      // The live contract until the upgrade: get_registration_closes does not
+      // exist. A rebuild must not become an outage in that window.
+      const page = seedEvent();
+      chain.preCloseDate = true;
+      const indexer = build(new FakeEventSource([page]));
+      await indexer.pollOnce();
+
+      await expect(indexer.rebuild()).resolves.toMatchObject({ events: 1 });
+      expect(await closesAt()).toBeNull();
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
     });
   });
 

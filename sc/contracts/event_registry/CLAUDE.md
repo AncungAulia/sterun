@@ -19,6 +19,7 @@ authoritative design: `docs/SYSTEM_DESIGN.md` §3.1. The frozen interface: `docs
 | `AddOnCount(event_id)` | persistent | `u32` (v2) |
 | `Organiser(organiser)` | persistent | `bool` (v2.1) — the admin's allowlist, **contract-wide** |
 | `EventEntryCount(event_id)` | persistent | `u32` (v2.3) — entries taken across ALL distances; the bib sequence |
+| `RegistrationCloses(event_id)` | persistent | `u64` (v2.5) — unix seconds; entries stop at it. Absent = closes manually only |
 
 `DataKey` is **not** documented in `INTERFACE.md`: it is a storage schema, not a surface clients
 call. `check-interface.mjs` records it as `internalTypes`, so any **new** `#[contracttype]` that
@@ -29,7 +30,7 @@ entries written by old code. A `DataKey` variant is transmitted as its **name**,
 variant at the end is safe; deleting one, renaming one, or changing its value type orphans the old
 entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`.
 
-## Eight things that are easy to break
+## Nine things that are easy to break
 
 1. **`set_race_record` is one-shot.** A second call is refused (`RaceRecordAlreadySet = 7`). The
    reason: that address is the only trusted caller of `reserve_slot`. If it could be swapped, a
@@ -104,13 +105,30 @@ entries with no error at all. The full rules and their reasoning: `sc/CLAUDE.md`
    because the refund is off-chain. If that ever changes, it is a new feature with a new function —
    not a counter quietly decremented.
 
+9. **A close date is checked after the status, and only ever by the ledger clock.** (v2.5, STE-46)
+   `reserve_slot` and `reserve_addon` both refuse with `RegistrationClosed = 20` when
+   `RegistrationCloses(event_id)` exists and `env.ledger().timestamp() >= closes_at`. Four things to
+   hold:
+   - **status first, date second.** A `Closed` event answers `EventNotOpen` whether or not its date
+     passed, so an app can tell "the organiser closed it" from "the date passed". Swapping the two
+     checks fails a test;
+   - **the date is the only thing that reopens after it.** Moving the status back to `Open` past the
+     date reopens nothing; `set_registration_closes` with a later date does. The console offers that
+     as one action, paired with a signed announcement (STE-40). **The chain does not check that an
+     announcement exists** — never write that up as though it does;
+   - **no key means no automatic close**, which is every event created before v2.5. Nothing was
+     migrated. There is no way to delete a date once set; a far-future date is the same thing;
+   - **the entry path refreshes the key's TTL.** A date that archived would stop being enforced by
+     time passing alone, the exact failure it exists to prevent.
+
 ## Error codes — band `1..=99`, never renumbered
 
 `NotInitialized=1`, `EventNotFound=2`, `CategoryNotFound=3`, `EventNotOpen=4`, `QuotaFull=5`,
 `RaceRecordNotSet=6`, `RaceRecordAlreadySet=7`, `InvalidQuota=8`, `InvalidPrice=9`,
 `InvalidDistance=10`, `InvalidStatus=11`, `ScannerAlreadyAdded=12`, `ScannerNotFound=13`,
 `AddOnNotFound=14`, `AddOnQuotaFull=15`, `OrganiserAlreadyAdded=16`, `OrganiserNotFound=17`,
-`NotAllowlistedOrganiser=18`, `QuotaNotIncreased=19`. The next free code is **20**.
+`NotAllowlistedOrganiser=18`, `QuotaNotIncreased=19`, `RegistrationClosed=20`. The next free code is
+**21**.
 
 `add_addon` **reuses** `InvalidQuota=8` and `InvalidPrice=9` — its conditions are exactly
 `add_category`'s (`quota == 0`, `price < 0`), and a new code would only force clients to distinguish
@@ -126,7 +144,8 @@ not a C2 error. That is what the bands are for.
 `SlotReserved` (its `seq` is the bib — event-wide and 1-based since v2.3, **same layout**), plus in
 v2: `AddOnAdded`, `AddOnReserved`, `ContractUpgraded`, plus in v2.1:
 `OrganiserAdded`, `OrganiserRemoved` (their topics carry **no** `event_id` — the allowlist is
-contract-wide), plus in v2.4: `QuotaIncreased`.
+contract-wide), plus in v2.4: `QuotaIncreased`, plus in v2.5: `RegistrationClosesSet` (`event_id` topic;
+`previous: Option<u64>`, `current: u64` data, so an extension is readable from the event alone).
 
 `QuotaIncreased` makes `category_id` a **topic**, which `CategoryAdded` deliberately does not: the
 question it answers is per distance ("did the 10K open a second batch"), not per event. It carries
@@ -142,7 +161,7 @@ is **alphabetical**, not declaration order. It is `#[topic]` that keeps declarat
 
 ## Tests
 
-`src/test.rs`, 91 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
+`src/test.rs`, 107 tests, `lib.rs` coverage 98%. Every revert path has its own test. If you add a
 `pub fn` or an error variant, add **positive + negative + edge** with it — `cargo test` is not a
 place for happy paths alone.
 
@@ -151,7 +170,7 @@ place for happy paths alone.
 `stellar contract build` is not merely advice here: stale wasm means the upgrade tests are testing
 yesterday's code.
 
-Two tests there do not use the local build as their "old code". Each deploys the wasm that was
+Four tests there do not use the local build as their "old code". Each deploys the wasm that was
 **genuinely live** before one upgrade, writes state with it, then upgrades to the current build —
 the only pair that can prove the storage change in question was safe:
 
@@ -160,6 +179,7 @@ the only pair that can prove the storage change in question was safe:
 | `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` | `event_registry_live_pre_allowlist.wasm`, `22bb432e…` | `DataKey::Organiser` was appended safely (STE-36) |
 | `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` | `event_registry_live_pre_bib.wasm`, `cf009033…` | the per-distance bibs on chain still decode once bibs go event-wide (STE-54) |
 | `a_quota_can_be_raised_on_a_category_the_live_wasm_created` | `event_registry_live_pre_quota.wasm`, `c8b5e82a…` | a sold-out category written by the running code takes a larger quota and sells again (STE-55) |
+| `a_close_date_can_be_set_on_an_event_the_live_wasm_created` | `event_registry_live_pre_close_date.wasm`, `33b5e687…` | an event the running code opened takes a close date and stops at it; one left alone runs as before (STE-46) |
 
 The rules for adding the next fixture — add, never overwrite — are in `testdata/README.md`.
 

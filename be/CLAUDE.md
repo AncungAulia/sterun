@@ -479,7 +479,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-1036 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+1048 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that
@@ -641,6 +641,35 @@ fails to decode. When `docs/specs/CHANGELOG.md` changes, read it against `src/ch
 Guarded by tests, each checked by breaking the fix: removing the recount, restoring the equality
 check, making `quota_increased` a no-op, and dropping the category comparison from `doctor` each fail
 the suite.
+
+## Registration close dates (STE-46, migration 014)
+
+EventRegistry v2.5 refuses entries at or after an event's close date (`RegistrationClosed = 20`, with the
+status still `Open`). The index keeps that date so the race page and the console need no RPC call per
+event: `events.registration_closes_at`, served as `registration_closes_at` (a string like every u64, or
+`null` for an event with no date) on `/events` and `/events/:eventId`.
+
+| | How |
+| --- | --- |
+| poller | `registration_closes_set` writes `current`; an event not indexed is an orphan. No cross-check: the date may have moved again since, and the contract emits nothing for a no-op |
+| rebuild | `get_registration_closes` per event, from state, so a date set while the index was down comes back |
+| doctor | compares the column with `get_registration_closes` |
+
+Three things worth knowing:
+
+- **`numeric(20,0)`, not `bigint`.** `u64::MAX` is a legal "never" on chain. A bigint column would refuse
+  it and stop the poller on a value the contract accepted. `starts_at` is still `bigint` and has the same
+  latent problem; it is left alone here because nothing has sent a huge `starts_at` yet.
+- **This service runs against a pre-v2.5 contract too.** There `get_registration_closes` does not exist,
+  the host answers `Error(WasmVm, MissingValue)`, and `ChainReader.registrationCloses` answers `null`,
+  which is true of every event on such a contract. Without that, deploying this before the contract
+  upgrade would turn every rebuild and every doctor run into an outage. Any other failure still throws.
+- **The API gives the date, not a verdict.** Whether entries are closed right now depends on the ledger
+  clock at the moment of `enter`, and the status. A client compares; the chain decides.
+
+Guarded by tests, each checked by breaking it: the poller ignoring the event, rebuild dropping dates,
+doctor skipping them, the pre-v2.5 fallback removed, the API always sending `null`, and the decoder
+dropping `previous` each fail the suite.
 
 ## Signed event announcements (STE-40, migration 013)
 

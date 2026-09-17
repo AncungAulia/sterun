@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.4.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.5.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,94 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.5.0] — 2026-09-17
+
+**MINOR — entries close on their own at the registration close date (STE-46).** Two new functions,
+one new event, one new error code taking the next free number in the C1 band, and one storage key
+appended. No signature moved, no event layout moved, nothing was renumbered.
+
+### Why
+
+The event wizard asks an organiser for a registration close date, it goes into the event document,
+and runners read it on the race page. Until v2.5 the contract enforced none of it: `reserve_slot`
+checked the status and the quota and nothing else, so entries stayed open until somebody pressed
+Close entries. An organiser reasonably reads a close date as "set it and the race handles itself";
+one forgotten click turned the race page into a false statement to every runner who looked. That is
+the "what is printed must be what happens" promise from STE-34 and STE-36, broken quietly.
+
+Axel's decision in STE-45 set the shape and all five open questions; Ancung asked on STE-46 to bring
+it into phase 2 once STE-40 (signed announcements) was live, since extensions depend on it.
+
+### What was added
+
+| | |
+| --- | --- |
+| `set_registration_closes(event_id: u32, closes_at: u64) -> Result<(), Error>` | organiser-gated through the same `auth_organiser` route as `increase_quota`; unix seconds; either direction |
+| `get_registration_closes(event_id: u32) -> Result<Option<u64>, Error>` | `None` = no date, closes manually only; `EventNotFound(2)` for an unknown event |
+| `RegistrationClosesSet` | topics: `"registration_closes_set"`, `event_id`; data: `current: u64`, `previous: Option<u64>` (alphabetical, the `ScMap` wire order) |
+| `RegistrationClosed = 20` | `reserve_slot` / `reserve_addon` at or after the date, on an event that is otherwise `Open` |
+| `DataKey::RegistrationCloses(event_id) -> u64` | appended last; not documented as surface, recorded here because it is the storage change |
+
+The next free C1 code is now **21**.
+
+### The rules, each of them a decision from STE-45
+
+- **Enforced by the ledger clock**: refused when `env.ledger().timestamp() >= closes_at`. Ledgers
+  close every few seconds, and second-level granularity is irrelevant to a registration deadline.
+- **A new error code, not `EventNotOpen(4)`.** "This race is not open" and "registration has closed"
+  send a runner to different places. The status is checked **first**, so a `Closed` event still
+  answers `EventNotOpen(4)` whatever its date, and the two stay distinguishable.
+- **A key, not a field on `EventData`.** A required field on a struct that is already stored is the
+  one change an in-place upgrade cannot survive.
+- **Races already on chain are left manual.** No key, no change, no migration. An organiser can opt
+  one in by setting a date.
+- **The date moves either way.** Earlier is closing early and needs no ceremony; a past date closes
+  at once. Later is an extension, and it is also the only way to reopen after the date: moving the
+  status back to `Open` alone reopens nothing, so the console offers "Reopen and extend to <date>" as
+  one action.
+- **An extension is paired with a signed announcement (STE-40), and the chain does not check that.**
+  The document's date is frozen by its hash and stays what runners were promised when they paid; the
+  on-chain date is what is enforced now; the announcement is the dated, signed record connecting the
+  two. That pairing is an application-level rule, and this spec does not claim otherwise.
+
+Two choices made in the implementation, recorded so they are not reopened by accident:
+
+- **Setting the date the event already has changes nothing and emits nothing**, so every
+  `RegistrationClosesSet` in the ledger is a real move.
+- **There is no way to remove a date once set.** A far-future date has the same effect, and a removal
+  function would be one more thing a client has to explain. It can be appended later if a real need
+  appears.
+
+### Impact on existing data and running clients
+
+- **Existing events:** unchanged. None has a date, so none is refused by the new rule. Proven against
+  the live wasm (`33b5e687…`, now committed as `event_registry_live_pre_close_date.wasm`): an event it
+  opened and sold entries in takes a date after the upgrade and stops at it, while the event beside it
+  with no date keeps selling and its bibs continue where the old code left them.
+- **`RaceRecord.enter` can revert `RegistrationClosed(20)`**, propagated from `reserve_slot`. A client
+  that maps error codes to sentences needs one more; a client that does not falls back to its generic
+  message, which is what happens today for any code it does not know. RaceRecord's wasm does not
+  change.
+- **Indexers:** a consumer that does not know `RegistrationClosesSet` simply does not show close
+  dates. No existing event changed layout.
+- **Vectors:** none added, none changed. `HASH_AND_TOTP.md` is untouched.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| `cd sc && cargo test` | EventRegistry 107 (16 new), RaceRecord 72 |
+| mutations | removing either check, `>=` as `>`, the no-op emitting, no TTL refresh on entry, the date checked before the status, the view answering `None` for an unknown event: each fails a test |
+| `node sc/scripts/check-interface.mjs` | OK after the bindings are regenerated |
+| `bash docs/specs/verify.sh` | OK (nothing it covers changed) |
+| wasm | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942`, 35,814 B (doc comments travel in the contract spec, hence most of the growth) |
+
+**Not yet upgraded on testnet.** This entry is the spec PR; the live EventRegistry at `CAPB6NQP…`
+keeps running v2.4 until Axel and fable approve it. The end-to-end run against a throwaway deployment
+of this wasm is recorded in `docs/deployments.md`.
 
 ---
 

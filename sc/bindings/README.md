@@ -7,11 +7,11 @@ retypes a contract signature.
 
 | Package | Contract | From wasm | wasm sha256 |
 | --- | --- | --- | --- |
-| [`event-registry/`](event-registry/) | EventRegistry (C1, v2.4) | `event_registry.wasm` | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` |
+| [`event-registry/`](event-registry/) | EventRegistry (C1, v2.5) | `event_registry.wasm` | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` |
 | [`race-record/`](race-record/) | RaceRecord (C2, v2.2) | `race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` |
 
 The frozen contract they represent: **[`docs/specs/INTERFACE.md`](../../docs/specs/INTERFACE.md)
-v2.4.0**. These bindings talk to the **v2 pair of addresses**; the v1 addresses that are still live
+v2.5.0**. These bindings talk to the **v2 pair of addresses**; the v1 addresses that are still live
 run v1 wasm with a different `enter` signature, so do not cross the two.
 
 If this document and the files here disagree, **the document is right** — and the disagreement is
@@ -146,7 +146,7 @@ Demonstrated: a probe package with the two `file:` dependencies above passes `ts
    client concern.
 3. **`version` in `package.json` says `0.0.0`.** That is what the generator emits, and we
    deliberately do **not** change it, so the output stays byte-identical to a regeneration. The
-   meaningful version is the spec version they represent — **v2.4.0**, recorded in
+   meaningful version is the spec version they represent — **v2.5.0**, recorded in
    `docs/specs/CHANGELOG.md` — plus the wasm sha256 in the table at the top. Both of those are
    verifiable identities; the number in `package.json` is not.
 
@@ -156,7 +156,7 @@ Each package's `Errors` maps a code to a name, exactly as in `INTERFACE.md` §1.
 
 | Package | Export | Band |
 | --- | --- | --- |
-| `event-registry` | `Errors` | `1..=19` (EventRegistry, C1) |
+| `event-registry` | `Errors` | `1..=20` (EventRegistry, C1) |
 | `race-record` | `Errors` | `100..=107` (RaceRecord, C2) |
 | `race-record` | `NonFungibleTokenError` | `200..=214` (OpenZeppelin) |
 

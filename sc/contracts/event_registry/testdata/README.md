@@ -9,6 +9,7 @@ at the moment the upgrade beside it was written:
 | `event_registry_live_pre_allowlist.wasm` | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | EventRegistry v2.0.1, live before **STE-36** (the organiser allowlist) |
 | `event_registry_live_pre_bib.wasm` | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | EventRegistry v2.2, live before **STE-54** (bibs unique within an event) |
 | `event_registry_live_pre_quota.wasm` | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | EventRegistry v2.3, live before **STE-55** (`increase_quota`) |
+| `event_registry_live_pre_close_date.wasm` | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | EventRegistry v2.4, live before **STE-46** (registration closes on its own) |
 
 Fetched from testnet as-is:
 
@@ -38,6 +39,7 @@ the one frozen in `docs/specs/INTERFACE.md` §0.
 | `state_written_by_the_live_wasm_survives_the_allowlist_upgrade` | pre-allowlist | `DataKey::Organiser` was appended without orphaning `event_id` 0 |
 | `bibs_issued_by_the_live_wasm_survive_the_event_wide_sequence` | pre-bib | the per-distance bibs already on chain still read back once bibs become event-wide |
 | `a_quota_can_be_raised_on_a_category_the_live_wasm_created` | pre-quota | a category written by the running code — sold out, with entrants already counted against it — takes a larger quota and sells again |
+| `a_close_date_can_be_set_on_an_event_the_live_wasm_created` | pre-close-date | an event the running code opened and sold entries in takes a close date and stops at it, while the event beside it with no date runs exactly as before |
 
 The third one is the only test that can show the *absence* the ticket is about: the pre-quota
 fixture has no `increase_quota` at all, so `try_increase_quota` failing against it is the sold-out
