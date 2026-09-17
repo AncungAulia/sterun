@@ -135,7 +135,22 @@ body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webki
 .item .d{font-size:12.5px;color:var(--n500);font-variant-numeric:tabular-nums}
 .item .b{font-size:14.5px;line-height:1.55;margin-top:2px}
 .item .b p{margin:0}
-.it<!-- 1. placement -->
+.item .sig{font-size:12.5px;color:var(--success);font-weight:500;margin-top:6px}
+.item .sig.bad{color:var(--warning)}
+.doc{margin-top:18px;font-size:13px;color:var(--n500);line-height:1.55}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>Adding places to a distance</h1>
+  <p>STE-57. An organiser raises a distance's places from the race console, and runners see when and why.
+  <b>Raising places is paired with a signed announcement</b>: runners paid against the published number,
+  so a change to it is said in public.</p>
+</div>
+
+<!-- 1. placement -->
 <div class="block">
   <h2>1. Where the button lives</h2>
   <h3>In the race header, top right, as a menu of distances</h3>
@@ -186,19 +201,6 @@ body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webki
   </div>
 </div>
 
-/div></div>
-          </div>
-          <div class="places">
-            <div class="place"><div class="top"><b>10K</b><span class="pill warn">Full</span></div><div class="bar full"><i style="width:100%"></i></div><div class="foot"><span>500 of 500</span><button class="btn sm">Add places</button></div></div>
-            <div class="place"><div class="top"><b>5K</b></div><div class="bar"><i style="width:78%"></i></div><div class="foot"><span>312 of 400</span><button class="btn ghost sm">Add places</button></div></div>
-          </div>
-          <div class="ghostrows">(search, filters and the entries table, as today)</div>
-        </div>
-      </div>
-      <p class="cap">B. A "Places" strip between the numbers and the table, one card per distance with a bar.</p>
-    </div>
-  </div>
-</div>
 
 <!-- 2. dialog form -->
 <div class="block">
