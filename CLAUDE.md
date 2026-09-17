@@ -75,7 +75,7 @@ must **never** be edited by hand.
 | STE-17 | organiser console | in progress (Ancung) |
 | STE-18 | race-day design: QR pass + scanner (C13) | done — `docs/design/race-day/`, what STE-21 and STE-22 are built from |
 | STE-23 | runner profile design + polish pass (C13) | done — `docs/design/profile/` for STE-24, findings in `docs/design/polish/` |
-| STE-12 | landing page (C13) | **in progress** — every section is built on `feat/8-landing-page`; still waiting on the How it works photos, the Product preview screenshot, the running-track image, the footer's team line (Axel) and the app URL (STE-32) |
+| STE-12 | landing page (C13) | **in progress** — every section is built on `feat/8-landing-page`; still waiting on the How it works photos, the Product preview screenshot, the footer's team line (Axel) and the app URL (STE-32) |
 | STE-35 | **contracts v2**: upgradeable + paid add-ons + `Cancelled` | done, **LIVE on testnet** |
 | STE-36 | **organiser allowlist** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED** |
 | STE-37 | add-on methods on `SterunClient` | done, live v2 e2e |

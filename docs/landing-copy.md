@@ -15,7 +15,7 @@ salah satunya salah dan harus disamakan di commit yang sama.
 | 2 | [Problem](#problem) | `#problem` | ✅ | **draft** | ✅ |
 | 3 | [How it works](#how-it-works) | `#how-it-works` | ✅ | final | ✅ |
 | 4 | [Product preview](#product-preview) | `#product` | — | **draft** | ✅ screenshot placeholder |
-| 5 | [Why Stellar](#why-stellar) | `#why-stellar` | ✅ | final, fee number dropped | ✅ track placeholder |
+| 5 | [Why Stellar](#why-stellar) | `#why-stellar` | ✅ | final, fee number dropped | ✅ |
 | 6 | [Closing CTA](#closing-cta) | `#start` | — | **draft** | ✅ |
 | 7 | [Footer](#footer) | — | — | team line waits on Axel | ✅ without the team line |
 
@@ -257,12 +257,15 @@ S of Stellar stands exactly as tall as WHY. No question mark. The mark file live
 `landing-page/public/third-party/` with a README saying whose it is; it is never recoloured or
 redrawn.
 
-**The answer**, one sentence broken at its commas into three clauses, each laid onto a running
-track:
+**The answer**, three claims set over a photograph of a runner on a track, two screens tall. The
+photograph rises over the held heading, and each claim rises out of a line mask on its own as the
+reader reaches it:
 
-> Non-transferable records mean a bib can't be resold,
-> organiser-signed finish results mean a time can't be forged,
-> and settlement reaches the organiser directly.
+> Non-transferable records mean a bib can't be resold.
+>
+> Organiser-signed finish results mean a time can't be forged.
+>
+> Settlement reaches the organiser directly.
 
 **Dropped: "at a per-record fee measured in fractions of a cent".** No transaction fee is recorded in
 [`docs/deployments.md`](deployments.md), so it was the one number on the page a reader could not
