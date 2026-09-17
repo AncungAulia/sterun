@@ -1,3 +1,4 @@
+import { Footer } from "@/components/layouts/Footer";
 import { ClosingCta } from "@/modules/closing-cta/ClosingCta";
 import { Hero } from "@/modules/hero/Hero";
 import { HowItWorks } from "@/modules/how-it-works/HowItWorks";
@@ -16,6 +17,7 @@ export default function Home() {
       <WhyStellar />
       <WhyStellarTrack />
       <ClosingCta />
+      <Footer />
     </>
   );
 }
