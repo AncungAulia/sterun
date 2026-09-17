@@ -123,24 +123,28 @@ The next free C2 code is now **109**.
 - **No cap in the contract**, and an empty batch succeeds with nothing recorded. The network's
   per-transaction limits are what bound a batch, and they differ by network and move over time.
 
-### The maximum batch is 46 rows — measured
+### The maximum batch is 120 rows — measured
 
-Both contracts deployed from wasm, `soroban-sdk` testutils enforcing the mainnet per-invocation limits,
-every row a timed finish (the largest event). Per row: one record written, one more footprint entry
-read, 136 event bytes.
+Both contracts deployed from wasm, every row a timed finish (the largest event), against the
+per-transaction limits **live on testnet and mainnet** on 2026-09-17, read with `stellar network
+settings` and identical on both:
 
-| Resource for `n` rows | Measured | Mainnet limit | Binds at |
+| Resource for `n` timed rows | Measured | Live limit | Binds at |
 | --- | --- | --- | ---: |
-| footprint ledger entries | `(n + 7) + (n + 1)` | 100 | **46** |
-| written entries | `n + 1` | 50 | 49 |
-| contract event bytes | `136n` | 16,384 | 120 |
-| CPU instructions | about 13.4 M at 45 | 600 M | — |
+| contract event bytes | `136n` | 16,384 | **120** |
+| written entries | `n + 1` (testutils) | 200 | 199 |
+| footprint entries | `2n + 8` (testutils), less on the network | 400 | 196 |
+| CPU instructions | about 41 M at 100 | 400 M | — |
 
-A first measurement read only the written entries and concluded 49; the footprint limit was what the
-network would have refused. Two tests pin the result: 46 rows fit, 47 fail with
-`total footprint ledger entries: 102 > 100`. The SDK exposes `RECORD_RESULTS_MAX_BATCH = 46` and refuses
-a larger batch before signing. Testnet allows 200 written entries, so a batch sized to testnet would
-break on mainnet; clients use the mainnet figure everywhere.
+Two tests pin it (120 rows fit; 121 fail with `contract events size bytes: 16456 > 16384`), and the
+testnet e2e confirms both against the network's own simulation. The SDK exposes
+`RECORD_RESULTS_MAX_BATCH = 120` and refuses a larger batch before signing.
+
+**A first measurement said 46, and was wrong.** It used soroban-sdk 26's
+`InvocationResourceLimits::mainnet()`, whose 50 written and 100 footprint entries are older than the
+network's settings. The testnet e2e caught it: the network's simulation reported a smaller footprint
+than the testutils count, which sent the measurement back to the live limits. If the network's limits
+change, the number is measured again with the new settings, not scaled.
 
 ### Also corrected in the wasm
 

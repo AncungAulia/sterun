@@ -32,10 +32,11 @@ Three things you must read before using this version:
   terminal states), because both run the same code. A token listed twice fails on its second row.
 - **Every row must belong to `event_id`**, or the batch reverts `ResultForAnotherEvent(108)`. The
   organiser gate is read once, for that event.
-- **At most 46 rows per call**, measured, not computed: with every row timed, the per-transaction
-  footprint limit of 100 ledger entries binds at 46 on mainnet's limits, before the written-entries or
-  event-byte limits. The contract has no cap of its own; a larger batch fails on the network's
-  limits. The SDK refuses more than 46 before signing.
+- **At most 120 rows per call**, measured, not computed: with every row timed (136 event bytes), the
+  per-transaction limit of 16,384 contract-event bytes binds at 120, on the limits live on testnet and
+  mainnet alike on 2026-09-17. The contract has no cap of its own; a larger batch fails on the
+  network's limits, and the network's simulation refuses 121. The SDK refuses more than 120 before
+  signing.
 
 ## What changed from v2.4.0 (MINOR, additive)
 
@@ -646,8 +647,8 @@ Important notes for D2/D3:
   `record_finish_untimed(token_id)`, `Dnf` is `record_dnf(token_id)`. Each row runs the same code as
   its single call, and emits the same event, in row order. The batch is **atomic**: the first invalid
   row reverts all of it. Every row must belong to `event_id` (`ResultForAnotherEvent(108)`). An empty
-  list succeeds and records nothing. **At most 46 rows per call** on mainnet's limits (measured; see
-  "What changed from v2.5.0"); the contract has no cap of its own.
+  list succeeds and records nothing. **At most 120 rows per call** on the network's current limits (measured;
+  see "What changed from v2.5.0"); the contract has no cap of its own.
 - **How to read a result:** `Finished` + `finish_time_s: Some(t)` is an official time of `t`
   seconds; `Finished` + `finish_time_s: None` is **finished with no official time** (declared by the
   organiser); `Dnf` is did-not-finish or no-show. A result is never rewritten — an untimed finish
@@ -887,7 +888,7 @@ changes, no regenerated bindings.
 | STE-35 | Paid add-ons (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
 | STE-41 | Untimed finish | `record_finish_untimed`, `RecordFinishedUntimed`, and `finish_time_s == None` on a `Finished` record — consumed by the `be/` indexer + CSV (James) and the `fe/` profile (Ancung) |
 | STE-46 | Registration closes on its own | `set_registration_closes`, `get_registration_closes`, `RegistrationClosesSet`, `RegistrationClosed(20)` — consumed by the `be/` indexer and the SDK (James) and the `fe/` wizard, console header and "Reopen and extend" flow, which must pair a later date with a signed announcement (Ancung) |
-| STE-60 | Many results in one signature | `record_results`, `ResultEntry`, `ResultOutcome`, `ResultForAnotherEvent(108)` — consumed by the SDK's `recordResults` (James) and the `fe/` results screen, which records a preview's `publishable` rows in batches of at most 46 (Ancung, STE-58) |
+| STE-60 | Many results in one signature | `record_results`, `ResultEntry`, `ResultOutcome`, `ResultForAnotherEvent(108)` — consumed by the SDK's `recordResults` (James) and the `fe/` results screen, which records a preview's `publishable` rows in batches of at most 120 (Ancung, STE-58) |
 | STE-55 | Raising a sold-out quota | `increase_quota`, `QuotaIncreased`, `QuotaNotIncreased(19)` — consumed by the `be/` indexer (James) and the `fe/` console's "add capacity" flow, which must pair it with a signed announcement (Ancung) |
 
 ---
