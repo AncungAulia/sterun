@@ -154,7 +154,8 @@ timed (the largest event, 136 bytes), against the per-transaction limits **live 
 alike** on 2026-09-17 (`stellar network settings`): 16,384 contract-event bytes, 200 written entries,
 400 footprint entries, 400 M instructions. Events bind first: 120 rows is 16,320 bytes, 121 is 16,456.
 `the_largest_batch_fits_the_network_limits` and `one_row_more_exceeds_the_event_size_limit` pin it,
-the testnet e2e confirms 120 and 121 against the network's own simulation, and
+the testnet e2e confirms both by submitting them (121 simulates cleanly and fails on the ledger:
+simulation does not enforce the event-size limit), and
 `RECORD_RESULTS_MAX_BATCH` in the SDK is the same number.
 
 **Do not measure against `InvocationResourceLimits::mainnet()`.** soroban-sdk 26's constants (50

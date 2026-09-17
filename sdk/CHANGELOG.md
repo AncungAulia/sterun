@@ -51,7 +51,7 @@ already in other people's hands.
   rows, a token listed twice, or a time outside 1..u32 is refused before signing.
 - **`RECORD_RESULTS_MAX_BATCH = 120`** and **`chunkResults(results, size?)`**. 120 is measured against
   the per-transaction limits live on testnet and mainnet (identical on 2026-09-17): the 16,384 bytes
-  of contract events bind first, and the network's simulation refuses 121.
+  of contract events bind first, and a 121-row transaction fails on the ledger (it simulates cleanly).
 - `ResultForAnotherEvent` (108) in the RaceRecord error table.
 
 **Needs the v2.5 EventRegistry and the v2.6 RaceRecord.** Against older contracts these methods fail

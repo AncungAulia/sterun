@@ -35,7 +35,7 @@ Three things you must read before using this version:
 - **At most 120 rows per call**, measured, not computed: with every row timed (136 event bytes), the
   per-transaction limit of 16,384 contract-event bytes binds at 120, on the limits live on testnet and
   mainnet alike on 2026-09-17. The contract has no cap of its own; a larger batch fails on the
-  network's limits, and the network's simulation refuses 121. The SDK refuses more than 120 before
+  network's limits: on testnet 121 rows simulated cleanly and then failed on the ledger. The SDK refuses more than 120 before
   signing.
 
 ## What changed from v2.4.0 (MINOR, additive)
