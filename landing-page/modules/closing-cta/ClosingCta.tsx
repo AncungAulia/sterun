@@ -95,7 +95,7 @@ export function ClosingCta() {
           {/* Two actions separated by space, not by a glyph. */}
           <div data-cta-rise className="flex flex-wrap items-center gap-x-10 gap-y-4">
             <a
-              href={APP_URL || "#"}
+              href={APP_URL}
               className="wipe-underline relative inline-flex items-center gap-3 text-base font-medium leading-tight"
             >
               Launch app

@@ -133,9 +133,9 @@ function NavRow({
         )}
 
         <div className="flex shrink-0 items-center gap-3 max-[359px]:gap-2 sm:gap-8 lg:gap-10">
-          {/* Deployment must set NEXT_PUBLIC_APP_URL (STE-32) or this points at nothing. */}
+          {/* The web app, from lib/links.ts. */}
           {hit ? (
-            <a href={APP_URL || "#"} aria-label="Launch app" className={ctaClass} {...bind?.("cta")}>
+            <a href={APP_URL} aria-label="Launch app" className={ctaClass} {...bind?.("cta")}>
               {ctaContent}
             </a>
           ) : (
