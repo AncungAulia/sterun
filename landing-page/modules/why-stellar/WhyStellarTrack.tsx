@@ -8,7 +8,7 @@
  * rather than pushing it away, the same move Product preview makes over How it
  * works: this section carries -100svh and a higher z-index, and the heading's
  * section is tall enough that its sweep has finished before the photograph
- * reaches the middle of the screen.
+ * starts to rise at all.
  *
  * LAYOUT. Nabil's layout, measured off the mockup as fractions of the image:
  *
@@ -24,7 +24,8 @@
  *
  * MOTION. Each claim appears on its own as the reader reaches it, never all at
  * once: its lines rise out of a mask, one after the other, the way Apple sets a
- * headline in. Replayed whenever the reader comes back down to it.
+ * headline in. Scrolling back above it lowers them again quickly, and coming
+ * back down raises them again; a claim already on screen is never replayed.
  *
  * SHADOW. Drop shadow x 22, y 19, blur 6.8, 57% opacity, as specified at the
  * 1440 design width and scaled with the section so a phone does not get a
@@ -58,6 +59,8 @@ const CLAIMS = [
 ] as const;
 
 const START = "top 78%";
+/** Where a hidden line waits, clear of its padded mask. */
+const HIDDEN = 160;
 
 export function WhyStellarTrack() {
   const rootRef = useRef<HTMLElement>(null);
@@ -76,24 +79,36 @@ export function WhyStellarTrack() {
           linesClass: "why-line",
           aria: "auto",
         });
-        const tl = gsap.timeline({ paused: true }).fromTo(
-          split.lines,
-          // Not 110: the mask is padded downwards to keep the shadow whole, so a
-          // line pushed just past its own height still showed its tops through
-          // that padding. 160 clears the line plus the padding at every width.
-          { yPercent: 160 },
-          { yPercent: 0, duration: 1.1, ease: "expo.out", stagger: 0.12 },
-        );
-        const st = ScrollTrigger.create({
-          trigger: claim,
-          start: START,
-          onEnter: () => tl.restart(),
-          onEnterBack: () => tl.restart(),
-          onLeaveBack: () => tl.pause(0),
-        });
+        const lines = split.lines;
+        // Hidden lines sit at 160%, not 110%: the mask is padded downwards to
+        // keep the shadow whole, and a line pushed just past its own height
+        // still showed its tops through that padding.
+        gsap.set(lines, { yPercent: HIDDEN });
+
+        // Showing and hiding are two tweens from wherever the lines are now, not
+        // one timeline restarted. restart() on the way back up made a claim that
+        // was already on screen vanish and replay as it came back into view, and
+        // pause(0) dropped it out in a single frame when the reader scrolled above
+        // it. overwrite hands over mid-flight, so reversing direction halfway
+        // through never jumps.
+        const show = () =>
+          gsap.to(lines, { yPercent: 0, duration: 1.1, ease: "expo.out", stagger: 0.12, overwrite: true });
+        const hide = () =>
+          gsap.to(lines, {
+            yPercent: HIDDEN,
+            duration: 0.45,
+            ease: "power2.in",
+            stagger: { each: 0.05, from: "end" },
+            overwrite: true,
+          });
+
+        const st = ScrollTrigger.create({ trigger: claim, start: START, onEnter: show, onLeaveBack: hide });
+        // Reloaded further down the page: already past it, so simply shown.
+        if (st.scroll() > st.start) gsap.set(lines, { yPercent: 0 });
+
         return () => {
           st.kill();
-          tl.kill();
+          gsap.killTweensOf(lines);
           split.revert();
         };
       });
