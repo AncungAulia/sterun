@@ -2950,28 +2950,35 @@ mod upgrade {
     // -- STE-60: how many results fit in one transaction --------------------
     //
     // Measured, not computed. Both contracts are deployed from wasm so VM and
-    // cross-contract costs are real, and `Env::default()` enforces the mainnet
-    // per-invocation limits. A timed result is the largest row (its event
-    // carries the time). Per row: one record written, one more entry in the
-    // footprint read, 136 event bytes. Measured totals for n rows:
+    // cross-contract costs are real, every row is a timed finish (the largest
+    // event), and the limits enforced are the per-transaction settings live on
+    // BOTH testnet and mainnet when this was written (2026-09-17, read with
+    // `stellar network settings`): 400 M instructions, 200 disk-read entries,
+    // 200 written entries, 400 footprint entries, 132,096 write bytes, 16,384
+    // contract event bytes.
     //
-    //   footprint entries  (n + 7 read) + (n + 1 written) = 2n + 8   limit 100
-    //   written entries    n + 1                                     limit 50
-    //   event bytes        136n                                      limit 16,384
+    // NOT `InvocationResourceLimits::mainnet()` from soroban-sdk 26: its 50
+    // written and 100 footprint entries are older than the network's, and a
+    // first measurement against them concluded 46.
     //
-    // The footprint binds first: 46 rows is 100 entries, 47 is 102. The
-    // written-entries limit alone would have allowed 49, which is what a first
-    // measurement that ignored the footprint concluded, and the wrong number
-    // this test exists to keep out. `RECORD_RESULTS_MAX_BATCH` in the SDK is
-    // this figure.
+    // Per timed row: 136 event bytes, one record written. Events bind first:
+    // 120 rows is 16,320 bytes, 121 is 16,456. The footprint the testutils count
+    // (2n + 8) is larger than the network's own simulation reports (n + 5), and
+    // neither binds before events. `RECORD_RESULTS_MAX_BATCH` in the SDK is this
+    // figure, and the testnet e2e checks 120 and 121 against the real network.
 
-    const MAX_BATCH_MAINNET: u32 = 46;
+    const MAX_BATCH: u32 = 120;
 
     /// Registry and RaceRecord both from wasm, a free 10K, `n` runners checked
-    /// in, and the timed rows to record them.
+    /// in, and the timed rows to record them, under the live network limits.
     fn full_batch(n: u32) -> (Env, RaceRecordClient<'static>, u32, Vec<crate::ResultEntry>) {
+        use soroban_sdk::testutils::cost_estimate::{
+            CostEstimate, NetworkInvocationResourceLimits,
+        };
+
         let env = Env::default();
         env.ledger().set_timestamp(NOW);
+        env.cost_estimate().disable_resource_limits();
         let admin = Address::generate(&env);
         let organiser = Address::generate(&env);
         let token = env
@@ -3025,6 +3032,25 @@ mod upgrade {
                 outcome: crate::ResultOutcome::Timed(86_399 - i),
             });
         }
+
+        // soroban-sdk does not re-export the limits type, so it is named through
+        // the method that takes it.
+        fn typed<T>(_: fn(&CostEstimate, T), value: T) -> T {
+            value
+        }
+        let mut limits = typed(
+            CostEstimate::enforce_resource_limits,
+            NetworkInvocationResourceLimits::mainnet(),
+        );
+        limits.instructions = 400_000_000;
+        limits.disk_read_entries = 200;
+        limits.write_entries = 200;
+        limits.ledger_entries = 400;
+        limits.disk_read_bytes = 200_000;
+        limits.write_bytes = 132_096;
+        limits.contract_events_size_bytes = 16_384;
+        env.cost_estimate().enforce_resource_limits(limits);
+
         // The clients borrow `env`; leaking it keeps the test body simple and
         // lives only as long as the test process.
         let env: &'static Env = std::boxed::Box::leak(std::boxed::Box::new(env));
@@ -3037,32 +3063,28 @@ mod upgrade {
     }
 
     #[test]
-    fn the_largest_batch_fits_the_mainnet_limits() {
-        let (env, records, event_id, rows) = full_batch(MAX_BATCH_MAINNET);
+    fn the_largest_batch_fits_the_network_limits() {
+        let (env, records, event_id, rows) = full_batch(MAX_BATCH);
         env.mock_all_auths();
         records.record_results(&event_id, &rows);
         let used = env.cost_estimate().resources();
-        assert_eq!(used.write_entries, MAX_BATCH_MAINNET + 1);
-        assert_eq!(
-            used.memory_read_entries + used.write_entries,
-            2 * MAX_BATCH_MAINNET + 8
-        );
-        assert_eq!(
-            2 * MAX_BATCH_MAINNET + 8,
-            100,
-            "the largest batch is exactly the footprint limit"
-        );
+        assert_eq!(used.contract_events_size_bytes, 136 * MAX_BATCH);
         assert!(used.contract_events_size_bytes <= 16_384);
+        assert!(used.write_entries <= 200);
+        assert!(used.memory_read_entries + used.disk_read_entries + used.write_entries <= 400);
+        assert!(used.instructions <= 400_000_000);
         assert_eq!(
-            records.record_of(&rows.get_unchecked(0).token_id).state,
+            records
+                .record_of(&rows.get_unchecked(MAX_BATCH - 1).token_id)
+                .state,
             RecordState::Finished
         );
     }
 
     #[test]
-    #[should_panic(expected = "total footprint ledger entries: 102 > 100")]
-    fn one_row_more_exceeds_the_mainnet_limits() {
-        let (env, records, event_id, rows) = full_batch(MAX_BATCH_MAINNET + 1);
+    #[should_panic(expected = "contract events size bytes: 16456 > 16384")]
+    fn one_row_more_exceeds_the_event_size_limit() {
+        let (env, records, event_id, rows) = full_batch(MAX_BATCH + 1);
         env.mock_all_auths();
         records.record_results(&event_id, &rows);
     }
