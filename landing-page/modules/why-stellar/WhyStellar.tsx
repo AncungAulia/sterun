@@ -42,8 +42,11 @@ export function WhyStellar() {
          how the logo ended up ink on blue. The blue panel's rect is the only
          band here. */
       /* Starts under the blue panel and outlives it. The height beyond the
-         first screen is the scroll the sweep is scrubbed to. */
-      className="relative z-0 -mt-[100svh] h-[280svh] bg-paper text-ink"
+         first screen is the scroll the sweep is scrubbed to. Its last screen is
+         also where the photograph below rises over it, so the section is tall
+         enough that the sweep has finished before the photograph reaches the
+         middle of the screen. */
+      className="relative z-0 -mt-[100svh] h-[340svh] bg-paper text-ink"
     >
       <div className="sticky top-0 grid h-[100svh] place-items-center overflow-hidden px-5 sm:px-6">
         {/* One line, and every size on it derives from --why. --cap is the ink

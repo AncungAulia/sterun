@@ -1,105 +1,104 @@
 "use client";
 
 /**
- * The answer to "Why Stellar", written onto a running track.
+ * The answer to "Why Stellar": three claims over a photograph of a runner on a
+ * track, two screens tall.
  *
- * The approved sentence is one sentence with three claims in it. Here it is
- * broken at its commas into three clauses, the way Obys' Typography Principles
- * spends a whole screen on one phrase at a time, and each clause lands on the
- * track like a marking painted across the lanes.
+ * THE TRANSITION IN. The photograph rises over the held WHY Stellar heading
+ * rather than pushing it away, the same move Product preview makes over How it
+ * works: this section carries -100svh and a higher z-index, and the heading's
+ * section is tall enough that its sweep has finished before the photograph
+ * reaches the middle of the screen.
  *
- * Plain CSS 3D, not WebGL. The track is a plane tilted back in perspective; the
- * clauses are children of that plane, so "lying on the track" is simply their
- * resting transform of none. Each one starts standing up out of the track
- * (rotateX cancelling the tilt), turned on its Z axis and lifted, and scroll
- * lays it down. The plane itself slides towards the reader across the section,
- * which is what makes it read as running along the track rather than watching
- * a floor. The text stays real text: selectable, readable by a screen reader,
- * set in our own font, at zero bytes of 3D library.
+ * LAYOUT. Nabil's layout, measured off the mockup as fractions of the image:
  *
- * TRACK IMAGE. `trackSrc` takes the webp once it exists. Until then the plane
- * draws its own lanes in tokens, in a deliberately high-contrast teal so the
- * motion can be judged. It is a placeholder, not a design.
+ *   claim   left    top     width
+ *   one     39.9%    8.9%   48.1%
+ *   two     51.0%   40.8%   44.8%
+ *   three   28.5%   74.6%   44.8%
  *
- * Reduced motion never builds the timeline, and the CSS resting state under
- * reduced motion is a flat plane facing the reader, so the three clauses are
- * simply three lines of text.
+ * The section keeps the photograph's own aspect ratio on anything wider than a
+ * phone, so those percentages land on the same lanes at every width. A phone
+ * would shrink the whole thing to under one screen, so there it is two screens
+ * tall, the photograph is cropped to cover, and the claims widen.
+ *
+ * MOTION. Each claim appears on its own as the reader reaches it, never all at
+ * once: its lines rise out of a mask, one after the other, the way Apple sets a
+ * headline in. Replayed whenever the reader comes back down to it.
+ *
+ * SHADOW. Drop shadow x 22, y 19, blur 6.8, 57% opacity, as specified at the
+ * 1440 design width and scaled with the section so a phone does not get a
+ * shadow a third of the letter's size. A line mask clips everything outside the
+ * line, shadow included, so the mask is padded right and down by the shadow's
+ * reach and pulled back with a negative margin: layout unchanged, shadow whole.
  */
 
+import Image from "next/image";
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { SplitText } from "gsap/SplitText";
 
-gsap.registerPlugin(ScrollTrigger);
-
-const CLAUSES = [
-  "Non-transferable records mean a bib can't be resold,",
-  "organiser-signed finish results mean a time can't be forged,",
-  "and settlement reaches the organiser directly.",
+const CLAIMS = [
+  {
+    text: "Non-transferable records mean a bib can't be resold.",
+    place: "sm:left-[39.9%] sm:top-[8.9%] sm:w-[48.1%]",
+    phone: "top-[9%]",
+  },
+  {
+    text: "Organiser-signed finish results mean a time can't be forged.",
+    place: "sm:left-[51%] sm:top-[40.8%] sm:w-[44.8%]",
+    phone: "top-[41%]",
+  },
+  {
+    text: "Settlement reaches the organiser directly.",
+    place: "sm:left-[28.5%] sm:top-[74.6%] sm:w-[44.8%]",
+    phone: "top-[74%]",
+  },
 ] as const;
 
-/**
- * The plane's tilt. The clauses cancel it to stand up, and rest at none to lie on
- * it. A phone gets far less: on a narrow screen 62 degrees foreshortened the
- * farthest clause to unreadable, so it lies at 40.
- */
-const TILT = { wide: 62, narrow: 40 };
+const START = "top 78%";
 
-interface WhyStellarTrackProps {
-  /** The running-track image. Omit to draw the placeholder lanes. */
-  trackSrc?: string;
-}
-
-export function WhyStellarTrack({ trackSrc }: WhyStellarTrackProps) {
+export function WhyStellarTrack() {
   const rootRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    gsap.registerPlugin(ScrollTrigger, SplitText);
 
     const mm = gsap.matchMedia();
-    mm.add(
-      { motion: "(prefers-reduced-motion: no-preference)", narrow: "(max-width: 639px)" },
-      (ctx) => {
-        if (!ctx.conditions?.motion) return;
-        const tilt = ctx.conditions.narrow ? TILT.narrow : TILT.wide;
-        const q = gsap.utils.selector(root);
-        const plane = q("[data-track-plane]");
-        const clauses = q("[data-track-clause]");
-
-        gsap.set(plane, { rotateX: tilt, yPercent: 28 });
-        gsap.set(clauses, {
-          rotateX: -tilt,
-          rotateZ: (i: number) => [-14, 11, -8][i] ?? 0,
-          z: 260,
-          opacity: 0,
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      const cleanups = gsap.utils.toArray<HTMLElement>("[data-why-claim]", root).map((claim) => {
+        const split = SplitText.create(claim, {
+          type: "lines",
+          mask: "lines",
+          linesClass: "why-line",
+          aria: "auto",
         });
-
-        const tl = gsap.timeline({
-          defaults: { ease: "power2.inOut" },
-          scrollTrigger: { trigger: root, start: "top top", end: "bottom bottom", scrub: 0.5 },
+        const tl = gsap.timeline({ paused: true }).fromTo(
+          split.lines,
+          // Not 110: the mask is padded downwards to keep the shadow whole, so a
+          // line pushed just past its own height still showed its tops through
+          // that padding. 160 clears the line plus the padding at every width.
+          { yPercent: 160 },
+          { yPercent: 0, duration: 1.1, ease: "expo.out", stagger: 0.12 },
+        );
+        const st = ScrollTrigger.create({
+          trigger: claim,
+          start: START,
+          onEnter: () => tl.restart(),
+          onEnterBack: () => tl.restart(),
+          onLeaveBack: () => tl.pause(0),
         });
-
-        // The run: the whole track comes towards the reader across the section.
-        tl.to(plane, { yPercent: -6, ease: "none", duration: 1 }, 0);
-
-        // Each clause is laid down in turn, overlapping a little so there is
-        // never a dead stretch of scroll where nothing moves.
-        clauses.forEach((clause, i) => {
-          const at = 0.06 + i * 0.26;
-          tl.to(clause, { opacity: 1, duration: 0.08, ease: "none" }, at).to(
-            clause,
-            { rotateX: 0, rotateZ: 0, z: 0, duration: 0.3 },
-            at,
-          );
-        });
-
         return () => {
-          tl.scrollTrigger?.kill();
+          st.kill();
           tl.kill();
+          split.revert();
         };
-      },
-    );
+      });
+      return () => cleanups.forEach((c) => c());
+    });
 
     return () => mm.revert();
   }, []);
@@ -109,50 +108,27 @@ export function WhyStellarTrack({ trackSrc }: WhyStellarTrackProps) {
       ref={rootRef}
       id="why-stellar-answer"
       data-nav-theme="dark"
-      className="relative h-[320svh] bg-teal-800 text-paper"
+      className="why-track relative z-10 -mt-[100svh] h-[200svh] overflow-hidden bg-teal-800 text-paper sm:aspect-[1052/1495] sm:h-auto"
     >
+      <Image
+        src="/images/why-stellar/track.webp"
+        alt=""
+        fill
+        sizes="100vw"
+        className="object-cover object-[32%_50%] sm:object-center"
+      />
+
       <h2 className="sr-only">Why Stellar</h2>
 
-      <div className="sticky top-0 h-[100svh] overflow-hidden [perspective:1100px] [perspective-origin:50%_18%] motion-reduce:[perspective:none]">
-        <div
-          data-track-plane
-          className="absolute inset-x-[-35%] bottom-[-12%] h-[118%] origin-bottom [transform-style:preserve-3d] motion-reduce:inset-x-0 motion-reduce:bottom-0 motion-reduce:h-full"
-          style={
-            trackSrc
-              ? { backgroundImage: `url(${trackSrc})`, backgroundSize: "cover", backgroundPosition: "center bottom" }
-              : undefined
-          }
+      {CLAIMS.map((claim) => (
+        <p
+          key={claim.text}
+          data-why-claim
+          className={`why-claim heading-hero absolute left-[7%] w-[86%] text-[clamp(2.25rem,5.2vw,6rem)] uppercase leading-[0.92] ${claim.phone} ${claim.place}`}
         >
-          {trackSrc ? null : (
-            /* PLACEHOLDER lanes: eight lanes of teal-700 lines, a start line near
-               the reader. Replaced by the webp through `trackSrc`. */
-            <div
-              aria-hidden
-              className="absolute inset-0 bg-teal-700 motion-reduce:hidden"
-              style={{
-                backgroundImage:
-                  "repeating-linear-gradient(to right, transparent 0 calc(12.5% - 3px), var(--color-teal-200) calc(12.5% - 3px) 12.5%), linear-gradient(to top, transparent 9%, var(--color-paper) 9% 9.6%, transparent 9.6%)",
-              }}
-            />
-          )}
-
-          {/* The plane is 170% of the screen wide, so an inset of 20.6% puts this
-              column exactly across the screen. A phone uses all of it; wider
-              screens pull the clauses into a narrower column so they break
-              into balanced lines rather than one long one. */}
-          <div className="absolute inset-x-[20.6%] top-[8%] bottom-[18%] px-5 sm:inset-x-[35%] sm:px-0 flex flex-col justify-between motion-reduce:inset-0 motion-reduce:justify-center motion-reduce:gap-8 motion-reduce:px-6 motion-reduce:sm:inset-x-0 motion-reduce:sm:px-10">
-            {CLAUSES.map((clause) => (
-              <p
-                key={clause}
-                data-track-clause
-                className="heading-hero text-balance text-center text-[clamp(2.25rem,5.4vw,5.5rem)] uppercase leading-[0.92] [backface-visibility:hidden] motion-reduce:text-[clamp(1.75rem,3.4vw,3.25rem)]"
-              >
-                {clause}
-              </p>
-            ))}
-          </div>
-        </div>
-      </div>
+          {claim.text}
+        </p>
+      ))}
     </section>
   );
 }
