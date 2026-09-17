@@ -43,7 +43,7 @@ export function WhyStellar() {
          band here. */
       /* Starts under the blue panel and outlives it. The height beyond the
          first screen is the scroll the sweep is scrubbed to. */
-      className="relative z-0 -mt-[100svh] h-[280svh] bg-n-200 text-ink"
+      className="relative z-0 -mt-[100svh] h-[280svh] bg-paper text-ink"
     >
       <div className="sticky top-0 grid h-[100svh] place-items-center overflow-hidden px-5 sm:px-6">
         {/* One line, and every size on it derives from --why. --cap is the ink
