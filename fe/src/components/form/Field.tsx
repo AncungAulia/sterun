@@ -16,6 +16,7 @@ import type { InputHTMLAttributes, ReactNode } from "react";
 import { Help } from "@/components/form/Help";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   id: string;
@@ -95,6 +96,7 @@ interface TextAreaFieldProps {
   value: string;
   rows?: number;
   placeholder?: string;
+  maxLength?: number;
   onChange: (value: string) => void;
 }
 
@@ -108,18 +110,21 @@ export function TextAreaField({
   value,
   rows = 4,
   placeholder,
+  maxLength,
   onChange,
 }: TextAreaFieldProps) {
   return (
     <div className="flex flex-col gap-2">
       <LabelRow htmlFor={id} label={label} required={required} help={help} />
-      <textarea
+      <Textarea
         id={id}
         rows={rows}
         value={value}
         placeholder={placeholder}
+        maxLength={maxLength}
+        aria-invalid={error ? true : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-input bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="bg-background text-base text-foreground md:text-base"
       />
       <FieldMessage hint={hint} error={error} />
     </div>

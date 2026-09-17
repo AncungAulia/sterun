@@ -63,6 +63,7 @@ const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
   "addCategory",
   "addAddon",
   "setEventStatus",
+  "increaseQuota",
   "addScanner",
   "removeScanner",
   "addOrganiser",
@@ -88,6 +89,10 @@ const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
 const CONTRACT_MESSAGES: Partial<Record<`${ContractErrorSource}:${string}`, string>> = {
   "event-registry:NotAllowlistedOrganiser":
     "This wallet cannot publish races yet. Send its address to the Sterun team to be added.",
+  // STE-63: a retry cannot succeed for either of these, so neither may say "try again".
+  "event-registry:QuotaNotIncreased":
+    "This distance already has that many places or more. Enter a higher number.",
+  "event-registry:InvalidStatus": "This race cannot be moved to that status any more.",
 };
 
 /** Said as a cancellation, because that is what it is. Nobody has to fix it. */
@@ -105,6 +110,16 @@ const MAYBE_ALREADY_DONE =
   "so you do not create the same one twice.";
 
 const NOT_ENOUGH_FUNDS = "Your wallet does not have enough funds for this.";
+
+/**
+ * A wallet that is not the one the contract asked for (STE-63). The refusal
+ * comes from the network's auth check, before any contract code runs, so it is
+ * text rather than a revert, and retrying with the same wallet cannot succeed.
+ */
+const WRONG_WALLET =
+  "This wallet cannot do this for this race. Switch to the wallet that created the race.";
+
+const WRONG_WALLET_TEXT = /requires signatures from/i;
 
 /**
  * A wallet refusal, in the several shapes wallets phrase it.
@@ -185,6 +200,7 @@ export function friendlyError(error: unknown): string {
     return REACHED_THE_NETWORK_TEXT.test(text) ? MAYBE_ALREADY_DONE : DECLINED;
   }
   if (NOT_ENOUGH_FUNDS_TEXT.test(text)) return NOT_ENOUGH_FUNDS;
+  if (WRONG_WALLET_TEXT.test(text)) return WRONG_WALLET;
 
   return SOMETHING_WENT_WRONG;
 }
