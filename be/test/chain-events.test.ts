@@ -27,6 +27,7 @@ import {
   recordFinishedUntimed,
   recordEntered,
   recordFinished,
+  registrationClosesSet,
   scannerAdded,
   scannerRemoved,
   slotReserved,
@@ -89,6 +90,31 @@ describe("EventRegistry events (INTERFACE.md §1.3)", () => {
       previous: 2_000,
       current: 3_000,
     });
+  });
+
+  it("decodes registration_closes_set, whose previous date is an Option (v2.5)", () => {
+    expect(decode(registrationClosesSet(registry, 3, null, 1_790_000_000n))?.event).toEqual({
+      name: "registration_closes_set",
+      eventId: 3,
+      previous: null,
+      current: 1_790_000_000n,
+    });
+    expect(decode(registrationClosesSet(registry, 3, 1_790_000_000n, 2n ** 64n - 1n))?.event).toEqual({
+      name: "registration_closes_set",
+      eventId: 3,
+      previous: 1_790_000_000n,
+      current: 2n ** 64n - 1n,
+    });
+  });
+
+  it("drops registration_closes_set emitted by RaceRecord", () => {
+    expect(decode(registrationClosesSet(raceRecord, 3, null, 1n))).toBeNull();
+  });
+
+  it("refuses a registration_closes_set whose date is not a u64", () => {
+    const bad = registrationClosesSet(registry, 3, null, 1n);
+    (bad.data as Record<string, unknown>).current = 1_790_000_000;
+    expect(() => decode(bad)).toThrow(/expected a u64/);
   });
 
   it("drops quota_increased emitted by RaceRecord", () => {
@@ -286,6 +312,7 @@ describe("coverage of the frozen surface", () => {
       "record_entered",
       "record_finished",
       "record_finished_untimed",
+      "registration_closes_set",
       "scanner_added",
       "scanner_removed",
       "slot_reserved",
