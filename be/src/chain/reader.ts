@@ -40,12 +40,20 @@ import {
   decodeRecord,
   decodeTokenIds,
   accountAddress,
+  optional,
   u32,
+  u64,
   type ChainCategory,
   type ChainEvent,
   type ChainRecord,
 } from "./decode.js";
 import { ContractRevertError, asContractRevert } from "./errors.js";
+
+/**
+ * What the host says when a contract has no function by that name. Matched on
+ * the error type and code, not on the prose around them.
+ */
+const MISSING_FUNCTION = /Error\(WasmVm, MissingValue\)/;
 
 /** Simulation never lands in a ledger, so this only has to be non-zero. */
 const SIMULATION_TIMEOUT_SECONDS = 60;
@@ -251,6 +259,32 @@ export class ChainReader {
       );
     }
     return value;
+  }
+
+  /**
+   * `get_registration_closes(event_id)` (EventRegistry v2.5, STE-46): unix
+   * seconds, or `null` when the event has no close date. Reverts
+   * `EventNotFound(2)` for an unknown id.
+   *
+   * **Also `null` against a pre-v2.5 EventRegistry**, where the function does
+   * not exist and the host answers `Error(WasmVm, MissingValue)`. Every event on
+   * such a contract has no date, so `null` is the true answer there, and it lets
+   * this service be deployed before the contract is upgraded instead of turning
+   * every rebuild into an outage until it is. Any other failure still throws.
+   */
+  async registrationCloses(eventId: number): Promise<bigint | null> {
+    const context = `get_registration_closes(${eventId})`;
+    try {
+      const { value } = await this.caller.simulate(
+        this.addresses.eventRegistry,
+        "get_registration_closes",
+        [u32Arg(eventId)],
+      );
+      return optional(value, context, u64);
+    } catch (e) {
+      if (e instanceof ChainCallError && MISSING_FUNCTION.test(e.message)) return null;
+      throw e;
+    }
   }
 
   /** `get_organiser(event_id)`. Reverts `EventNotFound(2)` for an unknown id. */
