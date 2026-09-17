@@ -154,6 +154,55 @@ describe("organiser flow maps onto EventRegistry", () => {
     expect(registry.calls[0]?.args).toEqual({ event_id: 3, category_id: 1, new_quota: 3_000 });
   });
 
+  it("setRegistrationCloses sends the event and the close date as u64 (v2.5)", async () => {
+    const { client, registry } = clientWith({ set_registration_closes: good(ok(undefined)) });
+
+    await client.setRegistrationCloses(3, 1_790_000_000);
+
+    expect(registry.calls[0]?.method).toBe("set_registration_closes");
+    expect(registry.calls[0]?.args).toEqual({ event_id: 3, closes_at: 1_790_000_000n });
+  });
+
+  it("setRegistrationCloses refuses a date that is not a u64 before it reaches the network", async () => {
+    const { client, registry } = clientWith({ set_registration_closes: good(ok(undefined)) });
+
+    await expect(client.setRegistrationCloses(3, -1)).rejects.toThrow(/closesAt must fit in a u64/);
+    await expect(client.setRegistrationCloses(3, 2n ** 64n)).rejects.toThrow(/closesAt must fit in a u64/);
+    await expect(client.setRegistrationCloses(3, 1.5)).rejects.toThrow(/closesAt must be a whole number/);
+    expect(registry.calls).toHaveLength(0);
+    // The boundaries themselves are legal: 0 closes at once, u64::MAX never closes.
+    await client.setRegistrationCloses(3, 0);
+    await client.setRegistrationCloses(3, 2n ** 64n - 1n);
+    expect(registry.calls.map((c) => c.args)).toEqual([
+      { event_id: 3, closes_at: 0n },
+      { event_id: 3, closes_at: 2n ** 64n - 1n },
+    ]);
+  });
+
+  it("getRegistrationCloses answers null for an event with no date and the date otherwise (v2.5)", async () => {
+    const none = clientWith({ get_registration_closes: good(ok(undefined)) });
+    await expect(none.client.getRegistrationCloses(0)).resolves.toBeNull();
+    expect(none.registry.calls[0]?.args).toEqual({ event_id: 0 });
+
+    const set = clientWith({ get_registration_closes: good(ok(1_790_000_000n)) });
+    await expect(set.client.getRegistrationCloses(4)).resolves.toBe(1_790_000_000n);
+  });
+
+  it("names RegistrationClosed(20) from enter as an EventRegistry error (v2.5)", async () => {
+    // enter propagates reserve_slot's revert unchanged. The entry flow shows
+    // "registration has closed" for this and "this race is not open" for #4, so
+    // the name has to arrive, not just the number.
+    const { client } = clientWith({}, { enter: reverting(20) });
+    await expect(
+      client.enter({ runner: RUNNER, eventId: 0, categoryId: 0, participantHash: HASH }),
+    ).rejects.toMatchObject({
+      variant: "RegistrationClosed",
+      code: 20,
+      source: "event-registry",
+      method: "enter",
+    });
+  });
+
   it("setEventStatus sends the tagged enum the bindings expect", async () => {
     const { client, registry } = clientWith({ set_event_status: good(ok(undefined)) });
     await client.setEventStatus(3, "Open");
