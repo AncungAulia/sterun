@@ -2233,6 +2233,437 @@ fn record_finish_untimed_re_extends_a_decayed_ttl() {
 }
 
 // ---------------------------------------------------------------------------
+// Many results in one call (v2.6, STE-60)
+//
+// `record_results` exists so an organiser signs once for a whole finish list
+// instead of once per runner. What these tests hold down: every row obeys
+// exactly the rules its single-call twin obeys, one bad row leaves the whole
+// list unrecorded, a row from another race is refused, and what an indexer sees
+// is the same events the single calls emit.
+// ---------------------------------------------------------------------------
+mod results {
+    use super::*;
+    use crate::{ResultEntry, ResultOutcome};
+
+    fn row(token_id: u32, outcome: ResultOutcome) -> ResultEntry {
+        ResultEntry { token_id, outcome }
+    }
+
+    impl World {
+        /// The organiser signing exactly this batch, in enforcing auth mode.
+        fn mock_batch(&self, signer: &Address, event_id: u32, rows: &Vec<ResultEntry>) {
+            self.env.mock_auths(&[MockAuth {
+                address: signer,
+                invoke: &MockAuthInvoke {
+                    contract: &self.contract,
+                    fn_name: "record_results",
+                    args: (event_id, rows.clone()).into_val(&self.env),
+                    sub_invokes: &[],
+                },
+            }]);
+        }
+    }
+
+    /// The ticket in one test: a timed finish, an untimed finish, a DNF after
+    /// check-in and a no-show, recorded by one organiser signature, each record
+    /// ending exactly as its single call would leave it.
+    #[test]
+    fn one_signature_records_a_mixed_finish_list() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let timed = w.claimed(event_id, category_id, 1);
+        let untimed = w.claimed(event_id, category_id, 2);
+        let dropped = w.claimed(event_id, category_id, 3);
+        let no_show = w.enter(&w.runner(), event_id, category_id, 4);
+
+        w.env.ledger().set_timestamp(NOW + 7_200);
+        let rows = vec![
+            &w.env,
+            row(timed, ResultOutcome::Timed(3_161)),
+            row(untimed, ResultOutcome::Untimed),
+            row(dropped, ResultOutcome::Dnf),
+            row(no_show, ResultOutcome::Dnf),
+        ];
+        w.mock_batch(&w.organiser, event_id, &rows);
+        w.records().record_results(&event_id, &rows);
+
+        let records = w.records();
+        let t = records.record_of(&timed);
+        assert_eq!(
+            (t.state, t.finish_time_s, t.result_at),
+            (RecordState::Finished, Some(3_161), Some(NOW + 7_200))
+        );
+        let u = records.record_of(&untimed);
+        assert_eq!(
+            (u.state, u.finish_time_s, u.result_at),
+            (RecordState::Finished, None, Some(NOW + 7_200))
+        );
+        let d = records.record_of(&dropped);
+        assert_eq!(
+            (d.state, d.finish_time_s, d.result_at),
+            (RecordState::Dnf, None, Some(NOW + 7_200))
+        );
+        let n = records.record_of(&no_show);
+        assert_eq!(
+            (n.state, n.claimed_at, n.result_at),
+            (RecordState::Dnf, None, Some(NOW + 7_200))
+        );
+    }
+
+    /// A batch leaves a record byte-for-byte as the single call would. Two
+    /// worlds, the same entries, one recorded row by row and one in a batch.
+    #[test]
+    fn a_batch_writes_exactly_what_the_single_calls_write() {
+        let single = World::new();
+        let batch = World::new();
+        let mut rows_for_batch = std::vec::Vec::new();
+        for w in [&single, &batch] {
+            let (event_id, category_id) = w.open_event(10, PRICE);
+            let a = w.claimed(event_id, category_id, 1);
+            let b = w.claimed(event_id, category_id, 2);
+            let c = w.enter(&w.runner(), event_id, category_id, 3);
+            w.env.ledger().set_timestamp(NOW + 5_000);
+            rows_for_batch = std::vec![(event_id, a, b, c)];
+        }
+        let (event_id, a, b, c) = rows_for_batch[0];
+
+        single.env.mock_all_auths();
+        single.records().record_finish(&a, &2_900);
+        single.records().record_finish_untimed(&b);
+        single.records().record_dnf(&c);
+
+        batch.env.mock_all_auths();
+        batch.records().record_results(
+            &event_id,
+            &vec![
+                &batch.env,
+                row(a, ResultOutcome::Timed(2_900)),
+                row(b, ResultOutcome::Untimed),
+                row(c, ResultOutcome::Dnf),
+            ],
+        );
+
+        for token_id in [a, b, c] {
+            let one = single.records().record_of(&token_id);
+            let many = batch.records().record_of(&token_id);
+            assert_eq!(
+                (
+                    one.state,
+                    one.finish_time_s,
+                    one.claimed_at,
+                    one.result_at,
+                    one.bib_no
+                ),
+                (
+                    many.state,
+                    many.finish_time_s,
+                    many.claimed_at,
+                    many.result_at,
+                    many.bib_no
+                ),
+                "token {token_id}"
+            );
+        }
+    }
+
+    /// The events are the single calls' events, one per row, in row order, so
+    /// an indexer needs no new handler.
+    #[test]
+    fn emits_the_single_call_events_in_row_order() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let a = w.claimed(event_id, category_id, 1);
+        let b = w.claimed(event_id, category_id, 2);
+        let c = w.enter(&w.runner(), event_id, category_id, 3);
+
+        w.env.mock_all_auths();
+        w.records().record_results(
+            &event_id,
+            &vec![
+                &w.env,
+                row(b, ResultOutcome::Untimed),
+                row(a, ResultOutcome::Timed(3_600)),
+                row(c, ResultOutcome::Dnf),
+            ],
+        );
+
+        let events = w.env.events().all().filter_by_contract(&w.contract);
+        assert_eq!(
+            events,
+            std::vec![
+                RecordFinishedUntimed {
+                    token_id: b,
+                    event_id
+                }
+                .to_xdr(&w.env, &w.contract),
+                RecordFinished {
+                    token_id: a,
+                    event_id,
+                    finish_time_s: 3_600
+                }
+                .to_xdr(&w.env, &w.contract),
+                RecordDnf {
+                    token_id: c,
+                    event_id
+                }
+                .to_xdr(&w.env, &w.contract),
+            ]
+        );
+    }
+
+    /// Atomic: the last row is invalid, so the rows before it are not recorded
+    /// either, and nothing is emitted.
+    #[test]
+    fn one_invalid_row_leaves_the_whole_list_unrecorded() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let a = w.claimed(event_id, category_id, 1);
+        let b = w.claimed(event_id, category_id, 2);
+        let never_claimed = w.enter(&w.runner(), event_id, category_id, 3);
+
+        w.env.mock_all_auths();
+        assert_eq!(
+            w.records().try_record_results(
+                &event_id,
+                &vec![
+                    &w.env,
+                    row(a, ResultOutcome::Timed(3_000)),
+                    row(b, ResultOutcome::Dnf),
+                    row(never_claimed, ResultOutcome::Timed(3_100)),
+                ],
+            ),
+            Err(Ok(Error::InvalidState))
+        );
+        assert_eq!(
+            w.records().record_of(&a).state,
+            RecordState::RacepackClaimed
+        );
+        assert_eq!(
+            w.records().record_of(&b).state,
+            RecordState::RacepackClaimed
+        );
+        assert_eq!(
+            w.records().record_of(&never_claimed).state,
+            RecordState::Entered
+        );
+        assert_eq!(
+            w.env
+                .events()
+                .all()
+                .filter_by_contract(&w.contract)
+                .events(),
+            &[]
+        );
+    }
+
+    /// Every rule of the single calls holds per row.
+    #[test]
+    fn each_row_obeys_its_single_call_rules() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let claimed = w.claimed(event_id, category_id, 1);
+        let entered = w.enter(&w.runner(), event_id, category_id, 2);
+        let finished = w.claimed(event_id, category_id, 3);
+        let dnf = w.enter(&w.runner(), event_id, category_id, 4);
+        w.env.mock_all_auths();
+        w.records().record_finish(&finished, &3_000);
+        w.records().record_dnf(&dnf);
+
+        let refused = |rows: Vec<ResultEntry>, expected: Error| {
+            assert_eq!(
+                w.records().try_record_results(&event_id, &rows),
+                Err(Ok(expected))
+            );
+        };
+        refused(
+            vec![&w.env, row(claimed, ResultOutcome::Timed(0))],
+            Error::InvalidFinishTime,
+        );
+        refused(
+            vec![&w.env, row(entered, ResultOutcome::Timed(3_000))],
+            Error::InvalidState,
+        );
+        refused(
+            vec![&w.env, row(entered, ResultOutcome::Untimed)],
+            Error::InvalidState,
+        );
+        refused(
+            vec![&w.env, row(finished, ResultOutcome::Dnf)],
+            Error::InvalidState,
+        );
+        refused(
+            vec![&w.env, row(finished, ResultOutcome::Timed(2_000))],
+            Error::InvalidState,
+        );
+        refused(
+            vec![&w.env, row(dnf, ResultOutcome::Untimed)],
+            Error::InvalidState,
+        );
+        refused(
+            vec![&w.env, row(404, ResultOutcome::Dnf)],
+            Error::RecordNotFound,
+        );
+        // A token listed twice: the second row finds a terminal record.
+        refused(
+            vec![
+                &w.env,
+                row(claimed, ResultOutcome::Timed(3_000)),
+                row(claimed, ResultOutcome::Dnf),
+            ],
+            Error::InvalidState,
+        );
+        assert_eq!(
+            w.records().record_of(&claimed).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// A row from another race is refused, even when the caller organises
+    /// both races: the batch is for one event.
+    #[test]
+    fn a_row_from_another_event_is_refused() {
+        let w = World::new();
+        let (race_a, cat_a) = w.open_event(10, PRICE);
+        let (race_b, cat_b) = w.open_event(10, PRICE);
+        let in_a = w.claimed(race_a, cat_a, 1);
+        let in_b = w.claimed(race_b, cat_b, 2);
+
+        w.env.mock_all_auths();
+        assert_eq!(
+            w.records().try_record_results(
+                &race_a,
+                &vec![
+                    &w.env,
+                    row(in_a, ResultOutcome::Timed(3_000)),
+                    row(in_b, ResultOutcome::Timed(3_000))
+                ],
+            ),
+            Err(Ok(Error::ResultForAnotherEvent))
+        );
+        assert_eq!(
+            w.records().record_of(&in_a).state,
+            RecordState::RacepackClaimed
+        );
+        assert_eq!(
+            w.records().record_of(&in_b).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// Another organiser cannot reach this race's records through a batch for
+    /// their own race, and cannot sign a batch for this race either.
+    #[test]
+    fn another_organiser_cannot_record_this_race() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let token_id = w.claimed(event_id, category_id, 1);
+
+        let rival = Address::generate(&w.env);
+        w.env.mock_all_auths();
+        w.registry().add_organiser(&rival);
+        let rival_event = w.registry().create_event(
+            &rival,
+            &String::from_str(&w.env, "Rival Run"),
+            &phash(&w.env, 9),
+            &String::from_str(&w.env, "ipfs://rival"),
+            &STARTS_AT,
+        );
+
+        let rows = vec![&w.env, row(token_id, ResultOutcome::Dnf)];
+        w.mock_batch(&rival, rival_event, &rows);
+        assert_eq!(
+            w.records().try_record_results(&rival_event, &rows),
+            Err(Ok(Error::ResultForAnotherEvent))
+        );
+
+        w.mock_batch(&rival, event_id, &rows);
+        assert_eq!(
+            w.records().try_record_results(&event_id, &rows),
+            Err(Err(InvokeError::Abort))
+        );
+        assert_eq!(
+            w.records().record_of(&token_id).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// A scanner checks runners in; results stay the organiser's.
+    #[test]
+    fn a_scanner_and_a_runner_cannot_sign_a_batch() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let token_id = w.claimed(event_id, category_id, 1);
+        let scanner = Address::generate(&w.env);
+        w.env.mock_all_auths();
+        w.registry().add_scanner(&event_id, &scanner);
+        let runner = w.records().owner_of(&token_id);
+
+        let rows = vec![&w.env, row(token_id, ResultOutcome::Timed(1_234))];
+        for signer in [&scanner, &runner] {
+            w.mock_batch(signer, event_id, &rows);
+            assert_eq!(
+                w.records().try_record_results(&event_id, &rows),
+                Err(Err(InvokeError::Abort))
+            );
+        }
+        assert_eq!(
+            w.records().record_of(&token_id).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// An empty list records nothing, emits nothing, and is not an error.
+    #[test]
+    fn an_empty_list_records_nothing() {
+        let w = World::new();
+        let (event_id, _category_id) = w.open_event(10, PRICE);
+        w.mock_batch(&w.organiser, event_id, &vec![&w.env]);
+        w.records().record_results(&event_id, &vec![&w.env]);
+        assert_eq!(
+            w.env
+                .events()
+                .all()
+                .filter_by_contract(&w.contract)
+                .events(),
+            &[]
+        );
+    }
+
+    /// Every row pays its record's rent, like the single calls.
+    #[test]
+    fn a_batch_extends_each_record_ttl() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let a = w.claimed(event_id, category_id, 1);
+        let b = w.enter(&w.runner(), event_id, category_id, 2);
+
+        let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+        w.env
+            .ledger()
+            .set_sequence_number(w.env.ledger().sequence() + aged_by);
+        assert!(persistent_ttl(&w.env, &w.contract, DataKey::Record(a)) < BUMP_THRESHOLD);
+
+        w.env.mock_all_auths();
+        w.records().record_results(
+            &event_id,
+            &vec![
+                &w.env,
+                row(a, ResultOutcome::Timed(3_000)),
+                row(b, ResultOutcome::Dnf),
+            ],
+        );
+        assert_eq!(
+            persistent_ttl(&w.env, &w.contract, DataKey::Record(a)),
+            BUMP_TO
+        );
+        assert_eq!(
+            persistent_ttl(&w.env, &w.contract, DataKey::Record(b)),
+            BUMP_TO
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // Deployed from the BUILT WASM, because that is the only form
@@ -2515,6 +2946,229 @@ mod upgrade {
         records.record_finish(&fresh, &2_900);
         assert_eq!(records.record_of(&fresh).finish_time_s, Some(2_900));
     }
+
+    // -- STE-60: how many results fit in one transaction --------------------
+    //
+    // Measured, not computed. Both contracts are deployed from wasm so VM and
+    // cross-contract costs are real, and `Env::default()` enforces the mainnet
+    // per-invocation limits. A timed result is the largest row (its event
+    // carries the time). Per row: one record written, one more entry in the
+    // footprint read, 136 event bytes. Measured totals for n rows:
+    //
+    //   footprint entries  (n + 7 read) + (n + 1 written) = 2n + 8   limit 100
+    //   written entries    n + 1                                     limit 50
+    //   event bytes        136n                                      limit 16,384
+    //
+    // The footprint binds first: 46 rows is 100 entries, 47 is 102. The
+    // written-entries limit alone would have allowed 49, which is what a first
+    // measurement that ignored the footprint concluded, and the wrong number
+    // this test exists to keep out. `RECORD_RESULTS_MAX_BATCH` in the SDK is
+    // this figure.
+
+    const MAX_BATCH_MAINNET: u32 = 46;
+
+    /// Registry and RaceRecord both from wasm, a free 10K, `n` runners checked
+    /// in, and the timed rows to record them.
+    fn full_batch(n: u32) -> (Env, RaceRecordClient<'static>, u32, Vec<crate::ResultEntry>) {
+        let env = Env::default();
+        env.ledger().set_timestamp(NOW);
+        let admin = Address::generate(&env);
+        let organiser = Address::generate(&env);
+        let token = env
+            .register_stellar_asset_contract_v2(Address::generate(&env))
+            .address();
+        let registry = env.register(
+            wasm_bytes("event_registry.wasm").as_slice(),
+            (admin.clone(),),
+        );
+        let contract = env.register(
+            wasm_bytes("race_record.wasm").as_slice(),
+            (
+                admin.clone(),
+                registry.clone(),
+                token,
+                String::from_str(&env, NAME),
+                String::from_str(&env, SYMBOL),
+                String::from_str(&env, BASE_URI),
+            ),
+        );
+        env.mock_all_auths();
+        let reg = RegistryClient::new(&env, &registry);
+        reg.set_race_record(&contract);
+        reg.add_organiser(&organiser);
+        let event_id = reg.create_event(
+            &organiser,
+            &String::from_str(&env, "Jakarta Night Run 2026"),
+            &phash(&env, 7),
+            &String::from_str(&env, "ipfs://bafyjakartanightrun"),
+            &STARTS_AT,
+        );
+        let category_id = reg.add_category(&event_id, &symbol_short!("10K"), &10_000, &1_000, &0);
+        reg.set_event_status(&event_id, &EventStatus::Open);
+
+        let records = RaceRecordClient::new(&env, &contract);
+        let mut rows = Vec::new(&env);
+        for i in 0..n {
+            let runner = Address::generate(&env);
+            let token_id = records.enter(
+                &runner,
+                &event_id,
+                &category_id,
+                &vec![&env],
+                &phash(&env, (i % 250) as u8),
+            );
+            records.claim_racepack(&token_id, &organiser);
+            rows.push_back(crate::ResultEntry {
+                token_id,
+                // The largest time a race will plausibly publish, so the event
+                // is no smaller than a real one.
+                outcome: crate::ResultOutcome::Timed(86_399 - i),
+            });
+        }
+        // The clients borrow `env`; leaking it keeps the test body simple and
+        // lives only as long as the test process.
+        let env: &'static Env = std::boxed::Box::leak(std::boxed::Box::new(env));
+        (
+            env.clone(),
+            RaceRecordClient::new(env, &contract),
+            event_id,
+            rows,
+        )
+    }
+
+    #[test]
+    fn the_largest_batch_fits_the_mainnet_limits() {
+        let (env, records, event_id, rows) = full_batch(MAX_BATCH_MAINNET);
+        env.mock_all_auths();
+        records.record_results(&event_id, &rows);
+        let used = env.cost_estimate().resources();
+        assert_eq!(used.write_entries, MAX_BATCH_MAINNET + 1);
+        assert_eq!(
+            used.memory_read_entries + used.write_entries,
+            2 * MAX_BATCH_MAINNET + 8
+        );
+        assert_eq!(
+            2 * MAX_BATCH_MAINNET + 8,
+            100,
+            "the largest batch is exactly the footprint limit"
+        );
+        assert!(used.contract_events_size_bytes <= 16_384);
+        assert_eq!(
+            records.record_of(&rows.get_unchecked(0).token_id).state,
+            RecordState::Finished
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "total footprint ledger entries: 102 > 100")]
+    fn one_row_more_exceeds_the_mainnet_limits() {
+        let (env, records, event_id, rows) = full_batch(MAX_BATCH_MAINNET + 1);
+        env.mock_all_auths();
+        records.record_results(&event_id, &rows);
+    }
+
+    // -- STE-60: the upgrade from the RaceRecord live before it --------------
+
+    /// RaceRecord v2.2, the executable at CCVW7WVC… before STE-60.
+    const LIVE_PRE_RESULTS_WASM: &[u8] =
+        include_bytes!("../testdata/race_record_live_pre_results.wasm");
+    /// What the ledger reports for that contract, and INTERFACE.md §0 freezes.
+    const LIVE_PRE_RESULTS_HASH: &str =
+        "0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba";
+
+    /// Records the running code minted and checked in take a batch of results
+    /// after the upgrade, and a terminal record it wrote stays terminal.
+    #[test]
+    fn records_the_live_wasm_minted_take_a_batch_of_results() {
+        let w = World::new();
+        let registry = w.env.register(EventRegistry, (w.admin.clone(),));
+        let contract = w.env.register(
+            LIVE_PRE_RESULTS_WASM,
+            (
+                w.admin.clone(),
+                registry.clone(),
+                w.token.clone(),
+                String::from_str(&w.env, NAME),
+                String::from_str(&w.env, SYMBOL),
+                String::from_str(&w.env, BASE_URI),
+            ),
+        );
+        w.env.mock_all_auths();
+        let registry_client = RegistryClient::new(&w.env, &registry);
+        registry_client.set_race_record(&contract);
+        registry_client.add_organiser(&w.organiser);
+        let w = World {
+            contract,
+            registry,
+            ..w
+        };
+
+        let live_hash = w
+            .env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&w.env, LIVE_PRE_RESULTS_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_RESULTS_HASH);
+
+        // -- written by the OLD code ---------------------------------------
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let timed = w.claimed(event_id, category_id, 1);
+        let untimed = w.claimed(event_id, category_id, 2);
+        let no_show = w.enter(&w.runner(), event_id, category_id, 3);
+        let already = w.claimed(event_id, category_id, 4);
+        w.env.mock_all_auths();
+        let records = w.records();
+        records.record_finish(&already, &3_000);
+        let rows = vec![
+            &w.env,
+            crate::ResultEntry {
+                token_id: timed,
+                outcome: crate::ResultOutcome::Timed(2_950),
+            },
+            crate::ResultEntry {
+                token_id: untimed,
+                outcome: crate::ResultOutcome::Untimed,
+            },
+            crate::ResultEntry {
+                token_id: no_show,
+                outcome: crate::ResultOutcome::Dnf,
+            },
+        ];
+        // The running code has no batch function at all.
+        assert!(records.try_record_results(&event_id, &rows).is_err());
+        let before: std::vec::Vec<RecordData> = [timed, untimed, no_show, already]
+            .iter()
+            .map(|t| records.record_of(t))
+            .collect();
+
+        // -- the upgrade ----------------------------------------------------
+        w.env.mock_all_auths();
+        records.upgrade(&upload(&w.env, "race_record.wasm"));
+        for (token_id, record) in [timed, untimed, no_show, already].iter().zip(&before) {
+            assert_eq!(&records.record_of(token_id), record);
+        }
+
+        // -- the batch, on records the OLD code minted ----------------------
+        w.env.mock_all_auths();
+        records.record_results(&event_id, &rows);
+        assert_eq!(records.record_of(&timed).finish_time_s, Some(2_950));
+        assert_eq!(records.record_of(&untimed).state, RecordState::Finished);
+        assert_eq!(records.record_of(&untimed).finish_time_s, None);
+        assert_eq!(records.record_of(&no_show).state, RecordState::Dnf);
+        assert_eq!(
+            records.try_record_results(
+                &event_id,
+                &vec![
+                    &w.env,
+                    crate::ResultEntry {
+                        token_id: already,
+                        outcome: crate::ResultOutcome::Dnf
+                    }
+                ],
+            ),
+            Err(Ok(Error::InvalidState))
+        );
+        assert_eq!(records.record_of(&already), before[3]);
+    }
 }
 
 mod spec_vectors {
@@ -2710,7 +3364,7 @@ mod exports {
     ///
     /// `upgrade` is deliberately absent from this list — both contracts export
     /// one of their own (v2), so finding it here is correct, not a leak.
-    const REGISTRY_ONLY: [&str; 19] = [
+    const REGISTRY_ONLY: [&str; 22] = [
         "create_event",
         "add_category",
         "set_event_status",
@@ -2730,6 +3384,9 @@ mod exports {
         "add_organiser",
         "remove_organiser",
         "is_organiser",
+        "increase_quota",
+        "set_registration_closes",
+        "get_registration_closes",
     ];
 
     fn wasm_path() -> PathBuf {

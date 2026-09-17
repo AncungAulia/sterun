@@ -33,8 +33,9 @@ How it is done: use only OpenZeppelin's *storage primitives* (`Base::mint`, `Bas
 `scripts/check-exports.sh` (grepping the built interface) and the `exports::…` test in `src/test.rs`
 (parsing the wasm's export section directly). Both run in CI.
 
-The legitimate export surface — **20 functions**: `__constructor`, `upgrade`, `enter`,
+The legitimate export surface — **21 functions**: `__constructor`, `upgrade`, `enter`,
 `claim_racepack`, `record_finish`, `record_finish_untimed` (v2.2), `record_dnf`,
+`record_results` (v2.6),
 `extend_record_ttl`, `record_of`, `records_of`, `verify`, `owner_of`, `balance`, `token_uri`,
 `total_supply`, `name`, `symbol`, `get_admin`, `get_registry`, `get_token`.
 
@@ -127,10 +128,41 @@ Rules that keep that marker trustworthy — do not "simplify" them away:
   be erased into "no time" (`an_untimed_finish_is_terminal`,
   `record_finish_untimed_rejects_terminal_states`).
 
+### Many results in one call (v2.6, STE-60)
+
+`record_results(event_id, results: Vec<ResultEntry>)`, where each `ResultEntry` is a `token_id` and a
+`ResultOutcome`: `Timed(finish_time_s)`, `Untimed` or `Dnf`. A race of 312 runners used to be 312
+organiser signatures, and a transaction may hold only one `InvokeHostFunctionOp`, so a batch has to be a
+contract function that loops.
+
+What holds it together, each guarded by a test that fails without it:
+
+- **One code path for a result.** `record_finish`, `record_finish_untimed`, `record_dnf` and every row of
+  a batch go through `apply_result`, so a batch cannot accept what a single call refuses. Never give the
+  batch its own copy of the rules.
+- **One organiser gate, for `event_id`, and every row must belong to that event**
+  (`ResultForAnotherEvent = 108`). Without the second check the organiser of one race could publish
+  results into another race's records.
+- **Atomic.** The first invalid row reverts the batch, including rows before it. Results are terminal;
+  the preview is where a file gets fixed. A token listed twice fails its second row on `InvalidState`.
+- **The same events as the single calls**, one per row, in row order. The indexer needs no new handler.
+- **No cap in the contract.** The network's per-transaction limits bound a batch. An empty batch
+  records nothing and succeeds.
+
+**The largest batch is 46 rows**, measured with both contracts deployed from wasm under the mainnet
+limits `Env::default()` enforces, with every row timed (the largest event). Per row: one record
+written, one more footprint entry read, 136 event bytes. The footprint limit binds first:
+`2n + 8` entries against 100. The written-entries limit alone would allow 49, which a first
+measurement concluded before it looked at the footprint.
+`the_largest_batch_fits_the_mainnet_limits` and `one_row_more_exceeds_the_mainnet_limits` pin it, and
+`RECORD_RESULTS_MAX_BATCH` in the SDK is the same number. Testnet allows 200 written entries; the mainnet
+figure is the one clients use, because a console that batches more on testnet breaks on mainnet.
+
 ## Error codes — band `100..=199`, never renumbered
 
 `NotInitialized=100`, `RecordNotFound=101`, `AlreadyClaimed=102`, `InvalidState=103`,
-`NotAuthorized=104`, `InvalidFinishTime=105`, `TooManyAddOns=106`, `DuplicateAddOn=107`.
+`NotAuthorized=104`, `InvalidFinishTime=105`, `TooManyAddOns=106`, `DuplicateAddOn=107`,
+`ResultForAnotherEvent=108`.
 OZ's `NonFungibleTokenError` occupies `200..=214`.
 
 An error outside those two bands coming out of a function of this contract is **not** this
@@ -167,16 +199,17 @@ evidence merely for holding no XLM. The STE-12 keeper job calls it on a schedule
 
 ## Tests
 
-`src/test.rs`, 72 tests, `lib.rs` coverage 97% region / 99% line.
+`src/test.rs`, 85 tests.
 
 `mod upgrade` deploys RaceRecord **from wasm**, so `stellar contract build` has to run first — and
 its World builds its own registry, because `set_race_record` is one-shot.
 
 `records_written_by_the_live_wasm_survive_the_untimed_upgrade` starts from
 `testdata/race_record_live_pre_untimed.wasm` — the executable that was genuinely live at `CCVW7WVC…`
-before STE-41 — and checks its own fixture against the hash the ledger reported. It is the "before"
-of the **next** upgrade too: when you ship one, fetch the then-live wasm with
-`stellar contract fetch` first (provenance and rules in `testdata/README.md`).
+before STE-41 — and `records_the_live_wasm_minted_take_a_batch_of_results` from
+`testdata/race_record_live_pre_results.wasm`, live before STE-60. Each checks its own fixture against
+the hash the ledger reported. For the next upgrade, fetch the then-live wasm with
+`stellar contract fetch` and add it beside these (provenance and rules in `testdata/README.md`).
 
 **`RecordData` must never gain another REQUIRED field.** A `#[contracttype]` struct is a map keyed by
 field name, so an already-stored record fails to decode into a struct that gained a required field.
