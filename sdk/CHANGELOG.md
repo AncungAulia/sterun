@@ -44,9 +44,17 @@ already in other people's hands.
   anything is signed. An extension changes what runners were promised: pair a later date with a
   signed announcement, which the contract does not check.
 - `RegistrationClosed` (20) in the EventRegistry error table.
+- **`recordResults(eventId, results)`** (STE-60, contracts v2.6): many results for one event in one
+  organiser signature. Each result is `{ tokenId, kind: "timed", finishTimeS }`, `{ tokenId, kind:
+  "untimed" }` or `{ tokenId, kind: "dnf" }`, the same `kind` words as the backend's results preview.
+  **Atomic**: one invalid row reverts the batch. An empty list, more than `RECORD_RESULTS_MAX_BATCH`
+  rows, a token listed twice, or a time outside 1..u32 is refused before signing.
+- **`RECORD_RESULTS_MAX_BATCH = 46`** and **`chunkResults(results, size?)`**. 46 is measured under the
+  mainnet limits, where the footprint limit binds; batch by it on every network.
+- `ResultForAnotherEvent` (108) in the RaceRecord error table.
 
-**Needs the v2.5 EventRegistry.** Against v2.4 both methods fail with a host error, because the
-functions do not exist yet.
+**Needs the v2.5 EventRegistry and the v2.6 RaceRecord.** Against older contracts these methods fail
+with a host error, because the functions do not exist yet.
 
 ## [0.3.1] — 2026-09-17
 
