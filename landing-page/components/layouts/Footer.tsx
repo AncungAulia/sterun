@@ -35,8 +35,8 @@ const THIS_PAGE = [
 ];
 
 const THE_APP = [
-  { label: "Browse races", href: APP_URL || "#" },
-  { label: "Organiser console", href: APP_URL ? `${APP_URL}/org` : "#" },
+  { label: "Browse races", href: APP_URL },
+  { label: "Organiser console", href: `${APP_URL}/org` },
   { label: "SDK", href: SDK_URL, external: true },
   { label: "Source", href: REPO_URL, external: true },
 ];

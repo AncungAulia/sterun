@@ -7,11 +7,11 @@
  */
 
 /**
- * The web app. Set NEXT_PUBLIC_APP_URL at deploy time (STE-32); until that
- * project exists there is no URL to hardcode, and inventing one would ship a
- * dead button. The header hides its CTA rather than pointing nowhere.
+ * The web app, live at app.sterun.xyz (STE-32): `/` browses races, `/org` is
+ * the organiser console. NEXT_PUBLIC_APP_URL still overrides it, for a preview
+ * deployment pointed at a preview app.
  */
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "";
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.sterun.xyz";
 
 export const X_URL = "https://x.com/sterunxyz";
 export const REPO_URL = "https://github.com/AncungAulia/sterun";
