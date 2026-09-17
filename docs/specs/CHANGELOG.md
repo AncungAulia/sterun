@@ -137,13 +137,16 @@ settings` and identical on both:
 | CPU instructions | about 41 M at 100 | 400 M | — |
 
 Two tests pin it (120 rows fit; 121 fail with `contract events size bytes: 16456 > 16384`), and the
-testnet e2e confirms both against the network's own simulation. The SDK exposes
+testnet e2e confirms both on the real network: 120 rows landed in one transaction, and 121 rows,
+which **simulate cleanly** because simulation does not enforce the event-size limit, failed on the
+ledger on resources and moved no record. The SDK exposes
 `RECORD_RESULTS_MAX_BATCH = 120` and refuses a larger batch before signing.
 
 **A first measurement said 46, and was wrong.** It used soroban-sdk 26's
 `InvocationResourceLimits::mainnet()`, whose 50 written and 100 footprint entries are older than the
 network's settings. The testnet e2e caught it: the network's simulation reported a smaller footprint
-than the testutils count, which sent the measurement back to the live limits. If the network's limits
+than the testutils count (`5 + n` against `2n + 8`), which sent the measurement back to the live
+limits. If the network's limits
 change, the number is measured again with the new settings, not scaled.
 
 ### Also corrected in the wasm
