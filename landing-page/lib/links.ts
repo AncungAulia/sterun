@@ -15,18 +15,24 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
 export const X_URL = "https://x.com/sterunxyz";
 export const REPO_URL = "https://github.com/AncungAulia/sterun";
-export const SDK_URL = "https://github.com/AncungAulia/sterun/tree/main/sdk";
+/** Published on npm since STE-19, so the registry page rather than the source folder. */
+export const SDK_URL = "https://www.npmjs.com/package/@sterunxyz/sdk";
 
 const EXPLORER = "https://stellar.expert/explorer/testnet/contract";
 
+/**
+ * The v2 pair, the one be/ and fe/ run against. deployments.md gives these the
+ * unqualified row names and labels the older pair "v1"; v1 is still alive on
+ * chain but is history, and nothing should point at it.
+ */
 export const CONTRACTS = {
   eventRegistry: {
-    id: "CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64",
-    url: `${EXPLORER}/CDL6A734H5DITOFC5VGSAAIOQBBGSH2NIIDU4KJDAO734I3ZRL4GTA64`,
+    id: "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+    url: `${EXPLORER}/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU`,
   },
   raceRecord: {
-    id: "CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4",
-    url: `${EXPLORER}/CDWFNF427X4R5BABSUUQNPNEVP5QERBGLTHWD5GEHSGFK6E4YME7XNB4`,
+    id: "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
+    url: `${EXPLORER}/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW`,
   },
   susd: {
     id: "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU",
