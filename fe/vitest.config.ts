@@ -23,6 +23,22 @@ export default defineConfig({
       "test/**/*.test.tsx",
     ],
     restoreMocks: true,
+    /*
+      15s rather than vitest's 5s, because of what these tests are.
+
+      A component test here drives a real dialog or dropdown through
+      user-event, which waits on timers and on React's own scheduling. Alone
+      each takes well under a second. Run together on a laptop that is also
+      running the dev server, the slowest of them (ScannersTab's add dialog,
+      PhoneField's country picker, the calendar's dropdowns) cross five seconds
+      and fail with a timeout that says nothing about the code.
+
+      Chasing those false failures cost more than the ceiling protects against,
+      and a genuinely hung test still fails, ten seconds later. This is not a
+      licence to write slow tests: anything approaching this number is a test
+      waiting on something it should be stubbing.
+    */
+    testTimeout: 15_000,
     /**
      * lib/env.ts throws at import when configuration is missing, and almost
      * everything imports it transitively. These are the testnet values from

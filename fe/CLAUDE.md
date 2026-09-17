@@ -829,6 +829,13 @@ Four conventions that apply to every screen, all from Ancung looking at the app:
   are 192 and 512, `any` and `maskable`, rendered from the logo SVG: a maskable
   icon is a full bleed of paper with the mark at 62%, so a launcher's crop eats
   only background.
+- **The installed app starts at `/pass`** (`manifest.ts` `start_url`,
+  `modules/pass/OpenPass.tsx`), which looks the newest entry up in IndexedDB
+  (`latestEntry`) and redirects to it. A manifest cannot carry a token id, and
+  `/pass` is inside the offline worker's scope, so the doorway itself is cached
+  and works at a venue; the directory is not cached and never can be. A phone
+  holding no entry gets both offline screens as links rather than a redirect to
+  a page it may not be able to load.
 
 ## Tests
 
@@ -836,6 +843,12 @@ Four conventions that apply to every screen, all from Ancung looking at the app:
 pnpm --filter fe test                      # unit + component, no network
 STERUN_E2E=1 pnpm --filter fe test test/e2e  # e2e against live testnet, run by hand
 ```
+
+**`testTimeout` is 15s, not vitest's 5s.** A component test here drives a real
+dialog or dropdown through user-event; alone each takes well under a second, and
+run together on a laptop the slowest cross five seconds and fail with a timeout
+that says nothing about the code. It is not a licence to write slow tests:
+anything approaching that number is waiting on something it should stub.
 
 The e2e is opt-in so `typescript.yml` still never touches the network. The e2e files run in a **node**
 environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as the global, so a
