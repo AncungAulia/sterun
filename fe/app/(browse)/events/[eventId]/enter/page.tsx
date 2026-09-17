@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { EntryFlow } from "@/modules/entry/EntryFlow";
 
+export const metadata = { title: "Enter this race" };
+
 /**
  * STE-21. Event ids are sequential u32 from zero, so anything else in the slot
  * is a bad link. `?category=` is read here and handed down as a number, or null

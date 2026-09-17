@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { RaceConsole } from "@/modules/organiser/race/RaceConsole";
 import { parseRaceTab } from "@/modules/organiser/race/lib/race-tab";
 
+export const metadata = { title: "Race console" };
+
 /**
  * One race in the console. Event ids are sequential u32 from zero, so anything
  * else in the slot is a bad link; it goes to the console's own not-found,
