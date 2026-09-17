@@ -106,7 +106,8 @@ pub enum RecordState {
 pub struct RecordData {
     pub event_id: u32,
     pub category_id: u32,
-    /// The category sequence handed out by `EventRegistry::reserve_slot`.
+    /// The bib `EventRegistry::reserve_slot` handed out: unique within the
+    /// event and counting from 1 since registry v2.3.
     pub bib_no: u32,
     /// The add-ons this entry paid for, in the order they were reserved (v2).
     /// Empty for an entry that bought none.
