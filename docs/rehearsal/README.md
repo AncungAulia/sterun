@@ -78,14 +78,47 @@ Out of scope for STE-25 and left to Axel: screen footage, the team walkthrough, 
 
 ## How it is built
 
-`src/mock-race.ts` is the stage manager, `src/device.ts` a desk or phone, `src/evidence.ts` the
-writer. `run.sh` bundles them with esbuild into `be/node_modules/.cache/` and
-`fe/node_modules/.cache/` — inside the package whose dependencies each one imports — so the
+`src/mock-race.ts` is the stage manager, `src/device.ts` a desk or phone, `src/device-process.ts`
+the stage manager's handle on one of those processes, `src/evidence.ts` the writer. `run.sh`
+bundles them with esbuild into `be/node_modules/.cache/` and `fe/node_modules/.cache/` — inside the package whose dependencies each one imports — so the
 rehearsal adds no workspace member, no lockfile change and no file in a teammate's folder.
 
 The writer refuses to write a file containing a Stellar secret seed or any secret value the run
 has handled (the admin key, fresh keys, salts, check-in secrets), and `run.sh` greps the run
 directory once more at the end.
+
+### Typechecked against `fe/`, in CI
+
+The desks are not a copy of the scanner: `device.ts` imports the web app's own code from
+`fe/src/modules/scanner/lib`, `fe/src/lib/totp` and `fe/src/lib/chain`, and `mock-race.ts`
+imports `be/src/deployments`. That is the point — the rehearsal tests the code a volunteer's
+phone runs — and it means **a change in `fe/` can break the harness without touching it**.
+
+esbuild does not typecheck, so `run.sh` cannot notice. It already happened: STE-62 renamed
+`sendClaims`' dependency `claimedAtOf` to `recordOf`, `fe/` was updated, the harness was not, and
+the bundle built fine. Run 1 then threw `deps.recordOf is not a function` on every sync and failed
+17 steps from 4.3 on, which read like a product bug.
+
+So the harness is typechecked in `.github/workflows/typescript.yml`, which also runs whenever
+`docs/rehearsal/**` changes:
+
+```bash
+pnpm --filter @sterunxyz/sdk build     # the harness imports the SDK's dist/ types
+pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.device.json
+pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.stage.json
+pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts
+```
+
+Both configs extend `fe/tsconfig.json` unchanged — `strict` included — and differ only in where
+bare packages resolve, mirroring where `run.sh` puts each bundle: `tsconfig.device.json` (the
+desks) from `fe/node_modules`, `tsconfig.stage.json` (the stage manager, the writer and the test)
+from `be/node_modules`. Only the packages the harness imports itself are mapped; a new one fails
+with `TS2307` until it is added to `paths`. Reintroducing the old `claimedAtOf` fails the check
+with `TS2353: … 'claimedAtOf' does not exist in type 'SendDeps'`.
+
+The test pins the other way this tool once lied: a desk or phone process that dies must fail the
+step, not leave its calls unsettled so that node exits 0 mid-run with no `EVIDENCE.md` (fixed in
+`14ef24a`). It runs real child processes and needs no network.
 
 ## Runs
 
