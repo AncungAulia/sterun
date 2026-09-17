@@ -1,0 +1,14 @@
+{
+  "extends": "../../fe/tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "paths": {
+      "@/*": ["../../fe/src/*"],
+      "@stellar/stellar-sdk": ["../../fe/node_modules/@stellar/stellar-sdk"],
+      "@sterunxyz/sdk": ["../../fe/node_modules/@sterunxyz/sdk"]
+    },
+    "typeRoots": ["../../fe/node_modules/@types"]
+  },
+  "include": ["src/device.ts"],
+  "exclude": []
+}

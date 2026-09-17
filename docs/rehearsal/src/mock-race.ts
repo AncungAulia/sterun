@@ -21,7 +21,6 @@
  * A refused step is recorded and the run carries on wherever the next step does
  * not depend on it. Nothing is retried to make the log look clean.
  */
-import { fork, type ChildProcess } from "node:child_process";
 import { randomBytes, randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,6 +44,7 @@ import {
   accountUrl,
   contractUrl,
 } from "./evidence";
+import { Device } from "./device-process";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -65,6 +65,10 @@ const PRICE_5K = 5n * SUSD;
 
 const log = (message: string) => console.log(message);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+// Desks and phones are child processes; see device-process.ts for why that handle
+// has its own module.
+const newDevice = (role: string) => new Device(role, DEVICE_BUNDLE, [`--env-file=${join(REPO, "fe", ".env")}`]);
+
 const bigintJson = (value: unknown) =>
   JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
 
@@ -99,61 +103,6 @@ function newAccount(): Keypair {
   const kp = Keypair.random();
   remember(kp.secret());
   return kp;
-}
-
-// ---------------------------------------------------------------------------
-// Child processes: desks and phones
-// ---------------------------------------------------------------------------
-
-class Device {
-  private seq = 0;
-  private stopped = false;
-  private readonly pending = new Map<number, (m: { ok: boolean; value?: unknown; error?: string }) => void>();
-  private readonly ready: Promise<void>;
-  private readonly child: ChildProcess;
-
-  constructor(readonly role: string) {
-    this.child = fork(DEVICE_BUNDLE, [role], {
-      execArgv: [`--env-file=${join(REPO, "fe", ".env")}`],
-      stdio: ["ignore", "inherit", "inherit", "ipc"],
-    });
-    this.ready = new Promise((resolve, reject) => {
-      this.child.on("message", (raw) => {
-        const m = raw as { id: number; ok: boolean; value?: unknown; error?: string };
-        if (m.id === 0) return resolve();
-        this.pending.get(m.id)?.(m);
-        this.pending.delete(m.id);
-      });
-      // A device that dies (a missing package, a crash) used to leave `ready` and
-      // every pending call unsettled. Node then ran out of work and exited 0 in
-      // the middle of a step, with no RESULT line and no EVIDENCE.md.
-      this.child.on("exit", (code, signal) => {
-        if (this.stopped) return;
-        const error = `${role} process exited (code ${code}, signal ${signal}) — its own output above says why`;
-        reject(new Error(error));
-        for (const settle of this.pending.values()) settle({ ok: false, error });
-        this.pending.clear();
-      });
-    });
-    this.ready.catch(() => {});
-  }
-
-  async call<T = Record<string, unknown>>(cmd: string, body: Record<string, unknown> = {}): Promise<T> {
-    await this.ready;
-    this.seq += 1;
-    const id = this.seq;
-    const reply = await new Promise<{ ok: boolean; value?: unknown; error?: string }>((resolve) => {
-      this.pending.set(id, resolve);
-      this.child.send({ id, cmd, ...body });
-    });
-    if (!reply.ok) throw new Error(`${this.role} ${cmd}: ${reply.error}`);
-    return reply.value as T;
-  }
-
-  stop(): void {
-    this.stopped = true;
-    this.child.kill();
-  }
 }
 
 const big = (value: bigint) => ({ $bigint: value.toString() });
@@ -340,10 +289,10 @@ async function main(): Promise<void> {
   ev.meta.runners = runners.map((r) => `${r.label} ${r.kp.publicKey()}`).join(", ");
   ev.write();
 
-  const deskA = new Device("desk-A");
-  const deskB = new Device("desk-B");
-  const phones = new Device("phones");
-  const consoleDevice = new Device("console"); // the web app's error wording, for negative paths
+  const deskA = newDevice("desk-A");
+  const deskB = newDevice("desk-B");
+  const phones = newDevice("phones");
+  const consoleDevice = newDevice("console"); // the web app's error wording, for negative paths
 
   let eventId: number | undefined;
   let cat10k: number | undefined;
