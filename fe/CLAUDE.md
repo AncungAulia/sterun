@@ -273,6 +273,14 @@ What is settled:
   code needs no special case. The list is imported inside the success callback, so a visitor who
   refuses never downloads it. "Near you" is left for a point with no province near it. Matching one
   point per province is not a geocoder: it answers a province, never a street.
+- **What can be entered comes first** (Ancung, 2026-09-17, `entryRank` in
+  `lib/event/events.ts`). The order was by date alone, so a cancelled rehearsal
+  from this week sat above every race a runner could actually enter. Three
+  groups, never mixed: open with places left, then anything still ahead (not
+  open yet, entries closed, sold out), then what is over (already run, or
+  cancelled whatever its date). Date orders within a group, and the place and
+  the distance sort inside that again. A race whose categories could not be read
+  is not in the first group: it may be enterable, and nothing can say so.
 - **The location control sorts the page, it does not filter it** (Revision 3, which overrides
   Revision 2): "All locations" by default, or a country with an optional province, picked by the
   visitor and stored in `localStorage` under `sterun.area` (`lib/place/area.ts`). Every race stays on the

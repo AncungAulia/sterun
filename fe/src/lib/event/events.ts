@@ -109,16 +109,43 @@ export async function getEventSummary(
 }
 
 /**
- * Upcoming races first, soonest at the top; finished races after them, most
- * recent first.
+ * How much a race is worth showing, before its date is looked at (Ancung,
+ * 2026-09-17).
+ *
+ * The date alone put a race that had already run, or one that was cancelled,
+ * above a race somebody can enter next month, purely because it happened
+ * sooner. Someone opening a race directory is asking "what can I enter?", so
+ * that is the first question the order answers.
+ *
+ * - `0` **enterable now**: open, still to come, with places left somewhere.
+ * - `1` **still ahead**: not open yet, entries closed, or sold out. There is a
+ *   race at the end of it, so it belongs above what is over.
+ * - `2` **over**: already run, or cancelled whatever its date says.
+ *
+ * A race whose categories could not be read counts as `1` rather than `0`: it
+ * may be enterable, but nothing here can say so, and promising a way in that
+ * is not there is the worse mistake.
+ */
+export function entryRank(summary: EventSummary, nowS: bigint): 0 | 1 | 2 {
+  const { event, categories } = summary;
+  if (event.status === "Cancelled" || event.startsAt < nowS) return 2;
+  const open = event.status === "Open" && categories.some((category) => category.slotsLeft > 0);
+  return open ? 0 : 1;
+}
+
+/**
+ * Races that can be entered first, then the ones still to come, then what is
+ * over. Inside each, soonest first for what is ahead and most recent first for
+ * what has run.
  *
  * Sorting by id would show the directory in the order events were created,
- * which is meaningless to somebody looking for a race to enter. A race that
- * has already run is still worth a page (a runner profile links to it), but it
- * belongs below the ones that can still be entered.
+ * which is meaningless to somebody looking for a race to enter.
  */
 export function sortEvents(events: EventSummary[], nowS: bigint): EventSummary[] {
   return [...events].sort((a, b) => {
+    const rank = entryRank(a, nowS) - entryRank(b, nowS);
+    if (rank !== 0) return rank;
+
     const aUpcoming = a.event.startsAt >= nowS;
     const bUpcoming = b.event.startsAt >= nowS;
     if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;

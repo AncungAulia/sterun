@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getEventSummary, listEvents, sortEvents, type EventSummary } from "@/lib/event/events";
+import { entryRank, getEventSummary, listEvents, sortEvents, type EventSummary } from "@/lib/event/events";
 import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
 const ORGANISER = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
@@ -225,5 +225,50 @@ describe("getEventSummary", () => {
       expect(summary.event.eventId).toBe(0);
       expect(summary.categories).toEqual([]);
     });
+  });
+});
+
+describe("what can be entered comes first (Ancung, 2026-09-17)", () => {
+  function race(
+    eventId: number,
+    startsAt: bigint,
+    status: SterunEvent["status"],
+    slotsLeft = 10,
+  ): EventSummary {
+    return {
+      event: event(eventId, { startsAt, status }),
+      categories: [category(eventId, 0, { quota: 100, enteredCount: 100 - slotsLeft, slotsLeft })],
+    };
+  }
+
+  it("ranks an open race with places above everything else", () => {
+    expect(entryRank(race(0, NOW_S + 100n, "Open"), NOW_S)).toBe(0);
+    expect(entryRank(race(1, NOW_S + 100n, "Open", 0), NOW_S)).toBe(1);
+    expect(entryRank(race(2, NOW_S + 100n, "Draft"), NOW_S)).toBe(1);
+    expect(entryRank(race(3, NOW_S + 100n, "Closed"), NOW_S)).toBe(1);
+    expect(entryRank(race(4, NOW_S + 100n, "Cancelled"), NOW_S)).toBe(2);
+    expect(entryRank(race(5, NOW_S - 100n, "Open"), NOW_S)).toBe(2);
+  });
+
+  it("puts a race months away that can be entered above one next week that cannot", () => {
+    // The directory read the other way round: a cancelled rehearsal from this
+    // week sat above every race a runner could actually enter.
+    const cancelledSoon = race(0, NOW_S + 86_400n, "Cancelled");
+    const finishedSoon = race(1, NOW_S - 86_400n, "Completed");
+    const openLater = race(2, NOW_S + 60n * 86_400n, "Open");
+    const soldOutSoon = race(3, NOW_S + 2n * 86_400n, "Open", 0);
+
+    expect(
+      sortEvents([cancelledSoon, finishedSoon, openLater, soldOutSoon], NOW_S).map(
+        (e) => e.event.eventId,
+      ),
+    ).toEqual([2, 3, 0, 1]);
+  });
+
+  it("keeps a race whose categories could not be read out of the enterable group", () => {
+    // It may well be enterable. Nothing here can say so, and offering a way in
+    // that is not there is the worse mistake.
+    const unknown: EventSummary = { event: event(9, { status: "Open" }), categories: [] };
+    expect(entryRank(unknown, NOW_S)).toBe(1);
   });
 });
