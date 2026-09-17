@@ -1416,6 +1416,43 @@ as `0.2.0`, while the npm debug log already had the `PUT … 202` and exit 0. Th
 finished propagating. Check again, or read the registry document directly, before concluding a
 publish failed.
 
+### 0.3.1 — published 2026-09-16
+
+`@sterunxyz/sdk@0.3.1` is on npm as `latest`, published **2026-09-16T19:59:31.152Z** from the `lin1era` account.
+
+| | |
+| --- | --- |
+| version | `0.3.1` (PATCH: a fix plus one additive export) |
+| `dist.shasum` | `8b99bf0945c2801b95f4ecc7a0ce42aa462db640` |
+| files / unpacked | 38 / 286,364 bytes |
+| what is new | a write that fails **on the ledger** throws `SterunContractError` with `phase: "ledger"`, `txHash` and `ledger` instead of crashing on `result` (STE-61); `ledgerFailureCode` exported |
+| release commit | `5f6541a` — `sdk/package.json` 0.3.1 and the `[0.3.1]` changelog heading |
+
+Checked against the registry, not against the working tree:
+
+```
+downloaded sdk-0.3.1.tgz: sha1 8b99bf09…, sha512 matches dist.integrity
+contents vs a fresh `npm pack` of main: identical (38 files)
+secret seed pattern in the tarball: none
+changelog heading: ## [0.3.1] — 2026-09-17
+```
+
+Then installed from npm into an empty TypeScript project outside the repository (`strict`,
+`NodeNext`, `skipLibCheck: false`): `tsc` clean, and run against live testnet:
+
+```
+713f63a2cd36… FAILED, ledgerFailureCode = 102      # the STE-61 claim-race e2e
+10e261cf2647… FAILED, ledgerFailureCode = 102      # rehearsal run 3, step 6.1
+recordOf(58): RacepackClaimed, event 29
+getEvent(999999): EventNotFound (#2), phase simulation
+```
+
+The release-day confusion from 0.2.0 happened again, in both directions, so it is worth the two lines:
+the registry showed no 0.3.1 and the tarball URL answered 404 for about two minutes after the upload
+started, and a second `npm publish` then failed with `You cannot publish over the previously published
+versions: 0.3.1`. The first publish had succeeded. `time["0.3.1"]` in the registry document is the
+authority.
+
 ---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
@@ -2886,3 +2923,38 @@ The script also asserts exactly one claim won and the record ended `RacepackClai
 the same losing call threw `SterunNetworkError: claimRacepack could not be simulated: Cannot read
 properties of undefined (reading 'type')` (STE-25 run 2, step 4.3).
 
+
+---
+
+## STE-64 — a rebuild keeps transition transaction hashes, live (`0ccf923`, 2026-09-17)
+
+Deployed with a backup first (`backups/pre-ste64-20260916T172155Z.sql.gz`), then the API rebuilt, the
+poller and keeper stopped, `node dist/cli/indexer.js rebuild` run once, and both started again.
+
+| `record_transitions` | before | after the rebuild |
+| --- | --- | --- |
+| rows | 104 | 104 |
+| without `tx_hash` | 59 | 7 |
+| `source = 'event'` | 45 | 97 |
+| `source = 'event'` missing a ledger or hash | 0 | 0 |
+
+```
+rebuilt in 76158ms: 30 events, 49 categories, 59 records, 104 transitions. Following resumes at ledger 4711163.
+doctor: index matches the chain
+```
+
+**The seven left without a hash are correct, not missed.** Tokens 0, 1 and 2 (five transitions) have
+logged events only from the **v1** RaceRecord (`CDWFNF42…`), whose token ids overlap v2's; linking them
+would point a v2 runner at someone else's transaction, which is exactly what the contract filter
+refuses. `14/Finished` and `17/Finished` have no logged event at all (the raw log for v2 starts at
+ledger 4585194 and those finishes were not polled). An earlier count of "57 recoverable" matched on
+token id alone, and so included those five v1 rows.
+
+A restored hash checked against the network rather than trusted: `GET /records/14` now gives
+`Entered` → [`b79a5912…`](https://stellar.expert/explorer/testnet/tx/b79a59128c3c8e56bb9862600a7446a92378e1b3a9f8225e354d7be8ce88ca0b),
+which RPC `getTransaction` reports `SUCCESS` in ledger 4620655, the ledger the index holds, and
+Horizon shows as an `enter` invocation.
+
+After the restart the poller follows both v2 contracts, all three containers run with 0 restarts, a
+second `doctor` reports `"findings": []`, and `verify-deployment.sh` passes 18 of 18
+(2026-09-16T17:27:24Z).

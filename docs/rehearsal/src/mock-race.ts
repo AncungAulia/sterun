@@ -107,6 +107,7 @@ function newAccount(): Keypair {
 
 class Device {
   private seq = 0;
+  private stopped = false;
   private readonly pending = new Map<number, (m: { ok: boolean; value?: unknown; error?: string }) => void>();
   private readonly ready: Promise<void>;
   private readonly child: ChildProcess;
@@ -116,14 +117,25 @@ class Device {
       execArgv: [`--env-file=${join(REPO, "fe", ".env")}`],
       stdio: ["ignore", "inherit", "inherit", "ipc"],
     });
-    this.ready = new Promise((resolve) => {
+    this.ready = new Promise((resolve, reject) => {
       this.child.on("message", (raw) => {
         const m = raw as { id: number; ok: boolean; value?: unknown; error?: string };
         if (m.id === 0) return resolve();
         this.pending.get(m.id)?.(m);
         this.pending.delete(m.id);
       });
+      // A device that dies (a missing package, a crash) used to leave `ready` and
+      // every pending call unsettled. Node then ran out of work and exited 0 in
+      // the middle of a step, with no RESULT line and no EVIDENCE.md.
+      this.child.on("exit", (code, signal) => {
+        if (this.stopped) return;
+        const error = `${role} process exited (code ${code}, signal ${signal}) — its own output above says why`;
+        reject(new Error(error));
+        for (const settle of this.pending.values()) settle({ ok: false, error });
+        this.pending.clear();
+      });
     });
+    this.ready.catch(() => {});
   }
 
   async call<T = Record<string, unknown>>(cmd: string, body: Record<string, unknown> = {}): Promise<T> {
@@ -139,6 +151,7 @@ class Device {
   }
 
   stop(): void {
+    this.stopped = true;
     this.child.kill();
   }
 }
