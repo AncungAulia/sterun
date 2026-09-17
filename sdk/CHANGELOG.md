@@ -32,6 +32,22 @@ already in other people's hands.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`setRegistrationCloses(eventId, closesAt)` and `getRegistrationCloses(eventId)`** (STE-46,
+  contracts v2.5). An event can close entries on its own at a date: from `closesAt` (unix seconds, the
+  ledger's clock) on, `enter` reverts `RegistrationClosed(20)` while the event is still `Open`.
+  `getRegistrationCloses` answers `null` for an event with no date, which is every event created
+  before v2.5. A `closesAt` that is not a whole number or does not fit in a `u64` is refused before
+  anything is signed. An extension changes what runners were promised: pair a later date with a
+  signed announcement, which the contract does not check.
+- `RegistrationClosed` (20) in the EventRegistry error table.
+
+**Needs the v2.5 EventRegistry.** Against v2.4 both methods fail with a host error, because the
+functions do not exist yet.
+
 ## [0.3.1] — 2026-09-17
 
 ### Fixed
