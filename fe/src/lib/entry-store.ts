@@ -20,7 +20,7 @@
  * so nothing here tracks or retries it. Entries saved before that may still
  * carry a `confirmed` field; it is ignored.
  */
-import { createStore, get, set, update, type UseStore } from "idb-keyval";
+import { createStore, get, set, update, values, type UseStore } from "idb-keyval";
 
 export interface StoredEntry {
   eventId: number;
@@ -85,6 +85,27 @@ export async function saveEntry(entry: StoredEntry): Promise<void> {
 
 export async function readEntry(tokenId: number): Promise<StoredEntry | undefined> {
   return get<StoredEntry>(tokenId, entries());
+}
+
+/**
+ * The newest entry this device holds, or undefined.
+ *
+ * What the installed app opens at (`app/(offline)/pass/page.tsx`): a manifest
+ * has one `start_url` for the whole origin and cannot know a token id, so the
+ * id is looked up here instead. Newest by `enteredAt`, with the token id as
+ * the tie-break, since ids only ever go up and an entry saved by an older
+ * build may have no date at all.
+ */
+export async function latestEntry(): Promise<StoredEntry | undefined> {
+  const all = await values<StoredEntry>(entries());
+  return all
+    .filter((entry) => typeof entry?.tokenId === "number")
+    .sort((a, b) => {
+      const byDate = Date.parse(b.enteredAt ?? "") || 0;
+      const mine = Date.parse(a.enteredAt ?? "") || 0;
+      return byDate === mine ? b.tokenId - a.tokenId : byDate - mine;
+    })
+    .at(0);
 }
 
 /**

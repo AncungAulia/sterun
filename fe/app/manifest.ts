@@ -3,9 +3,12 @@ import type { MetadataRoute } from "next";
 /**
  * So a runner can keep the pass on their home screen (STE-21, round 2).
  *
- * `start_url` is the directory rather than a pass: a manifest is one file for
- * the whole origin and cannot know a token id. The installed app opens at the
- * races, and the pass is one tap from the race a runner entered.
+ * `start_url` is `/pass`, which is a doorway rather than a pass: a manifest is
+ * one file for the whole origin and cannot know a token id, so the page looks
+ * the id up in IndexedDB and redirects. It is inside the offline worker's scope
+ * on purpose, so an installed copy opens at a venue with no signal; the
+ * directory is not cached and never can be, since a cached race page could show
+ * a quota the chain no longer agrees with.
  *
  * The two colours are the only hex values in this app outside `tokens.css`,
  * because an operating system reads this file before any stylesheet exists.
@@ -28,7 +31,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Sterun",
     short_name: "Sterun",
     description: "Find races, enter them, and keep a trusted record of every finish.",
-    start_url: "/",
+    start_url: "/pass",
     display: "standalone",
     background_color: "#f8f8f8",
     theme_color: "#016985",

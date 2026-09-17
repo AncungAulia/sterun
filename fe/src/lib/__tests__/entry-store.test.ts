@@ -2,9 +2,11 @@
  * What this browser keeps about an entry it made. Backed by fake-indexeddb
  * (test/setup.ts), so the real idb-keyval code runs.
  */
-import { describe, expect, it } from "vitest";
+import { clear, createStore } from "idb-keyval";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  latestEntry,
   markReceiptSaved,
   readEntry,
   rememberPassFacts,
@@ -109,5 +111,35 @@ describe("what the pass remembers", () => {
   it("does nothing for a token this device never entered", async () => {
     await expect(rememberPassFacts(9999, { state: "Entered" })).resolves.toBeUndefined();
     expect(await readEntry(9999)).toBeUndefined();
+  });
+});
+
+describe("what the installed app opens", () => {
+  /*
+    The other describes above leave their entries behind, which is fine for
+    reads by id and wrong for "what is the newest". Same database and store
+    names as `entry-store.ts`, so this empties the real one.
+  */
+  const saved = createStore("sterun-entries", "entries");
+  beforeEach(() => clear(saved));
+
+  it("finds the newest entry on this phone, so the home screen icon opens that pass", async () => {
+    await saveEntry({ ...entry, tokenId: 10, enteredAt: "2026-09-01T00:00:00.000Z" });
+    await saveEntry({ ...entry, tokenId: 11, enteredAt: "2026-09-14T00:00:00.000Z" });
+    await saveEntry({ ...entry, tokenId: 12, enteredAt: "2026-09-08T00:00:00.000Z" });
+
+    expect((await latestEntry())?.tokenId).toBe(11);
+  });
+
+  it("falls back to the highest token id when an older build saved no date", async () => {
+    // Token ids only ever go up, so the newest entry is the largest id.
+    await saveEntry({ ...entry, tokenId: 20, enteredAt: "" });
+    await saveEntry({ ...entry, tokenId: 21, enteredAt: "" });
+
+    expect((await latestEntry())?.tokenId).toBe(21);
+  });
+
+  it("answers undefined on a phone that has entered nothing", async () => {
+    expect(await latestEntry()).toBeUndefined();
   });
 });
