@@ -61,7 +61,7 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
 
       <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
         {nowS === undefined ? (
-          <div className="h-60 animate-pulse rounded-lg bg-n-100" />
+          <div className="h-60 skeleton rounded-lg" />
         ) : (
           <EntriesPerDay values={entriesPerDay(records ?? [], nowS, DAYS)} nowS={nowS} />
         )}

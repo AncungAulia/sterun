@@ -106,8 +106,8 @@ export function EnteredPage({ eventId, tokenId }: { eventId: number; tokenId: nu
     return (
       <Page>
         <div role="status" aria-label="Loading your entry" className="flex flex-col items-center gap-6">
-          <div className="h-12 w-48 animate-pulse rounded-md bg-n-100" />
-          <div className="aspect-[3/2] w-full max-w-lg animate-pulse rounded-lg bg-n-100" />
+          <div className="h-12 w-48 skeleton rounded-md" />
+          <div className="aspect-[3/2] w-full max-w-lg skeleton rounded-lg" />
         </div>
       </Page>
     );

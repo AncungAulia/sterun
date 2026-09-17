@@ -82,7 +82,7 @@ export function ScannersTab({ summary }: { summary: EventSummary }) {
       <div
         role="status"
         aria-label="Loading scanners"
-        className="h-48 animate-pulse rounded-lg bg-n-100"
+        className="h-48 skeleton rounded-lg"
       />
     );
   }

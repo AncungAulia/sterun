@@ -34,6 +34,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { BackLink } from "@/components/layout/BackLink";
 import { Stepper } from "@/components/form/Stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -107,7 +108,7 @@ function CreateGate() {
   if (isChecking) {
     return (
       <div role="status" className="mx-auto w-full max-w-4xl px-4 py-16">
-        <div className="h-6 w-56 animate-pulse rounded-sm bg-n-100" />
+        <div className="h-6 w-56 skeleton rounded-sm" />
       </div>
     );
   }
@@ -300,11 +301,9 @@ function Wizard() {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-12">
-      <header>
-        <Link href="/org" className="text-sm text-teal-500 underline underline-offset-4">
-          Organiser console
-        </Link>
-        <h1 className="heading-hero mt-3 text-4xl text-ink">New event</h1>
+      <header className="flex flex-col items-start">
+        <BackLink href="/org">Organiser console</BackLink>
+        <h1 className="heading-hero mt-3 text-4xl text-ink">New race</h1>
         <p className="mt-2 max-w-2xl text-base text-n-600">
           Describe the race, lay out the distances, then approve it. Nothing here can be edited or
           deleted afterwards, so the review comes last and it is worth reading.

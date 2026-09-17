@@ -123,6 +123,8 @@ export interface ActivityItem {
   at: bigint;
   tokenId: number;
   bibNo: number;
+  /** The wallet that owns the record. What the feed names a runner by. */
+  runner: string;
   code: string;
   /** Only meaningful on `finished`. `null` there is "No official time". */
   finishTimeS: number | null;
@@ -141,6 +143,7 @@ export function recentActivity(
     const base = {
       tokenId: record.tokenId,
       bibNo: record.bibNo,
+      runner: record.runnerAddress,
       code: codes.get(record.categoryId) ?? `Distance ${record.categoryId}`,
       finishTimeS: null,
     };

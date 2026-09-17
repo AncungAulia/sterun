@@ -20,6 +20,7 @@
  */
 import Link from "next/link";
 
+import { BackLink } from "@/components/layout/BackLink";
 import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
@@ -55,10 +56,10 @@ export function EventDetail({ eventId }: { eventId: number }) {
       <div className="mx-auto w-full max-w-5xl px-4 py-12">
         <div role="status" aria-label="Loading this race">
           <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-            <div className="h-64 animate-pulse rounded-lg bg-n-100" />
-            <div className="h-64 animate-pulse rounded-lg bg-n-100" />
+            <div className="h-64 skeleton rounded-lg" />
+            <div className="h-64 skeleton rounded-lg" />
           </div>
-          <div className="mt-8 h-40 w-full animate-pulse rounded-lg bg-n-100" />
+          <div className="mt-8 h-40 w-full skeleton rounded-lg" />
         </div>
       </div>
     );
@@ -92,9 +93,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-12">
-      <Link href="/" className="text-sm text-teal-500 underline underline-offset-4">
-        All races
-      </Link>
+      <BackLink href="/">All races</BackLink>
 
       <EventView
         event={event}

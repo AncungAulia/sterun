@@ -104,9 +104,10 @@ describe("OverviewTab", () => {
     it("lists what happened, newest first", async () => {
       renderTab();
 
-      const items = await screen.findAllByRole("listitem", { name: /^Bib/ });
-      expect(items[0]).toHaveAccessibleName("Bib 7 collected their race pack");
-      expect(items[1]).toHaveAccessibleName("Bib 8 entered the 10K");
+      // The wallet names a row, not the bib (Ancung, 2026-09-17).
+      const items = await screen.findAllByRole("listitem", { name: /^G/ });
+      expect(items[0]).toHaveAccessibleName(/collected their race pack$/);
+      expect(items[1]).toHaveAccessibleName(/entered the 10K$/);
     });
 
     it("marks a sold-out add-on", async () => {
@@ -146,7 +147,7 @@ describe("OverviewTab", () => {
       renderTab();
 
       expect(
-        await screen.findByRole("listitem", { name: "Bib 7 finished the 10K with no official time" }),
+        await screen.findByRole("listitem", { name: /finished the 10K with no official time$/ }),
       ).toBeInTheDocument();
       expect(screen.queryByText(/0:00/)).not.toBeInTheDocument();
     });

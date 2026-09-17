@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { PassPage } from "@/modules/pass/PassPage";
 
+export const metadata = { title: "Your race pass" };
+
 /**
  * STE-21 round 2. A token id is a u32 from zero, so anything else is a bad
  * link. Whether this device can open that pass is decided on the page, from

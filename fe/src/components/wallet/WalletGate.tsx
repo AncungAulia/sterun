@@ -42,7 +42,7 @@ export function WalletGate({
   if (isRestoring) {
     return (
       <div role="status" className="mx-auto w-full max-w-4xl px-4 py-16">
-        <div className="h-6 w-48 animate-pulse rounded-sm bg-n-100" />
+        <div className="h-6 w-48 skeleton rounded-sm" />
       </div>
     );
   }

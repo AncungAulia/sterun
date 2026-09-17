@@ -496,9 +496,16 @@ describe("EventDetail", () => {
 
       renderDetail();
 
-      expect(await screen.findByText(/this race has been cancelled/i)).toBeInTheDocument();
+      // Where the way in would be: a button that says the word and refuses the
+      // press (Ancung, 2026-09-17), rather than a second red panel saying what
+      // the status badge beside the title already says.
+      const off = await screen.findByRole("button", { name: "Cancelled" });
+      expect(off).toHaveAttribute("aria-disabled", "true");
       expect(screen.queryByRole("link", { name: /enter/i })).not.toBeInTheDocument();
-      expect(screen.getByText("Cancelled")).toHaveAttribute("data-status", "Cancelled");
+      expect(screen.getByText("Cancelled", { selector: "[data-status]" })).toHaveAttribute(
+        "data-status",
+        "Cancelled",
+      );
     });
 
     it("says nothing about refunds where there is no way in", async () => {

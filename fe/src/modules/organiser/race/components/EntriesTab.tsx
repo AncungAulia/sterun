@@ -85,7 +85,7 @@ export function EntriesTab({ summary }: { summary: EventSummary }) {
       <div
         role="status"
         aria-label="Loading entries"
-        className="h-80 animate-pulse rounded-lg bg-n-100"
+        className="h-80 skeleton rounded-lg"
       />
     );
   }

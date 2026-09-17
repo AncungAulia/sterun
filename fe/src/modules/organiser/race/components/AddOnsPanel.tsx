@@ -27,7 +27,7 @@ export function AddOnsPanel({
         <div
           role="status"
           aria-label="Loading add-ons"
-          className="h-32 animate-pulse rounded-md bg-n-100"
+          className="h-32 skeleton rounded-md"
         />
       ) : addOns.length === 0 ? (
         <p className="grid min-h-32 place-items-center text-sm text-n-500">No add-ons</p>
@@ -51,7 +51,7 @@ export function AddOnsPanel({
                     {addOn.reservedCount} / {addOn.quota}
                   </span>
                 </div>
-                <div aria-hidden className="h-2 overflow-hidden rounded-full bg-n-100">
+                <div aria-hidden className="h-2 overflow-hidden rounded-full">
                   <div
                     className={
                       soldOut ? "h-full rounded-full bg-warning" : "h-full rounded-full bg-teal"
