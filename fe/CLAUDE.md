@@ -802,6 +802,34 @@ P1 to P12 from `docs/design/profile/`. What is settled:
   Close), and stay put only when the check could not be asked. "Use the receipt code saved on this
   device" appears when `lib/entry-store.ts` holds the entry, and fills on a press.
 
+### Loading, back, titles and installing (2026-09-17)
+
+Four conventions that apply to every screen, all from Ancung looking at the app:
+
+- **A skeleton is the `.skeleton` class** (`app/globals.css`), never
+  `animate-pulse`. It shimmers a highlight across a block whose opacity does not
+  change; the element keeps its own size and radius, and reduced motion leaves
+  it still. One class rather than utilities per shape, so two skeletons on one
+  page can never drift out of step. The directory's skeleton draws the featured
+  row too, in the three-race shape, so the page settles upward when the races
+  land instead of growing a block on top of what is being read.
+- **One-crumb breadcrumbs are back buttons** (`components/layout/BackLink.tsx`).
+  A link rather than `history.back()`: a page opened from a shared message has
+  no history, the destination is always known, and middle-click still works.
+- **Every route sets its own `title`.** The root layout holds the
+  `%s · Sterun` template; a route exports `metadata` with a plain title.
+  `/events/[eventId]` is the one exception: `generateMetadata` reads the race's
+  name from the chain, with a 2.5s timeout and "Race" as the fallback, because
+  it is the page people send each other. Nothing else reads the chain to render
+  a title.
+- **Installing is offered on the two offline screens only**
+  (`components/layout/InstallApp.tsx`, on the pass and the scanner's list). The
+  button appears only where `beforeinstallprompt` fired, iOS gets the sentence
+  about Safari's Share sheet, and an installed copy gets nothing. Manifest icons
+  are 192 and 512, `any` and `maskable`, rendered from the logo SVG: a maskable
+  icon is a full bleed of paper with the mark at 62%, so a launcher's crop eats
+  only background.
+
 ## Tests
 
 ```bash
