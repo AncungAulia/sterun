@@ -148,6 +148,13 @@ jobs:
           pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.device.json
           pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.stage.json
 
+      # 14ef24a: a device process that died left its calls unsettled, node exited
+      # 0 mid-step, and run.sh reported a pass for a rehearsal that stopped. A
+      # verification tool that can pass while broken is the worst bug it can
+      # have, so that property is pinned with real child processes, offline.
+      - name: Test the rehearsal harness (a crashed device fails its step)
+        run: pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts
+
       - name: Build
         run: pnpm build
 

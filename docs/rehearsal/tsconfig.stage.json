@@ -8,6 +8,6 @@
     },
     "typeRoots": ["../../be/node_modules/@types"]
   },
-  "include": ["src/mock-race.ts", "src/evidence.ts"],
+  "include": ["src/mock-race.ts", "src/evidence.ts", "src/device-process.ts", "test/**/*.ts"],
   "exclude": []
 }
