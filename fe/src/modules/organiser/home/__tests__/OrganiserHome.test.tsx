@@ -298,7 +298,7 @@ describe("OrganiserHome", () => {
 
       renderHome();
 
-      const create = await screen.findByRole("link", { name: "Create event" });
+      const create = await screen.findByRole("link", { name: "Create race" });
       expect(create).toHaveAttribute("href", "/org/new");
     });
   });
@@ -368,7 +368,7 @@ describe("OrganiserHome", () => {
       expect(screen.queryByText(/may be missing from this list/i)).not.toBeInTheDocument();
     });
 
-    it("does not offer Create event before the allowlist has answered", async () => {
+    it("does not offer Create race before the allowlist has answered", async () => {
       // Drawing the button and then taking it away is worse than a moment
       // without it.
       const pending = deferred();
@@ -378,12 +378,12 @@ describe("OrganiserHome", () => {
       renderHome();
 
       await screen.findByText("Jakarta Marathon 0");
-      expect(screen.queryByRole("link", { name: "Create event" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Create race" })).not.toBeInTheDocument();
       await pending.settle(true);
-      expect(await screen.findByRole("link", { name: "Create event" })).toBeInTheDocument();
+      expect(await screen.findByRole("link", { name: "Create race" })).toBeInTheDocument();
     });
 
-    it("still offers Create event when the allowlist cannot be asked", async () => {
+    it("still offers Create race when the allowlist cannot be asked", async () => {
       // A node that failed to answer is not a refusal. The wizard lets the
       // wallet through on the same terms, and the contract still refuses on its
       // own before anything is signed.
@@ -392,7 +392,7 @@ describe("OrganiserHome", () => {
 
       renderHome();
 
-      expect(await screen.findByRole("link", { name: "Create event" })).toBeInTheDocument();
+      expect(await screen.findByRole("link", { name: "Create race" })).toBeInTheDocument();
     });
   });
 
@@ -460,7 +460,7 @@ describe("OrganiserHome", () => {
       expect(await screen.findByText(/cannot publish new races/i)).toBeInTheDocument();
       expect(screen.getByText(ORGANISER)).toBeInTheDocument();
       expect(screen.getByText("Jakarta Marathon 0")).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "Create event" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Create race" })).not.toBeInTheDocument();
     });
 
     it("reports a failed read as an error with a way out, never as no races", async () => {

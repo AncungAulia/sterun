@@ -242,14 +242,14 @@ async function fillAddOn(
 }
 
 /**
- * Press Create event and confirm in the dialog.
+ * Press Create race and confirm in the dialog.
  *
  * The dialog is the whole point of the second press: it is where the number of
  * wallet prompts is stated, and a run this irreversible should not start on one
  * click at the bottom of a long page.
  */
 async function startRun(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "Create event" }));
+  await user.click(screen.getByRole("button", { name: "Create race" }));
   await user.click(await screen.findByRole("button", { name: "Start" }));
 }
 
@@ -298,7 +298,7 @@ describe("CreateEvent", () => {
       // has to be read, and a block on a long page is read by nobody.
       expect(screen.queryByText(/ask you 4 times/i)).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await user.click(screen.getByRole("button", { name: "Create race" }));
 
       expect(await screen.findByText(/ask you 4 times/i)).toBeInTheDocument();
       expect(screen.getByText("Publish the event details")).toBeInTheDocument();
@@ -316,12 +316,12 @@ describe("CreateEvent", () => {
       const { user } = await renderForm();
       await reachReview(user);
 
-      await user.click(screen.getByRole("button", { name: "Create event" }));
+      await user.click(screen.getByRole("button", { name: "Create race" }));
       await user.click(await screen.findByRole("button", { name: /not yet/i }));
 
       expect(uploadEventFile).not.toHaveBeenCalled();
       expect(createEvent).not.toHaveBeenCalled();
-      expect(screen.getByRole("button", { name: "Create event" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Create race" })).toBeInTheDocument();
     });
 
     it("walks the whole run from one press, and ends with an open event", async () => {
@@ -551,7 +551,7 @@ describe("CreateEvent", () => {
 
       await openPreviewTab(user, "Race pack");
 
-      const preview = screen.getByRole("region", { name: /preview of your event page/i });
+      const preview = screen.getByRole("region", { name: /preview of your race page/i });
       expect(within(preview).getByText("Event jersey")).toBeInTheDocument();
 
       // Which distances it belongs to is the whole model: an add-on is not a
@@ -668,7 +668,7 @@ describe("CreateEvent", () => {
 
       await user.click(screen.getByRole("tab", { name: "Race pack" }));
       expect(screen.getByText(/has not published a race pack/i)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Create event" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Create race" })).toBeInTheDocument();
     });
 
     it("shows an item sold on top at the price it will be sold for", async () => {
@@ -692,7 +692,7 @@ describe("CreateEvent", () => {
       const { user } = await renderForm();
       await reachReview(user);
 
-      const preview = screen.getByRole("region", { name: /preview of your event page/i });
+      const preview = screen.getByRole("region", { name: /preview of your race page/i });
       expect(within(preview).getByRole("heading", { name: "Jakarta Sunrise 10K" })).toBeInTheDocument();
       expect(within(preview).getByText("Two laps of the park.")).toBeInTheDocument();
 
@@ -719,7 +719,7 @@ describe("CreateEvent", () => {
       // everything typed so far.
       const { user } = await renderForm();
       await reachReview(user);
-      const preview = screen.getByRole("region", { name: /preview of your event page/i });
+      const preview = screen.getByRole("region", { name: /preview of your race page/i });
 
       expect(within(preview).queryByRole("button", { name: /enter/i })).not.toBeInTheDocument();
 

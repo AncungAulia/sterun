@@ -40,6 +40,27 @@ import { EXPLORER_BASE } from "@/lib/chain/env";
 import { formatPrice, shortAddress } from "@/utils/format";
 import type { SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
+/**
+ * A cancelled race, where the way in would be (Ancung, 2026-09-17).
+ *
+ * A disabled button rather than the red panel this used to draw: the panel was
+ * the loudest thing on a page that already says Cancelled in the status badge
+ * beside the title, so the card shouted the same word twice. Off and labelled
+ * is enough to stop the press, and it keeps the card the shape every other
+ * status leaves it.
+ *
+ * `aria-disabled` rather than `disabled`: a disabled button is skipped by the
+ * keyboard entirely, so a screen reader user tabbing the card would never hear
+ * that the race is cancelled at all. `pointer-events-none` does the refusing.
+ */
+function CancelledButton() {
+  return (
+    <Button aria-disabled className="pointer-events-none w-full opacity-60 sm:w-auto">
+      Cancelled
+    </Button>
+  );
+}
+
 /** What the status means for entering, in the words a runner needs. */
 const CLOSED_REASON: Record<string, string> = {
   Draft: "The organiser has not opened this race yet.",
@@ -137,14 +158,7 @@ export function EntryCard({
       {myEntry ? (
         <div className="mt-auto flex flex-col gap-3">
           {/* A cancelled race is still the most important fact, entry or not. */}
-          {event.status === "Cancelled" ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-base text-danger"
-            >
-              {CLOSED_REASON.Cancelled}
-            </p>
-          ) : null}
+          {event.status === "Cancelled" ? <CancelledButton /> : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button asChild className="sm:flex-1">
               <Link href={`/events/${event.eventId}/entered/${myEntry.tokenId}`}>View my entry</Link>
@@ -162,20 +176,12 @@ export function EntryCard({
             </Button>
           </div>
         ) : null
+      ) : event.status === "Cancelled" ? (
+        <div className="mt-auto">
+          <CancelledButton />
+        </div>
       ) : (
-        /*
-          A cancelled race is not a disabled button. It is the most important
-          fact on the page, and the pair a runner must not confuse is Closed
-          against Cancelled: one of them still has a race at the end of it.
-        */
-        <p
-          role={event.status === "Cancelled" ? "alert" : undefined}
-          className={
-            event.status === "Cancelled"
-              ? "mt-auto rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-base text-danger"
-              : "mt-auto text-base text-n-600"
-          }
-        >
+        <p className="mt-auto text-base text-n-600">
           {CLOSED_REASON[event.status] ?? "This race is not taking entries."}
         </p>
       )}

@@ -27,7 +27,7 @@
  *
  * The list used to sit in a panel on the page, where it was one more block to
  * scroll past. It is the single thing here that must be read before anything
- * irreversible happens, so it interrupts instead: Create event opens a dialog,
+ * irreversible happens, so it interrupts instead: Create race opens a dialog,
  * the dialog says how many prompts are coming and what each is, and starting is
  * a second deliberate press.
  *
@@ -106,7 +106,7 @@ export function StepReview({
 
       {preview ? (
         <section
-          aria-label="Preview of your event page"
+          aria-label="Preview of your race page"
           className="flex flex-col gap-8 rounded-xl border border-dashed border-n-300 bg-background p-4 sm:p-6"
         >
           <p className="text-sm text-n-500">
@@ -202,7 +202,7 @@ function RunDialog({
         setRequested(next);
       }}
     >
-      <Button onClick={() => setRequested(true)}>{started ? "Carry on" : "Create event"}</Button>
+      <Button onClick={() => setRequested(true)}>{started ? "Carry on" : "Create race"}</Button>
       <DialogContent
         className="max-h-[85vh] overflow-y-auto"
         onInteractOutside={(event) => {
