@@ -149,14 +149,18 @@ What holds it together, each guarded by a test that fails without it:
 - **No cap in the contract.** The network's per-transaction limits bound a batch. An empty batch
   records nothing and succeeds.
 
-**The largest batch is 46 rows**, measured with both contracts deployed from wasm under the mainnet
-limits `Env::default()` enforces, with every row timed (the largest event). Per row: one record
-written, one more footprint entry read, 136 event bytes. The footprint limit binds first:
-`2n + 8` entries against 100. The written-entries limit alone would allow 49, which a first
-measurement concluded before it looked at the footprint.
-`the_largest_batch_fits_the_mainnet_limits` and `one_row_more_exceeds_the_mainnet_limits` pin it, and
-`RECORD_RESULTS_MAX_BATCH` in the SDK is the same number. Testnet allows 200 written entries; the mainnet
-figure is the one clients use, because a console that batches more on testnet breaks on mainnet.
+**The largest batch is 120 rows**, measured with both contracts deployed from wasm and every row
+timed (the largest event, 136 bytes), against the per-transaction limits **live on testnet and mainnet
+alike** on 2026-09-17 (`stellar network settings`): 16,384 contract-event bytes, 200 written entries,
+400 footprint entries, 400 M instructions. Events bind first: 120 rows is 16,320 bytes, 121 is 16,456.
+`the_largest_batch_fits_the_network_limits` and `one_row_more_exceeds_the_event_size_limit` pin it,
+the testnet e2e confirms 120 and 121 against the network's own simulation, and
+`RECORD_RESULTS_MAX_BATCH` in the SDK is the same number.
+
+**Do not measure against `InvocationResourceLimits::mainnet()`.** soroban-sdk 26's constants (50
+written, 100 footprint entries) are older than the network's, and a first measurement against them
+concluded 46. The testutils' footprint count also runs higher than the network's simulation. If the
+network's limits change, measure again with the new settings; do not scale the number.
 
 ## Error codes — band `100..=199`, never renumbered
 
