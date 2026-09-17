@@ -1,6 +1,6 @@
-# INTERFACE — the FROZEN Sterun contracts (v2.4.0)
+# INTERFACE — the FROZEN Sterun contracts (v2.5.0)
 
-> **Status: FROZEN 2026-09-15 (v2.4 — an organiser can raise a sold-out quota).**
+> **Status: FROZEN 2026-09-17 (v2.5 — entries close on their own at the registration close date).**
 > This document is handoff contract number 1 in `docs/SYSTEM_DESIGN.md` §9: the function
 > signatures and `#[contractevent]` layouts that **James** (backend/indexer) and **Ancung**
 > (web app, QR pass, scanner PWA) hold, so they can work in parallel without waiting for
@@ -9,6 +9,39 @@
 > Any change to a signature, an event layout, or an error code after this PR is merged requires:
 > **a new PR + approval from Axel (PM) + fable**, an entry in `docs/specs/CHANGELOG.md`, and
 > **regenerated TS bindings** (STE-14). Error codes are public ABI — **never renumber them**.
+
+## What changed from v2.4.0 (MINOR, additive)
+
+STE-46, as decided in STE-45. An organiser writes a registration close date into the event document
+and runners read it on the race page, but until v2.5 the contract enforced nothing of it: entries
+stayed open until somebody pressed Close entries, so one forgotten click made the race page false.
+
+| Change | Impact on clients |
+| --- | --- |
+| `set_registration_closes(event_id, closes_at)` new in C1 | additive |
+| `get_registration_closes(event_id)` new in C1 | additive |
+| New event: `RegistrationClosesSet` | additive — an indexer that does not know it does not show close dates |
+| New error code: `RegistrationClosed(20)`, from `reserve_slot` and `reserve_addon` | **read this** — `RaceRecord.enter` propagates it |
+| No changed signature, no changed event layout; one storage key appended | — |
+| Installed by `upgrade` at the **same** address (`CAPB6NQP…`) | no new address; existing events intact |
+
+Four things you must read before using this version:
+
+- **`enter` can now revert `RegistrationClosed(20)` on an event whose status is still `Open`.** The
+  date is checked after the status, so a `Closed` event still answers `EventNotOpen(4)` whether or not
+  its date has passed. Show them differently: one is a state the organiser chose, the other a date
+  that passed.
+- **No date means no automatic close.** Every event created before v2.5 has none and behaves exactly
+  as before; nothing was migrated. `get_registration_closes` answers `None` for those.
+- **The date moves either way, and a later date is the only thing that reopens after it.** Moving the
+  status back to `Open` past the date reopens nothing. A date in the past closes entries at once.
+  There is no way to remove a date once set.
+- **The chain cannot tell you whether anyone was told.** The document's date is frozen by its hash
+  and stays what runners were promised; the on-chain date is what is enforced now. An extension is a
+  real change to that promise, so the console pairs a later date with a signed announcement (STE-40).
+  That is an **application-level** rule, and no client should be written as though the chain checks
+  it. `RegistrationClosesSet` carries `previous` and `current`, so an extension is visible from the
+  event alone.
 
 ## What changed from v2.3.0 (MINOR, additive)
 
@@ -193,13 +226,13 @@ The artefacts used for this freeze:
 
 | Contract | Wasm | Wasm hash (sha256) | Size |
 | --- | --- | --- | ---: |
-| EventRegistry (C1, v2.4) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | 31,770 B |
+| EventRegistry (C1, v2.5) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` | 35,814 B |
 | RaceRecord (C2, v2.2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
 
 Each version moves exactly one of the two. EventRegistry did **not** change in v2.2 (its v2.1 hash
 stood, and its address was not `upgrade`d); RaceRecord does **not** change in v2.3 — `bib_no` carries
 a different number, but no C2 code produced it, so its hash is exactly the one frozen at v2.2 — and
-it does not change in v2.4 either, which touches C1 alone.
+it does not change in v2.4 or v2.5 either, which touch C1 alone.
 
 > RaceRecord's `bib_no` field still carries the doc comment "the category sequence handed out by
 > `EventRegistry::reserve_slot`", which v2.3 makes wrong. Doc comments travel in the contract spec
@@ -215,15 +248,17 @@ its transactions are in `docs/deployments.md`):
 | EventRegistry v2.0.0/v2.0.1 | `22bb432ecfd5480a7dbfe68949df2aa6ccd9c87c21db2b7ec9dd19bf6d032a2f` | 22,952 B |
 | EventRegistry v2.1.0/v2.2.0 | `cf0090331f199766af56c243a9de22c0581ea030b02940695851d64231fec3c0` | 26,948 B |
 | EventRegistry v2.3.0 | `c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd` | 28,794 B |
+| EventRegistry v2.4.0 | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | 31,770 B |
 | RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21,795 B |
 | RaceRecord v2.0.1/v2.1.0 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
 
-Four of those artefacts are also **committed**, each as the "before" of an upgrade test that
+Five of those artefacts are also **committed**, each as the "before" of an upgrade test that
 deploys the genuinely live code, writes state with it, then replaces it with the current build:
-`22bb432e…`, `cf009033…` and `c8b5e82a…` in `sc/contracts/event_registry/testdata/` (the first
-proves `DataKey::Organiser` was added safely, the second that the per-distance bibs already on chain
-still decode once bibs become event-wide, the third that a sold-out category written by the running
-code takes a larger quota and sells again) and `27749180…` in
+`22bb432e…`, `cf009033…`, `c8b5e82a…` and `33b5e687…` in `sc/contracts/event_registry/testdata/`
+(the first proves `DataKey::Organiser` was added safely, the second that the per-distance bibs
+already on chain still decode once bibs become event-wide, the third that a sold-out category written
+by the running code takes a larger quota and sells again, the fourth that an event the running code
+opened takes a close date and stops at it while an event with none runs as before) and `27749180…` in
 `sc/contracts/race_record/testdata/` (proves every record state the old code could write still
 decodes, and that `record_finish_untimed` works on records it minted).
 
@@ -236,7 +271,7 @@ Stellar CLI:
 
 ```bash
 shasum -a 256 sc/target/wasm32v1-none/release/event_registry.wasm
-# 33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890
+# 995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942
 ```
 
 The toolchain that produced them: `rustc 1.93.0`, `stellar 27.0.0`, `soroban-sdk =26.1.1`,
@@ -270,12 +305,13 @@ Every `Result<T, Error>` means: on success it returns `T`, on failure it **rever
 | `create_event` | `organiser: Address, name: String, metadata_hash: BytesN<32>, uri: String, starts_at: u64` | `Result<u32, Error>` (event_id) | the **`organiser`** (the argument), which must be on the admin's allowlist | `NotInitialized(1)`, `NotAllowlistedOrganiser(18)` |
 | `add_category` | `event_id: u32, code: Symbol, distance_m: u32, quota: u32, price_usdc: i128` | `Result<u32, Error>` (category_id) | **that event's organiser** (from storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)`, `InvalidDistance(10)` |
 | `increase_quota` | `event_id: u32, category_id: u32, new_quota: u32` | `Result<(), Error>` | **that event's organiser** (from storage) | `EventNotFound(2)`, `CategoryNotFound(3)`, `QuotaNotIncreased(19)` |
+| `set_registration_closes` | `event_id: u32, closes_at: u64` | `Result<(), Error>` | **that event's organiser** (from storage) | `EventNotFound(2)` |
 | `add_addon` | `event_id: u32, code: Symbol, price_usdc: i128, quota: u32` | `Result<u32, Error>` (addon_id) | **that event's organiser** (from storage) | `EventNotFound(2)`, `InvalidQuota(8)`, `InvalidPrice(9)` |
 | `set_event_status` | `event_id: u32, status: EventStatus` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `InvalidStatus(11)` |
 | `add_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `ScannerAlreadyAdded(12)` |
 | `remove_scanner` | `event_id: u32, scanner: Address` | `Result<(), Error>` | **that event's organiser** | `EventNotFound(2)`, `ScannerNotFound(13)` |
-| `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (the bib: unique in the event, from 1) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
-| `reserve_addon` | `event_id: u32, addon_id: u32` | `Result<i128, Error>` (the price charged) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `AddOnNotFound(14)`, `AddOnQuotaFull(15)` |
+| `reserve_slot` | `event_id: u32, category_id: u32` | `Result<u32, Error>` (the bib: unique in the event, from 1) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `RegistrationClosed(20)`, `CategoryNotFound(3)`, `QuotaFull(5)` |
+| `reserve_addon` | `event_id: u32, addon_id: u32` | `Result<i128, Error>` (the price charged) | **only the wired RaceRecord contract** (invoker-contract auth) | `RaceRecordNotSet(6)`, `EventNotFound(2)`, `EventNotOpen(4)`, `RegistrationClosed(20)`, `AddOnNotFound(14)`, `AddOnQuotaFull(15)` |
 | `get_admin` | — | `Result<Address, Error>` | — (view) | `NotInitialized(1)` |
 | `get_race_record` | — | `Result<Address, Error>` | — (view) | `RaceRecordNotSet(6)` |
 | `get_event` | `event_id: u32` | `Result<EventData, Error>` | — (view) | `EventNotFound(2)` |
@@ -287,6 +323,7 @@ Every `Result<T, Error>` means: on success it returns `T`, on failure it **rever
 | `category_count` | `event_id: u32` | `u32` | — (view) | **never reverts** (`0` when there are none) |
 | `get_addon` | `event_id: u32, addon_id: u32` | `Result<AddOnData, Error>` | — (view) | `AddOnNotFound(14)` |
 | `addon_count` | `event_id: u32` | `u32` | — (view) | **never reverts** (`0` when there are none) |
+| `get_registration_closes` | `event_id: u32` | `Result<Option<u64>, Error>` (unix seconds; `None` = closes manually only) | — (view) | `EventNotFound(2)` |
 
 Important notes for D2/D3:
 
@@ -349,6 +386,19 @@ Important notes for D2/D3:
 - **`increase_quota` has no status gate**, on purpose. A `Closed` event is exactly where the
   second-batch flow puts it — lift the cap, then re-open — and on a `Cancelled` or `Completed` event
   the larger number sells nothing, because `reserve_slot` requires `Open`.
+- **A registration close date is enforced by the ledger clock** (v2.5). From `closes_at` on —
+  `env.ledger().timestamp() >= closes_at`, unix seconds — `reserve_slot` and `reserve_addon` revert
+  `RegistrationClosed(20)`, so `RaceRecord.enter` does too. The status is checked **first**: a
+  `Closed` event answers `EventNotOpen(4)` whatever its date. An event with no date is never refused
+  by this rule, which is every event created before v2.5.
+- **`set_registration_closes` moves the date either way** (v2.5). Earlier is closing early; a past
+  date closes at once; later is an extension, and also the only way to reopen after the date — a
+  status change alone does not. Setting the date the event already has changes nothing and emits
+  nothing. There is no status gate (on a terminal event the date sells nothing either way) and no way
+  to remove a date once set. The console pairs a later date with a signed announcement (STE-40); the
+  contract does not check that, and no client should be written as though it does.
+- **`get_registration_closes` reverts `EventNotFound(2)` for an unknown event** rather than answering
+  `None`, which would read as "this race closes manually".
 - **`upgrade` replaces this contract's wasm in place.** The address, storage and balances do not
   change; only the code does. It takes effect **after** the invocation finishes, so a storage
   migration needs a second call. The hash must already be uploaded to the ledger. See §4.
@@ -418,6 +468,7 @@ alphabetically**, not in declaration order), and an **empty** `ScMap` when every
 | `EventCreated` | `"event_created"`, `event_id: u32`, `organiser: Address` | *(none)* |
 | `CategoryAdded` | `"category_added"`, `event_id: u32` | `category_id: u32`, `price: i128`, `quota: u32` |
 | `QuotaIncreased` | `"quota_increased"`, `event_id: u32`, `category_id: u32` | `current: u32`, `previous: u32` |
+| `RegistrationClosesSet` | `"registration_closes_set"`, `event_id: u32` | `current: u64`, `previous: Option<u64>` |
 | `AddOnAdded` | `"add_on_added"`, `event_id: u32` | `addon_id: u32`, `price: i128`, `quota: u32` |
 | `EventStatusChanged` | `"event_status_changed"`, `event_id: u32` | `status: EventStatus` |
 | `ScannerAdded` | `"scanner_added"`, `event_id: u32`, `scanner: Address` | *(none)* |
@@ -457,6 +508,11 @@ would leave a consumer diffing against its own last read, which reports what the
 than what the chain did. Note the alphabetical data order, `current` before `previous`, which is the
 `ScMap` wire order and not the declaration order.
 
+`RegistrationClosesSet` carries both dates for the same reason as `QuotaIncreased`: "entries were
+extended from the 20th to the 27th" is a dated fact, and a consumer should not diff against its own
+last read to state it. `previous` is `None` (`ScVal::Void`) the first time a date is set. Setting the
+date the event already has emits nothing, so every `RegistrationClosesSet` is a real move.
+
 `OrganiserAdded` / `OrganiserRemoved` deliberately do **not** carry an `event_id`: the allowlist is
 contract-wide, and the grant happens before its recipient has an event to name. An indexer wanting to
 show "who may create events" filters on these two topic names alone.
@@ -489,6 +545,7 @@ that nobody has to guess.
 | 17 | `OrganiserNotFound` | `remove_organiser` for an address that is not on the allowlist |
 | 18 | `NotAllowlistedOrganiser` | `create_event` from an address the admin has not allowlisted |
 | 19 | `QuotaNotIncreased` | `increase_quota` with a `new_quota` that is not strictly greater than the category's current `quota` |
+| 20 | `RegistrationClosed` | `reserve_slot` / `reserve_addon` (and so `RaceRecord.enter`) at or after the event's registration close date, on an event that is otherwise `Open` |
 
 ---
 
@@ -784,6 +841,7 @@ changes, no regenerated bindings.
 | STE-33 | Testnet deploy | wasm hashes + constructor parameters (§0, §5) |
 | STE-35 | Paid add-ons (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
 | STE-41 | Untimed finish | `record_finish_untimed`, `RecordFinishedUntimed`, and `finish_time_s == None` on a `Finished` record — consumed by the `be/` indexer + CSV (James) and the `fe/` profile (Ancung) |
+| STE-46 | Registration closes on its own | `set_registration_closes`, `get_registration_closes`, `RegistrationClosesSet`, `RegistrationClosed(20)` — consumed by the `be/` indexer and the SDK (James) and the `fe/` wizard, console header and "Reopen and extend" flow, which must pair a later date with a signed announcement (Ancung) |
 | STE-55 | Raising a sold-out quota | `increase_quota`, `QuotaIncreased`, `QuotaNotIncreased(19)` — consumed by the `be/` indexer (James) and the `fe/` console's "add capacity" flow, which must pair it with a signed announcement (Ancung) |
 
 ---
