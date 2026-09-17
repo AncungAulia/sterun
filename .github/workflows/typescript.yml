@@ -1,4 +1,5 @@
-# STE-6 (infra) — CI for the TypeScript side: be/, sdk/, fe/, landing-page/.
+# STE-6 (infra) — CI for the TypeScript side: be/, sdk/, fe/, landing-page/,
+# and the STE-25 rehearsal harness in docs/rehearsal/.
 #
 # Companion to contracts.yml, which owns everything under sc/. Split rather
 # than merged because the two have nothing in common: different toolchains,
@@ -34,6 +35,10 @@ on:
       - "pnpm-workspace.yaml"
       - "docs/deployments.md"
       - "docs/specs/vectors/**"
+      # The STE-25 rehearsal harness imports fe/src and be/src directly. It is
+      # typechecked below; without it here, a change to the harness alone would
+      # never run that check.
+      - "docs/rehearsal/**"
       # The deployment files are validated by this job too — see the step at the
       # bottom, and the bug that put it there.
       - "compose*.yml"
@@ -131,6 +136,17 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # STE-25. docs/rehearsal is not a workspace member, so `pnpm typecheck`
+      # never sees it, and run.sh bundles it with esbuild, which checks no
+      # types. STE-62 renamed a dependency of the scanner's sendClaims; fe/ was
+      # updated, the harness was not, and the mismatch only surfaced mid-run as
+      # "deps.recordOf is not a function", failing 17 steps. This reports it as
+      # TS2353 instead. Run with fe's tsc, against fe's compiler settings.
+      - name: Typecheck the rehearsal harness (docs/rehearsal)
+        run: |
+          pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.device.json
+          pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.stage.json
 
       - name: Build
         run: pnpm build
