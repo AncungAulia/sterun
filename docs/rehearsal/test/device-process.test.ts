@@ -41,3 +41,9 @@ test("a device that dies while a call is waiting fails that call", async () => {
   const device = new Device("desk-B", fixture("device.mjs"));
   await assert.rejects(settlesWithin(device.call("crash")), /desk-B crash: desk-B process exited \(code 3/);
 });
+
+test("a device that died between steps fails the next call", async () => {
+  const device = new Device("phones", fixture("device.mjs"));
+  await assert.rejects(settlesWithin(device.call("crash")), /process exited/);
+  await assert.rejects(settlesWithin(device.call("echo", { value: 1 })), /phones echo: phones process exited \(code 3/);
+});
