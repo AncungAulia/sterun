@@ -231,7 +231,7 @@ describe("organiser flow maps onto EventRegistry", () => {
     await expect(client.recordResults(3, [])).rejects.toThrow(/at least one result/);
     await expect(
       client.recordResults(3, Array.from({ length: RECORD_RESULTS_MAX_BATCH + 1 }, (_, i) => timed(i))),
-    ).rejects.toThrow(/at most 46 results per call, got 47/);
+    ).rejects.toThrow(/at most 120 results per call, got 121/);
     await expect(client.recordResults(3, [timed(1), { tokenId: 1, kind: "dnf" }])).rejects.toThrow(/listed twice/);
     for (const finishTimeS of [0, -1, 1.5, 2 ** 32]) {
       await expect(
@@ -256,15 +256,15 @@ describe("organiser flow maps onto EventRegistry", () => {
     });
   });
 
-  it("chunkResults splits a finish list into ordered batches of at most 46", () => {
-    const list = Array.from({ length: 100 }, (_, i) => i);
+  it("chunkResults splits a finish list into ordered batches of at most 120", () => {
+    const list = Array.from({ length: 312 }, (_, i) => i);
     const batches = chunkResults(list);
-    expect(batches.map((b) => b.length)).toEqual([46, 46, 8]);
+    expect(batches.map((b) => b.length)).toEqual([120, 120, 72]);
     expect(batches.flat()).toEqual(list);
     expect(chunkResults([], 10)).toEqual([]);
-    expect(chunkResults(list, 30).map((b) => b.length)).toEqual([30, 30, 30, 10]);
-    expect(() => chunkResults(list, 47)).toThrow(/from 1 to 46/);
-    expect(() => chunkResults(list, 0)).toThrow(/from 1 to 46/);
+    expect(chunkResults(list.slice(0, 100), 30).map((b) => b.length)).toEqual([30, 30, 30, 10]);
+    expect(() => chunkResults(list, 121)).toThrow(/from 1 to 120/);
+    expect(() => chunkResults(list, 0)).toThrow(/from 1 to 120/);
   });
 
   it("setEventStatus sends the tagged enum the bindings expect", async () => {

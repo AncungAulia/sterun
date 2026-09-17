@@ -49,8 +49,9 @@ already in other people's hands.
   "untimed" }` or `{ tokenId, kind: "dnf" }`, the same `kind` words as the backend's results preview.
   **Atomic**: one invalid row reverts the batch. An empty list, more than `RECORD_RESULTS_MAX_BATCH`
   rows, a token listed twice, or a time outside 1..u32 is refused before signing.
-- **`RECORD_RESULTS_MAX_BATCH = 46`** and **`chunkResults(results, size?)`**. 46 is measured under the
-  mainnet limits, where the footprint limit binds; batch by it on every network.
+- **`RECORD_RESULTS_MAX_BATCH = 120`** and **`chunkResults(results, size?)`**. 120 is measured against
+  the per-transaction limits live on testnet and mainnet (identical on 2026-09-17): the 16,384 bytes
+  of contract events bind first, and the network's simulation refuses 121.
 - `ResultForAnotherEvent` (108) in the RaceRecord error table.
 
 **Needs the v2.5 EventRegistry and the v2.6 RaceRecord.** Against older contracts these methods fail
