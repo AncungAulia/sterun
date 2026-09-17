@@ -29,6 +29,8 @@ REGISTRY_FNS=(
   reserve_slot set_race_record get_race_record get_event get_organiser
   is_scanner event_count
   add_addon reserve_addon get_addon addon_count
+  add_organiser remove_organiser is_organiser increase_quota
+  set_registration_closes get_registration_closes
 )
 
 cd "${SC_DIR}"

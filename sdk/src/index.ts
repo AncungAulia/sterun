@@ -32,6 +32,9 @@ export {
   type AddCategoryArgs,
   type IncreaseQuotaArgs,
   type EnterArgs,
+  type SterunResult,
+  RECORD_RESULTS_MAX_BATCH,
+  chunkResults,
 } from "./client.js";
 
 export {

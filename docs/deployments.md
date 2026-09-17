@@ -1507,6 +1507,62 @@ error with no contract code, which is how every organiser-gated function behaves
 address, deploy the backend with migration 014, and record both here.
 
 ---
+
+## STE-60 — many results in one signature, end to end on a throwaway deployment (2026-09-17)
+
+**The live RaceRecord (`CCVW7WVC…`) was NOT upgraded.** v2.6 is a spec change stacked on v2.5, waiting
+for Axel and fable. `bash sc/scripts/throwaway-pair-testnet.sh e2e:record-results` deployed a
+throwaway pair from this branch's wasm with a Friendbot-funded throwaway admin, wired to the real sUSD
+SAC, and ran `be/scripts/e2e-record-results.ts` against it: 125 runners, 124 checked in by five desks.
+
+| | Address | wasm |
+| --- | --- | --- |
+| EventRegistry v2.5 (throwaway) | [`CAF3BDBJPS6KSJWBOWODUU2LF32OGPMKZVY7ET3MVQXQTZGI5ZDBGPRT`](https://stellar.expert/explorer/testnet/contract/CAF3BDBJPS6KSJWBOWODUU2LF32OGPMKZVY7ET3MVQXQTZGI5ZDBGPRT) | `995d19ea…` |
+| RaceRecord v2.6 (throwaway) | [`CDS5WN6ZW5N5Q327ZNZME2LV44P274KFFK4OFXPJEJCBSM7C57AOAXXD`](https://stellar.expert/explorer/testnet/contract/CDS5WN6ZW5N5Q327ZNZME2LV44P274KFFK4OFXPJEJCBSM7C57AOAXXD) | `081d6eee…` (the INTERFACE.md v2.6.0 hash) |
+
+```
+▸ One organiser, two races, five scanner desks, 125 runners
+  125 entered, 124 checked in; timed 0..120, untimed 121, DNF 122, no-show 123, other race 124
+▸ What the network's own simulation reports for 1 and 120 timed rows
+    1 rows simulate: footprint 5 read + 1 written, 1455536 instructions, 448 write bytes
+  120 rows simulate: footprint 5 read + 120 written, 41290463 instructions, 53760 write bytes
+▸ 121 timed rows, submitted anyway: the network refuses them and no record moves
+  FAILED on the ledger in 2ac3ddda058f0e8e43fb868b0dbfbd8df873ac3ec5ef85a99a5e2c6e848a7fc0 (resource); all 121 records still RacepackClaimed
+▸ Refused before signing: 121 rows
+  RangeError: at most 120 results per call
+▸ Refused whole: an unclaimed row, a row from another race, a stranger's signature
+  InvalidState (#103), ResultForAnotherEvent (#108), stranger refused; no record moved
+▸ 120 timed results in one transaction
+  tx 22f9c10d35c87f6d8d59e425dfc31649bb1287a0fc10bec627e02f1294d969e6 in ledger 4720867; all 120 Finished with their times
+▸ The events that transaction emitted, decoded by the indexer's own decoder
+  120 record_finished, in row order, each matching its row
+▸ A mixed batch: the last timed row, an untimed finish, a DNF after check-in, a no-show
+  Finished 5400 s; Finished with no time; Dnf (checked in); Dnf (never checked in)
+▸ A replay of a recorded batch is refused
+  InvalidState (#103): results are terminal
+✓ an organiser records a finish list 120 at a time, atomically, and the indexer reads what the chain emits
+```
+
+| Transaction | Rows | Result | Fee charged (Horizon) |
+| --- | ---: | --- | ---: |
+| [`22f9c10d…`](https://stellar.expert/explorer/testnet/tx/22f9c10d35c87f6d8d59e425dfc31649bb1287a0fc10bec627e02f1294d969e6) | 120 | success, ledger 4720867 | 2,198,128 stroops (0.22 XLM) |
+| [`2ac3ddda…`](https://stellar.expert/explorer/testnet/tx/2ac3ddda058f0e8e43fb868b0dbfbd8df873ac3ec5ef85a99a5e2c6e848a7fc0) | 121 | **failed on resources**, ledger 4720863 | 517,121 stroops |
+
+What only the real network could show:
+
+- **Simulation does not enforce the event-size limit.** 121 rows simulate cleanly; the limit bites when
+  the transaction is applied, where it failed and moved no record. So the maximum cannot be found by
+  simulating alone. It was confirmed by submitting.
+- **The network's footprint is `5 + n`**, smaller than the testutils count (`2n + 8`). A first
+  measurement against soroban-sdk's outdated mainnet constants concluded 46 from that count; this run
+  is what showed it wrong. The binding limit is contract-event bytes, at 120.
+- **One signature for 120 finishers cost 0.22 XLM.** The same list one call at a time is 120 organiser
+  approvals.
+
+**Still to do after approval:** upgrade `CCVW7WVC…` in place to `081d6eee…` (after STE-46's registry
+upgrade), prove it on the live address, and record it here.
+
+---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
 Run on **2026-09-05** with `pnpm --filter be e2e:results`. Not a simulation: the event was genuinely

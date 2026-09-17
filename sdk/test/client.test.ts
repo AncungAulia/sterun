@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 import type { Client as EventRegistryClient } from "../vendor-dist/event-registry.js";
 import type { Client as RaceRecordClient } from "../vendor-dist/race-record.js";
-import { SterunClient } from "../src/client.js";
+import { RECORD_RESULTS_MAX_BATCH, SterunClient, chunkResults } from "../src/client.js";
 import { SterunContractError } from "../src/errors.js";
 
 const HASH = "feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29";
@@ -201,6 +201,70 @@ describe("organiser flow maps onto EventRegistry", () => {
       source: "event-registry",
       method: "enter",
     });
+  });
+
+  it("recordResults sends each row as the tagged outcome the bindings expect (v2.6)", async () => {
+    const { client, registry, record } = clientWith({}, { record_results: good(ok(undefined)) });
+
+    await client.recordResults(3, [
+      { tokenId: 10, kind: "timed", finishTimeS: 3_161 },
+      { tokenId: 11, kind: "untimed" },
+      { tokenId: 12, kind: "dnf" },
+    ]);
+
+    expect(registry.calls).toHaveLength(0);
+    expect(record.calls[0]?.method).toBe("record_results");
+    expect(record.calls[0]?.args).toEqual({
+      event_id: 3,
+      results: [
+        { token_id: 10, outcome: { tag: "Timed", values: [3_161] } },
+        { token_id: 11, outcome: { tag: "Untimed", values: undefined } },
+        { token_id: 12, outcome: { tag: "Dnf", values: undefined } },
+      ],
+    });
+  });
+
+  it("recordResults refuses what the chain would refuse, before anything is signed", async () => {
+    const { client, record } = clientWith({}, { record_results: good(ok(undefined)) });
+    const timed = (tokenId: number) => ({ tokenId, kind: "timed" as const, finishTimeS: 3_000 });
+
+    await expect(client.recordResults(3, [])).rejects.toThrow(/at least one result/);
+    await expect(
+      client.recordResults(3, Array.from({ length: RECORD_RESULTS_MAX_BATCH + 1 }, (_, i) => timed(i))),
+    ).rejects.toThrow(/at most 120 results per call, got 121/);
+    await expect(client.recordResults(3, [timed(1), { tokenId: 1, kind: "dnf" }])).rejects.toThrow(/listed twice/);
+    for (const finishTimeS of [0, -1, 1.5, 2 ** 32]) {
+      await expect(
+        client.recordResults(3, [{ tokenId: 1, kind: "timed", finishTimeS }]),
+      ).rejects.toThrow(/finishTimeS must be whole seconds/);
+    }
+    expect(record.calls).toHaveLength(0);
+
+    // The boundaries themselves are legal.
+    await client.recordResults(3, Array.from({ length: RECORD_RESULTS_MAX_BATCH }, (_, i) => timed(i)));
+    await client.recordResults(3, [{ tokenId: 1, kind: "timed", finishTimeS: 2 ** 32 - 1 }]);
+    expect(record.calls).toHaveLength(2);
+  });
+
+  it("names ResultForAnotherEvent(108) from recordResults as a RaceRecord error", async () => {
+    const { client } = clientWith({}, { record_results: reverting(108) });
+    await expect(client.recordResults(3, [{ tokenId: 1, kind: "dnf" }])).rejects.toMatchObject({
+      variant: "ResultForAnotherEvent",
+      code: 108,
+      source: "race-record",
+      method: "recordResults",
+    });
+  });
+
+  it("chunkResults splits a finish list into ordered batches of at most 120", () => {
+    const list = Array.from({ length: 312 }, (_, i) => i);
+    const batches = chunkResults(list);
+    expect(batches.map((b) => b.length)).toEqual([120, 120, 72]);
+    expect(batches.flat()).toEqual(list);
+    expect(chunkResults([], 10)).toEqual([]);
+    expect(chunkResults(list.slice(0, 100), 30).map((b) => b.length)).toEqual([30, 30, 30, 10]);
+    expect(() => chunkResults(list, 121)).toThrow(/from 1 to 120/);
+    expect(() => chunkResults(list, 0)).toThrow(/from 1 to 120/);
   });
 
   it("setEventStatus sends the tagged enum the bindings expect", async () => {
