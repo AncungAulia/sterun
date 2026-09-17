@@ -91,7 +91,7 @@ const CONTRACT_MESSAGES: Partial<Record<`${ContractErrorSource}:${string}`, stri
     "This wallet cannot publish races yet. Send its address to the Sterun team to be added.",
   // STE-63: a retry cannot succeed for either of these, so neither may say "try again".
   "event-registry:QuotaNotIncreased":
-    "This distance already has that many places or more. Enter a higher number.",
+    "This distance already has that many entries or more. Enter a higher number.",
   "event-registry:InvalidStatus": "This race cannot be moved to that status any more.",
 };
 

@@ -545,9 +545,9 @@ knowing before adding a page there:
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
 - **The header's action is the status move** (`status-action.ts`): open, close or reopen
-  entries, always behind a dialog. **A race that can still take entries also gets Add places**
+  entries, always behind a dialog. **A race that can still take entries also gets Add entries**
   (STE-57), the one exception to one action: closing must stay reachable until entries close on
-  their own (STE-46), and adding places is the main button beside it. The dialog for opening states that a race which has opened never
+  their own (STE-46), and adding entries is the main button beside it. The dialog for opening states that a race which has opened never
   returns to not open. Completing and cancelling are not offered here.
 - **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
   (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
@@ -571,11 +571,11 @@ knowing before adding a page there:
 `lib/add-places-run.ts`), with the runner's side in `modules/event-detail/`. Mockup:
 `docs/superpowers/specs/2026-09-17-quota-increase-mockup.html`. What is settled:
 
-- **Add places is a menu of distances in the race header**, beside Close/Reopen entries, on an
+- **Add entries is a menu of distances in the race header**, beside Close/Reopen entries, on an
   `Open` or `Closed` race that has not run. One distance opens the dialog directly. Every distance
   is offered, not only a full one (Ancung, 2026-09-17).
 - **A raise is never sent without its announcement.** The contract cannot enforce the pairing, so
-  the dialog is one form: the new number, a sentence the page writes from the numbers ("Places for
+  the dialog is one form: the new number, a sentence the page writes from the numbers ("Entries for
   10K raised from 500 to 800."), which cannot be edited, and an optional note.
 - **Three steps, in this order:** sign the announcement (SEP-53), `increaseQuota`, then
   `POST /events/:id/announcements`. Signing first means a decline moves nothing. A raise that fails
@@ -585,8 +585,8 @@ knowing before adding a page there:
   server refuses a `published_at` more than ten minutes off.
 - **The plan is frozen at the press.** The race is refetched once the places land, and a plan
   still built from the live quota would rewrite the sentence as "800 to 800".
-- **Runners see two things**: a dated "Places raised from … to … on …" line per raise on the
-  distance card (`lib/event/quota-history.ts`, from `GET /events/:id`), and **Updates** under
+- **Runners see two things**: a dated "Entries raised from … to … on …" line per raise on the
+  distance card (`lib/event/quota-history.ts`, from `GET /events/:id`), and **Updates** above
   General information in Details. Both come from the backend and disappear, never error, when it
   is down.
 - **An announcement is verified on the page** (`isSignedByOrganiser`, `lib/event/announcements.ts`)

@@ -75,7 +75,7 @@ function renderIt(value: EventSummary) {
 }
 
 async function openFor(code: string) {
-  await userEvent.click(screen.getByRole("button", { name: "Add places" }));
+  await userEvent.click(screen.getByRole("button", { name: "Add entries" }));
   await userEvent.click(await screen.findByRole("menuitem", { name: new RegExp(`^${code}`) }));
   return screen.findByRole("dialog");
 }
@@ -93,7 +93,7 @@ describe("AddPlaces", () => {
   describe("where it is offered", () => {
     it("is a menu of distances, each saying how full it is", async () => {
       renderIt(summary("Open", TWO));
-      await userEvent.click(screen.getByRole("button", { name: "Add places" }));
+      await userEvent.click(screen.getByRole("button", { name: "Add entries" }));
 
       const menu = await screen.findByRole("menu");
       expect(within(menu).getByText("Which distance?")).toBeInTheDocument();
@@ -107,10 +107,10 @@ describe("AddPlaces", () => {
 
     it("opens the dialog straight away on a race with one distance", async () => {
       renderIt(summary("Closed", [category()]));
-      await userEvent.click(screen.getByRole("button", { name: "Add places" }));
+      await userEvent.click(screen.getByRole("button", { name: "Add entries" }));
 
       expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-      expect(await screen.findByRole("dialog")).toHaveTextContent("Add places to 10K");
+      expect(await screen.findByRole("dialog")).toHaveTextContent("Add entries to 10K");
     });
 
     it("is not offered on a draft, a race that has run, or a race with no distances", () => {
@@ -131,22 +131,22 @@ describe("AddPlaces", () => {
     it("writes the announcement from the numbers and refuses a number that is not higher", async () => {
       renderIt(summary("Open", TWO));
       const dialog = await openFor("10K");
-      const submit = within(dialog).getByRole("button", { name: "Add places and announce" });
+      const submit = within(dialog).getByRole("button", { name: "Add entries and announce" });
 
-      expect(dialog).toHaveTextContent("Places now500");
-      expect(within(dialog).getByRole("note")).toHaveTextContent("Places for 10K raised from 500 to ?");
+      expect(dialog).toHaveTextContent("Entries now500");
+      expect(within(dialog).getByRole("note")).toHaveTextContent("Entries for 10K raised from 500 to ?");
       expect(submit).toBeDisabled();
 
-      await userEvent.type(within(dialog).getByLabelText("New number of places"), "500");
+      await userEvent.type(within(dialog).getByLabelText("New number of entries"), "500");
       expect(within(dialog).getByRole("alert")).toHaveTextContent(
-        "Enter a number above 500. Places cannot go down or stay the same.",
+        "Enter a number above 500. Entries cannot go down or stay the same.",
       );
       expect(submit).toBeDisabled();
 
-      await userEvent.clear(within(dialog).getByLabelText("New number of places"));
-      await userEvent.type(within(dialog).getByLabelText("New number of places"), "800");
-      expect(within(dialog).getByRole("note")).toHaveTextContent("Places for 10K raised from 500 to 800.");
-      expect(dialog).toHaveTextContent("300 more places. Bib numbers carry on from the last one.");
+      await userEvent.clear(within(dialog).getByLabelText("New number of entries"));
+      await userEvent.type(within(dialog).getByLabelText("New number of entries"), "800");
+      expect(within(dialog).getByRole("note")).toHaveTextContent("Entries for 10K raised from 500 to 800.");
+      expect(dialog).toHaveTextContent("300 more entries. Bib numbers carry on from the last one.");
       expect(submit).toBeEnabled();
       expect(kit.signMessage).not.toHaveBeenCalled();
     });
@@ -156,12 +156,12 @@ describe("AddPlaces", () => {
     it("signs the sentence and the note, raises the quota, publishes, then says it is done", async () => {
       renderIt(summary("Open", TWO));
       const dialog = await openFor("10K");
-      await userEvent.type(within(dialog).getByLabelText("New number of places"), "800");
+      await userEvent.type(within(dialog).getByLabelText("New number of entries"), "800");
       await userEvent.type(within(dialog).getByLabelText("Add a note (optional)"), "Second batch.");
-      await userEvent.click(within(dialog).getByRole("button", { name: "Add places and announce" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add entries and announce" }));
 
-      expect(await screen.findByText("10K now has 800 places")).toBeInTheDocument();
-      const body = "Places for 10K raised from 500 to 800.\n\nSecond batch.";
+      expect(await screen.findByText("10K now has 800 entries")).toBeInTheDocument();
+      const body = "Entries for 10K raised from 500 to 800.\n\nSecond batch.";
       expect(kit.signMessage).toHaveBeenCalledWith(`SIGN:${body}`, { address: ORGANISER });
       expect(readClient.increaseQuota).toHaveBeenCalledWith(
         { eventId: 4, categoryId: 0, newQuota: 800 },
@@ -181,27 +181,27 @@ describe("AddPlaces", () => {
       kit.signMessage.mockRejectedValue(new Error("User declined the request"));
       renderIt(summary("Open", TWO));
       const dialog = await openFor("5K");
-      await userEvent.type(within(dialog).getByLabelText("New number of places"), "600");
-      await userEvent.click(within(dialog).getByRole("button", { name: "Add places and announce" }));
+      await userEvent.type(within(dialog).getByLabelText("New number of entries"), "600");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add entries and announce" }));
 
-      expect(await screen.findByText("Places not added")).toBeInTheDocument();
+      expect(await screen.findByText("Entries not added")).toBeInTheDocument();
       expect(screen.getByRole("alert")).toHaveTextContent("You declined this in your wallet. Nothing was sent.");
       expect(readClient.increaseQuota).not.toHaveBeenCalled();
 
       await userEvent.click(screen.getByRole("button", { name: "Back" }));
-      expect(screen.getByLabelText("New number of places")).toHaveValue("600");
+      expect(screen.getByLabelText("New number of entries")).toHaveValue("600");
     });
 
-    it("once the places landed, offers only Publish the announcement, and cannot be closed", async () => {
+    it("once the entries landed, offers only Publish the announcement, and cannot be closed", async () => {
       announcements.publishAnnouncement
         .mockRejectedValueOnce(new ApiError(0, "unreachable", "Could not reach our server. Check your signal and try again."))
         .mockResolvedValueOnce({});
       renderIt(summary("Open", TWO));
       const dialog = await openFor("10K");
-      await userEvent.type(within(dialog).getByLabelText("New number of places"), "800");
-      await userEvent.click(within(dialog).getByRole("button", { name: "Add places and announce" }));
+      await userEvent.type(within(dialog).getByLabelText("New number of entries"), "800");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add entries and announce" }));
 
-      expect(await screen.findByText("Places added, announcement not published")).toBeInTheDocument();
+      expect(await screen.findByText("Entries added, announcement not published")).toBeInTheDocument();
       expect(screen.getByRole("alert")).toHaveTextContent("Could not reach our server");
       const buttons = within(screen.getByRole("dialog")).getAllByRole("button");
       expect(buttons.map((b) => b.textContent)).toEqual(["Publish the announcement"]);
@@ -210,19 +210,19 @@ describe("AddPlaces", () => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
 
       await userEvent.click(screen.getByRole("button", { name: "Publish the announcement" }));
-      expect(await screen.findByText("10K now has 800 places")).toBeInTheDocument();
+      expect(await screen.findByText("10K now has 800 entries")).toBeInTheDocument();
       expect(readClient.increaseQuota).toHaveBeenCalledTimes(1);
       expect(kit.signMessage).toHaveBeenCalledTimes(1);
     });
 
-    it("says the places wait for reopening on a closed race", async () => {
+    it("says the entries wait for reopening on a closed race", async () => {
       renderIt(summary("Closed", TWO));
       const dialog = await openFor("5K");
-      await userEvent.type(within(dialog).getByLabelText("New number of places"), "450");
-      await userEvent.click(within(dialog).getByRole("button", { name: "Add places and announce" }));
+      await userEvent.type(within(dialog).getByLabelText("New number of entries"), "450");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add entries and announce" }));
 
-      expect(await screen.findByText("5K now has 450 places")).toBeInTheDocument();
-      expect(screen.getByText(/ready for when entries reopen/)).toBeInTheDocument();
+      expect(await screen.findByText("5K now has 450 entries")).toBeInTheDocument();
+      expect(screen.getByText(/Runners can enter 5K once you reopen entries/)).toBeInTheDocument();
     });
   });
 });

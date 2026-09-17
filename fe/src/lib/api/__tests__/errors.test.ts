@@ -34,7 +34,7 @@ describe("friendlyError", () => {
     it("does not tell an organiser to try again when a retry cannot succeed (STE-63)", () => {
       // QuotaNotIncreased (#19): the same number again, or a lower one.
       expect(friendlyError(revert(19, "increaseQuota"))).toBe(
-        "This distance already has that many places or more. Enter a higher number.",
+        "This distance already has that many entries or more. Enter a higher number.",
       );
       // InvalidStatus (#11): reopening a cancelled race.
       expect(friendlyError(revert(11, "setEventStatus"))).toMatch(/cannot be moved to that status/);

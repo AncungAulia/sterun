@@ -85,6 +85,11 @@ export function TabDetails({
 
   return (
     <div className="flex flex-col gap-8">
+      {/* First, above the details they sit beside (Ancung, 2026-09-17): an
+          update is the newest thing on the page and the one a returning
+          runner came back to read. */}
+      {updates.length > 0 ? <Updates updates={updates} /> : null}
+
       <section>
         <h2 className="heading-strong text-lg text-foreground">General information</h2>
         <div className="mt-2">
@@ -137,8 +142,6 @@ export function TabDetails({
           ) : null}
         </div>
       </section>
-
-      {updates.length > 0 ? <Updates updates={updates} /> : null}
 
       {document?.links?.instagram || document?.links?.website ? (
         <section>
@@ -193,8 +196,7 @@ export function TabDetails({
  * Every announcement is shown, including one this page could not confirm:
  * hiding it would let a broken index silently take back what an organiser
  * said, and showing it as signed would let one put words in their mouth. So
- * the mark beside each says which it is, in words, and the sentence under the
- * list says what an update can and cannot change.
+ * the mark beside each says which it is, in words.
  */
 function Updates({ updates }: { updates: RaceUpdate[] }) {
   return (
@@ -222,10 +224,6 @@ function Updates({ updates }: { updates: RaceUpdate[] }) {
           </li>
         ))}
       </ol>
-      <p className="mt-4 max-w-2xl text-sm text-n-500">
-        The race details on this page are what the organiser published when the race was created.
-        Updates never change them. They are added beside them.
-      </p>
     </section>
   );
 }

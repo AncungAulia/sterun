@@ -723,7 +723,7 @@ describe("EventDetail, what changed since publishing (STE-57)", () => {
   it("lists announcements newest first under Details, saying which the organiser signed", async () => {
     getEventSummary.mockResolvedValue(summary());
     listAnnouncements.mockResolvedValue([
-      announcement("2", "2026-09-18T01:12:00.000Z", "Places for 10K raised from 500 to 800.\n\nSecond batch."),
+      announcement("2", "2026-09-18T01:12:00.000Z", "Entries for 10K raised from 500 to 800.\n\nSecond batch."),
       announcement("1", "2026-09-10T12:40:00.000Z", "Start moved to Lapangan Banteng."),
     ]);
     isSignedByOrganiser.mockImplementation((a: { id: string }) => a.id === "2");
@@ -733,7 +733,7 @@ describe("EventDetail, what changed since publishing (STE-57)", () => {
     const heading = await screen.findByRole("heading", { name: "Updates" });
     const items = within(heading.closest("section")!).getAllByRole("listitem");
     expect(items).toHaveLength(2);
-    expect(items[0]).toHaveTextContent("Places for 10K raised from 500 to 800.");
+    expect(items[0]).toHaveTextContent("Entries for 10K raised from 500 to 800.");
     expect(items[0]).toHaveTextContent("Second batch.");
     expect(items[0]).toHaveTextContent("Signed by the organiser");
     expect(items[1]).toHaveTextContent("Start moved to Lapangan Banteng.");
@@ -750,7 +750,7 @@ describe("EventDetail, what changed since publishing (STE-57)", () => {
     expect(screen.queryByRole("heading", { name: "Updates" })).not.toBeInTheDocument();
   });
 
-  it("says on the distance card when its places were raised, and nothing on one never raised", async () => {
+  it("says on the distance card when its entries were raised, and nothing on one never raised", async () => {
     getEventSummary.mockResolvedValue(
       summary({}, [category(0, { quota: 800, enteredCount: 500 }), category(1, { code: "5K" })]),
     );
@@ -761,17 +761,17 @@ describe("EventDetail, what changed since publishing (STE-57)", () => {
     renderDetail();
     await showTab(/Distances/);
 
-    expect(await screen.findByText(/Places raised from 500 to 800 on Sep 1[78], 2026/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Places raised/)).toHaveLength(1);
+    expect(await screen.findByText(/Entries raised from 500 to 800 on Sep 1[78], 2026/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Entries raised/)).toHaveLength(1);
   });
 
-  it("still lists every distance and its places when the index cannot say what was raised", async () => {
+  it("still lists every distance and its entries when the index cannot say what was raised", async () => {
     getEventSummary.mockResolvedValue(summary({}, [category(0, { quota: 800, enteredCount: 500 })]));
 
     renderDetail();
     await showTab(/Distances/);
 
     expect(await screen.findByText("300 of 800 entries left")).toBeInTheDocument();
-    expect(screen.queryByText(/Places raised/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Entries raised/)).not.toBeInTheDocument();
   });
 });

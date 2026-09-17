@@ -23,7 +23,7 @@ const plan: AddPlacesPlan = {
   categoryId: 1,
   organiser: "GORGANISER",
   newQuota: 800,
-  body: "Places for 10K raised from 500 to 800.",
+  body: "Entries for 10K raised from 500 to 800.",
 };
 
 function deps(overrides: Partial<AddPlacesDeps> = {}) {
@@ -48,7 +48,7 @@ function deps(overrides: Partial<AddPlacesDeps> = {}) {
 }
 
 describe("runAddPlaces", () => {
-  it("signs the announcement, raises the places, then publishes, in that order", async () => {
+  it("signs the announcement, raises the entries, then publishes, in that order", async () => {
     const { deps: d, calls } = deps();
     const state = await runAddPlaces(plan, INITIAL_STATE, d);
 
@@ -83,7 +83,7 @@ describe("runAddPlaces", () => {
     expect(running).toEqual(["sign", "raise", "publish"]);
   });
 
-  it("stops before any places move when the announcement is declined", async () => {
+  it("stops before any entries move when the announcement is declined", async () => {
     const { deps: d, calls } = deps({
       signMessage: vi.fn(async () => {
         throw new Error("User declined the request");
@@ -110,7 +110,7 @@ describe("runAddPlaces", () => {
     expect(state.raised).toBe(false);
   });
 
-  it("counts a raise with no answer as landed when the ledger already holds the new places", async () => {
+  it("counts a raise with no answer as landed when the ledger already holds the new entries", async () => {
     const { deps: d, calls } = deps({
       increaseQuota: vi.fn(async () => {
         throw new Error("increaseQuota returned no transaction hash");
@@ -141,7 +141,7 @@ describe("runAddPlaces", () => {
     }
   });
 
-  it("after the places landed, a failed publish keeps both and a retry only publishes", async () => {
+  it("after the entries landed, a failed publish keeps both and a retry only publishes", async () => {
     let attempts = 0;
     const { deps: d, calls } = deps({
       publish: vi.fn(async () => {

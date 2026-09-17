@@ -8,7 +8,7 @@
  * download the roster, add a scanner, record the results, and putting it here
  * rather than under the content means it does not travel down the page as a
  * table grows. A race that can still take entries is the one exception: it
- * carries Close or Reopen entries beside Add places (STE-57), because closing
+ * carries Close or Reopen entries beside Add entries (STE-57), because closing
  * has to stay in reach until entries close on their own (STE-46).
  *
  * `bell` is a slot, and by default the slot fills itself from the frame's own

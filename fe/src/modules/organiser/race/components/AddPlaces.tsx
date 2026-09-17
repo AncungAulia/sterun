@@ -45,12 +45,12 @@ export function AddPlaces({ summary }: { summary: EventSummary }) {
   return (
     <>
       {only ? (
-        <Button onClick={() => setCategoryId(only.categoryId)}>Add places</Button>
+        <Button onClick={() => setCategoryId(only.categoryId)}>Add entries</Button>
       ) : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button>
-              Add places
+              Add entries
               <ChevronDownIcon aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>

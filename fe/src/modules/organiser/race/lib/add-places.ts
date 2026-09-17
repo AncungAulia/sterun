@@ -45,21 +45,21 @@ export function readNewQuota(
 ): { quota: number; problem: null } | { quota: null; problem: string | null } {
   const text = input.trim();
   if (text === "") return { quota: null, problem: null };
-  if (!/^\d+$/.test(text)) return { quota: null, problem: "Enter a whole number of places." };
+  if (!/^\d+$/.test(text)) return { quota: null, problem: "Enter a whole number of entries." };
   const quota = Number(text);
   if (quota <= current) {
     return {
       quota: null,
-      problem: `Enter a number above ${count(current)}. Places cannot go down or stay the same.`,
+      problem: `Enter a number above ${count(current)}. Entries cannot go down or stay the same.`,
     };
   }
-  if (quota > MAX_QUOTA) return { quota: null, problem: "That is more places than a race can hold." };
+  if (quota > MAX_QUOTA) return { quota: null, problem: "That is more entries than a race can hold." };
   return { quota, problem: null };
 }
 
-/** "Places for 10K raised from 500 to 800." The line the organiser cannot edit. */
+/** "Entries for 10K raised from 500 to 800." The line the organiser cannot edit. */
 export function raiseSentence(code: string, from: number, to: number): string {
-  return `Places for ${code} raised from ${count(from)} to ${count(to)}.`;
+  return `Entries for ${code} raised from ${count(from)} to ${count(to)}.`;
 }
 
 /**
@@ -95,5 +95,5 @@ export function announcementBody(sentence: string, note: string): string {
 export function doneLead(code: string, status: EventStatus): string {
   return status === "Open"
     ? `Runners can enter ${code} again, and the announcement is on the race page.`
-    : `The new places are ready for when entries reopen, and the announcement is on the race page.`;
+    : `Runners can enter ${code} once you reopen entries, and the announcement is on the race page.`;
 }

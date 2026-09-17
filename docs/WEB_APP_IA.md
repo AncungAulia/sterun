@@ -539,9 +539,9 @@ check that the caller is the event's organiser. So the rule lives in the console
 is an app-level promise, and the documentation should not dress it up as a protocol guarantee.
 
 Implementation: `be/` endpoint in STE-40. `fe/` in STE-57, for the quota raise: the race console's
-**Add places** signs the announcement, raises the quota and publishes, as one dialog, and
-`/events/[id]` lists every announcement under **Updates** in Details (each checked against the
-organiser on chain) and a dated "Places raised" line on the distance card from `quota_history`.
+**Add entries** signs the announcement, raises the quota and publishes, as one dialog, and
+`/events/[id]` lists every announcement under **Updates** in Details, above General information (each checked against the
+organiser on chain) and a dated "Entries raised" line on the distance card from `quota_history`.
 The schedule, venue and registration-date changes above have no flow yet.
 
 **As built (STE-40).** `POST /events/:eventId/announcements` takes `{ published_at, body, signer,

@@ -49,7 +49,7 @@ import {
 
 const STEP_LABEL: Record<AddPlacesStep, string> = {
   sign: "Approve the announcement",
-  raise: "Approve the new places",
+  raise: "Approve the new entries",
   publish: "Publish the announcement",
 };
 
@@ -69,7 +69,7 @@ export function AddPlacesDialog({ category, organiser, status, onClose }: AddPla
   const [input, setInput] = useState("");
   const [note, setNote] = useState("");
   /*
-    The plan is frozen at the press. Once the places land the race is read
+    The plan is frozen at the press. Once the entries land the race is read
     again, and a plan still built from the live category would turn "500 to
     800" into "800 to 800" halfway through its own run.
   */
@@ -178,15 +178,15 @@ function Form({
       }}
     >
       <DialogHeader>
-        <DialogTitle className="heading-strong text-xl text-ink">Add places to {category.code}</DialogTitle>
+        <DialogTitle className="heading-strong text-xl text-ink">Add entries to {category.code}</DialogTitle>
         <DialogDescription className="text-base text-n-600">
-          Places can only go up. Every runner sees the announcement on the race page.
+          Entries can only go up. Every runner sees the announcement on the race page.
         </DialogDescription>
       </DialogHeader>
 
       <dl className="grid grid-cols-2 gap-3">
         <Card className="gap-0 px-3 py-2 shadow-none">
-          <dt className="text-sm text-n-500">Places now</dt>
+          <dt className="text-sm text-n-500">Entries now</dt>
           <dd className="numeric text-lg font-semibold text-ink">{count(category.quota)}</dd>
         </Card>
         <Card className="gap-0 px-3 py-2 shadow-none">
@@ -197,7 +197,7 @@ function Form({
 
       <Field
         id="new-quota"
-        label="New number of places"
+        label="New number of entries"
         inputMode="numeric"
         autoComplete="off"
         value={input}
@@ -205,7 +205,7 @@ function Form({
         error={problem ?? undefined}
         hint={
           newQuota !== null
-            ? `${count(newQuota - category.quota)} more places. Bib numbers carry on from the last one.`
+            ? `${count(newQuota - category.quota)} more entries. Bib numbers carry on from the last one.`
             : undefined
         }
       />
@@ -217,7 +217,7 @@ function Form({
           <MegaphoneIcon aria-hidden="true" />
           <AlertTitle className="text-sm font-normal text-teal-600">Written for you</AlertTitle>
           <AlertDescription className="text-base">
-            {newQuota !== null ? sentence : `Places for ${category.code} raised from ${count(category.quota)} to ?`}
+            {newQuota !== null ? sentence : `Entries for ${category.code} raised from ${count(category.quota)} to ?`}
           </AlertDescription>
         </Alert>
       </div>
@@ -237,7 +237,7 @@ function Form({
           Cancel
         </Button>
         <Button type="submit" disabled={newQuota === null}>
-          Add places and announce
+          Add entries and announce
         </Button>
       </DialogFooter>
     </form>
@@ -268,16 +268,16 @@ function Steps({
   const done = isDone(state);
   const stranded = state.raised && !state.published && state.running === null;
 
-  let title = `Adding places to ${code}`;
+  let title = `Adding entries to ${code}`;
   let lead = "Your wallet will ask you 2 times.";
   if (done) {
-    title = `${code} now has ${count(newQuota)} places`;
+    title = `${code} now has ${count(newQuota)} entries`;
     lead = doneLead(code, status);
   } else if (stranded && state.failed) {
-    title = "Places added, announcement not published";
-    lead = `${code} now has ${count(newQuota)} places. The announcement did not go up, so runners cannot see why yet.`;
+    title = "Entries added, announcement not published";
+    lead = `${code} now has ${count(newQuota)} entries. The announcement did not go up, so runners cannot see why yet.`;
   } else if (state.failed) {
-    title = "Places not added";
+    title = "Entries not added";
     lead = "Nothing has changed for runners.";
   }
 

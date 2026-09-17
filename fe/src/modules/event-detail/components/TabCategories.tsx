@@ -117,7 +117,7 @@ export function TabCategories({
                       className="numeric flex items-start gap-2 text-sm text-n-700"
                     >
                       <TrendingUpIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-teal-500" />
-                      Places raised from {raise.previous.toLocaleString("en-US")} to{" "}
+                      Entries raised from {raise.previous.toLocaleString("en-US")} to{" "}
                       {raise.current.toLocaleString("en-US")} on {formatEventDate(raise.at)}
                     </li>
                   ))}

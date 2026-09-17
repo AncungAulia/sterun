@@ -27,7 +27,7 @@ function signed(
     id: "1",
     eventId: 7,
     publishedAt: "2026-09-18T01:12:00.000Z",
-    body: "Places for 10K raised from 500 to 800.",
+    body: "Entries for 10K raised from 500 to 800.",
     networkPassphrase: PASSPHRASE,
     eventRegistry: REGISTRY,
     ...overrides,
@@ -58,7 +58,7 @@ describe("isSignedByOrganiser", () => {
   });
 
   it("refuses a body changed after signing", () => {
-    const changed = { ...signed(organiser), body: "Places for 10K raised from 500 to 9000." };
+    const changed = { ...signed(organiser), body: "Entries for 10K raised from 500 to 9000." };
     expect(isSignedByOrganiser(changed, organiser.publicKey(), 7)).toBe(false);
   });
 
