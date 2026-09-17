@@ -29,6 +29,11 @@ import Image from "next/image";
 import { useRef } from "react";
 import { SweepReveal } from "@/components/elements/SweepReveal";
 
+/** Scroll the sweep is scrubbed over, from the heading reaching the top. With
+    from 0.12 and to 0.7 plus the 0.12 glow fade, the bar is full at 0.7 / 0.82
+    of it, about 171vh. */
+const SWEEP_END = "+=200%";
+
 export function WhyStellar() {
   const rootRef = useRef<HTMLElement>(null);
 
@@ -41,12 +46,13 @@ export function WhyStellar() {
          exactly the same scroll range as the blue panel's dark one, which is
          how the logo ended up ink on blue. The blue panel's rect is the only
          band here. */
-      /* Starts under the blue panel and outlives it. The height beyond the
-         first screen is the scroll the sweep is scrubbed to. Its last screen is
-         also where the photograph below rises over it, so the section is tall
-         enough that the sweep has finished before the photograph reaches the
-         middle of the screen. */
-      className="relative z-0 -mt-[100svh] h-[340svh] bg-paper text-ink"
+      /* Starts under the blue panel and outlives it. The sweep runs over its
+         own fixed two screens (SWEEP_END), not over the whole section, and the
+         photograph below only starts rising over it at 390 - 200 = 190svh. The
+         bar reaches 100% at about 171vh, so the word is whole, with a short
+         beat of stillness, before anything covers it. Tie the two numbers
+         together if either changes. */
+      className="relative z-0 -mt-[100svh] h-[390svh] bg-paper text-ink"
     >
       <div className="sticky top-0 grid h-[100svh] place-items-center overflow-hidden px-5 sm:px-6">
         {/* One line, and every size on it derives from --why. --cap is the ink
@@ -65,7 +71,7 @@ export function WhyStellar() {
               at cap / 0.731 puts the S of Stellar on exactly the line WHY sits
               on. The two halves then read as one word rather than as a word
               beside a logo. */}
-          <SweepReveal trigger={rootRef} from={0.12} to={0.7} bleed="14%">
+          <SweepReveal trigger={rootRef} end={SWEEP_END} from={0.12} to={0.7} bleed="14%">
             <Image
               src="/third-party/stellar-logo.svg"
               alt="Stellar"

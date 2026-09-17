@@ -16,7 +16,9 @@
  * that have shipped the spec.
  *
  * The caller supplies the scroll range through `trigger`, so this component
- * does not care how tall the section is or whether it is pinned.
+ * does not care how tall the section is or whether it is pinned. By default the
+ * range is the trigger's whole scroll; `start` and `end` narrow it when
+ * something else (a panel rising over it, say) has to wait for the sweep.
  */
 
 import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
@@ -29,6 +31,9 @@ interface SweepRevealProps {
   children: ReactNode;
   /** The element whose scroll range drives the sweep. */
   trigger: RefObject<HTMLElement | null>;
+  /** ScrollTrigger start and end of the range. Default: the trigger's whole scroll. */
+  start?: string;
+  end?: string;
   /** Where in that range the sweep starts and finishes, 0 to 1. */
   from?: number;
   to?: number;
@@ -48,6 +53,8 @@ interface SweepRevealProps {
 export function SweepReveal({
   children,
   trigger,
+  start = "top top",
+  end = "bottom bottom",
   from = 0.1,
   to = 0.75,
   brand = "var(--color-teal)",
@@ -73,7 +80,7 @@ export function SweepReveal({
       write();
 
       const tl = gsap.timeline({
-        scrollTrigger: { trigger: host, start: "top top", end: "bottom bottom", scrub: 0.4 },
+        scrollTrigger: { trigger: host, start, end, scrub: 0.4 },
       });
       // A gentle ease rather than a linear map, so the bar does not crawl at a
       // constant rate: it leans in, then eases off as the word completes.
@@ -89,7 +96,7 @@ export function SweepReveal({
     });
 
     return () => mm.revert();
-  }, [trigger, from, to, keepEdge]);
+  }, [trigger, start, end, from, to, keepEdge]);
 
   return (
     <span
