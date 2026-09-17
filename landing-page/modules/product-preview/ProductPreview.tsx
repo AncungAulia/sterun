@@ -49,6 +49,7 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { APP_URL } from "@/lib/links";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -161,7 +162,7 @@ export function ProductPreview() {
             </p>
 
             <a
-              href="#"
+              href={APP_URL || "#"}
               className="wipe-underline relative mt-8 inline-flex w-fit items-center gap-3 text-base font-medium leading-tight text-paper lg:mt-auto lg:mb-[7vh]"
             >
               Browse live events
