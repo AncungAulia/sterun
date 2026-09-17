@@ -206,8 +206,8 @@ function EntryForm({
     return (
       <Page>
         <div role="status" aria-label="Loading this race" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
-          <div className="h-80 animate-pulse rounded-lg bg-n-100" />
-          <div className="h-56 animate-pulse rounded-lg bg-n-100" />
+          <div className="h-80 skeleton rounded-lg" />
+          <div className="h-56 skeleton rounded-lg" />
         </div>
       </Page>
     );

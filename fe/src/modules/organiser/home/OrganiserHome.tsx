@@ -199,7 +199,7 @@ export function OrganiserHome() {
         action={
           canCreate ? (
             <Button asChild>
-              <Link href="/org/new">Create event</Link>
+              <Link href="/org/new">Create race</Link>
             </Button>
           ) : null
         }
@@ -285,15 +285,15 @@ function ConsoleSkeleton() {
       <div className="grid gap-3 sm:grid-cols-3">
         {[0, 1, 2].map((card) => (
           <div key={card} className="rounded-lg border border-n-200 bg-paper p-4">
-            <div className="h-3 w-1/2 animate-pulse rounded-sm bg-n-100" />
-            <div className="mt-3 h-7 w-2/3 animate-pulse rounded-sm bg-n-100" />
-            <div className="mt-3 h-1.5 w-full animate-pulse rounded-full bg-n-100" />
+            <div className="h-3 w-1/2 skeleton rounded-sm" />
+            <div className="mt-3 h-7 w-2/3 skeleton rounded-sm" />
+            <div className="mt-3 h-1.5 w-full skeleton rounded-full" />
           </div>
         ))}
       </div>
       <div className="rounded-lg border border-n-200 bg-paper p-4">
         {[0, 1, 2].map((line) => (
-          <div key={line} className="mt-3 h-5 w-full animate-pulse rounded-sm bg-n-100 first:mt-0" />
+          <div key={line} className="mt-3 h-5 w-full skeleton rounded-sm first:mt-0" />
         ))}
       </div>
     </div>

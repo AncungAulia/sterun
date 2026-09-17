@@ -42,7 +42,7 @@ export function WalletButton() {
   }, [menuOpen]);
 
   if (isRestoring) {
-    return <div className="h-10 w-36 animate-pulse rounded-md bg-n-100" aria-hidden />;
+    return <div className="h-10 w-36 skeleton rounded-md" aria-hidden />;
   }
 
   if (!address) {

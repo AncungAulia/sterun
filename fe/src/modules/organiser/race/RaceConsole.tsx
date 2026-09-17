@@ -45,8 +45,8 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
           aria-label="Loading this race"
           className="flex flex-col gap-3 px-4 py-6 md:px-6"
         >
-          <div className="h-24 animate-pulse rounded-lg bg-n-100" />
-          <div className="h-64 animate-pulse rounded-lg bg-n-100" />
+          <div className="h-24 skeleton rounded-lg" />
+          <div className="h-64 skeleton rounded-lg" />
         </div>
       </>
     );

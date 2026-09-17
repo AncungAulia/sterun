@@ -283,3 +283,51 @@ button:not(:disabled),
     animation-delay: 0s;
   }
 }
+
+/*
+  The skeleton, for every screen that has one (Ancung, 2026-09-17).
+
+  It replaces `animate-pulse`, which fades a whole block in and out: the block
+  reads as content that is there and dimming, and at the size of a poster frame
+  it makes the page breathe. A shimmer moves a highlight across a block that
+  never changes opacity, so the shape stays put and only the light travels,
+  which is why it reads as "being filled in" rather than "flickering".
+
+  One class rather than a set of utilities per shape: what varies between the
+  twenty-odd skeletons in this app is size and corner radius, both of which the
+  element already carries. What must NOT vary is the colour and the timing, or
+  two skeletons on one page shimmer out of step.
+
+  The highlight is `paper` over `n-100`, the same pair the cards already use, so
+  no new value enters the palette. 1.6s is slow enough to read as a sweep rather
+  than a strobe on the largest block on the page, the directory's poster frame.
+*/
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.skeleton {
+  background-color: var(--color-n-100);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--color-paper) 75%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.6s var(--ease-inout) infinite;
+}
+
+/* Still a block in the right place and the right shape, with nothing moving. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background-image: none;
+  }
+}
