@@ -145,7 +145,7 @@ export function TabProofs({
               <>
                 <p className="text-base text-n-600">
                   The race details could not be loaded, so this page shows only the basics. The
-                  race, its distances and places left are not affected.
+                  race, its distances and entries left are not affected.
                 </p>
                 {result?.status === "unavailable" ? (
                   <p className="mt-1 text-sm text-n-500">{result.reason}</p>
@@ -154,7 +154,7 @@ export function TabProofs({
             ) : (
               <p className="text-base text-n-600">
                 This race published no details, so this page shows only the basics. The race, its
-                distances and places left are not affected.
+                distances and entries left are not affected.
               </p>
             )}
           </div>

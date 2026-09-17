@@ -16,6 +16,7 @@ import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
 import { useEvent } from "@/hooks/useEvents";
 import { useWallet } from "@/hooks/useWallet";
 
+import { AddPlaces } from "./components/AddPlaces";
 import { ConsoleHeader } from "@/modules/organiser/shared/components/ConsoleHeader";
 import { EntriesTab } from "./components/EntriesTab";
 import { useNeedsContext } from "@/modules/organiser/shared/components/NeedsContext";
@@ -83,7 +84,16 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
         <ConsoleHeader
           title={data.event.name}
           badge={<EventStatusBadge status={data.event.status} />}
-          action={<StatusAction summary={data} />}
+          action={
+            // Two buttons on a race that can still take entries (STE-57):
+            // closing stays, because until entries close on their own at the
+            // registration end date (STE-46) it is the only thing that stops
+            // them, and adding places is the main one.
+            <>
+              <StatusAction summary={data} />
+              <AddPlaces summary={data} />
+            </>
+          }
         />
         <RaceTabs eventId={eventId} current={tab} />
       </div>

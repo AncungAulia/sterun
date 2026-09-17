@@ -86,13 +86,14 @@ The consequence: no avatars, no name lists, no participant export. What may be s
 | Object | Create | Update | Delete |
 | --- | --- | --- | --- |
 | Event | `create_event` | **status only** (`set_event_status`) | none |
-| Category | `add_category` | **none whatsoever** | none |
+| Category | `add_category` | **quota up only** (`increase_quota`, STE-55) | none |
 | Add-on | `add_addon` | **none whatsoever** | none |
 | Scanner | `add_scanner` | — | `remove_scanner` |
 
-An event's name, date, `metadata_hash` and `uri`, and everything about a category (code, distance,
-quota, price) have **no setter**. A mistyped price is permanent; the only way out is `Closed` and
-then a new event.
+An event's name, date, `metadata_hash` and `uri`, and everything about a category except its quota
+(code, distance, price) have **no setter**. A mistyped price is permanent; the only way out is
+`Closed` and then a new event. The quota is the one exception since STE-55, and it only ever goes
+**up**: the console pairs every raise with a signed announcement (§6.1, STE-57).
 
 `Draft` is **not** a draft in the Google Docs sense: it only means entries are not open yet; the
 contents are frozen from the first second. So an organiser form must not follow a "fill in → Save →
@@ -537,7 +538,11 @@ check that the caller is the event's organiser. So the rule lives in the console
 **one flow that includes the announcement**, never two buttons where the second can be skipped. This
 is an app-level promise, and the documentation should not dress it up as a protocol guarantee.
 
-Implementation: `be/` endpoint in STE-40, `fe/` rendering in the same ticket's follow-up.
+Implementation: `be/` endpoint in STE-40. `fe/` in STE-57, for the quota raise: the race console's
+**Add entries** signs the announcement, raises the quota and publishes, as one dialog, and
+`/events/[id]` lists every announcement under **Updates** in Details, above General information (each checked against the
+organiser on chain) and a dated "Entries raised" line on the distance card from `quota_history`.
+The schedule, venue and registration-date changes above have no flow yet.
 
 **As built (STE-40).** `POST /events/:eventId/announcements` takes `{ published_at, body, signer,
 signature }` and `GET` returns them newest first, each with the exact signed `message`. What the wallet

@@ -31,6 +31,21 @@ describe("friendlyError", () => {
       expect(friendlyError(revert(18))).toMatch(/Sterun team/i);
     });
 
+    it("does not tell an organiser to try again when a retry cannot succeed (STE-63)", () => {
+      // QuotaNotIncreased (#19): the same number again, or a lower one.
+      expect(friendlyError(revert(19, "increaseQuota"))).toBe(
+        "This distance already has that many entries or more. Enter a higher number.",
+      );
+      // InvalidStatus (#11): reopening a cancelled race.
+      expect(friendlyError(revert(11, "setEventStatus"))).toMatch(/cannot be moved to that status/);
+      // A wallet that is not the organiser: refused by auth, as text, before the contract runs.
+      const wrongWallet = new Error("Transaction requires signatures from GABC...XYZ");
+      expect(friendlyError(wrongWallet)).toMatch(/Switch to the wallet that created the race/);
+      for (const sentence of [revert(19, "increaseQuota"), revert(11, "setEventStatus"), wrongWallet].map(friendlyError)) {
+        expect(sentence).not.toMatch(/try again/i);
+      }
+    });
+
     it("falls back for a revert there is nothing useful to say about", () => {
       // InvalidDistance (#10) is a bug in this app, not something an organiser
       // can act on. Naming the variant would only be technical wording.
