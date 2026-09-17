@@ -1,0 +1,13 @@
+{
+  "extends": "../../fe/tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "paths": {
+      "@stellar/stellar-sdk": ["../../be/node_modules/@stellar/stellar-sdk"],
+      "@sterunxyz/sdk": ["../../be/node_modules/@sterunxyz/sdk"]
+    },
+    "typeRoots": ["../../be/node_modules/@types"]
+  },
+  "include": ["src/mock-race.ts", "src/evidence.ts"],
+  "exclude": []
+}
