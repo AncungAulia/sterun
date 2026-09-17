@@ -1,3 +1,4 @@
+import { ClosingCta } from "@/modules/closing-cta/ClosingCta";
 import { Hero } from "@/modules/hero/Hero";
 import { HowItWorks } from "@/modules/how-it-works/HowItWorks";
 import { ProductPreview } from "@/modules/product-preview/ProductPreview";
@@ -14,6 +15,7 @@ export default function Home() {
       <ProductPreview />
       <WhyStellar />
       <WhyStellarTrack />
+      <ClosingCta />
     </>
   );
 }
