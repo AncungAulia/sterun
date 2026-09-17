@@ -243,8 +243,8 @@ exists: every event in the app today is test data named TESTING or e2e, and none
 "Document verified" caption this file used to carry is withdrawn until a screenshot actually shows
 it, because a claim written under a screenshot is the easiest thing on the page to knock down.
 
-The link and the header's Launch app both use `NEXT_PUBLIC_APP_URL`, so they come alive together
-once STE-32 gives the app a URL.
+The link and the header's Launch app both go to the web app at `https://app.sterun.xyz` (`APP_URL` in
+`landing-page/lib/links.ts`, overridable with `NEXT_PUBLIC_APP_URL`).
 
 ---
 
@@ -340,5 +340,4 @@ Why Stellar dan Closing CTA.
 | Diagram 4 langkah | Dikerjakan bersama section *How it works* |
 | Menu nav 04 | `PROOF` → `#proof`, blok tautan kontrak di kolom kiri Problem. Pertimbangkan tambah atau ganti ke `PRODUCT` begitu section itu dibangun |
 | Isi baris footer | Keputusan Axel |
-| URL app untuk Launch app dan Browse live events | STE-32 |
 | Landing jadi route `/` di `fe/` | Diskusi dengan Ancung |
