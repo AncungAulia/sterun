@@ -95,15 +95,19 @@ export function ProductPreview() {
         AT.image,
       );
 
-      // It plays again every time the reader comes back down to it, rather than
-      // once for the life of the page.
+      // It plays again every time the reader comes back down past the start,
+      // rather than once for the life of the page.
       const st = ScrollTrigger.create({
         trigger: root,
         start: START,
-        onEnter: () => tl.restart(),
-        onEnterBack: () => tl.restart(),
-        onLeaveBack: () => tl.pause(0),
+        // Forward plays it; going back above the start reverses it from wherever
+        // it is, faster. The old restart() on the way back up replayed an entrance
+        // that was already on screen, and pause(0) dropped it out in one frame.
+        onEnter: () => tl.timeScale(1).play(),
+        onLeaveBack: () => tl.timeScale(2.5).reverse(),
       });
+      // Reloaded further down the page: already past it, so simply shown.
+      if (st.scroll() > st.start) tl.progress(1);
 
       return () => {
         st.kill();

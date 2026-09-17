@@ -11,7 +11,8 @@
  * track, what reads as an ending is stillness.
  *
  * The only movement is the heading rising out of a line mask, then the sentence
- * and the actions after it, replayed each time the reader comes back down.
+ * and the actions after it. Scrolling back above it reverses them, and coming
+ * back down plays them again.
  * SplitText's own mask does the masking, so there is no wrapper to maintain.
  */
 
@@ -52,10 +53,14 @@ export function ClosingCta() {
       const st = ScrollTrigger.create({
         trigger: root,
         start: START,
-        onEnter: () => tl.restart(),
-        onEnterBack: () => tl.restart(),
-        onLeaveBack: () => tl.pause(0),
+        // Forward plays it; going back above the start reverses it from wherever
+        // it is, faster. The old restart() on the way back up replayed an entrance
+        // that was already on screen, and pause(0) dropped it out in one frame.
+        onEnter: () => tl.timeScale(1).play(),
+        onLeaveBack: () => tl.timeScale(2.5).reverse(),
       });
+      // Reloaded further down the page: already past it, so simply shown.
+      if (st.scroll() > st.start) tl.progress(1);
 
       return () => {
         st.kill();
