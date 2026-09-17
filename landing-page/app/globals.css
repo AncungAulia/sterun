@@ -362,6 +362,85 @@ html::-webkit-scrollbar {
   -webkit-text-stroke: var(--char-bold, 0em) currentColor;
 }
 
+/* --- Glowing bar reveal --------------------------------------------------
+   One word revealed by a bar sweeping across it. Everything is driven by a
+   single number, --sweep-p (0 to 100), which GSAP scrubs to scroll. Nothing
+   here reads the scroll position itself.
+
+   Three pieces share that one number:
+     text   clipped from the right, so it exists exactly up to the bar
+     trail  a gradient whose right edge rides with the bar and whose width
+            grows with it, capped so it never becomes a solid block
+     edge   a thin line at the bar's position, glowing in layers
+
+   The colour is one variable. Every glow is a color-mix of it rather than a
+   second hex, so changing --sweep-brand moves the whole effect. */
+.sweep {
+  --sweep-p: 0;
+  --sweep-brand: var(--color-teal);
+  --sweep-cap: 40; /* the trail never grows past this share of the word */
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+.sweep__text {
+  display: block;
+  clip-path: inset(0 calc((100 - var(--sweep-p)) * 1%) 0 0);
+}
+.sweep__trail {
+  position: absolute;
+  top: calc(var(--sweep-bleed, 6%) * -1);
+  bottom: calc(var(--sweep-bleed, 6%) * -1);
+  right: calc((100 - var(--sweep-p)) * 1%);
+  width: calc(min(var(--sweep-p), var(--sweep-cap)) * 1%);
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--sweep-brand) 28%, transparent) 55%,
+    color-mix(in srgb, var(--sweep-brand) 82%, transparent)
+  );
+  filter: blur(1px);
+  opacity: var(--sweep-glow, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+.sweep__edge {
+  position: absolute;
+  top: calc(var(--sweep-bleed, 6%) * -1.6);
+  bottom: calc(var(--sweep-bleed, 6%) * -1.6);
+  left: calc(var(--sweep-p) * 1%);
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--sweep-brand);
+  box-shadow:
+    0 0 8px var(--sweep-brand),
+    0 0 20px color-mix(in srgb, var(--sweep-brand) 70%, transparent),
+    0 0 40px color-mix(in srgb, var(--sweep-brand) 45%, transparent);
+  opacity: var(--sweep-glow, 1);
+  pointer-events: none;
+}
+
+/* --- Why Stellar claims ---------------------------------------------------
+   Drop shadow x 22, y 19, blur 6.8, 57%, specified at the 1440 design width.
+   --u is one design pixel at the current width, capped at a real pixel, so the
+   shadow keeps its proportion to the letters on a phone. The colour is the
+   darkest neutral at 57%, not a raw black.
+
+   SplitText's line masks clip anything outside the line box, shadow included.
+   Each mask is padded right and down by the shadow's reach and pulled back by
+   the same amount, so the layout does not move and the shadow is not cut. */
+.why-track {
+  --u: min(1px, 100vw / 1440);
+}
+.why-claim {
+  text-shadow: calc(var(--u) * 22) calc(var(--u) * 19) calc(var(--u) * 6.8)
+    color-mix(in srgb, var(--color-n-950) 57%, transparent);
+}
+.why-claim .why-line-mask {
+  padding: 0 calc(var(--u) * 32) calc(var(--u) * 28) 0;
+  margin: 0 calc(var(--u) * -32) calc(var(--u) * -28) 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nav-fill,
   .wipe-underline::after,
@@ -375,6 +454,16 @@ html::-webkit-scrollbar {
   .hiw-cta__arrow,
   .hiw-cta__x {
     transition: none;
+  }
+
+  /* The word is simply present, and the bar that would have revealed it is
+     not drawn at all. */
+  .sweep__text {
+    clip-path: none;
+  }
+  .sweep__trail,
+  .sweep__edge {
+    display: none;
   }
 
   /* The box becomes a plain horizontal scroller: no hold, no packing, every

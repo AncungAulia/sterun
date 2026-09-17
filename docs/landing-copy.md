@@ -13,11 +13,11 @@ salah satunya salah dan harus disamakan di commit yang sama.
 | --- | --- | --- | --- | --- | --- |
 | 1 | [Hero](#hero) | `#top` | ✅ | final | ✅ |
 | 2 | [Problem](#problem) | `#problem` | ✅ | **draft** | ✅ |
-| 3 | [How it works](#how-it-works) | `#how-it-works` | ✅ | final | — |
-| 4 | [Product preview](#product-preview) | `#product` | — | **draft** | — |
-| 5 | [Why Stellar](#why-stellar) | `#why-stellar` | ✅ | final, 1 angka kurang | — |
-| 6 | [Closing CTA](#closing-cta) | — | — | **draft** | — |
-| 7 | [Footer](#footer) | — | — | nunggu Axel | — |
+| 3 | [How it works](#how-it-works) | `#how-it-works` | ✅ | final | ✅ |
+| 4 | [Product preview](#product-preview) | `#product` | — | **draft** | ✅ screenshot placeholder |
+| 5 | [Why Stellar](#why-stellar) | `#why-stellar` | ✅ | final, fee number dropped | ✅ |
+| 6 | [Closing CTA](#closing-cta) | `#start` | — | **draft** | ✅ |
+| 7 | [Footer](#footer) | — | — | team line waits on Axel | ✅ without the team line |
 
 Setelah STE-12 ditutup: [For developers](#backlog-setelah-ste-12) dan [FAQ](#backlog-setelah-ste-12).
 
@@ -222,85 +222,98 @@ mockup QR pass dan scanner dari **STE-18** dipasang di sini begitu jadi.
 ## Product preview
 
 > [!NOTE]
-> **Draft.** Struktur section sudah disetujui; kata-katanya belum.
+> The sections from here down are written in English, following the repository rule in the root
+> `CLAUDE.md`. The sections above still need translating.
 
-> ### Open it. No wallet needed.
+**Draft.** The structure is approved; the wording is not.
+
+> # OPEN IT.
+> ## NO WALLET NEEDED.
 >
 > The event directory and every event page read straight from the chain. Browse them the way a
 > runner would, before you connect anything.
 >
 > **Browse live events →**
 
-Caption di bawah screenshot halaman detail event:
+Corner label, set in the same type as the link: **Live on Stellar testnet**.
 
-> Sterun Demo Run 2026, read from EventRegistry on testnet. Its metadata document matches the hash
-> stored on chain, which is what "Document verified" means.
+There is **no caption** under the picture. The picture is a placeholder until a real demo event
+exists: every event in the app today is test data named TESTING or e2e, and none has a poster, and
+`/events/4` no longer holds the Sterun Demo Run 2026 since the v2 migration truncated the index. The
+"Document verified" caption this file used to carry is withdrawn until a screenshot actually shows
+it, because a claim written under a screenshot is the easiest thing on the page to knock down.
 
-Visual:
-
-- Screenshot **directory** (`fe/` route `/`) dan **detail event** (`/events/4`). Keduanya sudah
-  hidup dan membaca data chain nyata (STE-13).
-- Screenshot QR pass dan scanner menyusul setelah **STE-18**.
-
-Klaim yang dipakai dan sandarannya:
-
-| Klaim | Sandaran |
-| --- | --- |
-| Bisa dibuka tanpa wallet | `fe/src/modules/directory/Directory.tsx` tidak menyentuh wallet kit sama sekali |
-| Membaca langsung dari chain | root `CLAUDE.md`: `/` dan `/events/[id]` membaca EventRegistry lewat RPC, tanpa database |
-| "Document verified" | Event `event_id` 4 dibuat di STE-13; dokumen metadata-nya lolos pengecekan `metadata_hash` |
-
-Tombol **Browse live events** memakai `NEXT_PUBLIC_APP_URL` yang sama dengan Launch app, jadi ikut
-hidup begitu STE-32 memberi URL.
+The link and the header's Launch app both use `NEXT_PUBLIC_APP_URL`, so they come alive together
+once STE-32 gives the app a URL.
 
 ---
 
 ## Why Stellar
 
-Satu baris, sesuai requirement tiket:
+Two screens.
 
-> Non-transferable records mean a bib can't be resold, organiser-signed finish results mean a
-> time can't be forged, and settlement reaches the organiser directly at a per-record fee
-> measured in fractions of a cent.
+**The question.** `WHY` in our display face, then Stellar's own mark on the same line, sized so the
+S of Stellar stands exactly as tall as WHY. No question mark. The mark file lives in
+`landing-page/public/third-party/` with a README saying whose it is; it is never recoloured or
+redrawn.
 
-Catatan kecil di bawahnya:
+**The answer**, three claims set over a photograph of a runner on a track, two screens tall. The
+photograph rises over the held heading, and each claim rises out of a line mask on its own as the
+reader reaches it:
 
-> *Live on Stellar testnet, settling in sUSD. Mainnet settles in USDC.*
-
-> [!WARNING]
-> **"fractions of a cent" belum punya sandaran.** Tidak ada biaya transaksi yang tercatat di
-> [`docs/deployments.md`](deployments.md), jadi ini satu-satunya angka di halaman yang tidak bisa
-> diverifikasi pembaca. Itu tidak konsisten dengan halaman yang di section sebelumnya menyuruh
-> orang mengecek sendiri.
+> Non-transferable records mean a bib can't be resold.
 >
-> Sebelum halaman live: ambil biaya sebenarnya dari satu transaksi `enter` di testnet, catat ke
-> `deployments.md`, lalu tulis angkanya di sini. `0.0000xx XLM per record` jauh lebih kuat
-> daripada frasa yang terdengar seperti bahasa iklan.
+> Organiser-signed finish results mean a time can't be forged.
+>
+> Settlement reaches the organiser directly.
+
+**Dropped: "at a per-record fee measured in fractions of a cent".** No transaction fee is recorded in
+[`docs/deployments.md`](deployments.md), so it was the one number on the page a reader could not
+check, on a page that tells them to check. It comes back only as a measured figure from a real
+`enter` transaction, recorded in `deployments.md` first.
+
+Also not on the page for now: the small note *"Live on Stellar testnet, settling in sUSD. Mainnet
+settles in USDC."* The footer paragraph carries the testnet and sUSD point instead.
 
 ---
 
 ## Closing CTA
 
-> [!NOTE]
-> **Draft.** Struktur section sudah disetujui; kata-katanya belum.
+**Draft.** The structure is approved; the wording is not.
 
-> ## Put your next race on the record
+> # PUT YOUR NEXT RACE ON THE RECORD
 >
 > Create the event once. Every runner who enters leaves with a record they keep.
 >
-> **Launch app →** · Follow @sterunxyz ↗
+> **Launch app →**      **Follow @sterunxyz ↗**
 
-`.heading-hero` boleh dipakai lagi di sini: ini layar yang berbeda dari hero, dan aturan "sekali
-per layar" tetap terpenuhi.
+The two actions are separated by space, not by a glyph. `.heading-hero` is used again here because
+this is a different screen from the hero, so the one-per-screen rule still holds.
 
 ---
 
 ## Footer
 
-Satu baris menyebut tim. Reviewer grant mendanai orang, bukan cuma kode, dan halaman tanpa nama
-siapa pun terasa ada yang hilang.
+> # The contracts this page describes are live on the Stellar testnet.
+>
+> Race records are issued on testnet, and entry fees settle in sUSD, a test asset we issue
+> ourselves. Personal details never reach the chain; only a salted hash does. Nothing here runs on
+> mainnet yet.
 
-Isi persisnya menunggu keputusan Axel (nama tim, asal, atau daftar empat orang).
+The claim is scoped on purpose. The contracts are live; the entry pass and the scanner are not built
+yet, so it must not say that everything runs.
+
+| This page | The app | Contracts |
+| --- | --- | --- |
+| Problem | Browse races | EventRegistry, `CAPB6N…SHJU` |
+| How it works | Organiser console | RaceRecord, `CCVW7W…A6NW` |
+| Product | SDK (npm) | sUSD, `CBQ644…MOOU` |
+| Why Stellar | Source | |
+
+Contract rows come from `landing-page/lib/links.ts`, which copies the v2 pair from `deployments.md`.
+
+**Still waiting on Axel:** one line naming the team (team name, where it is from, or the four
+people). Reviewers fund people, not only code.
 
 ---
 

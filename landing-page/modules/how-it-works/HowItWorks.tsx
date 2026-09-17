@@ -148,7 +148,12 @@ export function HowItWorks() {
         ref={revealRef}
         data-hiw-reveal
         className="relative motion-reduce:!h-auto"
-        style={{ height: `calc(${HEAD} + 100svh + ${TRACK})` }}
+        /* The trailing 100svh is the hold that lets Product preview rise OVER
+           the landed box instead of pushing it. That section carries a matching
+           -100svh margin, so the page is no taller than it was. The track's
+           ScrollTrigger is anchored to the reveal element by a pixel length, not
+           to this height, so nothing measured from akaru moves. */
+        style={{ height: `calc(${HEAD} + 100svh + ${TRACK} + 100svh)` }}
       >
         {/* For the header, which caches document offsets. The only dark thing
             that passes under it here is the coal row with the runway, and it
