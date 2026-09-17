@@ -544,8 +544,10 @@ knowing before adding a page there:
 - **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
-- **The header's one action is the status move** (`status-action.ts`): open, close or reopen
-  entries, always behind a dialog. The dialog for opening states that a race which has opened never
+- **The header's action is the status move** (`status-action.ts`): open, close or reopen
+  entries, always behind a dialog. **A race that can still take entries also gets Add places**
+  (STE-57), the one exception to one action: closing must stay reachable until entries close on
+  their own (STE-46), and adding places is the main button beside it. The dialog for opening states that a race which has opened never
   returns to not open. Completing and cancelling are not offered here.
 - **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
   (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
@@ -562,6 +564,37 @@ knowing before adding a page there:
 - **A `beforeEach` that resets a mock needs braces.** `beforeEach(() => mock.mockReset())` returns the
   mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
   with an error that points at the mock rather than at the cause.
+
+### Adding places to a distance (STE-57)
+
+`modules/organiser/race/` (`components/AddPlaces.tsx`, `AddPlacesDialog.tsx`, `lib/add-places.ts`,
+`lib/add-places-run.ts`), with the runner's side in `modules/event-detail/`. Mockup:
+`docs/superpowers/specs/2026-09-17-quota-increase-mockup.html`. What is settled:
+
+- **Add places is a menu of distances in the race header**, beside Close/Reopen entries, on an
+  `Open` or `Closed` race that has not run. One distance opens the dialog directly. Every distance
+  is offered, not only a full one (Ancung, 2026-09-17).
+- **A raise is never sent without its announcement.** The contract cannot enforce the pairing, so
+  the dialog is one form: the new number, a sentence the page writes from the numbers ("Places for
+  10K raised from 500 to 800."), which cannot be edited, and an optional note.
+- **Three steps, in this order:** sign the announcement (SEP-53), `increaseQuota`, then
+  `POST /events/:id/announcements`. Signing first means a decline moves nothing. A raise that fails
+  without a decline is checked on the ledger, and counts as landed only if the quota is **exactly**
+  the new number. If only publishing fails, the dialog cannot be closed and its one button is
+  **Publish the announcement**. A signature older than nine minutes is signed again, because the
+  server refuses a `published_at` more than ten minutes off.
+- **The plan is frozen at the press.** The race is refetched once the places land, and a plan
+  still built from the live quota would rewrite the sentence as "800 to 800".
+- **Runners see two things**: a dated "Places raised from … to … on …" line per raise on the
+  distance card (`lib/event/quota-history.ts`, from `GET /events/:id`), and **Updates** under
+  General information in Details. Both come from the backend and disappear, never error, when it
+  is down.
+- **An announcement is verified on the page** (`isSignedByOrganiser`, `lib/event/announcements.ts`)
+  against the organiser the chain names and this app's network and registry. One that fails is
+  still listed, marked "Could not confirm the organiser signed this". Checked in a browser against
+  the real signed announcement on testnet event 23.
+- **stellar-sdk's crypto fails under jsdom** (see Tests): the announcement tests run with
+  `// @vitest-environment node`, and component tests mock `lib/event/announcements`.
 
 ### `/events/[id]/enter` — a runner enters (STE-21, round 1)
 
