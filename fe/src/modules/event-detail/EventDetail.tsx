@@ -23,6 +23,8 @@ import Link from "next/link";
 import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
+import { useAnnouncements, useQuotaHistory } from "@/hooks/useRaceUpdates";
+import { isSignedByOrganiser } from "@/lib/event/announcements";
 import { useRunnerRecords } from "@/hooks/useRunnerRecords";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -41,6 +43,12 @@ export function EventDetail({ eventId }: { eventId: number }) {
   const address = useWallet((state) => state.address);
   const records = useRunnerRecords(address);
   const mine = records.data?.find((record) => record.eventId === eventId);
+  /*
+    STE-57: what changed since publishing. Both from the backend, so neither
+    holds the page up or replaces it with an error when the index is down.
+  */
+  const announcements = useAnnouncements(eventId);
+  const quotaHistory = useQuotaHistory(eventId);
 
   if (isPending) {
     return (
@@ -94,6 +102,13 @@ export function EventDetail({ eventId }: { eventId: number }) {
         document={document}
         addOns={addOns.data ?? []}
         myEntry={mine ? { tokenId: mine.tokenId, categoryId: mine.categoryId } : undefined}
+        // Checked here against the organiser the chain names, not trusted
+        // from the server that stored them.
+        updates={(announcements.data ?? []).map((announcement) => ({
+          announcement,
+          signed: isSignedByOrganiser(announcement, event.organiser, eventId),
+        }))}
+        raises={quotaHistory.data}
         proofs={
           <TabProofs
             result={metadata.data}

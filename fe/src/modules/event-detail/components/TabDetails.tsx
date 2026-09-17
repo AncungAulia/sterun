@@ -8,6 +8,8 @@
  */
 import {
   AtSignIcon,
+  BadgeCheckIcon,
+  TriangleAlertIcon,
   CalendarDaysIcon,
   GlobeIcon,
   MapPinIcon,
@@ -16,8 +18,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { EXPLORER_BASE } from "@/lib/chain/env";
+import type { Announcement } from "@/lib/event/announcements";
 import { formatEventDateTime, shortAddress } from "@/utils/format";
+
+/** An announcement, and whether this page could confirm the organiser signed it. */
+export interface RaceUpdate {
+  announcement: Announcement;
+  signed: boolean;
+}
 import { openInMapsHref } from "@/utils/geo";
 import type { EventMetadata } from "@/lib/event/metadata";
 
@@ -53,10 +63,13 @@ export function TabDetails({
   document,
   organiser,
   startsAt,
+  updates = [],
 }: {
   document: EventMetadata | undefined;
   organiser: string;
   startsAt: bigint;
+  /** Newest first (STE-57). The section is not drawn at all without one. */
+  updates?: RaceUpdate[];
 }) {
   const place = [
     document?.location?.name,
@@ -125,6 +138,8 @@ export function TabDetails({
         </div>
       </section>
 
+      {updates.length > 0 ? <Updates updates={updates} /> : null}
+
       {document?.links?.instagram || document?.links?.website ? (
         <section>
           <h2 className="heading-strong text-lg text-foreground">Socials</h2>
@@ -169,5 +184,48 @@ export function TabDetails({
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What the organiser said after publishing (STE-57), newest first.
+ *
+ * Every announcement is shown, including one this page could not confirm:
+ * hiding it would let a broken index silently take back what an organiser
+ * said, and showing it as signed would let one put words in their mouth. So
+ * the mark beside each says which it is, in words, and the sentence under the
+ * list says what an update can and cannot change.
+ */
+function Updates({ updates }: { updates: RaceUpdate[] }) {
+  return (
+    <section>
+      <h2 className="heading-strong text-lg text-foreground">Updates</h2>
+      <ol className="mt-3 flex flex-col gap-5">
+        {updates.map(({ announcement, signed }) => (
+          <li key={announcement.id} className="border-l-2 border-teal-200 pl-4">
+            <p className="numeric text-sm text-n-500">
+              {formatEventDateTime(BigInt(Math.floor(Date.parse(announcement.publishedAt) / 1000)))}
+            </p>
+            {/* Plain text with its paragraphs kept, like the description. */}
+            <p className="mt-1 max-w-2xl text-base whitespace-pre-line text-ink">{announcement.body}</p>
+            {signed ? (
+              <Badge variant="success" className="mt-2">
+                <BadgeCheckIcon aria-hidden="true" />
+                Signed by the organiser
+              </Badge>
+            ) : (
+              <Badge variant="warning" className="mt-2">
+                <TriangleAlertIcon aria-hidden="true" />
+                Could not confirm the organiser signed this
+              </Badge>
+            )}
+          </li>
+        ))}
+      </ol>
+      <p className="mt-4 max-w-2xl text-sm text-n-500">
+        The race details on this page are what the organiser published when the race was created.
+        Updates never change them. They are added beside them.
+      </p>
+    </section>
   );
 }

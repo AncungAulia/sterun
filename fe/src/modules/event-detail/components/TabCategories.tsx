@@ -14,13 +14,16 @@
  * about, and a warning shown where it does not apply is how warnings stop
  * being read.
  */
+import { TrendingUpIcon } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { NonRefundableNotice } from "@/components/feedback/NonRefundableNotice";
-import { formatPrice } from "@/utils/format";
+import type { QuotaRaise } from "@/lib/event/quota-history";
+import { formatEventDate, formatPrice } from "@/utils/format";
 import type { SterunCategory } from "@sterunxyz/sdk";
 
 export function TabCategories({
@@ -28,6 +31,7 @@ export function TabCategories({
   openForEntry,
   offerEntry = true,
   enteredCategoryId,
+  raises,
 }: {
   categories: SterunCategory[];
   openForEntry: boolean;
@@ -44,6 +48,12 @@ export function TabCategories({
    * payment it warns about.
    */
   enteredCategoryId?: number;
+  /**
+   * When each distance's places were raised, oldest first (STE-57). From the
+   * index, so optional: without it a card has no raised line and loses nothing
+   * else. The places themselves always come from the chain.
+   */
+  raises?: ReadonlyMap<number, QuotaRaise[]>;
 }) {
   if (categories.length === 0) {
     return (
@@ -96,6 +106,24 @@ export function TabCategories({
                 </Link>
               ) : null}
             </div>
+
+            {raises?.get(category.categoryId)?.length ? (
+              <>
+                <Separator />
+                <ul className="flex flex-col gap-1.5">
+                  {raises.get(category.categoryId)!.map((raise) => (
+                    <li
+                      key={`${raise.at}-${raise.current}`}
+                      className="numeric flex items-start gap-2 text-sm text-n-700"
+                    >
+                      <TrendingUpIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-teal-500" />
+                      Places raised from {raise.previous.toLocaleString("en-US")} to{" "}
+                      {raise.current.toLocaleString("en-US")} on {formatEventDate(raise.at)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </Card>
         );
       })}

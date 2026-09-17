@@ -13,6 +13,7 @@ import { useCallback, useState } from "react";
 
 import { eventKeys } from "@/hooks/useEvents";
 import { useChainWrite } from "@/hooks/useChainWrite";
+import { raceUpdateKeys } from "@/hooks/useRaceUpdates";
 import { readClient } from "@/lib/chain/sterun";
 import { publishAnnouncement } from "@/lib/event/announcements";
 import { signMessage } from "@/lib/wallet/kit";
@@ -23,12 +24,6 @@ import {
   type AddPlacesPlan,
   type AddPlacesState,
 } from "../lib/add-places-run";
-
-/** The runner-facing reads a raise changes, beyond the chain's own. */
-export const updatesKeys = {
-  announcements: (eventId: number) => ["announcements", eventId] as const,
-  quotaHistory: (eventId: number) => ["quota-history", eventId] as const,
-};
 
 export function useAddPlaces() {
   const queryClient = useQueryClient();
@@ -63,10 +58,10 @@ export function useAddPlaces() {
       if (end.raised) {
         // The page, the rail and the dashboard all read places from "events".
         void queryClient.invalidateQueries({ queryKey: eventKeys.all });
-        void queryClient.invalidateQueries({ queryKey: updatesKeys.quotaHistory(plan.eventId) });
+        void queryClient.invalidateQueries({ queryKey: raceUpdateKeys.quotaHistory(plan.eventId) });
       }
       if (end.published) {
-        void queryClient.invalidateQueries({ queryKey: updatesKeys.announcements(plan.eventId) });
+        void queryClient.invalidateQueries({ queryKey: raceUpdateKeys.announcements(plan.eventId) });
       }
       return end;
     },

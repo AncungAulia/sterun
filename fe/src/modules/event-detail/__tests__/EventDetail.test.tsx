@@ -36,6 +36,16 @@ vi.mock("@/lib/wallet/kit", () => ({
   signMessage: vi.fn(),
   walletErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
+/*
+ * STE-57: announcements and quota raises come from the backend. Both are
+ * rejected by default, as with the index down, so every older test here also
+ * proves the page does not depend on them.
+ */
+const listAnnouncements = vi.hoisted(() => vi.fn());
+const isSignedByOrganiser = vi.hoisted(() => vi.fn());
+const fetchQuotaHistory = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/event/announcements", () => ({ listAnnouncements, isSignedByOrganiser }));
+vi.mock("@/lib/event/quota-history", () => ({ fetchQuotaHistory }));
 vi.mock("@/lib/event/metadata", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/event/metadata")>()),
   fetchEventMetadata,
@@ -97,6 +107,11 @@ beforeEach(() => {
   listAddOns.mockResolvedValue([]);
   recordsOfDetailed.mockReset();
   recordsOfDetailed.mockResolvedValue([]);
+  listAnnouncements.mockReset();
+  listAnnouncements.mockRejectedValue(new Error("the index is unreachable"));
+  isSignedByOrganiser.mockReset();
+  fetchQuotaHistory.mockReset();
+  fetchQuotaHistory.mockRejectedValue(new Error("the index is unreachable"));
   useWallet.setState({ address: null, isRestoring: false, isConnecting: false, error: null });
 });
 
@@ -688,5 +703,75 @@ describe("EventDetail", () => {
       expect(screen.getByText("a".repeat(64))).toBeInTheDocument();
       expect(screen.getByText("b".repeat(64))).toBeInTheDocument();
     });
+  });
+});
+
+describe("EventDetail, what changed since publishing (STE-57)", () => {
+  function announcement(id: string, publishedAt: string, body: string) {
+    return {
+      id,
+      eventId: 2,
+      publishedAt,
+      body,
+      signer: ORGANISER,
+      signature: "c2ln",
+      networkPassphrase: "Test SDF Network ; September 2015",
+      eventRegistry: "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+    };
+  }
+
+  it("lists announcements newest first under Details, saying which the organiser signed", async () => {
+    getEventSummary.mockResolvedValue(summary());
+    listAnnouncements.mockResolvedValue([
+      announcement("2", "2026-09-18T01:12:00.000Z", "Places for 10K raised from 500 to 800.\n\nSecond batch."),
+      announcement("1", "2026-09-10T12:40:00.000Z", "Start moved to Lapangan Banteng."),
+    ]);
+    isSignedByOrganiser.mockImplementation((a: { id: string }) => a.id === "2");
+
+    renderDetail();
+
+    const heading = await screen.findByRole("heading", { name: "Updates" });
+    const items = within(heading.closest("section")!).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Places for 10K raised from 500 to 800.");
+    expect(items[0]).toHaveTextContent("Second batch.");
+    expect(items[0]).toHaveTextContent("Signed by the organiser");
+    expect(items[1]).toHaveTextContent("Start moved to Lapangan Banteng.");
+    expect(items[1]).toHaveTextContent("Could not confirm the organiser signed this");
+    // Checked against the organiser the chain names.
+    expect(isSignedByOrganiser).toHaveBeenCalledWith(expect.objectContaining({ id: "2" }), ORGANISER, 2);
+  });
+
+  it("draws no Updates section for a race with none, or with the index down", async () => {
+    getEventSummary.mockResolvedValue(summary());
+    listAnnouncements.mockResolvedValue([]);
+    renderDetail();
+    await screen.findByText("Borobudur Marathon");
+    expect(screen.queryByRole("heading", { name: "Updates" })).not.toBeInTheDocument();
+  });
+
+  it("says on the distance card when its places were raised, and nothing on one never raised", async () => {
+    getEventSummary.mockResolvedValue(
+      summary({}, [category(0, { quota: 800, enteredCount: 500 }), category(1, { code: "5K" })]),
+    );
+    fetchQuotaHistory.mockResolvedValue(
+      new Map([[0, [{ previous: 500, current: 800, at: 1_789_700_000n }]]]),
+    );
+
+    renderDetail();
+    await showTab(/Distances/);
+
+    expect(await screen.findByText(/Places raised from 500 to 800 on Sep 1[78], 2026/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Places raised/)).toHaveLength(1);
+  });
+
+  it("still lists every distance and its places when the index cannot say what was raised", async () => {
+    getEventSummary.mockResolvedValue(summary({}, [category(0, { quota: 800, enteredCount: 500 })]));
+
+    renderDetail();
+    await showTab(/Distances/);
+
+    expect(await screen.findByText("300 of 800 entries left")).toBeInTheDocument();
+    expect(screen.queryByText(/Places raised/)).not.toBeInTheDocument();
   });
 });
