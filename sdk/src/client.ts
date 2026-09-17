@@ -166,13 +166,13 @@ export interface EnterArgs {
 /**
  * The most results one `recordResults` call can hold (contracts v2.6, STE-60).
  *
- * Measured, not computed: both contracts deployed from wasm under the mainnet
- * per-transaction limits, every row a timed finish. The footprint limit of 100
- * ledger entries binds at 46 (`2n + 8`), before written entries (49) or event
- * bytes (120). Testnet's limits are looser, and a batch sized to them would
- * fail on mainnet, so this is the number to batch by on every network.
+ * Measured, not computed: every row a timed finish (the largest event, 136
+ * bytes), against the per-transaction limits live on testnet and mainnet alike
+ * on 2026-09-17. The 16,384 bytes of contract events bind at 120; 121 is
+ * refused by the network's own simulation. If the network's limits change,
+ * this has to be measured again, not scaled.
  */
-export const RECORD_RESULTS_MAX_BATCH = 46;
+export const RECORD_RESULTS_MAX_BATCH = 120;
 
 /**
  * One result for {@link SterunClient.recordResults}. `kind` uses the same words
