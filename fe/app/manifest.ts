@@ -12,10 +12,16 @@ import type { MetadataRoute } from "next";
  * They are `--color-paper` and `--color-teal`; if those change, change these in
  * the same commit.
  *
- * The icons say the size they really are. `app/icon.png` is 256px, which is
- * enough for Chrome to offer an install, and the lockup is there as the
- * scalable one. A 512px export would make a better splash screen, and that is
- * Nabil's to draw rather than ours to upscale.
+ * The icons say the size they really are, and both PNGs are rendered from
+ * `public/brand/logo/sterun-logo-black.svg` rather than upscaled from the
+ * 256px `app/icon.png`: 192 and 512 are the two sizes Android asks for, and
+ * 512 is what a splash screen is drawn from.
+ *
+ * They are `maskable` as well as `any`. Android crops an icon to whatever
+ * shape the launcher uses, a circle on most phones, so the mark is laid out at
+ * 62% of the canvas on a full bleed of `paper`: the crop can only ever eat
+ * background. Declared without that, the launcher adds its own white plate
+ * behind the icon and the mark ends up a stamp inside a stamp.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -27,7 +33,10 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f8f8f8",
     theme_color: "#016985",
     icons: [
-      { src: "/icon.png", sizes: "256x256", type: "image/png" },
+      { src: "/icons/sterun-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/sterun-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/sterun-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+      { src: "/icons/sterun-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       { src: "/brand/logo/sterun-logo-black.svg", sizes: "any", type: "image/svg+xml" },
     ],
   };

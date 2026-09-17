@@ -34,6 +34,7 @@ import { LiveCode } from "./components/LiveCode";
 import { PassFacts } from "./components/PassFacts";
 import { OfflineNotice } from "./components/PassNotices";
 import { useOnline } from "@/hooks/useOnline";
+import { InstallApp } from "@/components/layout/InstallApp";
 
 
 export function PassPage({ tokenId }: { tokenId: number }) {
@@ -70,7 +71,7 @@ export function PassPage({ tokenId }: { tokenId: number }) {
         <div
           role="status"
           aria-label="Opening your pass"
-          className="h-96 animate-pulse rounded-lg bg-n-100"
+          className="h-96 skeleton rounded-lg"
         />
       </div>
     );
@@ -112,6 +113,10 @@ export function PassPage({ tokenId }: { tokenId: number }) {
         */
         <LiveCode tokenId={tokenId} secretHex={entry.totpSecret} />
       )}
+
+      {/* Under the code, never over it: the pass is held up at a desk, and the
+          one thing on this screen a volunteer reads must stay the first. */}
+      <InstallApp what="pass" />
     </div>
   );
 }

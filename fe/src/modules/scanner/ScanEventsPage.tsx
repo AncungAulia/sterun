@@ -27,6 +27,7 @@ import { RosterCard } from "./components/RosterCard";
 import { useDownloadRoster } from "./hooks/useDownloadRoster";
 import { useScannableEvents, useStoredRosters } from "./hooks/useScannerEvents";
 import type { StoredRoster } from "./lib/scanner-store";
+import { InstallApp } from "@/components/layout/InstallApp";
 
 interface Row {
   eventId: number;
@@ -158,6 +159,8 @@ export function ScanEventsPage() {
       <p className="text-base text-n-600">
         The download needs signal once. After that the whole desk works offline.
       </p>
+
+      <InstallApp what="desk" />
     </div>
   );
 }
