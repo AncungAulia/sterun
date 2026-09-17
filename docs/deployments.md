@@ -1548,6 +1548,57 @@ with the origin echoed for each, `GET /events` from the Vercel origin answers 20
 and an origin that is not on the list gets no header at all. The list is an exact match, so a new
 preview domain needs its own entry.
 
+## STE-46 — the close date, end to end on a throwaway deployment (2026-09-17)
+
+**The live EventRegistry (`CAPB6NQP…`) was NOT upgraded.** v2.5 is a spec change that waits for Axel
+and fable to approve the PR. To prove it on the real network before that, `bash
+sc/scripts/registration-closes-testnet.sh` deployed a throwaway pair from this branch's wasm, with a
+throwaway admin funded by Friendbot, wired to the real sUSD SAC, and ran
+`be/scripts/e2e-registration-closes.ts` against it.
+
+| | Address | wasm |
+| --- | --- | --- |
+| EventRegistry v2.5 (throwaway) | [`CBJNSKNNJGY6I56QIOV7DPFQPEDCBNAPTLBE2PIXMNGNYP4OJGJE5DA2`](https://stellar.expert/explorer/testnet/contract/CBJNSKNNJGY6I56QIOV7DPFQPEDCBNAPTLBE2PIXMNGNYP4OJGJE5DA2) | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` (the INTERFACE.md v2.5.0 hash) |
+| RaceRecord (throwaway) | [`CAIV7J6VOUK2Y6CJNJQFK4E27AJLXNZAQ6VGOG55NMI3THACQ3HOBWGY`](https://stellar.expert/explorer/testnet/contract/CAIV7J6VOUK2Y6CJNJQFK4E27AJLXNZAQ6VGOG55NMI3THACQ3HOBWGY) | `a948cd59…` (a local build of unchanged C2 source; Rust builds are not bit-for-bit reproducible) |
+
+```
+▸ An organiser, a free race with one distance, open, no close date
+  event 0, category 0; getRegistrationCloses → null
+  runner 1 entered with no date: token 0, ledger clock 1789621542
+▸ A close date 45 seconds ahead of the ledger clock: before it, entries still get in
+  set_registration_closes 1789621587 (tx f7642236bd74…); runner 2 entered at 1789621552, bib 2
+▸ Past the date: RegistrationClosed(20), and the status is still Open
+  enter → RegistrationClosed (#20, event-registry); status still Open
+▸ Closed says EventNotOpen whatever the date; Open again does not reopen past the date
+  Closed → EventNotOpen (#4); Open again → still RegistrationClosed (#20)
+▸ A later date is the extension that reopens it, and the bibs continue
+  extended to 1790226387 (tx 85bc1f0a6e72…); runner 3 entered, bib 3
+▸ The same date again, a stranger, an unknown event
+  stranger refused: SterunNetworkError
+  same date accepted; date unchanged; getRegistrationCloses(999999) → EventNotFound (#2)
+▸ What the chain emitted, decoded by the indexer's own decoder
+  2 registration_closes_set: null → 1789621587, 1789621587 → 1790226387 (the repeat emitted nothing)
+▸ The indexer's reader: the throwaway registry, and the live v2.4 one
+  throwaway: 1790226387; live CAPB6NQP… (v2.4, no such function): null
+✓ entries stop at the close date, only a later date reopens them, and the indexer reads what the chain emits
+```
+
+Two results that only the real network could give:
+
+- **`previous: None` decodes.** The first `registration_closes_set` came off `getEvents` with
+  `previous` as `ScVal::Void`, and `be/`'s own decoder read it as `null`. The unit tests build that value
+  by hand; this is the chain's own encoding.
+- **The backend is safe to deploy before the upgrade.** Against the live v2.4 registry,
+  `get_registration_closes` does not exist, and `ChainReader.registrationCloses` answered `null` rather
+  than failing, so a rebuild or `doctor` on production keeps working in the window between merging
+  this and upgrading the contract.
+
+The stranger's refusal surfaces as `SterunNetworkError`, not a contract error: an auth failure is a host
+error with no contract code, which is how every organiser-gated function behaves.
+
+**Still to do after approval:** upgrade `CAPB6NQP…` in place to `995d19ea…`, prove it on the live
+address, deploy the backend with migration 014, and record both here.
+
 ---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
