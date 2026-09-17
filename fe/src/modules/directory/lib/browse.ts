@@ -9,7 +9,7 @@
 import type { SterunCategory } from "@sterunxyz/sdk";
 
 import type { Area, Place } from "@/lib/place/area";
-import { sortEvents, type EventSummary } from "@/lib/event/events";
+import { entryRank, sortEvents, type EventSummary } from "@/lib/event/events";
 import type { EventMetadata } from "@/lib/event/metadata";
 import { formatPrice } from "@/utils/format";
 import { haversineKm, type Coordinates } from "@/utils/geo";
@@ -157,10 +157,17 @@ export function matchesSearch(entry: DirectoryEntry, query: string): boolean {
   );
 }
 
+/** The three groups `entryRank` sorts into, in the order they are shown. */
+const RANKS = [0, 1, 2] as const;
+
 /**
- * Races in date order. Upcoming ones always come first, and races already run
- * stay below them most recent first whichever way the upcoming ones go: "latest
- * first" is a question about races you can still enter.
+ * Races in date order, inside the groups `entryRank` puts them in: enterable
+ * first, then still to come, then what is over.
+ *
+ * The groups are never mixed, whichever date order the drawer asked for.
+ * "Furthest date first" is a question about races you can still enter, so it
+ * reverses each group from the inside and races already run stay most recent
+ * first.
  */
 export function sortByDate(
   entries: readonly DirectoryEntry[],
@@ -174,17 +181,20 @@ export function sortByDate(
   );
   const ordered =
     order === "latest"
-      ? [
-          ...sorted.filter((item) => item.event.startsAt >= nowS).reverse(),
-          ...sorted.filter((item) => item.event.startsAt < nowS),
-        ]
+      ? RANKS.flatMap((rank) => {
+          const group = sorted.filter((item) => entryRank(item, nowS) === rank);
+          // Only what is still ahead reverses: "latest" on races that have
+          // already run would bury the most recent one at the bottom.
+          return rank === 2 ? group : group.reverse();
+        })
       : sorted;
   return ordered.flatMap((item) => bySummary.get(item) ?? []);
 }
 
 /**
- * The whole list: still to come first, already run below, and inside each half
- * the races in the chosen place, or nearest to the visitor, leading.
+ * The whole list: enterable races first, then the rest still to come, then what
+ * is over, and inside each group the races in the chosen place, or nearest to
+ * the visitor, leading.
  *
  * The place sorts rather than filters (Revision 3 of the directory spec): a
  * visitor who picked Yogyakarta wants those races first, but hiding the rest
@@ -194,15 +204,15 @@ export function sortByDate(
  * The place is the *inner* key, never the outer one. Applied to the whole list
  * it would promote last year's Yogyakarta race above next week's Jakarta one,
  * which puts a race nobody can enter at the top of the page. "Can I still enter
- * this?" outranks "is it near me?", so the date split decides the halves and the
- * place only decides the order within them. Within each half the date order the
- * drawer asked for still applies. No place chosen means date order alone.
+ * this?" outranks "is it near me?", so the groups decide the order and the place
+ * only decides it within them. Within each group the date order the drawer asked
+ * for still applies. No place chosen means that order alone.
  *
- * Coordinates take the same shape, one level down: inside each half the races
+ * Coordinates take the same shape, one level down: inside each group the races
  * are nearest first, and the ones whose document carries no pin follow in the
  * date order they already had. A real distance is a finer key than "in this
  * province or not", but it is not a stronger claim than "can I still enter
- * this?", so it does not get to reorder the halves either.
+ * this?", so it does not get to reorder the groups either.
  */
 export function sortByPlace(
   entries: readonly DirectoryEntry[],
@@ -212,16 +222,12 @@ export function sortByPlace(
 ): DirectoryEntry[] {
   const sorted = sortByDate(entries, order, nowS);
   if (!place) return sorted;
-  return [
-    ...leadWithPlace(
-      sorted.filter((item) => item.summary.event.startsAt >= nowS),
+  return RANKS.flatMap((rank) =>
+    leadWithPlace(
+      sorted.filter((item) => entryRank(item.summary, nowS) === rank),
       place,
     ),
-    ...leadWithPlace(
-      sorted.filter((item) => item.summary.event.startsAt < nowS),
-      place,
-    ),
-  ];
+  );
 }
 
 /** "500 entries left", "1 entry left" or "Sold out". Only for a race open for entry. */
