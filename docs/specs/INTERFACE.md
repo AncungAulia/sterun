@@ -1,6 +1,6 @@
-# INTERFACE — the FROZEN Sterun contracts (v2.5.0)
+# INTERFACE — the FROZEN Sterun contracts (v2.6.0)
 
-> **Status: FROZEN 2026-09-17 (v2.5 — entries close on their own at the registration close date).**
+> **Status: FROZEN 2026-09-17 (v2.6 — an organiser records many results in one signature).**
 > This document is handoff contract number 1 in `docs/SYSTEM_DESIGN.md` §9: the function
 > signatures and `#[contractevent]` layouts that **James** (backend/indexer) and **Ancung**
 > (web app, QR pass, scanner PWA) hold, so they can work in parallel without waiting for
@@ -9,6 +9,33 @@
 > Any change to a signature, an event layout, or an error code after this PR is merged requires:
 > **a new PR + approval from Axel (PM) + fable**, an entry in `docs/specs/CHANGELOG.md`, and
 > **regenerated TS bindings** (STE-14). Error codes are public ABI — **never renumber them**.
+
+## What changed from v2.5.0 (MINOR, additive)
+
+STE-60. A finish list of 312 runners was 312 organiser signatures, and a Stellar transaction may hold
+only one `InvokeHostFunctionOp`, so recording many results in one signature has to be one contract
+function that loops.
+
+| Change | Impact on clients |
+| --- | --- |
+| `record_results(event_id, results)` new in C2 | additive |
+| New types: `ResultEntry`, `ResultOutcome` | additive |
+| New error code: `ResultForAnotherEvent(108)` | additive — nothing renumbered |
+| No new event: a batch emits the single calls' events | an indexer needs no change |
+| No changed signature, no changed event layout, no storage change | — |
+| Installed by `upgrade` at the **same** address (`CCVW7WVC…`) | no new address; existing records intact |
+
+Three things you must read before using this version:
+
+- **A batch is atomic.** The first invalid row reverts the whole call, rows before it included. Every
+  row obeys exactly the rules of its single call (`InvalidFinishTime(105)`, `InvalidState(103)`,
+  terminal states), because both run the same code. A token listed twice fails on its second row.
+- **Every row must belong to `event_id`**, or the batch reverts `ResultForAnotherEvent(108)`. The
+  organiser gate is read once, for that event.
+- **At most 46 rows per call**, measured, not computed: with every row timed, the per-transaction
+  footprint limit of 100 ledger entries binds at 46 on mainnet's limits, before the written-entries or
+  event-byte limits. The contract has no cap of its own; a larger batch fails on the network's
+  limits. The SDK refuses more than 46 before signing.
 
 ## What changed from v2.4.0 (MINOR, additive)
 
@@ -227,18 +254,16 @@ The artefacts used for this freeze:
 | Contract | Wasm | Wasm hash (sha256) | Size |
 | --- | --- | --- | ---: |
 | EventRegistry (C1, v2.5) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` | 35,814 B |
-| RaceRecord (C2, v2.2) | `sc/target/wasm32v1-none/release/race_record.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
+| RaceRecord (C2, v2.6) | `sc/target/wasm32v1-none/release/race_record.wasm` | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` | 24,844 B |
 
 Each version moves exactly one of the two. EventRegistry did **not** change in v2.2 (its v2.1 hash
 stood, and its address was not `upgrade`d); RaceRecord does **not** change in v2.3 — `bib_no` carries
 a different number, but no C2 code produced it, so its hash is exactly the one frozen at v2.2 — and
-it does not change in v2.4 or v2.5 either, which touch C1 alone.
+it does not change in v2.4 or v2.5 either, which touch C1 alone. v2.6 touches C2 alone, so
+EventRegistry's v2.5 hash stands.
 
-> RaceRecord's `bib_no` field still carries the doc comment "the category sequence handed out by
-> `EventRegistry::reserve_slot`", which v2.3 makes wrong. Doc comments travel in the contract spec
-> and therefore in the wasm hash, so correcting that sentence would mean an `upgrade` transaction
-> against a live contract whose behaviour did not change. The table in §2.2 below is right; the code
-> comment is corrected at C2's next real wasm change.
+> RaceRecord's `bib_no` doc comment, wrong since v2.3 ("the category sequence"), was corrected in
+> v2.6, the first C2 wasm change since then, as this note promised.
 
 Artefacts that have been **replaced at the same address** through `upgrade` (the full history and
 its transactions are in `docs/deployments.md`):
@@ -251,14 +276,16 @@ its transactions are in `docs/deployments.md`):
 | EventRegistry v2.4.0 | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` | 31,770 B |
 | RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21,795 B |
 | RaceRecord v2.0.1/v2.1.0 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
+| RaceRecord v2.2.0–v2.5.0 | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
 
-Five of those artefacts are also **committed**, each as the "before" of an upgrade test that
+Six of those artefacts are also **committed**, each as the "before" of an upgrade test that
 deploys the genuinely live code, writes state with it, then replaces it with the current build:
 `22bb432e…`, `cf009033…`, `c8b5e82a…` and `33b5e687…` in `sc/contracts/event_registry/testdata/`
 (the first proves `DataKey::Organiser` was added safely, the second that the per-distance bibs
 already on chain still decode once bibs become event-wide, the third that a sold-out category written
 by the running code takes a larger quota and sells again, the fourth that an event the running code
-opened takes a close date and stops at it while an event with none runs as before) and `27749180…` in
+opened takes a close date and stops at it while an event with none runs as before), `0e29026d…` in
+`sc/contracts/race_record/testdata/` (records the running code minted take a batch of results), and `27749180…` in
 `sc/contracts/race_record/testdata/` (proves every record state the old code could write still
 decodes, and that `record_finish_untimed` works on records it minted).
 
@@ -565,6 +592,7 @@ One **non-transferable** record per entry, bound to the runner's address. Design
 | `record_finish` | `token_id: u32, finish_time_s: u32` | `Result<(), Error>` | **that event's organiser** (read from the registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidFinishTime(105)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `record_finish_untimed` | `token_id: u32` | `Result<(), Error>` | **that event's organiser** (read from the registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `record_dnf` | `token_id: u32` | `Result<(), Error>` | **that event's organiser** | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
+| `record_results` | `event_id: u32, results: Vec<ResultEntry>` | `Result<(), Error>` | **`event_id`'s organiser** (read from the registry), once for the batch | `NotInitialized(100)`, `RecordNotFound(101)`, `ResultForAnotherEvent(108)`, `InvalidFinishTime(105)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `extend_record_ttl` | `token_id: u32` | `Result<(), Error>` | **nobody — permissionless** | `RecordNotFound(101)` |
 | `record_of` | `token_id: u32` | `Result<RecordData, Error>` | — (view) | `RecordNotFound(101)` |
 | `records_of` | `runner: Address` | `Vec<u32>` | — (view) | **never reverts** (`[]` when empty) |
@@ -613,6 +641,13 @@ Important notes for D2/D3:
   gate (a scanner may check a runner in, but never publish a result), the same `RacepackClaimed`
   guard, the same terminal `Finished`. It leaves `finish_time_s` as `None` and writes `result_at`.
   It has no `finish_time_s` argument, so it cannot revert `InvalidFinishTime(105)`.
+- **`record_results` records many results in one signature** (v2.6). Each row is a `token_id` and a
+  `ResultOutcome`: `Timed(t)` is `record_finish(token_id, t)`, `Untimed` is
+  `record_finish_untimed(token_id)`, `Dnf` is `record_dnf(token_id)`. Each row runs the same code as
+  its single call, and emits the same event, in row order. The batch is **atomic**: the first invalid
+  row reverts all of it. Every row must belong to `event_id` (`ResultForAnotherEvent(108)`). An empty
+  list succeeds and records nothing. **At most 46 rows per call** on mainnet's limits (measured; see
+  "What changed from v2.5.0"); the contract has no cap of its own.
 - **How to read a result:** `Finished` + `finish_time_s: Some(t)` is an official time of `t`
   seconds; `Finished` + `finish_time_s: None` is **finished with no official time** (declared by the
   organiser); `Dnf` is did-not-finish or no-show. A result is never rewritten — an untimed finish
@@ -635,6 +670,15 @@ RecordData {
 }
 
 RecordState = Entered | RacepackClaimed | Finished | Dnf
+
+// one row of record_results (v2.6)
+ResultEntry {
+  outcome: ResultOutcome,
+  token_id: u32,
+}
+
+// Timed(u32) = record_finish(t), Untimed = record_finish_untimed, Dnf = record_dnf
+ResultOutcome = Timed | Untimed | Dnf
 ```
 
 The lifecycle (anything outside it → `InvalidState(103)` / `AlreadyClaimed(102)`):
@@ -701,6 +745,7 @@ it carries each unit's `seq` and the `price` actually charged.
 | 105 | `InvalidFinishTime` | `finish_time_s == 0` |
 | 106 | `TooManyAddOns` | `addon_ids` is longer than `addon_count(event_id)` or than 16 |
 | 107 | `DuplicateAddOn` | `addon_ids` holds the same id twice |
+| 108 | `ResultForAnotherEvent` | a `record_results` row names a record of a different event than `event_id` |
 
 Plus the OZ enum embedded in RaceRecord's spec (not ours, do not reuse):
 
@@ -842,6 +887,7 @@ changes, no regenerated bindings.
 | STE-35 | Paid add-ons (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
 | STE-41 | Untimed finish | `record_finish_untimed`, `RecordFinishedUntimed`, and `finish_time_s == None` on a `Finished` record — consumed by the `be/` indexer + CSV (James) and the `fe/` profile (Ancung) |
 | STE-46 | Registration closes on its own | `set_registration_closes`, `get_registration_closes`, `RegistrationClosesSet`, `RegistrationClosed(20)` — consumed by the `be/` indexer and the SDK (James) and the `fe/` wizard, console header and "Reopen and extend" flow, which must pair a later date with a signed announcement (Ancung) |
+| STE-60 | Many results in one signature | `record_results`, `ResultEntry`, `ResultOutcome`, `ResultForAnotherEvent(108)` — consumed by the SDK's `recordResults` (James) and the `fe/` results screen, which records a preview's `publishable` rows in batches of at most 46 (Ancung, STE-58) |
 | STE-55 | Raising a sold-out quota | `increase_quota`, `QuotaIncreased`, `QuotaNotIncreased(19)` — consumed by the `be/` indexer (James) and the `fe/` console's "add capacity" flow, which must pair it with a signed announcement (Ancung) |
 
 ---

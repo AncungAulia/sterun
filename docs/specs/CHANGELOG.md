@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.5.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.6.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,94 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.6.0] — 2026-09-17
+
+**MINOR — an organiser records many results in one signature (STE-60).** One new function, two new
+types, one new error code taking the next free number in the C2 band. No new event, no signature
+moved, no event layout moved, no storage change, nothing renumbered.
+
+### Why
+
+A finish list is recorded one call per runner: 312 finishers are 312 organiser signatures. The
+console's results screen (STE-58) cannot reasonably ask for that, and batching cannot be done from the
+client side because **a Stellar transaction may hold only one `InvokeHostFunctionOp`**. So it is one
+contract function that loops. Split out of STE-44, whose backend half shipped on 2026-09-14.
+
+### What was added
+
+| | |
+| --- | --- |
+| `record_results(event_id: u32, results: Vec<ResultEntry>) -> Result<(), Error>` | organiser of `event_id`, authorised once for the batch |
+| `ResultEntry { outcome: ResultOutcome, token_id: u32 }` | one row |
+| `ResultOutcome = Timed(u32) \| Untimed \| Dnf` | the three single-result functions, one variant each |
+| `ResultForAnotherEvent = 108` | a row names a record of a different event |
+
+The next free C2 code is now **109**.
+
+### Decisions, recorded so they are not reopened by accident
+
+- **Atomic.** The first invalid row reverts the whole batch, rows before it included. Results are
+  terminal, and the preview (STE-20, STE-44) is where a file is fixed before anything is published. A
+  partial batch would leave the organiser reconciling which half landed. Proposed on STE-60 before the
+  spec PR, as the ticket asked.
+- **One code path.** `record_finish`, `record_finish_untimed`, `record_dnf` and every batch row run the
+  same function, so a batch cannot accept what a single call refuses. The single functions' behaviour
+  did not change; their 72 tests pass unchanged on the refactor.
+- **Every row must belong to `event_id`.** The organiser gate is read once, for that event. Without
+  the row check, the organiser of one race could publish results into another race's records.
+- **The same events as the single calls**, one per row, in row order. An indexer needs no new handler.
+- **No cap in the contract**, and an empty batch succeeds with nothing recorded. The network's
+  per-transaction limits are what bound a batch, and they differ by network and move over time.
+
+### The maximum batch is 46 rows — measured
+
+Both contracts deployed from wasm, `soroban-sdk` testutils enforcing the mainnet per-invocation limits,
+every row a timed finish (the largest event). Per row: one record written, one more footprint entry
+read, 136 event bytes.
+
+| Resource for `n` rows | Measured | Mainnet limit | Binds at |
+| --- | --- | --- | ---: |
+| footprint ledger entries | `(n + 7) + (n + 1)` | 100 | **46** |
+| written entries | `n + 1` | 50 | 49 |
+| contract event bytes | `136n` | 16,384 | 120 |
+| CPU instructions | about 13.4 M at 45 | 600 M | — |
+
+A first measurement read only the written entries and concluded 49; the footprint limit was what the
+network would have refused. Two tests pin the result: 46 rows fit, 47 fail with
+`total footprint ledger entries: 102 > 100`. The SDK exposes `RECORD_RESULTS_MAX_BATCH = 46` and refuses
+a larger batch before signing. Testnet allows 200 written entries, so a batch sized to testnet would
+break on mainnet; clients use the mainnet figure everywhere.
+
+### Also corrected in the wasm
+
+`RecordData.bib_no`'s doc comment said "the category sequence", wrong since v2.3. Doc comments travel
+in the contract spec and the wasm hash, so §0 deferred the fix to C2's next real wasm change. This is
+that change. `RecordData`'s shape did not move.
+
+### Impact on existing data and running clients
+
+- **Existing records:** unchanged. Proven against the live wasm (`0e29026d…`, now committed as
+  `race_record_live_pre_results.wasm`): records it minted and checked in take a batch after the
+  upgrade, and a terminal record it wrote stays terminal.
+- **Running clients:** nothing they call changed. The three single functions keep their signatures,
+  errors and events.
+- **Indexers:** no new event. A batch is indistinguishable from the same results recorded one by one,
+  except that the events share a transaction.
+- **Vectors:** none added, none changed. `HASH_AND_TOTP.md` is untouched.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| `cd sc && cargo test` | RaceRecord 85 (13 new), EventRegistry 107 |
+| mutations | no event check, non-atomic, no batch auth, a zero time allowed, untimed without check-in, DNF out of a terminal state, the wrong event emitted: each fails a test |
+| wasm | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2`, 24,844 B |
+
+**Not yet upgraded on testnet.** Stacked on v2.5.0 (STE-46), and approved the same way: Axel and fable,
+then an in-place upgrade of `CCVW7WVC…`.
 
 ---
 
