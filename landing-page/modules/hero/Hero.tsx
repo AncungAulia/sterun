@@ -92,7 +92,7 @@ export function Hero() {
         </p>
 
         {/* No secondary line and no contracts link here. Both moved down to the
-            Proof section: the hero's job is to say what this is, and the link
+            proof block inside Problem: the hero's job is to say what this is, and the link
             asking a reader to go verify it lands better once they know what
             they would be verifying. The header's Launch app is the only thing
             to press on this screen. */}

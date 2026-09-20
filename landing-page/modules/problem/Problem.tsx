@@ -191,6 +191,9 @@ export function Problem() {
               ))}
             </ul>
 
+            {/* #proof is no longer in the menu, which now lists the sections
+                themselves, but the id stays: it is a shareable anchor straight
+                to the contracts, and anyone who has the old link keeps it. */}
             <div id="proof" className="mt-10 scroll-mt-28 text-sm leading-[1.5]">
               <p data-strip-line className="max-w-[26ch]">
                 The contracts are already running. Read them yourself.
