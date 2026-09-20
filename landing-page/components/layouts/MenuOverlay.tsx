@@ -75,11 +75,15 @@ const FOOTER_DELAY_MS = sideDelay(8) + 60;
  * panel also carries an 86px header offset and a footer. At 83% those three
  * together came to more than one screen and the menu scrolled; at 70% it fits.
  *
+ * The numbers are per line, so they carry the count: at four sections they were
+ * 11vw, 18vh and 13rem, and going to five lines scales each by 4/5 to keep the
+ * list the same share of the screen.
+ *
  * The 2.75rem floor is set by the narrowest phone. Once the word indent gained
  * its own floor, a 3rem "HOW IT WORKS" ended 4px from the edge of a 320px
  * screen, inside the 16px gutter every other element respects.
  */
-const NAV_SIZE = "clamp(2.75rem, min(11vw, 18vh), 13rem)";
+const NAV_SIZE = "clamp(2.75rem, min(8.8vw, 14.4vh), 10.4rem)";
 
 /**
  * Where Big Shoulders' capitals begin inside its line box, as a fraction of the

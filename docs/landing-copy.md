@@ -338,6 +338,5 @@ Why Stellar dan Closing CTA.
 | Screenshot directory dan detail event | Diambil dari `fe/` yang jalan |
 | Screenshot QR pass dan scanner | STE-18 |
 | Diagram 4 langkah | Dikerjakan bersama section *How it works* |
-| Menu nav 04 | `PROOF` → `#proof`, blok tautan kontrak di kolom kiri Problem. Pertimbangkan tambah atau ganti ke `PRODUCT` begitu section itu dibangun |
 | Isi baris footer | Keputusan Axel |
 | Landing jadi route `/` di `fe/` | Diskusi dengan Ancung |

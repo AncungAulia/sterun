@@ -40,10 +40,18 @@ export const CONTRACTS = {
   },
 } as const;
 
-/** Anchors into this page. There is no second page, so nav is in-page. */
+/**
+ * Anchors into this page. There is no second page, so nav is in-page.
+ *
+ * One line per section a reader would go back to, which is why Proof is not
+ * among them: it is the contract block inside Problem, and it was standing in
+ * for sections that had not been built. Keep this list and the footer's "This
+ * page" column saying the same thing.
+ */
 export const SECTIONS = [
   { n: "01", label: "Home", href: "#top" },
   { n: "02", label: "Problem", href: "#problem" },
   { n: "03", label: "How it works", href: "#how-it-works" },
-  { n: "04", label: "Proof", href: "#proof" },
+  { n: "04", label: "Product", href: "#product" },
+  { n: "05", label: "Why Stellar", href: "#why-stellar" },
 ] as const;
