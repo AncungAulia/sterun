@@ -40,7 +40,6 @@ export function WhyStellar() {
   return (
     <section
       ref={rootRef}
-      id="why-stellar"
       /* Deliberately unmarked for the header. An unmarked section counts as
          light, and marking it would hand the header a light band occupying
          exactly the same scroll range as the blue panel's dark one, which is
@@ -54,6 +53,13 @@ export function WhyStellar() {
          together if either changes. */
       className="relative z-0 -mt-[100svh] h-[390svh] bg-paper text-ink"
     >
+      {/* The anchor is here rather than on the section, because the section
+          starts a screen higher than it looks: the -100svh puts its top behind
+          Product preview, so a jump to it landed on the blue panel. 180svh is
+          past the sweep finishing at about 171 and short of 190, where the
+          photograph starts to rise, so the link lands on the whole word. */}
+      <span id="why-stellar" aria-hidden className="absolute left-0 top-[180svh] block h-px w-px" />
+
       <div className="sticky top-0 grid h-[100svh] place-items-center overflow-hidden px-5 sm:px-6">
         {/* One line, and every size on it derives from --why. --cap is the ink
             height of WHY, measured in the browser at 0.80 of the font size, and
