@@ -2958,3 +2958,44 @@ Horizon shows as an `enter` invocation.
 After the restart the poller follows both v2 contracts, all three containers run with 0 restarts, a
 second `doctor` reports `"findings": []`, and `verify-deployment.sh` passes 18 of 18
 (2026-09-16T17:27:24Z).
+
+## STE-32 — the web app and the landing page, live (2026-09-23)
+
+| What | URL | Served by |
+| --- | --- | --- |
+| Web app (`fe/`) | [`https://app.sterun.xyz`](https://app.sterun.xyz) | Vercel (project `sterun-app`) |
+| Landing page (`landing-page/`) | [`https://sterun.xyz`](https://sterun.xyz) | Vercel |
+| API (`be/`) | [`https://api.sterun.xyz`](https://api.sterun.xyz) | the same homelab tunnel as `api-sterun.jameshub.fun`, which still answers |
+
+Checked 2026-09-23, every route a 200 from `app.sterun.xyz`: `/`, `/events/23`, `/runner`, `/scan`,
+`/org` and `/manifest.webmanifest`. The response carries `Server: Vercel` and an `x-vercel-id` from
+`sin1`, the Singapore region.
+
+**The race page proves the server reaches the chain**, not merely that Vercel serves a file:
+`/events/23` comes back titled *Sterun announcements e2e 2026-09-16 · Sterun*, and that name is read
+from EventRegistry in `generateMetadata` rather than from anything in the repository.
+
+**CORS is configured, and this was the one thing that could not be tested before the deploy.** With
+`Origin: https://app.sterun.xyz`, both `api.sterun.xyz` and `api-sterun.jameshub.fun` answer
+`access-control-allow-origin: https://app.sterun.xyz`. Until then `STERUN_WEB_ORIGIN` held
+`http://localhost:3000` alone, so every authenticated route (the roster download, entry details, file
+uploads, the faucet, announcements) would have been refused by the browser.
+
+### The build
+
+Both projects build from the repository root, which is what `fe/vercel.json` and
+`landing-page/vercel.json` are for: the only lockfile is at the root, and `fe` depends on
+`@sterunxyz/sdk` as a workspace package that has to be compiled to `sdk/dist` before Next can resolve
+it. The first attempt failed on exactly that, with seven `Can't resolve '@sterunxyz/sdk'` errors.
+
+`NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` is the one value not in git and is set in the Vercel
+dashboard; every other `NEXT_PUBLIC_*` value is public and committed in `fe/.env`.
+
+### Still open after this deploy
+
+- **The faucet has no payout key.** `GET https://api.sterun.xyz/config` still reports
+  `faucet.payoutConfigured: false`, so **Get test sUSD** refuses and a fresh wallet cannot pay for an
+  entry. That blocks the STE-25 manual steps (`M.2`) and the demo video, not this deploy.
+- The STE-25 rehearsal's `MANUAL REQUIRED` steps can now be run at last: create a race through the
+  console, enter and pay, two phones as two desks with one runner scanned at both, and the public
+  profile.
