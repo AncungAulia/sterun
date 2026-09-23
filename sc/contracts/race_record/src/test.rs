@@ -2233,6 +2233,424 @@ fn record_finish_untimed_re_extends_a_decayed_ttl() {
 }
 
 // ---------------------------------------------------------------------------
+// Many race packs in one signature (v2.7, STE-66)
+//
+// A desk works offline and queues each hand-over; one call per runner meant one
+// wallet prompt per runner, 300 of them for a busy desk. What these tests hold
+// down is the asymmetry the function exists for: a pack another desk already
+// handed over is SKIPPED and reported, while an operator who may not claim at
+// all REVERTS the batch.
+// ---------------------------------------------------------------------------
+mod claims {
+    use super::*;
+    use crate::{ClaimSkipped, SkippedClaim, MAX_CLAIMS_PER_CALL};
+
+    impl World {
+        /// A scanner allowlisted on `event_id`.
+        fn desk(&self, event_id: u32) -> Address {
+            let desk = Address::generate(&self.env);
+            self.env.mock_all_auths();
+            self.registry().add_scanner(&event_id, &desk);
+            desk
+        }
+
+        /// The operator signing exactly this batch, in enforcing auth mode.
+        fn mock_batch_claim(&self, signer: &Address, token_ids: &Vec<u32>) {
+            self.env.mock_auths(&[MockAuth {
+                address: signer,
+                invoke: &MockAuthInvoke {
+                    contract: &self.contract,
+                    fn_name: "claim_racepack_many",
+                    args: (token_ids.clone(), signer.clone()).into_val(&self.env),
+                    sub_invokes: &[],
+                },
+            }]);
+        }
+    }
+
+    /// The ticket in one test: a desk hands over five packs with one signature,
+    /// and every record ends exactly where a single call would leave it.
+    #[test]
+    fn one_signature_hands_over_many_packs() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let desk = w.desk(event_id);
+        let tokens: std::vec::Vec<u32> = (1..=5)
+            .map(|seed| w.enter(&w.runner(), event_id, category_id, seed))
+            .collect();
+        let batch = Vec::from_iter(&w.env, tokens.iter().copied());
+
+        w.env.ledger().set_timestamp(NOW + 600);
+        w.mock_batch_claim(&desk, &batch);
+        assert_eq!(w.records().claim_racepack_many(&batch, &desk), vec![&w.env]);
+
+        for token_id in &tokens {
+            let record = w.records().record_of(token_id);
+            assert_eq!(record.state, RecordState::RacepackClaimed);
+            assert_eq!(record.claimed_at, Some(NOW + 600));
+        }
+    }
+
+    /// A batch writes what the single call writes. Two worlds, the same
+    /// entries, one claimed row by row and one in a batch.
+    #[test]
+    fn a_batch_writes_exactly_what_the_single_call_writes() {
+        let single = World::new();
+        let batch = World::new();
+        let mut ids = std::vec::Vec::new();
+        for w in [&single, &batch] {
+            let (event_id, category_id) = w.open_event(10, PRICE);
+            let a = w.enter(&w.runner(), event_id, category_id, 1);
+            let b = w.enter(&w.runner(), event_id, category_id, 2);
+            w.env.ledger().set_timestamp(NOW + 900);
+            ids = std::vec![a, b];
+        }
+        let (a, b) = (ids[0], ids[1]);
+
+        single.env.mock_all_auths();
+        single.records().claim_racepack(&a, &single.organiser);
+        single.records().claim_racepack(&b, &single.organiser);
+
+        batch.env.mock_all_auths();
+        batch
+            .records()
+            .claim_racepack_many(&vec![&batch.env, a, b], &batch.organiser);
+
+        for token_id in [a, b] {
+            let one = single.records().record_of(&token_id);
+            let many = batch.records().record_of(&token_id);
+            assert_eq!(
+                (one.state, one.claimed_at, one.bib_no, one.entered_at),
+                (many.state, many.claimed_at, many.bib_no, many.entered_at),
+                "token {token_id}"
+            );
+        }
+    }
+
+    /// The two-desk case: a pack another desk already handed over is skipped
+    /// and reported, and the rest of the queue still lands.
+    #[test]
+    fn an_already_claimed_pack_is_skipped_and_the_rest_land() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let desk_a = w.desk(event_id);
+        let desk_b = w.desk(event_id);
+        let shared = w.enter(&w.runner(), event_id, category_id, 1);
+        let mine = w.enter(&w.runner(), event_id, category_id, 2);
+        let also_mine = w.enter(&w.runner(), event_id, category_id, 3);
+
+        w.env.mock_all_auths();
+        w.records().claim_racepack(&shared, &desk_a);
+
+        let batch = vec![&w.env, shared, mine, also_mine];
+        w.mock_batch_claim(&desk_b, &batch);
+        assert_eq!(
+            w.records().claim_racepack_many(&batch, &desk_b),
+            vec![
+                &w.env,
+                SkippedClaim {
+                    token_id: shared,
+                    reason: ClaimSkipped::NotEntered,
+                }
+            ]
+        );
+        assert_eq!(
+            w.records().record_of(&mine).state,
+            RecordState::RacepackClaimed
+        );
+        assert_eq!(
+            w.records().record_of(&also_mine).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// Every reason a row is skipped rather than fatal, including a terminal
+    /// record and a token id from another race's roster.
+    #[test]
+    fn unknown_terminal_and_repeated_tokens_are_skipped() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let fresh = w.enter(&w.runner(), event_id, category_id, 1);
+        let finished = w.claimed(event_id, category_id, 2);
+        let dnf = w.enter(&w.runner(), event_id, category_id, 3);
+        w.env.mock_all_auths();
+        w.records().record_finish(&finished, &3_000);
+        w.records().record_dnf(&dnf);
+
+        // `fresh` twice: the second row finds a record that is no longer Entered.
+        let batch = vec![&w.env, fresh, 404, finished, dnf, fresh];
+        let skipped = w.records().claim_racepack_many(&batch, &w.organiser);
+        assert_eq!(
+            skipped,
+            vec![
+                &w.env,
+                SkippedClaim {
+                    token_id: 404,
+                    reason: ClaimSkipped::NotFound
+                },
+                SkippedClaim {
+                    token_id: finished,
+                    reason: ClaimSkipped::NotEntered
+                },
+                SkippedClaim {
+                    token_id: dnf,
+                    reason: ClaimSkipped::NotEntered
+                },
+                SkippedClaim {
+                    token_id: fresh,
+                    reason: ClaimSkipped::NotEntered
+                },
+            ]
+        );
+        assert_eq!(
+            w.records().record_of(&fresh).state,
+            RecordState::RacepackClaimed
+        );
+        assert_eq!(
+            w.records().record_of(&finished).state,
+            RecordState::Finished
+        );
+        assert_eq!(w.records().record_of(&dnf).state, RecordState::Dnf);
+    }
+
+    /// One `RacepackClaimed` per pack actually handed over, in row order, and
+    /// nothing at all for a skipped row — an indexer needs no new handler.
+    #[test]
+    fn emits_one_racepack_claimed_per_pack_claimed() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let desk = w.desk(event_id);
+        let first = w.enter(&w.runner(), event_id, category_id, 1);
+        let already = w.claimed(event_id, category_id, 2);
+        let second = w.enter(&w.runner(), event_id, category_id, 3);
+
+        w.env.mock_all_auths();
+        w.records()
+            .claim_racepack_many(&vec![&w.env, first, already, second], &desk);
+
+        let events = w.env.events().all().filter_by_contract(&w.contract);
+        assert_eq!(
+            events,
+            std::vec![
+                RacepackClaimed {
+                    token_id: first,
+                    event_id,
+                    operator: desk.clone()
+                }
+                .to_xdr(&w.env, &w.contract),
+                RacepackClaimed {
+                    token_id: second,
+                    event_id,
+                    operator: desk
+                }
+                .to_xdr(&w.env, &w.contract),
+            ]
+        );
+    }
+
+    /// An operator who may not claim REVERTS the batch — a misconfigured desk
+    /// is not a race, and half a queue with no explanation is worse than none.
+    #[test]
+    fn an_operator_without_authority_reverts_the_whole_batch() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let a = w.enter(&w.runner(), event_id, category_id, 1);
+        let b = w.enter(&w.runner(), event_id, category_id, 2);
+        let stranger = Address::generate(&w.env);
+
+        let batch = vec![&w.env, a, b];
+        w.mock_batch_claim(&stranger, &batch);
+        assert_eq!(
+            w.records().try_claim_racepack_many(&batch, &stranger),
+            Err(Ok(Error::NotAuthorized))
+        );
+        // A revoked scanner is the same case.
+        let revoked = w.desk(event_id);
+        w.env.mock_all_auths();
+        w.registry().remove_scanner(&event_id, &revoked);
+        w.mock_batch_claim(&revoked, &batch);
+        assert_eq!(
+            w.records().try_claim_racepack_many(&batch, &revoked),
+            Err(Ok(Error::NotAuthorized))
+        );
+
+        for token_id in [a, b] {
+            assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+        }
+        assert_eq!(
+            w.env
+                .events()
+                .all()
+                .filter_by_contract(&w.contract)
+                .events(),
+            &[]
+        );
+    }
+
+    /// Authority is per event, and it is checked for every event in the batch:
+    /// a desk allowlisted on one race cannot claim in another through a mixed
+    /// batch, and the packs it could claim do not land either.
+    #[test]
+    fn a_batch_spanning_events_is_checked_for_each_event() {
+        let w = World::new();
+        let (race_a, cat_a) = w.open_event(10, PRICE);
+        let (race_b, cat_b) = w.open_event(10, PRICE);
+        let in_a = w.enter(&w.runner(), race_a, cat_a, 1);
+        let in_b = w.enter(&w.runner(), race_b, cat_b, 2);
+        let desk_a = w.desk(race_a);
+
+        let mixed = vec![&w.env, in_a, in_b];
+        w.mock_batch_claim(&desk_a, &mixed);
+        assert_eq!(
+            w.records().try_claim_racepack_many(&mixed, &desk_a),
+            Err(Ok(Error::NotAuthorized))
+        );
+        assert_eq!(w.records().record_of(&in_a).state, RecordState::Entered);
+
+        // Allowlisted on both, the same mixed batch lands.
+        w.env.mock_all_auths();
+        w.registry().add_scanner(&race_b, &desk_a);
+        w.mock_batch_claim(&desk_a, &mixed);
+        assert_eq!(
+            w.records().claim_racepack_many(&mixed, &desk_a),
+            vec![&w.env]
+        );
+        assert_eq!(
+            w.records().record_of(&in_a).state,
+            RecordState::RacepackClaimed
+        );
+        assert_eq!(
+            w.records().record_of(&in_b).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// The batch needs the operator's OWN signature: a valid signature from
+    /// somebody else does not hand over packs in an allowlisted desk's name.
+    #[test]
+    fn a_batch_needs_the_operators_own_signature() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let desk = w.desk(event_id);
+        let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+        let stranger = Address::generate(&w.env);
+        let batch = vec![&w.env, token_id];
+
+        // The stranger signs their own call — for the desk's address.
+        w.env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &w.contract,
+                fn_name: "claim_racepack_many",
+                args: (batch.clone(), desk.clone()).into_val(&w.env),
+                sub_invokes: &[],
+            },
+        }]);
+        assert_eq!(
+            w.records().try_claim_racepack_many(&batch, &desk),
+            Err(Err(InvokeError::Abort))
+        );
+        assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+    }
+
+    /// The organiser may hand packs over too, exactly as in the single call.
+    #[test]
+    fn the_organiser_can_hand_over_a_batch() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+        let batch = vec![&w.env, token_id];
+
+        w.mock_batch_claim(&w.organiser, &batch);
+        assert_eq!(
+            w.records().claim_racepack_many(&batch, &w.organiser),
+            vec![&w.env]
+        );
+        assert_eq!(
+            w.records().record_of(&token_id).state,
+            RecordState::RacepackClaimed
+        );
+    }
+
+    /// An empty queue is not an error, and writes nothing.
+    #[test]
+    fn an_empty_batch_claims_nothing() {
+        let w = World::new();
+        let (event_id, _category_id) = w.open_event(10, PRICE);
+        let _ = event_id;
+        let empty = vec![&w.env];
+        w.mock_batch_claim(&w.organiser, &empty);
+        assert_eq!(
+            w.records().claim_racepack_many(&empty, &w.organiser),
+            vec![&w.env]
+        );
+        assert_eq!(
+            w.env
+                .events()
+                .all()
+                .filter_by_contract(&w.contract)
+                .events(),
+            &[]
+        );
+    }
+
+    /// One over the cap is refused by the contract, before it reads anything —
+    /// so an oversized queue costs a simulation, not a failed transaction.
+    #[test]
+    fn a_batch_over_the_cap_is_refused() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(MAX_CLAIMS_PER_CALL + 2, 0);
+        let token_id = w.enter(&w.runner(), event_id, category_id, 1);
+
+        let mut too_many = Vec::new(&w.env);
+        for _ in 0..(MAX_CLAIMS_PER_CALL + 1) {
+            too_many.push_back(token_id);
+        }
+        w.env.mock_all_auths();
+        assert_eq!(
+            w.records().try_claim_racepack_many(&too_many, &w.organiser),
+            Err(Ok(Error::TooManyClaims))
+        );
+        assert_eq!(w.records().record_of(&token_id).state, RecordState::Entered);
+        assert_eq!(
+            w.env
+                .events()
+                .all()
+                .filter_by_contract(&w.contract)
+                .events(),
+            &[]
+        );
+    }
+
+    /// Every claimed record pays its own rent, as the single call does.
+    #[test]
+    fn a_batch_extends_each_record_ttl() {
+        let w = World::new();
+        let (event_id, category_id) = w.open_event(10, PRICE);
+        let a = w.enter(&w.runner(), event_id, category_id, 1);
+        let b = w.enter(&w.runner(), event_id, category_id, 2);
+
+        let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+        w.env
+            .ledger()
+            .set_sequence_number(w.env.ledger().sequence() + aged_by);
+        assert!(persistent_ttl(&w.env, &w.contract, DataKey::Record(a)) < BUMP_THRESHOLD);
+
+        w.env.mock_all_auths();
+        w.records()
+            .claim_racepack_many(&vec![&w.env, a, b], &w.organiser);
+        assert_eq!(
+            persistent_ttl(&w.env, &w.contract, DataKey::Record(a)),
+            BUMP_TO
+        );
+        assert_eq!(
+            persistent_ttl(&w.env, &w.contract, DataKey::Record(b)),
+            BUMP_TO
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Many results in one call (v2.6, STE-60)
 //
 // `record_results` exists so an organiser signs once for a whole finish list
@@ -3060,6 +3478,119 @@ mod upgrade {
             event_id,
             rows,
         )
+    }
+
+    // -- STE-66: how many race packs fit in one transaction -----------------
+    //
+    // Measured the same way as record_results, with both contracts from wasm and
+    // the live per-transaction limits. A `racepack_claimed` carries the operator
+    // address, so a row costs 160 event bytes — more than a result's 136:
+    //
+    //   contract event bytes   160n           limit 16,384   ceiling 102
+    //   written entries        n + 1          limit 200
+    //   footprint entries      2n + 8         limit 400
+    //   CPU instructions       ~0.39 M per row, 38.7 M at 100 of 400 M
+    //
+    // `MAX_CLAIMS_PER_CALL` is **100**, not the 102 the events allow: a desk
+    // sends a queue it collected offline, and the cost of being two rows short is
+    // one extra transaction, while the cost of being two rows over is a
+    // volunteer's queue failing at the counter.
+
+    #[test]
+    fn a_full_queue_of_race_packs_fits_the_network_limits() {
+        use soroban_sdk::testutils::cost_estimate::{
+            CostEstimate, NetworkInvocationResourceLimits,
+        };
+
+        let env = Env::default();
+        env.ledger().set_timestamp(NOW);
+        env.cost_estimate().disable_resource_limits();
+        let admin = Address::generate(&env);
+        let organiser = Address::generate(&env);
+        let token = env
+            .register_stellar_asset_contract_v2(Address::generate(&env))
+            .address();
+        let registry = env.register(
+            wasm_bytes("event_registry.wasm").as_slice(),
+            (admin.clone(),),
+        );
+        let contract = env.register(
+            wasm_bytes("race_record.wasm").as_slice(),
+            (
+                admin.clone(),
+                registry.clone(),
+                token,
+                String::from_str(&env, NAME),
+                String::from_str(&env, SYMBOL),
+                String::from_str(&env, BASE_URI),
+            ),
+        );
+        env.mock_all_auths();
+        let reg = RegistryClient::new(&env, &registry);
+        reg.set_race_record(&contract);
+        reg.add_organiser(&organiser);
+        let event_id = reg.create_event(
+            &organiser,
+            &String::from_str(&env, "Jakarta Night Run 2026"),
+            &phash(&env, 7),
+            &String::from_str(&env, "ipfs://bafyjakartanightrun"),
+            &STARTS_AT,
+        );
+        let category_id = reg.add_category(&event_id, &symbol_short!("10K"), &10_000, &1_000, &0);
+        reg.set_event_status(&event_id, &EventStatus::Open);
+
+        let records = RaceRecordClient::new(&env, &contract);
+        let mut queue = Vec::new(&env);
+        for i in 0..crate::MAX_CLAIMS_PER_CALL {
+            let runner = Address::generate(&env);
+            queue.push_back(records.enter(
+                &runner,
+                &event_id,
+                &category_id,
+                &vec![&env],
+                &phash(&env, (i % 250) as u8),
+            ));
+        }
+
+        // The limits live on testnet and mainnet alike (2026-09-23).
+        fn typed<T>(_: fn(&CostEstimate, T), value: T) -> T {
+            value
+        }
+        let mut limits = typed(
+            CostEstimate::enforce_resource_limits,
+            NetworkInvocationResourceLimits::mainnet(),
+        );
+        limits.instructions = 400_000_000;
+        limits.disk_read_entries = 200;
+        limits.write_entries = 200;
+        limits.ledger_entries = 400;
+        limits.disk_read_bytes = 200_000;
+        limits.write_bytes = 132_096;
+        limits.contract_events_size_bytes = 16_384;
+        env.cost_estimate().enforce_resource_limits(limits);
+
+        env.mock_all_auths();
+        assert_eq!(records.claim_racepack_many(&queue, &organiser), vec![&env]);
+
+        let used = env.cost_estimate().resources();
+        assert_eq!(
+            used.contract_events_size_bytes,
+            160 * crate::MAX_CLAIMS_PER_CALL
+        );
+        assert!(used.contract_events_size_bytes <= 16_384);
+        assert!(used.write_entries <= 200);
+        assert!(used.memory_read_entries + used.disk_read_entries + used.write_entries <= 400);
+        assert!(used.instructions <= 400_000_000);
+        // Why the cap is not higher, computed from what this run measured
+        // rather than from the constant: three more rows would not fit.
+        let per_row = used.contract_events_size_bytes / crate::MAX_CLAIMS_PER_CALL;
+        assert!(per_row * (crate::MAX_CLAIMS_PER_CALL + 3) > 16_384);
+        assert_eq!(
+            records
+                .record_of(&queue.get_unchecked(crate::MAX_CLAIMS_PER_CALL - 1))
+                .state,
+            RecordState::RacepackClaimed
+        );
     }
 
     #[test]

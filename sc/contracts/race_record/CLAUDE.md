@@ -33,9 +33,9 @@ How it is done: use only OpenZeppelin's *storage primitives* (`Base::mint`, `Bas
 `scripts/check-exports.sh` (grepping the built interface) and the `exports::…` test in `src/test.rs`
 (parsing the wasm's export section directly). Both run in CI.
 
-The legitimate export surface — **21 functions**: `__constructor`, `upgrade`, `enter`,
-`claim_racepack`, `record_finish`, `record_finish_untimed` (v2.2), `record_dnf`,
-`record_results` (v2.6),
+The legitimate export surface — **22 functions**: `__constructor`, `upgrade`, `enter`,
+`claim_racepack`, `claim_racepack_many` (v2.7), `record_finish`, `record_finish_untimed` (v2.2),
+`record_dnf`, `record_results` (v2.6),
 `extend_record_ttl`, `record_of`, `records_of`, `verify`, `owner_of`, `balance`, `token_uri`,
 `total_supply`, `name`, `symbol`, `get_admin`, `get_registry`, `get_token`.
 
@@ -163,11 +163,47 @@ written, 100 footprint entries) are older than the network's, and a first measur
 concluded 46. The testutils' footprint count also runs higher than the network's simulation. If the
 network's limits change, measure again with the new settings; do not scale the number.
 
+### Many race packs in one signature (v2.7, STE-66)
+
+`claim_racepack_many(token_ids: Vec<u32>, operator)` returns `Vec<SkippedClaim>` — the ids it did
+**not** claim, each with a `ClaimSkipped` reason (`NotFound`, `NotEntered`). A desk works offline and
+queues every hand-over; one call per runner meant one wallet prompt per runner, 300 of them for a busy
+desk.
+
+**The asymmetry is the feature, and it is the opposite of `record_results`:**
+
+| Case | `claim_racepack_many` | Why |
+| --- | --- | --- |
+| a pack another desk already handed over | **skipped**, reported in the return value | the STE-25 two-desk race: the loser would otherwise block the other 299 hand-overs |
+| an unknown `token_id` | **skipped** (`NotFound`) | a roster from another race, or a typo — not worth failing a queue for |
+| the operator may not claim for that event | **reverts** `NotAuthorized` | a misconfigured desk, not a race. Half a queue with no explanation is worse than none |
+| more than `MAX_CLAIMS_PER_CALL` | **reverts** `TooManyClaims = 109`, before reading anything | an oversized queue should cost a simulation, not a transaction that dies on the network's limits |
+
+Results are atomic because a bad row means a bad file, and the preview is where a file gets fixed;
+claims are not, because a "bad" row is the ordinary outcome of two desks meeting the same runner.
+
+**Authority is checked per event, once per call.** The operator authorises once, and each distinct
+`event_id` in the batch is checked against the registry and remembered in a `Map` for the rest of the
+call — a desk sends one event's queue, so that is one pair of cross-contract reads rather than one per
+runner. Checking only the first event (and trusting the rest) fails
+`a_batch_spanning_events_is_checked_for_each_event`.
+
+**One `RacepackClaimed` per pack actually claimed, in row order**, so the indexer needs no new
+handler, and a skipped row emits nothing. `claim_racepack` and every batch row share
+`hand_over_racepack`, so the two cannot drift.
+
+**The cap is 100, and it is measured** with both contracts from wasm under the live per-transaction
+limits: a `racepack_claimed` carries the operator address, so a row costs **160 event bytes** — more
+than a result's 136 — and the 16,384-byte limit is the ceiling at 102.
+`a_full_queue_of_race_packs_fits_the_network_limits` pins 100 fitting and computes from that run why
+three more rows would not. The two spare rows are deliberate: being two short costs one extra
+transaction, being two over costs a volunteer's queue at the counter.
+
 ## Error codes — band `100..=199`, never renumbered
 
 `NotInitialized=100`, `RecordNotFound=101`, `AlreadyClaimed=102`, `InvalidState=103`,
 `NotAuthorized=104`, `InvalidFinishTime=105`, `TooManyAddOns=106`, `DuplicateAddOn=107`,
-`ResultForAnotherEvent=108`.
+`ResultForAnotherEvent=108`, `TooManyClaims=109`.
 OZ's `NonFungibleTokenError` occupies `200..=214`.
 
 An error outside those two bands coming out of a function of this contract is **not** this
@@ -204,7 +240,7 @@ evidence merely for holding no XLM. The STE-12 keeper job calls it on a schedule
 
 ## Tests
 
-`src/test.rs`, 85 tests.
+`src/test.rs`, 97 tests.
 
 `mod upgrade` deploys RaceRecord **from wasm**, so `stellar contract build` has to run first — and
 its World builds its own registry, because `set_race_record` is one-shot.

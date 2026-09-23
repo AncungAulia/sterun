@@ -1671,9 +1671,7 @@
                     "key": {
                       "symbol": "claimed_at"
                     },
-                    "val": {
-                      "u64": "1772100000"
-                    }
+                    "val": "void"
                   },
                   {
                     "key": {
@@ -1783,9 +1781,7 @@
                     "key": {
                       "symbol": "claimed_at"
                     },
-                    "val": {
-                      "u64": "1772100000"
-                    }
+                    "val": "void"
                   },
                   {
                     "key": {
