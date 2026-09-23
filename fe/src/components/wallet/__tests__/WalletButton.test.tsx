@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -95,77 +95,24 @@ describe("connected", () => {
   it("shows the address truncated at both ends", () => {
     render(<WalletButton />);
 
-    expect(screen.getByRole("button", { name: /GAAZ…CWN7/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /GAAZ…CWN7/ })).toBeInTheDocument();
   });
 
-  it("keeps the menu closed until asked", () => {
+  it("opens the wallet's own page rather than a menu (Ancung, 2026-09-23)", async () => {
+    // The popover held the address, the record, the balance, the faucet and
+    // Disconnect, none of which could be linked to, and not the pass, which is
+    // what a runner comes back for. All of it is at /profile now.
     render(<WalletButton />);
 
+    expect(screen.getByRole("link", { name: /GAAZ…CWN7/ })).toHaveAttribute("href", "/profile");
+    await userEvent.click(screen.getByRole("link", { name: /GAAZ…CWN7/ }));
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  });
-
-  it("reveals the full address in the menu, since a truncation cannot be checked", async () => {
-    render(<WalletButton />);
-
-    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
-
-    expect(screen.getByRole("menu")).toHaveTextContent(ADDRESS);
-  });
-
-  it("links this wallet's public race record from the menu (STE-24)", async () => {
-    render(<WalletButton />);
-    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
-
-    expect(screen.getByRole("link", { name: "My race record" })).toHaveAttribute("href", `/runner/${ADDRESS}`);
-  });
-
-  it("disconnects from the menu and closes it", async () => {
-    render(<WalletButton />);
-    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
-
-    await userEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-
-    expect(disconnect).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  });
-
-  it("closes the menu on Escape", async () => {
-    render(<WalletButton />);
-    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
-
-    await userEvent.keyboard("{Escape}");
-
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  });
-
-  it("closes the menu when clicking outside it", async () => {
-    render(
-      <div>
-        <WalletButton />
-        <p data-testid="outside">elsewhere</p>
-      </div>,
-    );
-    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
-
-    await userEvent.click(screen.getByTestId("outside"));
-
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(disconnect).not.toHaveBeenCalled();
   });
 
   it("marks the address with tabular figures so it does not jitter", () => {
     render(<WalletButton />);
 
     expect(screen.getByText("GAAZ…CWN7")).toHaveClass("numeric");
-  });
-
-  it("shows the sUSD balance and a way to get test sUSD (mockup block 7)", async () => {
-    render(<WalletButton />);
-    await userEvent.click(screen.getByRole("button", { name: /GAAZ…CWN7/ }));
-
-    const menu = screen.getByRole("menu");
-    expect(menu).toHaveTextContent("sUSD balance");
-    expect(within(menu).getByText("20")).toBeInTheDocument();
-    expect(within(menu).getByRole("button", { name: "Get test sUSD" })).toBeInTheDocument();
-    expect(menu).toHaveTextContent("Test money for trying Sterun. It has no value.");
   });
 });

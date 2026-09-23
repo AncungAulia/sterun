@@ -893,6 +893,30 @@ P1 to P12 from `docs/design/profile/`. What is settled:
   Close), and stay put only when the check could not be asked. "Use the receipt code saved on this
   device" appears when `lib/entry-store.ts` holds the entry, and fills on a press.
 
+### `/profile` — the connected wallet's own page (2026-09-23)
+
+`modules/profile/MyProfilePage.tsx`. The wallet button in the header **links here** and no longer
+opens a menu.
+
+The popover it replaces held five unrelated things (the address, the public record, the sUSD
+balance, the faucet, Disconnect), none of which could be linked to, all of which closed at the next
+click, and it still did not hold the one thing a runner comes back for: their pass. Eventbrite's bar
+does the same thing this now does, linking to `/mytickets/` and `/account-settings/` rather than
+unfolding them; both are real routes that redirect to sign-in when logged out.
+
+- **Races you are in** is the part that did not exist anywhere. A record is "an entry" while its
+  state is `Entered` or `RacepackClaimed`, because the race can still be run and the pass still
+  matters; each row offers **Open my pass** and **View my entry**. Before this, opening a pass meant
+  remembering which race it belonged to.
+- **Your race record** is the history, drawn with the same `RecordCard` as the public page, above a
+  link to that page. `/runner/[address]` stays exactly as it was: public, no wallet, nothing that
+  writes. This page is that history plus what only its owner may do, and it links rather than
+  copying, because two pages claiming to be the record is how they drift.
+- **Test money** (testnet only) and **Disconnect** moved here from the menu.
+- **Not connected asks for a wallet** through `WalletGate` with its own words, and the header button
+  still connects rather than navigating: a page that says "connect first" where one press could have
+  connected you is a step charged for nothing.
+
 ### Loading, back, titles and installing (2026-09-17)
 
 Four conventions that apply to every screen, all from Ancung looking at the app:
