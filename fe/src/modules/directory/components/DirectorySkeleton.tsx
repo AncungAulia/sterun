@@ -29,12 +29,14 @@ export function DirectorySkeleton() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {CARDS.map((card) => (
-          <div key={card} className="overflow-hidden rounded-lg border border-n-200 bg-paper shadow-card">
-            <div className="skeleton aspect-video w-full" />
-            <div className="flex flex-col gap-3 p-4">
+          /* The same shape as `EventCard`: a poster with its own rounded edges
+             and the text under it on the page, with no frame around either. */
+          <div key={card} className="flex flex-col gap-3">
+            <div className="skeleton aspect-video w-full rounded-lg" />
+            <div className="flex flex-col gap-2">
+              <div className="skeleton h-4 w-1/3 rounded-sm" />
               <div className="skeleton h-5 w-2/3 rounded-sm" />
               <div className="skeleton h-4 w-1/2 rounded-sm" />
-              <div className="skeleton h-4 w-1/3 rounded-sm" />
             </div>
           </div>
         ))}

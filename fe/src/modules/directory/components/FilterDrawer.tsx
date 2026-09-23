@@ -21,11 +21,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useNowSeconds } from "@/hooks/useNowSeconds";
 
 import type { DateOrder, DirectoryEntry } from "../lib/browse";
 import {
   AVAILABLE_ONLY_LABEL,
   DISTANCE_BUCKETS,
+  INCLUDE_PAST_LABEL,
   NO_FILTERS,
   PRICE_BUCKETS,
   activeFilterCount,
@@ -51,13 +53,15 @@ function toggle<T>(list: readonly T[], value: T, on: boolean): T[] {
 }
 
 export function FilterDrawer({ entries, filters, order, onApply }: FilterDrawerProps) {
+  // The count has to judge what has run the same way the list does.
+  const nowS = useNowSeconds();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(filters);
   const [draftOrder, setDraftOrder] = useState(order);
   const wide = useMediaQuery("(min-width: 640px)");
 
   const applied = activeFilterCount(filters);
-  const count = entries.filter((item) => matchesFilters(item, draft)).length;
+  const count = entries.filter((item) => matchesFilters(item, draft, nowS)).length;
 
   function onOpenChange(next: boolean) {
     // Every opening starts from what is applied, never from a choice abandoned last time.
@@ -159,6 +163,14 @@ export function FilterDrawer({ entries, filters, order, onApply }: FilterDrawerP
                 onCheckedChange={(checked) => setDraft({ ...draft, availableOnly: checked === true })}
               />
               <Label htmlFor="filter-available-only">{AVAILABLE_ONLY_LABEL}</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="filter-include-past"
+                checked={draft.includePast}
+                onCheckedChange={(checked) => setDraft({ ...draft, includePast: checked === true })}
+              />
+              <Label htmlFor="filter-include-past">{INCLUDE_PAST_LABEL}</Label>
             </div>
           </fieldset>
         </div>

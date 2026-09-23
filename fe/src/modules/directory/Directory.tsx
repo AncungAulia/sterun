@@ -91,8 +91,16 @@ export function Directory() {
   // The search and the drawer decide what is shown; the place only decides what
   // comes first, so it is applied last and takes nothing away.
   const searched = entries.filter((item) => matchesSearch(item, query));
+  /*
+    A search reaches races that have run, whatever the drawer says. Somebody
+    typing last year's race name is checking a result rather than shopping, and
+    an empty page there reads as the race never having existed.
+  */
+  const searching = query.trim().length > 0;
   const results = sortByPlace(
-    searched.filter((item) => matchesFilters(item, filters)),
+    searched.filter((item) =>
+      matchesFilters(item, searching ? { ...filters, includePast: true } : filters, nowS),
+    ),
     place,
     order,
     nowS ?? 0n,

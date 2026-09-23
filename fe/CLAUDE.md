@@ -305,6 +305,17 @@ What is settled:
   everywhere else. For the same reason the list never waits on documents (it used to, so a filtered
   list would not grow as they arrived): only the order changes as they land. Grid: 2 columns from `sm`, 3 from `lg`, 4 from `xl`, for the
   list and the skeleton alike.
+- **Races that have run are off the list by default** (Ancung, 2026-09-23), with
+  "Show races that have finished" in the drawer to bring them back. Checked against what
+  organisers here actually use: loket.com, artatix.co.id and eventbrite.com all list upcoming
+  events only, all three keep a sold-out event listed with a label rather than hiding it (Loket
+  writes "HABIS TERJUAL"), Eventbrite moves what has happened to the organiser's own profile under
+  "Past Events", and none of the three uses a timer. Ours is a verification product, so what has
+  run is evidence: it stays one checkbox away, a **search reaches it whatever the checkbox says**
+  (somebody typing last year's race name is checking a result), and its page stays at its own URL
+  forever. `includePast` is not counted by `activeFilterCount`, since a badge on an untouched
+  drawer reads as a filter somebody forgot to clear. Draft races were already invisible here
+  (`publicEvents`).
 - **Filters** live in a staged drawer: Sort by ("Nearest date first" / "Furthest date first"),
   Price, Distance, and Availability ("Hide full and closed races", which hides races that are not
   `Open` or have no places left). There is no location group: the place is chosen in the header,
@@ -327,7 +338,7 @@ What is settled:
   title's first line lands at about 85% ink (10:1 against `paper`) and its caps at about 60% (4.3:1),
   even over a pure white poster. It used to be two layers with the whole block floored at 70% ink,
   which read as a grey sheet over most of the card. `EventCard` is the
-  list card only and keeps its white body; the two share the lines from `browse.ts`, not a variant.
+  list card only; the two share the lines from `browse.ts`, not a variant.
   Lead: hero title, venue, date, entries left, price. **Side cards are compact**: title, date and
   entries left.
 - **The featured row's shape follows how many races it has.** Stacked below `lg`, 4:3 on phones and
@@ -348,6 +359,13 @@ What is settled:
   makes the text block taller than the card, `min-h-min` grows the card to fit it, and the poster
   vanishes under the fade. A layout fact the card cannot see has to be told to it, and `className`
   cannot carry this one, because the size is a class on the heading rather than on the card.
+- **A list card has no frame** (Ancung, 2026-09-23, from loket.com and eventbrite.com): the poster
+  carries the only shape, and the text sits under it on the page's own background, with no border,
+  no white body and no shadow. What the frame used to do is done otherwise: the grid's gap and the
+  poster's edges separate one card from the next, and the title underlining with the poster
+  brightening says it is pressable. The lines lost their icons, so the price is the one bold thing
+  on the card, held to the bottom above a rule so a glance down a column compares prices. The
+  skeleton copies the same shape.
 - **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
   `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
   its corners.
