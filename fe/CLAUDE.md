@@ -622,6 +622,21 @@ knowing before adding a page there:
 - **stellar-sdk's crypto fails under jsdom** (see Tests): the announcement tests run with
   `// @vitest-environment node`, and component tests mock `lib/event/announcements`.
 
+### `/organisers` — the way in for somebody who runs races (2026-09-23)
+
+`modules/organiser/intro/ForOrganisers.tsx`, a public page under `(browse)`, linked from the header
+as **For organisers** (loket.com puts its "Partner with Us" in the same place).
+
+The gap it closes was a dead end, not a missing brochure: the console is behind a wallet, and a
+wallet that is not on the allowlist met a refusal saying "send this address to the Sterun team"
+that **named no way of doing it**. The page answers what Sterun does for a race, what publishing
+one involves, and how to be allowed to; it shows the connected wallet's address with a copy button,
+since that address is the thing the team needs and copying it out of an extension is the step people
+get wrong. `NotAllowedNotice` and `NotAllowedScreen` now point here and name the account too.
+
+**The contact channel lives in `lib/contact.ts`** (X, `@sterunxyz`, from `docs/social`), so the page
+and the two refusals can never name different ones.
+
 ### `/events/[id]/enter` — a runner enters (STE-21, round 1)
 
 `modules/entry/`. Design: `docs/superpowers/specs/2026-09-15-entry-flow-design.md` and its mockup;

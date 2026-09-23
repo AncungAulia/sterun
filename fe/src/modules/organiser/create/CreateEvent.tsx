@@ -31,7 +31,6 @@
  * event rather than a broken one.
  */
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { BackLink } from "@/components/layout/BackLink";

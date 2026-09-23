@@ -13,10 +13,16 @@
  * The address is shown in full in both. Somebody asking to be added has to be
  * able to copy it, and a truncated address is the one thing that would make
  * the next step harder than it needs to be.
+ *
+ * **Both name where to ask** (Ancung, 2026-09-23). They used to say "send this
+ * address to the Sterun team" and stop there, which is a dead end dressed as an
+ * instruction, at exactly the point where somebody had decided to try. The
+ * account lives in `lib/contact.ts`, so this and `/organisers` cannot drift.
  */
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { X_HANDLE, X_URL } from "@/lib/contact";
 
 /**
  * The console's note. Not the full screen: here the wallet may still run races
@@ -28,8 +34,16 @@ export function NotAllowedNotice({ address }: { address: string }) {
       <p className="heading-strong text-lg text-ink">This wallet cannot publish new races yet</p>
       <p className="mt-1 max-w-3xl text-base text-n-600">
         Sterun keeps a list of the wallets allowed to publish a race, so nobody can put one up in
-        somebody else{"'"}s name. Send this address to the Sterun team to be added. Races this
-        wallet already runs stay yours to manage.
+        somebody else{"'"}s name. Send this address to us on X at{" "}
+        <a
+          href={X_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-teal-500 underline underline-offset-4"
+        >
+          {X_HANDLE}
+        </a>{" "}
+        to be added. Races this wallet already runs stay yours to manage.
       </p>
       <p className="numeric mt-3 break-all text-sm text-foreground">{address}</p>
     </div>
@@ -54,13 +68,21 @@ export function NotAllowedScreen({ address }: { address: string }) {
       </div>
 
       <p className="max-w-2xl text-base text-n-600">
-        Send that address to the Sterun team to be added. Nothing else about your wallet changes:
-        if you already have races here, you can still manage them, add distances and scanners, and
-        publish results.
+        Send that address to us on X at {X_HANDLE} to be added. Nothing else about your wallet
+        changes: if you already have races here, you can still manage them, add distances and
+        scanners, and publish results.
       </p>
 
       <div className="flex flex-wrap gap-3">
         <Button asChild>
+          <a href={X_URL} target="_blank" rel="noreferrer">
+            Message us on X
+          </a>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/organisers">What Sterun does for organisers</Link>
+        </Button>
+        <Button variant="ghost" asChild>
           <Link href="/">Browse races</Link>
         </Button>
       </div>
