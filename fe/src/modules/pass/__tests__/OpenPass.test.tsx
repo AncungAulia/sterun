@@ -23,12 +23,15 @@ describe("OpenPass, where the installed app starts", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/pass/31"));
   });
 
-  it("says so, and offers both screens, on a phone that holds none", async () => {
+  it("offers the way to the entry first, on a phone that holds no pass", async () => {
+    // A runner who entered on a laptop, or whose installed copy keeps storage
+    // of its own, has an entry and no pass. The profile lists it.
     latestEntry.mockResolvedValue(undefined);
 
     render(<OpenPass />);
 
     expect(await screen.findByText("No pass on this phone")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Find my entries" })).toHaveAttribute("href", "/profile");
     expect(screen.getByRole("link", { name: "Browse races" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Race pack desk" })).toHaveAttribute("href", "/scan");
     expect(replace).not.toHaveBeenCalled();

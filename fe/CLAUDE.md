@@ -980,7 +980,13 @@ Four conventions that apply to every screen, all from Ancung looking at the app:
   only background.
 - **The installed app starts at `/pass`** (`manifest.ts` `start_url`,
   `modules/pass/OpenPass.tsx`), which looks the newest entry up in IndexedDB
-  (`latestEntry`) and redirects to it. A manifest cannot carry a token id, and
+  (`latestEntry`) and redirects to it. **Holding none, its first button is
+  `/profile`** (Ancung, 2026-09-23, from her own iPhone): she added the app to
+  her home screen, opened it and got "No pass on this phone", which was true
+  and useless. A runner who entered on a laptop, and an iOS home screen copy
+  that keeps storage separate from Safari's, both have an entry and no pass,
+  and the profile lists that entry and opens it. The two links under it,
+  Browse races and Race pack desk, are unchanged. A manifest cannot carry a token id, and
   `/pass` is inside the offline worker's scope, so the doorway itself is cached
   and works at a venue; the directory is not cached and never can be. A phone
   holding no entry gets both offline screens as links rather than a redirect to
