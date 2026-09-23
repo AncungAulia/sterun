@@ -95,6 +95,57 @@ function leadWithPlace(entries: readonly DirectoryEntry[], place: Place | null):
   return place.mode === "nearby" ? nearestFirst(entries, place) : areaFirst(entries, place);
 }
 
+/**
+ * Why a race is in the featured row, in the words the card prints (Ancung,
+ * 2026-09-23).
+ *
+ * The row used to be three races chosen by one rule and labelled with nothing,
+ * so a visitor could not tell why those three. Eventbrite says "Going fast" and
+ * "Just added" for the same reason. Every rule here is read from the chain, so
+ * no reason needs the index to be up, and none of them is a guess: a race is
+ * either nearly full or it is not.
+ *
+ * Deliberately NOT here: anything about how fast entries are arriving. The
+ * chain holds a total, not a history, so "trending" would need the index to
+ * answer for every race on the page, which is a backend ticket rather than a
+ * label.
+ */
+export type FeatureReason = "almost-full" | "closing-soon" | "just-added";
+
+export const FEATURE_LABEL: Record<FeatureReason, string> = {
+  "almost-full": "Almost full",
+  "closing-soon": "Closing soon",
+  "just-added": "Just added",
+};
+
+/** A tenth of the places left, at most. */
+const ALMOST_FULL_SHARE = 0.1;
+/** Race day inside a fortnight. Past that, "soon" is not what a runner reads it as. */
+const CLOSING_SOON_S = 14n * 24n * 60n * 60n;
+
+/**
+ * At most one reason per card, strongest first: running out of places beats a
+ * near date, and both beat being new, because the first two cost a runner
+ * something if they wait and the third does not.
+ *
+ * `newestId` is the largest event id on the page. Ids are handed out in order
+ * by the registry, so the largest is the most recently published race; there is
+ * no created-at on chain to read instead.
+ */
+export function featureReason(
+  entry: DirectoryEntry,
+  nowS: bigint,
+  newestId: number,
+): FeatureReason | null {
+  const { event, categories } = entry.summary;
+  const quota = categories.reduce((total, category) => total + category.quota, 0);
+  const left = categories.reduce((total, category) => total + category.slotsLeft, 0);
+  if (quota > 0 && left > 0 && left <= quota * ALMOST_FULL_SHARE) return "almost-full";
+  if (event.startsAt - nowS <= CLOSING_SOON_S) return "closing-soon";
+  if (event.eventId === newestId) return "just-added";
+  return null;
+}
+
 export interface FeaturedOptions {
   /** The chosen place. Races in it, or nearest to it, fill the row first. */
   place?: Place | null;
@@ -127,7 +178,39 @@ export function pickFeatured(
         compareBigint(a.summary.event.startsAt, b.summary.event.startsAt) ||
         a.summary.event.eventId - b.summary.event.eventId,
     );
-  return leadWithPlace(candidates, place).slice(0, FEATURED_LIMIT);
+  const queue = leadWithPlace(candidates, place);
+  if (queue.length <= FEATURED_LIMIT) return queue;
+
+  /*
+    Three races that differ, rather than the three soonest, which on a busy
+    month are three of the same thing. The lead is still whatever the ordering
+    put first, since that is the race the visitor is most likely to want; the
+    other two are taken to cover reasons the row does not have yet, and any
+    slot left over falls back to the order it already had.
+  */
+  const newestId = queue.reduce((max, item) => Math.max(max, item.summary.event.eventId), -1);
+  const picked = [queue[0] as DirectoryEntry];
+  const taken = new Set([picked[0]?.summary.event.eventId]);
+  const covered = new Set([featureReason(picked[0] as DirectoryEntry, nowS, newestId)]);
+
+  for (const item of queue) {
+    if (picked.length === FEATURED_LIMIT) break;
+    if (taken.has(item.summary.event.eventId)) continue;
+    const reason = featureReason(item, nowS, newestId);
+    if (reason === null || covered.has(reason)) continue;
+    picked.push(item);
+    taken.add(item.summary.event.eventId);
+    covered.add(reason);
+  }
+
+  for (const item of queue) {
+    if (picked.length === FEATURED_LIMIT) break;
+    if (taken.has(item.summary.event.eventId)) continue;
+    picked.push(item);
+    taken.add(item.summary.event.eventId);
+  }
+
+  return picked;
 }
 
 /**

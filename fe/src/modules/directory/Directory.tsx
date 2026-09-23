@@ -167,7 +167,7 @@ export function Directory() {
 
       {data && summaries.length > 0 ? (
         <>
-          <FeaturedEvents entries={featured} />
+          <FeaturedEvents entries={featured} nowS={nowS} />
 
           <section aria-labelledby="directory-list" className="flex flex-col gap-4">
             {/* Filters sit on the list's own heading row (Ancung, 2026-09-23).

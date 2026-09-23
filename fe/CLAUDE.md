@@ -341,6 +341,18 @@ What is settled:
   list card only; the two share the lines from `browse.ts`, not a variant.
   Lead: hero title, venue, date, entries left, price. **Side cards are compact**: title, date and
   entries left.
+- **Each featured card says why it is there** (Ancung, 2026-09-23, `featureReason`): **Almost full**
+  (a tenth of the places or fewer left), **Closing soon** (race day inside a fortnight) or **Just
+  added** (the largest event id, since the registry hands them out in order and there is no
+  created-at on chain). One reason per card, strongest first, and none at all rather than a filler
+  word. The row then **picks three that differ**: the lead is still whatever the ordering put first,
+  the other two cover reasons the row lacks, and any slot left over falls back to the existing
+  order. Eventbrite labels the same way ("Going fast", "Just added").
+  **An auto-rotating carousel was considered and refused**: NN/g finds auto-forwarding carousels
+  annoy people and reduce visibility, and Loket's own rotating hero is promoted inventory rather
+  than a browsing aid. "Trending" is refused for a different reason: the chain holds a total, not a
+  history, so it would need the index to answer for every race on the page, which is a backend
+  ticket rather than a label.
 - **The featured row's shape follows how many races it has.** Stacked below `lg`, 4:3 on phones and
   16:9 from `sm`. From `lg`, three races make a 3 by 2 grid — the lead spans two columns and both
   rows at 16:9, and each side card takes one row, dropping its own ratio to fill it. **Two races are
