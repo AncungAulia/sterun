@@ -416,6 +416,15 @@ going back first.
   per step read as a stutter), and the first word repeated at the end of the list so the loop lands
   on a copy of where it started instead of snapping back. It is a layer over the field, not the
   `placeholder` attribute, and `aria-hidden`: the field's label already says what it is for.
+- **The search box takes a row of its own below `sm`.** The bar wraps rather than shrinking
+  anything: at 390 the lockup, the box and the wallet side by side left the box about ninety pixels,
+  the rolling words wrapped onto two lines and the wallet chip landed on top of them. It is
+  `basis-full`, not `w-full`: `flex-1` is `flex: 1 1 0%`, so a width beside it is measured against a
+  base size of zero and the box never wraps. One box, not two, because two would mean two fields
+  with the same label and two subtrees reading the query. The `sr-only` submit button is pinned
+  `left-0` for the same class of reason: `sr-only` is `position: absolute` and the button keeps its
+  padding, so laid out after the input it sat past the right edge and gave the page seven pixels of
+  sideways scroll.
 - **The place shows the province alone** ("DI Yogyakarta", not "DI Yogyakarta, Indonesia"): the
   country adds nothing to somebody standing in it, and the pair was most of a header. It is in the
   bar from `lg` and in the directory's own header below that. `AreaPicker` and `AreaForm` moved to
@@ -904,15 +913,40 @@ click, and it still did not hold the one thing a runner comes back for: their pa
 does the same thing this now does, linking to `/mytickets/` and `/account-settings/` rather than
 unfolding them; both are real routes that redirect to sign-in when logged out.
 
+- **Three tabs, and the tab is in the address** (`lib/profile-tab.ts`, parsed by the route, which
+  stays a server component and needs no Suspense): **Your entries**, **Race record**, **Faucet**.
+  Three sections answering three different questions, and nobody needs two at once, so the scroll
+  that used to put the faucet below eleven record cards is gone. What tabs cost on a page whose
+  parts are compared, like the directory, is the comparison; here there is none to lose.
+- **Entries first, the faucet last**, reversing the order the redesign was asked for. The faucet
+  only exists on testnet, and a tab that disappears with the network cannot be the one the page
+  opens on; a runner opens this page for their pass, at a desk, on race morning. Off testnet the
+  strip is **two** tabs rather than three with one greyed out, and `?tab=faucet` written down back
+  then lands on Entries.
+- **The strip is the race console's, divided into equal parts** across the full width
+  (`components/ProfileTabs.tsx`): links with `aria-current` rather than a tablist, an icon each, the
+  same inset-shadow marker, scrolling sideways at phone width. A count is drawn only where there is
+  something to count. Give the count an **explicit space** after the label: JSX drops the whitespace
+  between two expressions, and the badge touching the label made a screen reader say "Your entries7".
 - **Races you are in** is the part that did not exist anywhere. A record is "an entry" while its
   state is `Entered` or `RacepackClaimed`, because the race can still be run and the pass still
   matters; each row offers **Open my pass** and **View my entry**. Before this, opening a pass meant
   remembering which race it belonged to.
-- **Your race record** is the history, drawn with the same `RecordCard` as the public page, above a
-  link to that page. `/runner/[address]` stays exactly as it was: public, no wallet, nothing that
-  writes. This page is that history plus what only its owner may do, and it links rather than
-  copying, because two pages claiming to be the record is how they drift.
-- **Test money** (testnet only) and **Disconnect** moved here from the menu.
+- **Your race record** is the history, drawn with the same `RecordCard` as the public page, above
+  **one** link to that page. `/runner/[address]` stays exactly as it was: public, no wallet, nothing
+  that writes. This page is that history plus what only its owner may do, and it links rather than
+  copying, because two pages claiming to be the record is how they drift. There is deliberately no
+  second link to it in the header (Ancung): the one on the record tab sits beside the history it
+  opens.
+- **The faucet tab is a centred column, not a card.** One number, one button and one sentence inside
+  a panel pinned to the left of a page this wide read as the first of several cards that never
+  arrived. It takes the shape an empty state takes, and for the same reason: there is nothing here
+  to compare it with.
+- **A wallet avatar was tried and removed.** `blobatar` draws a creature from any string, so an
+  address would have had a face on this page and on `/runner/[address]`, deterministic and rendered
+  on the device (never `blobatar.dev/avatar/<address>`, which would hand the wallet to a third party
+  on every page view). Ancung looked at it on the real page and it added nothing to a screen whose
+  subject is one address. Do not reopen it without a screenshot.
 - **Not connected asks for a wallet** through `WalletGate` with its own words, and the header button
   still connects rather than navigating: a page that says "connect first" where one press could have
   connected you is a step charged for nothing.

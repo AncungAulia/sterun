@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWallet } from "@/hooks/useWallet";
 import { MyProfilePage } from "@/modules/profile/MyProfilePage";
+import type { ProfileTab } from "@/modules/profile/lib/profile-tab";
 import type { SterunRecord } from "@sterunxyz/sdk";
 
 const readClient = vi.hoisted(() => ({
@@ -55,12 +56,12 @@ function record(overrides: Partial<SterunRecord> = {}): SterunRecord {
   } as SterunRecord;
 }
 
-function renderPage() {
+function renderPage(tab: ProfileTab = "entries") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
-  return render(<MyProfilePage />, { wrapper: Wrapper });
+  return render(<MyProfilePage tab={tab} />, { wrapper: Wrapper });
 }
 
 beforeEach(() => {
@@ -80,11 +81,9 @@ describe("MyProfilePage", () => {
 
       renderPage();
 
-      // The heading is on screen before the records answer, so the wait is on
-      // the link rather than on the section it lives in.
       const pass = await screen.findByRole("link", { name: "Open my pass" });
       const section = pass.closest("section") as HTMLElement;
-      expect(within(section).getByRole("heading", { name: "Races you are in" })).toBeInTheDocument();
+      expect(section).toHaveAttribute("aria-label", "Your entries");
       expect(pass).toHaveAttribute("href", "/pass/41");
       expect(within(section).getByRole("link", { name: "View my entry" })).toHaveAttribute(
         "href",
@@ -102,27 +101,46 @@ describe("MyProfilePage", () => {
       expect(await screen.findByRole("link", { name: "Open my pass" })).toBeInTheDocument();
     });
 
-    it("links the public page rather than claiming to be it", async () => {
+    it("counts each section on its tab once the chain has answered", async () => {
+      readClient.recordsOfDetailed.mockResolvedValue([
+        record({ tokenId: 1 }),
+        record({ tokenId: 2, state: "Finished", resultAt: 1_790_200_000n, finishTimeS: 3600 }),
+      ]);
+
       renderPage();
 
-      const links = await screen.findAllByRole("link", { name: /See what others see|Open the public page/ });
-      expect(links).toHaveLength(2);
-      for (const link of links) expect(link).toHaveAttribute("href", `/runner/${ADDRESS}`);
+      const tabs = await screen.findByRole("navigation", { name: "Profile sections" });
+      expect(await within(tabs).findByRole("link", { name: "Your entries 1" })).toBeInTheDocument();
+      expect(within(tabs).getByRole("link", { name: "Race record 1" })).toHaveAttribute(
+        "href",
+        "/profile?tab=record",
+      );
     });
 
-    it("shows the test money and the way to get some, on testnet", async () => {
-      renderPage();
+    it("links the public page from the record, rather than claiming to be it", async () => {
+      renderPage("record");
 
-      expect(await screen.findByText("Test money")).toBeInTheDocument();
-      expect(screen.getByText("sUSD 20")).toBeInTheDocument();
+      const link = await screen.findByRole("link", { name: "Open the public page" });
+      expect(link).toHaveAttribute("href", `/runner/${ADDRESS}`);
+      // One way there, beside the history it opens, rather than a second
+      // button in the header saying the same thing (Ancung, 2026-09-23).
+      expect(screen.queryByRole("link", { name: "See what others see" })).not.toBeInTheDocument();
+    });
+
+    it("shows the test money and the way to get some, on the faucet tab", async () => {
+      renderPage("faucet");
+
+      expect(await screen.findByText("sUSD 20")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Get test sUSD" })).toBeInTheDocument();
+      // The faucet is not in the way of the entries it exists to pay for.
+      expect(screen.queryByRole("link", { name: "Open my pass" })).not.toBeInTheDocument();
     });
 
-    it("disconnects from here, since the menu that used to hold it is gone", async () => {
+    it("disconnects from any tab, since the menu that used to hold it is gone", async () => {
       const disconnect = vi.fn(async () => {});
       useWallet.setState({ disconnect });
 
-      renderPage();
+      renderPage("faucet");
       await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
 
       expect(disconnect).toHaveBeenCalledTimes(1);
@@ -136,7 +154,14 @@ describe("MyProfilePage", () => {
       renderPage();
 
       expect(screen.getByText("Your profile")).toBeInTheDocument();
-      expect(screen.queryByRole("heading", { name: "Races you are in" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "Profile sections" })).not.toBeInTheDocument();
+    });
+
+    it("counts nothing while the chain has not answered", () => {
+      renderPage();
+
+      const tabs = screen.getByRole("navigation", { name: "Profile sections" });
+      expect(within(tabs).getByRole("link", { name: "Your entries" })).toBeInTheDocument();
     });
 
     it("says nothing is finished rather than nothing exists", async () => {
@@ -144,7 +169,7 @@ describe("MyProfilePage", () => {
       // run, and saying "no races" there would read as the entry being lost.
       readClient.recordsOfDetailed.mockResolvedValue([record()]);
 
-      renderPage();
+      renderPage("record");
 
       expect(await screen.findByText("Nothing finished yet")).toBeInTheDocument();
       expect(screen.queryByText("No races yet")).not.toBeInTheDocument();
