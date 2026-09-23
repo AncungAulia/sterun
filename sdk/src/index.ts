@@ -33,6 +33,8 @@ export {
   type IncreaseQuotaArgs,
   type EnterArgs,
   type SterunResult,
+  type SkippedClaim,
+  CLAIM_MAX_BATCH,
   RECORD_RESULTS_MAX_BATCH,
   chunkResults,
 } from "./client.js";

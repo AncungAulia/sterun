@@ -53,8 +53,17 @@ already in other people's hands.
   the per-transaction limits live on testnet and mainnet (identical on 2026-09-17): the 16,384 bytes
   of contract events bind first, and a 121-row transaction fails on the ledger (it simulates cleanly).
 - `ResultForAnotherEvent` (108) in the RaceRecord error table.
+- **`claimRacepackMany(tokenIds, operator)`** (STE-66, contracts v2.7): a scanner sends the queue it
+  collected offline in one signature instead of one per runner. **Not atomic**: a pack another desk
+  already handed over, or a token id with no record, comes back in the resolved value as
+  `{ tokenId, reason: "not-entered" | "not-found" }` while the rest of the queue lands. An operator
+  who may not claim for an event in the batch still fails the whole call with `NotAuthorized(104)`.
+- **`CLAIM_MAX_BATCH = 100`**, enforced before signing as well as by the contract
+  (`TooManyClaims(109)`). It is lower than `RECORD_RESULTS_MAX_BATCH` because a `racepack_claimed`
+  event carries the operator address: 160 bytes a row against a result's 136.
+- `TooManyClaims` (109) in the RaceRecord error table.
 
-**Needs the v2.5 EventRegistry and the v2.6 RaceRecord.** Against older contracts these methods fail
+**Needs the v2.5 EventRegistry and the v2.7 RaceRecord.** Against older contracts these methods fail
 with a host error, because the functions do not exist yet.
 
 ## [0.3.1] — 2026-09-17
