@@ -83,7 +83,16 @@ export function HeaderSearch() {
   }
 
   return (
-    <form role="search" onSubmit={submit} className="relative flex-1">
+    /* Its own row below `sm`, inline from there. At 390 the lockup, the box
+       and the wallet share 358 pixels, which left the box about ninety and
+       wrapped "Search by" onto two lines under a wallet chip sitting on top of
+       it. `basis-full` in a wrapping bar is what puts it on the next line, and
+       it has to be the basis rather than the width: `flex-1` is `flex: 1 1 0%`,
+       so a `w-full` beside it is measured against a base size of zero and the
+       box never wraps. One
+       search box rather than two, because two would mean two fields with the
+       same label and two subtrees reading the query. */
+    <form role="search" onSubmit={submit} className="relative order-last basis-full sm:order-none sm:flex-1 sm:basis-0">
       <SearchIcon
         aria-hidden
         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-n-400"
@@ -118,8 +127,15 @@ export function HeaderSearch() {
       ) : null}
       {/* Visible to a screen reader and to a keyboard, and off screen for
           everyone else: the magnifier on the left already says what the field
-          is, and a second button inside a header this tight is clutter. */}
-      <Button type="submit" variant="ghost" size="sm" className="sr-only focus:not-sr-only">
+          is, and a second button inside a header this tight is clutter.
+
+          `left-0` because `sr-only` is `position: absolute` and this button
+          still carries its size utilities: a 1px box with 24px of padding, laid
+          out after the input, sat past the right edge of a phone and gave the
+          whole page seven pixels of sideways scroll. Pinned to the left of the
+          form it is inside whatever the width, and focus makes it static
+          again. */}
+      <Button type="submit" variant="ghost" size="sm" className="sr-only left-0 focus:not-sr-only">
         Search
       </Button>
     </form>

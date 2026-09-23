@@ -231,7 +231,7 @@ function EventGrid({
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {entries.map((item) => (
-        <li key={item.summary.event.eventId}>
+        <li key={item.summary.event.eventId} className="min-w-0">
           <EventCard entry={item} documentLoading={pending.has(item.summary.event.eventId)} />
         </li>
       ))}

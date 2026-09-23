@@ -26,6 +26,12 @@
  * and the organiser button drop out, since the directory's own header still
  * carries the place and `/organisers` is a tap away from the footer of any
  * page it matters on.
+ *
+ * **The search box takes a row of its own on a phone** (2026-09-23). The three
+ * of them side by side at 390 left it about ninety pixels: the rolling words
+ * wrapped onto two lines, the wallet chip landed on top of them, and the whole
+ * page scrolled sideways. The bar wraps rather than shrinking anything, so it
+ * is two rows there and one from `sm`.
  */
 import { GlobeIcon } from "lucide-react";
 import Image from "next/image";
@@ -43,7 +49,7 @@ export function Header() {
 
   return (
     <header className="border-b border-n-200 bg-paper">
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-4">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:h-16 sm:flex-nowrap sm:gap-4 sm:py-0">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Sterun home">
           <Image
             src="/brand/logo/sterun-lockup-black.svg"
@@ -61,7 +67,7 @@ export function Header() {
         {/* `useSearchParams` makes its own subtree dynamic, so the boundary is
             here rather than around the whole header: the lockup and the wallet
             still render while the query is read. */}
-        <Suspense fallback={<div className="h-9 flex-1" />}>
+        <Suspense fallback={<div className="order-last h-9 basis-full sm:order-none sm:flex-1 sm:basis-0" />}>
           <HeaderSearch />
         </Suspense>
 

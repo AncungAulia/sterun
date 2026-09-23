@@ -70,7 +70,12 @@ export function EventCard({ entry, documentLoading }: EventCardProps) {
       // The link is the card surface, so the global focus ring's small radius
       // would square its corners on Tab. globals.css restores them for this slot.
       data-slot="event-card"
-      className="group flex h-full flex-col gap-3"
+      /* `min-w-0` because the title truncates. `truncate` sets
+         `white-space: nowrap`, which makes the card's min-content width the
+         whole race name, and a grid track sized `auto` takes that as its
+         floor: at 375 one long name pushed the column to 462 and the page
+         scrolled sideways. Measured in a browser, not guessed. */
+      className="group flex h-full min-w-0 flex-col gap-3"
     >
       {/* The frame crops, the picture inside it moves: scaling the frame would
           push its neighbours around and cut the corners off the radius. */}
@@ -86,7 +91,7 @@ export function EventCard({ entry, documentLoading }: EventCardProps) {
       </PosterFrame>
 
       {/* The body fills the row so the prices line up across it. */}
-      <div className="flex flex-1 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         {place ? (
           <p id={placeId} className="truncate text-sm text-n-500">
             {place}
