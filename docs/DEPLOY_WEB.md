@@ -58,10 +58,12 @@ path, no trailing slash) and restarts the API. A preview deployment has its own
 hostname and needs its own entry; the production alias
 (`https://<project>.vercel.app`) is stable and is the one that matters.
 
-**The faucet has no payout key yet.** `GET /config` reports
-`faucet.payoutConfigured: false`, so **Get test sUSD** tells a runner it is not
-available. Nobody can pay for an entry from a fresh wallet until that key is
-set, which makes it a blocker for the demo rather than a nicety.
+**The faucet works, and `payoutConfigured` is not the field to read.**
+`faucet.payoutConfigured` reports the **distributor** key, which never goes on a
+public box — the distributor can move the whole test supply. What the web app's
+**Get test sUSD** uses is `faucet.route.available`, backed by its own small
+float (`STERUN_SUSD_FAUCET_SECRET`). On production that is `true`, proven end to
+end on 2026-09-23: a fresh wallet with a trustline was paid 50 sUSD.
 
 ## 4. After it is live
 

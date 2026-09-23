@@ -1454,6 +1454,101 @@ versions: 0.3.1`. The first publish had succeeded. `time["0.3.1"]` in the regist
 authority.
 
 ---
+
+## The backend moved to a VPS, and got its own domain (2026-09-17 → 2026-09-23)
+
+The homelab LXC (`jameserver` / pve02 / ct-sterun) is retired. The backend runs on a Contabo VPS,
+still behind the **same Cloudflare Tunnel**, so nothing about ingress changed: no inbound port is
+open, Cloudflare terminates TLS, and `cf-connecting-ip` — the header the rate limiter trusts — still
+cannot be forged, because every request arrives through the tunnel.
+
+| | |
+| --- | --- |
+| Host | Ubuntu 26.04, 2 vCPU, 7.7 GiB RAM, 96 GB disk |
+| Firewall | `ufw`, **22/tcp only**. The API publishes no port at all |
+| Ingress | Cloudflare Tunnel `75461846…`, locally-managed config in `deploy/cloudflared-config.yml` |
+| Hostnames | **`https://api.sterun.xyz`** (new, the project's own domain) and `https://api-sterun.jameshub.fun` (kept) |
+| Cutover | 2026-09-17, ~40 s: 13:46:56Z services stopped on the LXC → 13:47:33Z serving from the VPS |
+
+**Both hostnames answer, and that is deliberate.** Event metadata URLs are committed **on-chain** in
+`create_event`'s `uri`, and an on-chain URI cannot be edited. Every event created before this move
+points at `api-sterun.jameshub.fun`, so that hostname has to keep answering for as long as those
+events exist. New uploads use the new domain: `STERUN_PUBLIC_BASE_URL=https://api.sterun.xyz` since
+2026-09-23.
+
+The move itself, with what was checked rather than assumed:
+
+```
+row counts, old box vs VPS after the restore (identical)
+  categories=59 chain_events=559 event_announcements=3 event_scanners=17 events=37
+  faucet_payouts=57 participants=55 record_transitions=155 records=88 schema_migrations=13
+./deploy/verify-deployment.sh https://api-sterun.jameshub.fun   18 passed, 0 failed
+./deploy/verify-deployment.sh https://api.sterun.xyz            18 passed, 0 failed
+indexer doctor                                                  findings: []
+keeper, first run on the VPS                                    SUCCESS 61142d8c… (10 keys)
+```
+
+Secrets (`be/.env.production`, `.env`, the tunnel credentials) were piped box to box over SSH and
+compared by sha256; they were never written to a laptop. The LXC's 14 manual backups were copied to
+the VPS at `backups/from-pve02/` before it was shut down, and its Postgres volume is untouched, so
+the old box is still a rollback for as long as it exists.
+
+> **Never start the Sterun stack on the LXC again.** It holds the same tunnel credentials, so a
+> second connector would put half the traffic on a database that stopped receiving writes on
+> 2026-09-17. Its containers are stopped, and `unless-stopped` keeps them stopped across a reboot.
+
+### Daily backups, on the box and off it (2026-09-23)
+
+Until now every backup was taken by hand before a deploy, and the only off-box copy was the LXC that
+this move retired. The index can be rebuilt from the chain; **the vault cannot be rebuilt from
+anything**.
+
+`deploy/backup-db.sh`, from cron at 03:15 UTC daily: `pg_dump` plain SQL gzipped to
+`backups/daily/`, uploaded to the private R2 bucket `sterun-backups` under `db/`, keeping 14 local
+copies and 60 days remote. It refuses a dump under 10 kB (a `pg_dump` that failed and exited 0) and
+verifies the gzip before uploading.
+
+Proven, not assumed — the first run, and a restore of what it produced:
+
+```
+dumped  backups/daily/sterun-20260923T151708Z.sql.gz (154448 bytes)
+uploaded s3://sterun-backups/db/sterun-20260923T151708Z.sql.gz
+restore into a scratch database, then compared with the live one:
+  restored: event_announcements=3 events=38 participants=56 records=89
+  live:     event_announcements=3 events=38 participants=56 records=89
+```
+
+The dump is not encrypted beyond what is already encrypted inside it: PII columns are AES-GCM
+ciphertext whose keys live only in `be/.env.production`, which is **not** in any bucket. A leaked
+dump is still a leak of hashes, blind indexes and bib numbers, so the bucket stays private.
+
+### The web faucet on production (2026-09-23)
+
+`pnpm --filter be e2e:faucet https://api.sterun.xyz`, the same flow the web app's **Get test sUSD**
+button drives:
+
+```
+route {"available":true,"reason":null,"windowHours":24,"dailyCapStroops":"50000000000"}
+▸ An unauthenticated call is refused                      401
+▸ A fresh wallet with XLM and no trustline                409 no-trustline, with the sentence to fix it
+▸ The wallet opens its sUSD trustline, then asks          200 paid 500000000 stroops, tx de58d7fa…
+  SAC balance 0 -> 500000000: the wallet can now pay an entry
+▸ A second claim inside the window                        429 rate-limited, retry at 2026-09-24T15:18:24Z
+```
+
+So a fresh wallet **can** pay for an entry today. `faucet.payoutConfigured: false` in `GET /config`
+is the **distributor** key, which stays off this box by design (`be/OPERATIONS.md`): the most a
+compromised API can give away is the faucet's small float.
+
+### New web origins allowed (2026-09-17)
+
+`STERUN_WEB_ORIGIN` gained `https://sterun-app.vercel.app`, `https://app.sterun.xyz` and
+`http://app.sterun.xyz`. Checked from outside: a preflight carrying `x-sterun-signature` answers 204
+with the origin echoed for each, `GET /events` from the Vercel origin answers 200 with the header,
+and an origin that is not on the list gets no header at all. The list is an exact match, so a new
+preview domain needs its own entry.
+
+---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
 Run on **2026-09-05** with `pnpm --filter be e2e:results`. Not a simulation: the event was genuinely
@@ -2993,9 +3088,11 @@ dashboard; every other `NEXT_PUBLIC_*` value is public and committed in `fe/.env
 
 ### Still open after this deploy
 
-- **The faucet has no payout key.** `GET https://api.sterun.xyz/config` still reports
-  `faucet.payoutConfigured: false`, so **Get test sUSD** refuses and a fresh wallet cannot pay for an
-  entry. That blocks the STE-25 manual steps (`M.2`) and the demo video, not this deploy.
+- ~~**The faucet has no payout key.**~~ **Corrected 2026-09-23: the faucet works.**
+  `faucet.payoutConfigured` reports the **distributor** key, which is deliberately absent from a
+  public box; the web app's button reads `faucet.route.available`, which is `true` and is backed by
+  the separate float key. Proven against production with `pnpm --filter be e2e:faucet
+  https://api.sterun.xyz` — see "The web faucet on production" below.
 - The STE-25 rehearsal's `MANUAL REQUIRED` steps can now be run at last: create a race through the
   console, enter and pay, two phones as two desks with one runner scanned at both, and the public
   profile.

@@ -134,9 +134,12 @@ results CSV → 9 results → per-runner verification, plus the negative paths. 
 the ledger** with `AlreadyClaimed(102)`; the SDK used to lose that code (STE-61) and the scanner
 stopped its whole queue (STE-62). Both are fixed, and run 3 shows the losing desk flagging the runner
 and sending the rest with one press. No contract bug was found. The six `MANUAL REQUIRED` steps were waiting on a deployed web app, and
-since 2026-09-23 they are not: they need a person, two phones and a camera, plus a faucet payout key
-so a fresh wallet can pay for an entry (`GET /config` still reports
-`faucet.payoutConfigured: false`).
+since 2026-09-23 they are not: they need a person, two phones and a camera, and nothing else. The
+web faucet **works** — proven against production on 2026-09-23 (`pnpm --filter be e2e:faucet
+https://api.sterun.xyz`): a fresh trustlined wallet was paid 50 sUSD. `faucet.payoutConfigured:
+false` in `GET /config` is **not** that faucet: it reports the **distributor** key, which is
+deliberately absent from a public box (`be/OPERATIONS.md`). The web app's route is
+`faucet.route.available`, and it is `true`.
 
 The backend runs as three processes from one `be/` package: the API (`pnpm dev`), the poller
 (`pnpm indexer follow`) and the TTL keeper (`pnpm keeper run`). The full chain has been run against
