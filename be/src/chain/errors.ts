@@ -56,6 +56,7 @@ export const RACE_RECORD_ERRORS: Readonly<Record<number, string>> = {
   106: "TooManyAddOns",
   107: "DuplicateAddOn",
   108: "ResultForAnotherEvent",
+  109: "TooManyClaims",
 };
 
 /** INTERFACE.md §2.4 — OpenZeppelin, embedded in the RaceRecord spec. */
