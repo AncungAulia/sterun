@@ -23,25 +23,58 @@
  *
  * The field is filled from the address on every render, so arriving at `/?q=jogja`
  * or pressing Back shows the search that is actually applied.
+ *
+ * ## The placeholder rolls
+ *
+ * "Search by race, venue or city" is three things read as one long line. The
+ * words take turns instead, on a wheel (`roll-words` in globals.css), which
+ * says the same thing in a quarter of the width and shows what can be typed
+ * rather than describing it.
+ *
+ * It is a layer over the field rather than the `placeholder` attribute, which
+ * cannot hold markup, and it is `aria-hidden`: the field's own label already
+ * says what it is, and a screen reader reading three rotating words over it
+ * would be noise. It disappears the moment there is anything to read instead.
  */
 import { SearchIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+/**
+ * What `matchesSearch` actually looks at (`lib/browse.ts`), in the order a
+ * runner would try them. A word here that the search does not match is a
+ * promise the field breaks.
+ */
+const SEARCHABLE = ["race", "venue", "city"];
+
+/**
+ * The words the wheel actually shows: the three, then the first again, so the
+ * loop lands on a copy of where it started instead of snapping back.
+ */
+const ROLLED = [...SEARCHABLE, SEARCHABLE[0]];
 
 export function HeaderSearch() {
   const router = useRouter();
   const params = useSearchParams();
   const applied = params.get("q") ?? "";
   const [value, setValue] = useState(applied);
+  /*
+    The box follows the address: Back, a shared link, or Clear on the directory
+    all change `applied`, and the field has to say what is being searched.
 
-  // Follows the address: Back, a shared link, or Clear on the directory all
-  // change `applied`, and the box has to say what is being searched.
-  useEffect(() => {
+    Adjusted during the render that sees the change rather than from an effect.
+    An effect renders once with the stale value and again with the new one, and
+    the React Compiler lint refuses it for exactly that reason; React documents
+    this shape for state that has to follow a prop.
+  */
+  const [lastApplied, setLastApplied] = useState(applied);
+  if (applied !== lastApplied) {
+    setLastApplied(applied);
     setValue(applied);
-  }, [applied]);
+  }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -58,11 +91,31 @@ export function HeaderSearch() {
       <Input
         type="search"
         aria-label="Search races"
-        placeholder="Search by race, venue or city"
+        // Empty on purpose: the rolling words below are the placeholder, and
+        // both at once would print two.
+        placeholder=""
         value={value}
         onChange={(event) => setValue(event.target.value)}
         className="pl-9"
       />
+
+      {value === "" ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-9 flex items-center text-base text-muted-foreground"
+        >
+          <span>Search by&nbsp;</span>
+          <span className="h-6 overflow-hidden">
+            <span className="roll-track flex flex-col">
+              {ROLLED.map((word, index) => (
+                <span key={`${word}-${index}`} className="flex h-6 items-center">
+                  {word}
+                </span>
+              ))}
+            </span>
+          </span>
+        </div>
+      ) : null}
       {/* Visible to a screen reader and to a keyboard, and off screen for
           everyone else: the magnifier on the left already says what the field
           is, and a second button inside a header this tight is clutter. */}

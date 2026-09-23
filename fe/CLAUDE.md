@@ -374,10 +374,12 @@ What is settled:
 - **A list card has no frame** (Ancung, 2026-09-23, from loket.com and eventbrite.com): the poster
   carries the only shape, and the text sits under it on the page's own background, with no border,
   no white body and no shadow. What the frame used to do is done otherwise: the grid's gap and the
-  poster's edges separate one card from the next, and the title underlining with the poster
-  brightening says it is pressable. The lines lost their icons, so the price is the one bold thing
-  on the card, held to the bottom above a rule so a glance down a column compares prices. The
-  skeleton copies the same shape.
+  poster's edges separate one card from the next, and the **picture grows a little inside its own
+  frame** under the pointer (the frame crops, so neighbours do not move) to say it is pressable.
+  The lines lost their icons, so the price is the one bold thing on the card, held to the bottom
+  with **no rule above it**: on a card with no frame a divider is the only line there is and draws
+  more attention than the price. The title is **one line, truncated**, because a row mixing one and
+  two line titles reads as a broken grid. The skeleton copies the same shape.
 - **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
   `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
   its corners.
@@ -402,6 +404,12 @@ going back first.
 - **Filters stayed with the list**, on its heading row. The drawer counts what would be left while
   you choose ("Show 12 races"), which needs the list itself, and a filter button in a bar that is on
   every page would do nothing on most of them.
+- **The placeholder rolls through what can be searched** (`roll-words` in `globals.css`): "race",
+  "venue", "city", one at a time, which says the same as "Search by race, venue or city" in a
+  quarter of the width. Keyframes rather than a library, one eased move per word (three segments
+  per step read as a stutter), and the first word repeated at the end of the list so the loop lands
+  on a copy of where it started instead of snapping back. It is a layer over the field, not the
+  `placeholder` attribute, and `aria-hidden`: the field's label already says what it is for.
 - **The place shows the province alone** ("DI Yogyakarta", not "DI Yogyakarta, Indonesia"): the
   country adds nothing to somebody standing in it, and the pair was most of a header. It is in the
   bar from `lg` and in the directory's own header below that. `AreaPicker` and `AreaForm` moved to

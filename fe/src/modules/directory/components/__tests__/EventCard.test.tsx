@@ -37,11 +37,13 @@ describe("EventCard", () => {
       expect(container.querySelector("img")?.getAttribute("src")).toBe("https://files.test/poster.jpg");
     });
 
-    it("sets the title in the card face, two lines at most", () => {
+    it("sets the title in the card face, on one line (Ancung, 2026-09-23)", () => {
+      // A row whose titles are one and two lines tall reads as a broken grid,
+      // and the rest of a long name is one tap away on the race's own page.
       render(<EventCard entry={entry(summary(7, {}, [category(0)]), metadata())} documentLoading={false} />);
 
       const heading = screen.getByRole("heading", { name: "Jakarta Marathon 7" });
-      expect(heading).toHaveClass("heading-strong", "line-clamp-2");
+      expect(heading).toHaveClass("heading-strong", "truncate");
       expect(heading).not.toHaveClass("heading-hero");
     });
 

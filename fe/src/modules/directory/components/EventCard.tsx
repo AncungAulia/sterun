@@ -16,8 +16,9 @@
  *
  * What the frame used to do, two things, is done otherwise. Separating one card
  * from the next: the grid's gap and the poster's own edges. Saying the card is
- * pressable: the title underlines on hover and the poster lifts its brightness,
- * and the whole surface is still one link.
+ * pressable: the poster grows a little inside its own frame under the pointer
+ * (Ancung, 2026-09-23, replacing an underline on the title), and the whole
+ * surface is still one link.
  *
  * The lines carry no icons any more. Three icons on three lines of a small card
  * is decoration standing where the eye lands; the price, which is the one thing
@@ -71,11 +72,13 @@ export function EventCard({ entry, documentLoading }: EventCardProps) {
       data-slot="event-card"
       className="group flex h-full flex-col gap-3"
     >
+      {/* The frame crops, the picture inside it moves: scaling the frame would
+          push its neighbours around and cut the corners off the radius. */}
       <PosterFrame
         posterUrl={entry.document?.posterUrl ?? null}
         loading={documentLoading}
         sizes={SIZES}
-        className="rounded-lg border border-n-200 transition-[filter] duration-150 ease-out group-hover:brightness-[1.03] motion-reduce:transition-none"
+        className="rounded-lg border border-n-200 [&_img]:transition-transform [&_img]:duration-200 [&_img]:ease-out group-hover:[&_img]:scale-105 motion-reduce:[&_img]:transition-none motion-reduce:group-hover:[&_img]:scale-100"
       >
         <div className="absolute top-3 right-3">
           <EventStatusBadge status={event.status} />
@@ -90,10 +93,10 @@ export function EventCard({ entry, documentLoading }: EventCardProps) {
           </p>
         ) : null}
 
-        <h3
-          id={titleId}
-          className="heading-strong line-clamp-2 text-xl text-ink underline-offset-4 group-hover:underline"
-        >
+        {/* One line, never two (Ancung): a row of cards whose titles are one
+            line tall and two lines tall reads as a broken grid, and the rest of
+            the name is on the race's own page a tap away. */}
+        <h3 id={titleId} className="heading-strong truncate text-xl text-ink">
           {event.name}
         </h3>
 
@@ -104,13 +107,12 @@ export function EventCard({ entry, documentLoading }: EventCardProps) {
         </div>
 
         {price ? (
-          /* Held to the bottom, above a rule the whole row shares, so a glance
-             down a column compares prices rather than hunting for them. The
-             line already says "From" where it needs to (`priceLine`), so there
-             is no label above it to repeat the word. */
-          <div className="mt-auto border-t border-n-200 pt-3">
-            <p className="numeric text-base font-medium text-ink">{price}</p>
-          </div>
+          /* Held to the bottom so a glance down a column compares prices rather
+             than hunting for them. No rule above it (Ancung, 2026-09-23): on a
+             card with no frame a divider is the only line on the card, and it
+             draws more attention than the price it was meant to set apart. The
+             line already says "From" where it needs to (`priceLine`). */
+          <p className="numeric mt-auto pt-2 text-base font-medium text-ink">{price}</p>
         ) : null}
       </div>
     </Link>
