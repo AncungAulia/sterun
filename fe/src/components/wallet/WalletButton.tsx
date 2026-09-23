@@ -1,45 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useSusdBalance } from "@/hooks/useSusdBalance";
 import { useWallet } from "@/hooks/useWallet";
-import { IS_TESTNET } from "@/lib/chain/env";
-import { GetTestSusd } from "@/components/wallet/GetTestSusd";
-import { formatAmount, shortAddress } from "@/utils/format";
+import { shortAddress } from "@/utils/format";
 
 /**
- * Connect / connected / disconnect, in one control.
+ * Connect, or the way to your own page. Two states, no menu.
  *
  * While restoring we render a placeholder of the same height rather than
  * "Connect wallet": showing a connect prompt to somebody who is already
  * connected, for the one frame before localStorage is read, reads as a dropped
  * session.
+ *
+ * **The popover is gone** (Ancung, 2026-09-23). It held five unrelated things
+ * (the address, the public record, the sUSD balance, the faucet, Disconnect),
+ * none of which could be linked to, all of which vanished at the next click,
+ * and it still did not hold the one thing a runner comes back for, their pass.
+ * All of it lives at `/profile` now, which is also where Disconnect went.
+ * Eventbrite's bar does the same: it links to `/mytickets/` and
+ * `/account-settings/` rather than unfolding them.
+ *
+ * **Not connected still connects rather than navigating.** A button that opened
+ * a page telling somebody to connect, when one press could have connected them,
+ * is a step charged for nothing.
  */
 export function WalletButton() {
-  const { address, isRestoring, isConnecting, error, connect, disconnect } = useWallet();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // Testnet only (STE-21): the label says sUSD, which mainnet does not use.
-  const balance = useSusdBalance(IS_TESTNET ? address : null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onPointerDown(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [menuOpen]);
+  const { address, isRestoring, isConnecting, error, connect } = useWallet();
 
   if (isRestoring) {
     return <div className="h-10 w-36 skeleton rounded-md" aria-hidden />;
@@ -61,58 +49,12 @@ export function WalletButton() {
   }
 
   return (
-    <div ref={menuRef} className="relative">
-      <Button
-        variant="secondary"
-        onClick={() => setMenuOpen((open) => !open)}
-        aria-expanded={menuOpen}
-        aria-haspopup="menu"
-      >
+    <Button variant="secondary" asChild>
+      {/* Named by the address rather than "Profile": on a page where a wallet
+          signs things, which wallet is connected is the fact worth printing. */}
+      <Link href="/profile" aria-label={`Your profile, ${shortAddress(address)}`}>
         <span className="numeric">{shortAddress(address)}</span>
-      </Button>
-
-      {menuOpen ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-10 mt-2 w-72 rounded-lg border border-n-200 bg-paper p-3 shadow-card"
-        >
-          <p className="text-xs text-n-500">Connected account</p>
-          <p className="numeric mt-1 break-all text-sm text-n-800">{address}</p>
-          {/*
-            The public race record for this address (STE-24). A link rather
-            than a page of its own: /runner/G... is the URL a runner sends to
-            other people, so their own copy is that same page.
-          */}
-          <Button asChild variant="outline" size="sm" className="mt-3 w-full">
-            <Link href={`/runner/${address}`} onClick={() => setMenuOpen(false)}>
-              My race record
-            </Link>
-          </Button>
-          {IS_TESTNET ? (
-            <div className="mt-3 border-t border-n-200 pt-3">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-xs text-n-500">sUSD balance</span>
-                <span className="numeric text-base font-medium text-ink">
-                  {balance.data?.kind === "balance" ? formatAmount(balance.data.stroops) : balance.data ? "0" : ""}
-                </span>
-              </div>
-              <GetTestSusd address={address} size="sm" className="mt-2 [&>button]:w-full" />
-              <p className="mt-2 text-xs text-n-500">Test money for trying Sterun. It has no value.</p>
-            </div>
-          ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3 w-full"
-            onClick={() => {
-              setMenuOpen(false);
-              void disconnect();
-            }}
-          >
-            Disconnect
-          </Button>
-        </div>
-      ) : null}
-    </div>
+      </Link>
+    </Button>
   );
 }

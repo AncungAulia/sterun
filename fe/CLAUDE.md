@@ -305,6 +305,17 @@ What is settled:
   everywhere else. For the same reason the list never waits on documents (it used to, so a filtered
   list would not grow as they arrived): only the order changes as they land. Grid: 2 columns from `sm`, 3 from `lg`, 4 from `xl`, for the
   list and the skeleton alike.
+- **Races that have run are off the list by default** (Ancung, 2026-09-23), with
+  "Show races that have finished" in the drawer to bring them back. Checked against what
+  organisers here actually use: loket.com, artatix.co.id and eventbrite.com all list upcoming
+  events only, all three keep a sold-out event listed with a label rather than hiding it (Loket
+  writes "HABIS TERJUAL"), Eventbrite moves what has happened to the organiser's own profile under
+  "Past Events", and none of the three uses a timer. Ours is a verification product, so what has
+  run is evidence: it stays one checkbox away, a **search reaches it whatever the checkbox says**
+  (somebody typing last year's race name is checking a result), and its page stays at its own URL
+  forever. `includePast` is not counted by `activeFilterCount`, since a badge on an untouched
+  drawer reads as a filter somebody forgot to clear. Draft races were already invisible here
+  (`publicEvents`).
 - **Filters** live in a staged drawer: Sort by ("Nearest date first" / "Furthest date first"),
   Price, Distance, and Availability ("Hide full and closed races", which hides races that are not
   `Open` or have no places left). There is no location group: the place is chosen in the header,
@@ -327,9 +338,21 @@ What is settled:
   title's first line lands at about 85% ink (10:1 against `paper`) and its caps at about 60% (4.3:1),
   even over a pure white poster. It used to be two layers with the whole block floored at 70% ink,
   which read as a grey sheet over most of the card. `EventCard` is the
-  list card only and keeps its white body; the two share the lines from `browse.ts`, not a variant.
+  list card only; the two share the lines from `browse.ts`, not a variant.
   Lead: hero title, venue, date, entries left, price. **Side cards are compact**: title, date and
   entries left.
+- **Each featured card says why it is there** (Ancung, 2026-09-23, `featureReason`): **Almost full**
+  (a tenth of the places or fewer left), **Closing soon** (race day inside a fortnight) or **Just
+  added** (the largest event id, since the registry hands them out in order and there is no
+  created-at on chain). One reason per card, strongest first, and none at all rather than a filler
+  word. The row then **picks three that differ**: the lead is still whatever the ordering put first,
+  the other two cover reasons the row lacks, and any slot left over falls back to the existing
+  order. Eventbrite labels the same way ("Going fast", "Just added").
+  **An auto-rotating carousel was considered and refused**: NN/g finds auto-forwarding carousels
+  annoy people and reduce visibility, and Loket's own rotating hero is promoted inventory rather
+  than a browsing aid. "Trending" is refused for a different reason: the chain holds a total, not a
+  history, so it would need the index to answer for every race on the page, which is a backend
+  ticket rather than a label.
 - **The featured row's shape follows how many races it has.** Stacked below `lg`, 4:3 on phones and
   16:9 from `sm`. From `lg`, three races make a 3 by 2 grid — the lead spans two columns and both
   rows at 16:9, and each side card takes one row, dropping its own ratio to fill it. **Two races are
@@ -348,12 +371,66 @@ What is settled:
   makes the text block taller than the card, `min-h-min` grows the card to fit it, and the poster
   vanishes under the fade. A layout fact the card cannot see has to be told to it, and `className`
   cannot carry this one, because the size is a class on the heading rather than on the card.
+- **An empty state is a column, not a box** (`components/feedback/EmptyState.tsx`, Ancung
+  2026-09-23, from loket.com's own empty search): a mark, the sentence, then what to do, centred
+  where the list would have been. The dashed rectangle is gone, because a frame around an absence
+  emphasises the one thing on the page that needs no emphasis and read as a placeholder nobody had
+  filled. The icon is a prop: "no races match" and "no distances yet" are different absences, and
+  the glyph is what says which without being read.
+- **A list card has no frame** (Ancung, 2026-09-23, from loket.com and eventbrite.com): the poster
+  carries the only shape, and the text sits under it on the page's own background, with no border,
+  no white body and no shadow. What the frame used to do is done otherwise: the grid's gap and the
+  poster's edges separate one card from the next, and the **picture grows a little inside its own
+  frame** under the pointer (the frame crops, so neighbours do not move) to say it is pressable.
+  The lines lost their icons, so the price is the one bold thing on the card, held to the bottom
+  with **no rule above it**: on a card with no frame a divider is the only line there is and draws
+  more attention than the price. The title is **one line, truncated**, because a row mixing one and
+  two line titles reads as a broken grid. The skeleton copies the same shape.
 - **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
   `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
   its corners.
 - **A `SearchableSelect` inside a Dialog must be `modal`** (the area picker does this), or the
   Dialog's scroll lock stops its list from scrolling by wheel or touch.
 - All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
+
+### What the site header carries (2026-09-23)
+
+The lockup, the place, the search, **For organisers** and the wallet. Loket and Eventbrite both keep
+search in the bar, and the reason it belongs there rather than on the directory is that it is the
+visitor's rather than the page's: from a race page there was no way to look for another race without
+going back first.
+
+- **The query lives in the address** (`HeaderSearch` writes `/?q=…`, `Directory` reads it). State
+  inside the directory could not move up: a box that sets state on a page you are not looking at
+  does nothing. It also makes a search shareable and Back meaningful. It is **submitted, not typed**:
+  a push per keystroke fills the history with half-typed words.
+- **`useSearchParams` needs a Suspense boundary.** It is around `HeaderSearch` in the header and
+  around `Directory` in `app/(browse)/page.tsx`, so the lockup and the wallet still render while the
+  query is read. A test that renders either must mock `next/navigation`.
+- **Filters stayed with the list**, on its heading row. The drawer counts what would be left while
+  you choose ("Show 12 races"), which needs the list itself, and a filter button in a bar that is on
+  every page would do nothing on most of them.
+- **The placeholder rolls through what can be searched** (`roll-words` in `globals.css`): "race",
+  "venue", "city", one at a time, which says the same as "Search by race, venue or city" in a
+  quarter of the width. Keyframes rather than a library, one eased move per word (three segments
+  per step read as a stutter), and the first word repeated at the end of the list so the loop lands
+  on a copy of where it started instead of snapping back. It is a layer over the field, not the
+  `placeholder` attribute, and `aria-hidden`: the field's label already says what it is for.
+- **The search box takes a row of its own below `sm`.** The bar wraps rather than shrinking
+  anything: at 390 the lockup, the box and the wallet side by side left the box about ninety pixels,
+  the rolling words wrapped onto two lines and the wallet chip landed on top of them. It is
+  `basis-full`, not `w-full`: `flex-1` is `flex: 1 1 0%`, so a width beside it is measured against a
+  base size of zero and the box never wraps. One box, not two, because two would mean two fields
+  with the same label and two subtrees reading the query. The `sr-only` submit button is pinned
+  `left-0` for the same class of reason: `sr-only` is `position: absolute` and the button keeps its
+  padding, so laid out after the input it sat past the right edge and gave the page seven pixels of
+  sideways scroll.
+- **The place shows the province alone** ("DI Yogyakarta", not "DI Yogyakarta, Indonesia"): the
+  country adds nothing to somebody standing in it, and the pair was most of a header. It is in the
+  bar from `lg` and in the directory's own header below that. `AreaPicker` and `AreaForm` moved to
+  `components/place/` on this second reader.
+- **For organisers is an outlined button with an icon**, not a plain link (Ancung): a door rather
+  than a footer link, and still not competing with the wallet, the one filled control here.
 
 ### Who renders the site header (2026-09-13)
 
@@ -604,6 +681,21 @@ knowing before adding a page there:
 - **stellar-sdk's crypto fails under jsdom** (see Tests): the announcement tests run with
   `// @vitest-environment node`, and component tests mock `lib/event/announcements`.
 
+### `/organisers` — the way in for somebody who runs races (2026-09-23)
+
+`modules/organiser/intro/ForOrganisers.tsx`, a public page under `(browse)`, linked from the header
+as **For organisers** (loket.com puts its "Partner with Us" in the same place).
+
+The gap it closes was a dead end, not a missing brochure: the console is behind a wallet, and a
+wallet that is not on the allowlist met a refusal saying "send this address to the Sterun team"
+that **named no way of doing it**. The page answers what Sterun does for a race, what publishing
+one involves, and how to be allowed to; it shows the connected wallet's address with a copy button,
+since that address is the thing the team needs and copying it out of an extension is the step people
+get wrong. `NotAllowedNotice` and `NotAllowedScreen` now point here and name the account too.
+
+**The contact channel lives in `lib/contact.ts`** (X, `@sterunxyz`, from `docs/social`), so the page
+and the two refusals can never name different ones.
+
 ### `/events/[id]/enter` — a runner enters (STE-21, round 1)
 
 `modules/entry/`. Design: `docs/superpowers/specs/2026-09-15-entry-flow-design.md` and its mockup;
@@ -810,6 +902,55 @@ P1 to P12 from `docs/design/profile/`. What is settled:
   Close), and stay put only when the check could not be asked. "Use the receipt code saved on this
   device" appears when `lib/entry-store.ts` holds the entry, and fills on a press.
 
+### `/profile` — the connected wallet's own page (2026-09-23)
+
+`modules/profile/MyProfilePage.tsx`. The wallet button in the header **links here** and no longer
+opens a menu.
+
+The popover it replaces held five unrelated things (the address, the public record, the sUSD
+balance, the faucet, Disconnect), none of which could be linked to, all of which closed at the next
+click, and it still did not hold the one thing a runner comes back for: their pass. Eventbrite's bar
+does the same thing this now does, linking to `/mytickets/` and `/account-settings/` rather than
+unfolding them; both are real routes that redirect to sign-in when logged out.
+
+- **Three tabs, and the tab is in the address** (`lib/profile-tab.ts`, parsed by the route, which
+  stays a server component and needs no Suspense): **Your entries**, **Race record**, **Faucet**.
+  Three sections answering three different questions, and nobody needs two at once, so the scroll
+  that used to put the faucet below eleven record cards is gone. What tabs cost on a page whose
+  parts are compared, like the directory, is the comparison; here there is none to lose.
+- **Entries first, the faucet last**, reversing the order the redesign was asked for. The faucet
+  only exists on testnet, and a tab that disappears with the network cannot be the one the page
+  opens on; a runner opens this page for their pass, at a desk, on race morning. Off testnet the
+  strip is **two** tabs rather than three with one greyed out, and `?tab=faucet` written down back
+  then lands on Entries.
+- **The strip is the race console's, divided into equal parts** across the full width
+  (`components/ProfileTabs.tsx`): links with `aria-current` rather than a tablist, an icon each, the
+  same inset-shadow marker, scrolling sideways at phone width. A count is drawn only where there is
+  something to count. Give the count an **explicit space** after the label: JSX drops the whitespace
+  between two expressions, and the badge touching the label made a screen reader say "Your entries7".
+- **Races you are in** is the part that did not exist anywhere. A record is "an entry" while its
+  state is `Entered` or `RacepackClaimed`, because the race can still be run and the pass still
+  matters; each row offers **Open my pass** and **View my entry**. Before this, opening a pass meant
+  remembering which race it belonged to.
+- **Your race record** is the history, drawn with the same `RecordCard` as the public page, above
+  **one** link to that page. `/runner/[address]` stays exactly as it was: public, no wallet, nothing
+  that writes. This page is that history plus what only its owner may do, and it links rather than
+  copying, because two pages claiming to be the record is how they drift. There is deliberately no
+  second link to it in the header (Ancung): the one on the record tab sits beside the history it
+  opens.
+- **The faucet tab is a centred column, not a card.** One number, one button and one sentence inside
+  a panel pinned to the left of a page this wide read as the first of several cards that never
+  arrived. It takes the shape an empty state takes, and for the same reason: there is nothing here
+  to compare it with.
+- **A wallet avatar was tried and removed.** `blobatar` draws a creature from any string, so an
+  address would have had a face on this page and on `/runner/[address]`, deterministic and rendered
+  on the device (never `blobatar.dev/avatar/<address>`, which would hand the wallet to a third party
+  on every page view). Ancung looked at it on the real page and it added nothing to a screen whose
+  subject is one address. Do not reopen it without a screenshot.
+- **Not connected asks for a wallet** through `WalletGate` with its own words, and the header button
+  still connects rather than navigating: a page that says "connect first" where one press could have
+  connected you is a step charged for nothing.
+
 ### Loading, back, titles and installing (2026-09-17)
 
 Four conventions that apply to every screen, all from Ancung looking at the app:
@@ -839,7 +980,13 @@ Four conventions that apply to every screen, all from Ancung looking at the app:
   only background.
 - **The installed app starts at `/pass`** (`manifest.ts` `start_url`,
   `modules/pass/OpenPass.tsx`), which looks the newest entry up in IndexedDB
-  (`latestEntry`) and redirects to it. A manifest cannot carry a token id, and
+  (`latestEntry`) and redirects to it. **Holding none, its first button is
+  `/profile`** (Ancung, 2026-09-23, from her own iPhone): she added the app to
+  her home screen, opened it and got "No pass on this phone", which was true
+  and useless. A runner who entered on a laptop, and an iOS home screen copy
+  that keeps storage separate from Safari's, both have an entry and no pass,
+  and the profile lists that entry and opens it. The two links under it,
+  Browse races and Race pack desk, are unchanged. A manifest cannot carry a token id, and
   `/pass` is inside the offline worker's scope, so the doorway itself is cached
   and works at a venue; the directory is not cached and never can be. A phone
   holding no entry gets both offline screens as links rather than a redirect to

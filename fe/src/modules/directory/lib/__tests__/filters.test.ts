@@ -11,6 +11,8 @@ import {
   type PriceBucketId,
 } from "@/modules/directory/lib/filters";
 
+import type { EventStatus } from "@sterunxyz/sdk";
+
 import { SUSD, category, entry, metadata, summary } from "../../__tests__/fixtures";
 
 function priceBucket(id: PriceBucketId) {
@@ -158,14 +160,21 @@ describe("NO_FILTERS", () => {
   it("holds price, distance and availability, and nothing about location", () => {
     // The place is chosen in the header now, so a second location control
     // in the drawer could only disagree with it.
-    expect(NO_FILTERS).toEqual({ prices: [], distances: [], availableOnly: false });
+    expect(NO_FILTERS).toEqual({ prices: [], distances: [], availableOnly: false, includePast: false });
   });
 });
 
 describe("activeFilterCount", () => {
   it("counts every selected option and the availability switch", () => {
     expect(activeFilterCount(NO_FILTERS)).toBe(0);
-    expect(activeFilterCount({ prices: ["free", "under-25"], distances: ["5k"], availableOnly: true })).toBe(4);
+    expect(
+      activeFilterCount({
+        prices: ["free", "under-25"],
+        distances: ["5k"],
+        availableOnly: true,
+        includePast: false,
+      }),
+    ).toBe(4);
     expect(activeFilterCount({ ...NO_FILTERS, availableOnly: true })).toBe(1);
   });
 });
@@ -175,6 +184,7 @@ describe("filterChips", () => {
     prices: ["free"] as PriceBucketId[],
     distances: ["over-21k"] as DistanceBucketId[],
     availableOnly: true,
+    includePast: false,
   };
 
   it("names every applied filter", () => {
@@ -195,5 +205,51 @@ describe("filterChips", () => {
 
   it("has no chips when nothing is applied", () => {
     expect(filterChips(NO_FILTERS)).toEqual([]);
+  });
+});
+
+describe("races that have run (Ancung, 2026-09-23)", () => {
+  const NOW = 1_790_000_000n;
+
+  function race(status: EventStatus, startsAt: bigint) {
+    return entry(summary(1, { status, startsAt }, [category(0)]));
+  }
+
+  it("leaves a finished or cancelled race off the list by default", () => {
+    expect(matchesFilters(race("Completed", NOW - 86_400n), NO_FILTERS, NOW)).toBe(false);
+    expect(matchesFilters(race("Open", NOW - 86_400n), NO_FILTERS, NOW)).toBe(false);
+    expect(matchesFilters(race("Cancelled", NOW + 86_400n), NO_FILTERS, NOW)).toBe(false);
+  });
+
+  it("keeps everything still ahead, including sold out and closed", () => {
+    // Loket keeps a sold-out event on the list with a label; so do we.
+    expect(matchesFilters(race("Open", NOW + 86_400n), NO_FILTERS, NOW)).toBe(true);
+    expect(matchesFilters(race("Closed", NOW + 86_400n), NO_FILTERS, NOW)).toBe(true);
+  });
+
+  it("brings them back when the checkbox asks for them", () => {
+    const withPast = { ...NO_FILTERS, includePast: true };
+    expect(matchesFilters(race("Completed", NOW - 86_400n), withPast, NOW)).toBe(true);
+    expect(matchesFilters(race("Cancelled", NOW + 86_400n), withPast, NOW)).toBe(true);
+  });
+
+  it("hides nothing before the clock has answered", () => {
+    // `useNowSeconds` is undefined on the first render. A list that flashes
+    // shorter is worse than one that settles.
+    expect(matchesFilters(race("Completed", NOW - 86_400n), NO_FILTERS)).toBe(true);
+  });
+
+  it("does not count as a filter the visitor applied", () => {
+    // It is the default, and a badge on an untouched drawer reads as something
+    // somebody forgot to clear.
+    expect(activeFilterCount(NO_FILTERS)).toBe(0);
+    expect(activeFilterCount({ ...NO_FILTERS, includePast: true })).toBe(0);
+  });
+
+  it("is named in the chips only when it is on", () => {
+    expect(filterChips(NO_FILTERS)).toEqual([]);
+    const chips = filterChips({ ...NO_FILTERS, includePast: true });
+    expect(chips.map((chip) => chip.label)).toEqual(["Show races that have finished"]);
+    expect(chips[0]?.remove({ ...NO_FILTERS, includePast: true })).toEqual(NO_FILTERS);
   });
 });

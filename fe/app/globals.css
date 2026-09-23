@@ -331,3 +331,57 @@ button:not(:disabled),
     background-image: none;
   }
 }
+
+/*
+  The search box's placeholder, rolling through what can be searched (Ancung,
+  2026-09-23, from a search bar she liked in another project of hers).
+
+  That one animates a stack with GSAP. This does the same with keyframes and no
+  dependency: a library loaded on every page for a placeholder is a strange
+  trade, and three words on a loop is not what a timeline is for.
+
+  **One move per word, and nothing in between.** The first version tipped each
+  word away on its way past, which meant three segments per step, each with its
+  own easing, and it read as a stutter rather than a wheel. A single eased
+  translate per step is what the original does too.
+
+  **The first word is repeated at the end of the list**, and the track stops on
+  that copy rather than past it. Four items means each step is a quarter and the
+  last one sits at -75%; the first version ended at -100%, which is one line
+  below the last word, so the wheel showed an empty slot before snapping back.
+  Landing on the copy and restarting at 0 shows the same word twice in a row,
+  which is to say no change at all.
+
+  Each word holds about 2.3s and each turn takes about 0.65s. Nothing on the
+  page depends on it: the overlay is gone the moment somebody types, and it is
+  never read aloud, because the field's own label says what it is for.
+*/
+.roll-track {
+  animation: roll-words 9s ease-in-out infinite;
+}
+
+@keyframes roll-words {
+  0%,
+  26% {
+    transform: translateY(0);
+  }
+  33.33%,
+  59.33% {
+    transform: translateY(-25%);
+  }
+  66.66%,
+  92.66% {
+    transform: translateY(-50%);
+  }
+  /* The copy of the first word. Restarting from here changes nothing on screen. */
+  100% {
+    transform: translateY(-75%);
+  }
+}
+
+/* One word, standing still. The field still says what it is for. */
+@media (prefers-reduced-motion: reduce) {
+  .roll-track {
+    animation: none;
+  }
+}

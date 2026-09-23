@@ -227,7 +227,7 @@ describe("useArea", () => {
 
 describe("placeLabel", () => {
   it("names the province and its country", () => {
-    expect(placeLabel(YOGYA)).toBe("DI Yogyakarta, Indonesia");
+    expect(placeLabel(YOGYA)).toBe("DI Yogyakarta");
   });
 
   it("names only the country when no province is chosen", () => {

@@ -20,10 +20,18 @@ import Link from "next/link";
 import { useId } from "react";
 
 import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/utils/cn";
 import { formatEventDate } from "@/utils/format";
 
-import { entriesLine, placeLine, priceLine, type DirectoryEntry } from "../lib/browse";
+import {
+  FEATURE_LABEL,
+  entriesLine,
+  placeLine,
+  priceLine,
+  type DirectoryEntry,
+  type FeatureReason,
+} from "../lib/browse";
 import { PosterFrame } from "./PosterFrame";
 
 export type FeaturedCardSize = "lead" | "side";
@@ -87,13 +95,19 @@ export function featuredTitleClass(name: string, size: FeaturedCardSize, compact
 interface FeaturedCardProps {
   entry: DirectoryEntry;
   size: FeaturedCardSize;
+  /**
+   * Why this race is in the row (2026-09-23). Drawn opposite the status, so a
+   * visitor can see what the three cards have that the list below does not.
+   * Absent when nothing true can be said, which is better than a filler word.
+   */
+  reason?: FeatureReason | null;
   /** The lead is only half the row's width, so its title takes a smaller step. */
   compact?: boolean;
   /** Placement in the featured grid, which only the row knows. */
   className?: string;
 }
 
-export function FeaturedCard({ entry, size, compact = false, className }: FeaturedCardProps) {
+export function FeaturedCard({ entry, size, reason, compact = false, className }: FeaturedCardProps) {
   const { event, categories } = entry.summary;
   const lead = size === "lead";
   // Side cards are compact: title, date and entries left, nothing else.
@@ -197,6 +211,12 @@ export function FeaturedCard({ entry, size, compact = false, className }: Featur
       <div className="absolute top-3 right-3">
         <EventStatusBadge status={event.status} />
       </div>
+
+      {reason ? (
+        <div className="absolute top-3 left-3">
+          <Badge variant="accent">{FEATURE_LABEL[reason]}</Badge>
+        </div>
+      ) : null}
     </Link>
   );
 }

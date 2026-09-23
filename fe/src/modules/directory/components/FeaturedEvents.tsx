@@ -20,12 +20,24 @@
  */
 import { cn } from "@/utils/cn";
 
-import type { DirectoryEntry } from "../lib/browse";
+import { featureReason, type DirectoryEntry } from "../lib/browse";
 import { FeaturedCard } from "./FeaturedCard";
 
-export function FeaturedEvents({ entries }: { entries: readonly DirectoryEntry[] }) {
+export function FeaturedEvents({
+  entries,
+  nowS,
+}: {
+  entries: readonly DirectoryEntry[];
+  /** For the reason each card prints. Undefined before the clock answers. */
+  nowS?: bigint;
+}) {
   const [lead, ...others] = entries;
   if (!lead) return null;
+  // The newest race on the page, which is the largest id: the registry hands
+  // them out in order and there is no created-at on chain.
+  const newestId = entries.reduce((max, item) => Math.max(max, item.summary.event.eventId), -1);
+  const reasonFor = (item: DirectoryEntry) =>
+    nowS === undefined ? null : featureReason(item, nowS, newestId);
   // Two beside the lead at most, whatever a caller passes: the three-race grid
   // has two rows, so a third side card would open a third.
   const rest = others.slice(0, 2);
@@ -42,6 +54,7 @@ export function FeaturedEvents({ entries }: { entries: readonly DirectoryEntry[]
       <FeaturedCard
         entry={lead}
         size="lead"
+        reason={reasonFor(lead)}
         // Two equal columns is the only row where the lead is half its width.
         // `className` cannot carry this: the size the title steps down to is a
         // class on the heading, not on the card.
@@ -59,6 +72,7 @@ export function FeaturedEvents({ entries }: { entries: readonly DirectoryEntry[]
           key={item.summary.event.eventId}
           entry={item}
           size="side"
+          reason={reasonFor(item)}
           // Only in the three-race grid does a side card drop its own ratio: its
           // height is one row of the lead, which works out at about 16:9 anyway.
           className={cn(rest.length === 2 && "lg:aspect-auto lg:h-full")}

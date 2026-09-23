@@ -11,6 +11,8 @@
  */
 import { STROOPS_PER_UNIT } from "@sterunxyz/sdk";
 
+import { entryRank } from "@/lib/event/events";
+
 import type { DirectoryEntry } from "./browse";
 
 export type PriceBucketId = "free" | "under-25" | "25-50" | "50-100" | "100-up";
@@ -54,15 +56,45 @@ export const DISTANCE_BUCKETS: readonly Bucket<DistanceBucketId, number>[] = [
 /** One string for the checkbox and its chip, so the two always read the same. */
 export const AVAILABLE_ONLY_LABEL = "Hide full and closed races";
 
+/**
+ * Races that have run, and cancelled ones, are **off the list by default**
+ * (Ancung, 2026-09-23).
+ *
+ * Checked against what the three ticketing sites Indonesian organisers actually
+ * use do: loket.com, artatix.co.id and eventbrite.com all list upcoming events
+ * only. A sold-out one stays on the list with a label (Loket writes "HABIS
+ * TERJUAL" across the poster); one that has happened is simply not there, and
+ * on Eventbrite it moves to the organiser's own profile under "Past Events".
+ * None of the three uses a timer, and none hides a race for being full.
+ *
+ * Ours is a verification product, so what has run is evidence rather than
+ * clutter, and it stays one checkbox away and stays reachable at its own URL
+ * forever. A search also reaches it, because somebody typing last year's race
+ * name is checking a result, not shopping.
+ */
+export const INCLUDE_PAST_LABEL = "Show races that have finished";
+
 export interface Filters {
   prices: PriceBucketId[];
   distances: DistanceBucketId[];
   /** Only races someone could enter right now: `Open`, with places left. */
   availableOnly: boolean;
+  /** Races that have run, and cancelled ones. Off by default. */
+  includePast: boolean;
 }
 
-export const NO_FILTERS: Filters = { prices: [], distances: [], availableOnly: false };
+export const NO_FILTERS: Filters = {
+  prices: [],
+  distances: [],
+  availableOnly: false,
+  includePast: false,
+};
 
+/**
+ * What the button's badge counts. `includePast` is deliberately absent: it is
+ * the default rather than something the visitor narrowed the list with, and a
+ * badge on an untouched drawer reads as a filter somebody forgot to clear.
+ */
 export function activeFilterCount(filters: Filters): number {
   return filters.prices.length + filters.distances.length + (filters.availableOnly ? 1 : 0);
 }
@@ -78,8 +110,15 @@ function canBeEntered({ summary }: DirectoryEntry): boolean {
   return summary.categories.reduce((total, category) => total + category.slotsLeft, 0) > 0;
 }
 
-/** Options within a group are either-or; groups must all hold. */
-export function matchesFilters(entry: DirectoryEntry, filters: Filters): boolean {
+/**
+ * Options within a group are either-or; groups must all hold.
+ *
+ * `nowS` is optional because the clock arrives a render late (`useNowSeconds`
+ * is `undefined` on the server). Without one, nothing is called past: a race
+ * appearing and then leaving is better than the list flashing shorter.
+ */
+export function matchesFilters(entry: DirectoryEntry, filters: Filters, nowS?: bigint): boolean {
+  if (!filters.includePast && nowS !== undefined && entryRank(entry.summary, nowS) === 2) return false;
   if (filters.availableOnly && !canBeEntered(entry)) return false;
 
   if (filters.prices.length === 0 && filters.distances.length === 0) return true;
@@ -111,6 +150,15 @@ export function filterChips(filters: Filters): FilterChip[] {
       label: DISTANCE_BUCKETS.find((bucket) => bucket.id === id)?.label ?? id,
       remove: (current: Filters) => ({ ...current, distances: current.distances.filter((item) => item !== id) }),
     })),
+    ...(filters.includePast
+      ? [
+          {
+            id: "include-past",
+            label: INCLUDE_PAST_LABEL,
+            remove: (current: Filters) => ({ ...current, includePast: false }),
+          },
+        ]
+      : []),
     ...(filters.availableOnly
       ? [
           {

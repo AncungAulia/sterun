@@ -31,7 +31,13 @@ vi.mock("@/lib/event/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
 }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/org" }));
+/* The site header reads the search from the address (2026-09-23), so every
+   layout that draws it needs the router mocked, not only the console's rail. */
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/org",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 let wallet = {
   address: ADDRESS as string | null,

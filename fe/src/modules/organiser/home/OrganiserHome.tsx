@@ -22,6 +22,7 @@
  * cards reading zero over an empty state are three ways of saying the same
  * thing, and the empty state says it better.
  */
+import { FlagIcon } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -223,7 +224,7 @@ export function OrganiserHome() {
         ) : null}
 
         {data && mine.length === 0 ? (
-          <EmptyState title="You have not created a race yet">
+          <EmptyState title="You have not created a race yet" icon={FlagIcon}>
             {allowed === false
               ? "Races show up here once this wallet is allowed to publish them."
               : "Races you publish with this wallet show up here."}

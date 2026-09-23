@@ -14,7 +14,7 @@
  * about, and a warning shown where it does not apply is how warnings stop
  * being read.
  */
-import { TrendingUpIcon } from "lucide-react";
+import { RouteIcon, TrendingUpIcon } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +57,7 @@ export function TabCategories({
 }) {
   if (categories.length === 0) {
     return (
-      <EmptyState title="No distances yet">
+      <EmptyState title="No distances yet" icon={RouteIcon}>
         The organiser has not added any distances yet. The race may still be being set up.
       </EmptyState>
     );

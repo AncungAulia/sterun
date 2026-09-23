@@ -58,11 +58,20 @@ export function OpenPass() {
     <div className="mx-auto my-auto flex w-full max-w-md flex-col gap-4 px-5 py-6 text-center">
       <h1 className="heading-strong text-2xl text-ink">No pass on this phone</h1>
       <p className="text-base text-n-600">
-        A pass is kept on the phone that entered the race. Open your entry on that phone, or use
-        this one to find a race.
+        A pass is kept on the phone that entered the race. If you entered on another device, connect
+        the same wallet here and open the race from your entries.
       </p>
       <div className="flex flex-col gap-2">
+        {/* The way out of this screen, and the reason it is first (Ancung,
+            2026-09-23, from her own phone): a runner who entered on a laptop,
+            or who installed the app and found the installed copy keeping its
+            own storage, has an entry and no pass. `/profile` lists it and opens
+            it with one press. It needs signal, like the two links below it, and
+            fetching a pass needs signal anyway. */}
         <Button asChild>
+          <Link href="/profile">Find my entries</Link>
+        </Button>
+        <Button variant="outline" asChild>
           <Link href="/">Browse races</Link>
         </Button>
         {/* The other offline screen. A volunteer installs the app too, and

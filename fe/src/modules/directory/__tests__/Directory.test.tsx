@@ -15,6 +15,19 @@ import { category, daysFromNow, metadata, summary } from "./fixtures";
 const listEvents = vi.hoisted(() => vi.fn());
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
 
+/*
+  The search moved into the site header on 2026-09-23 and travels in the
+  address, so this page reads it rather than owning it: a test searches by
+  setting `?q=` and re-rendering, which is exactly what the header does.
+*/
+const searchParams = { current: new URLSearchParams() };
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace }),
+  useSearchParams: () => searchParams.current,
+  usePathname: () => "/",
+}));
+
 vi.mock("@/lib/event/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
@@ -108,12 +121,16 @@ function serve(documents: Record<number, EventMetadata | "modified">) {
   });
 }
 
+let redraw: (() => void) | null = null;
+
 function renderDirectory() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
-  return render(<Directory />, { wrapper: Wrapper });
+  const view = render(<Directory />, { wrapper: Wrapper });
+  redraw = () => view.rerender(<Directory />);
+  return view;
 }
 
 /**
@@ -138,8 +155,10 @@ function deferred() {
   };
 }
 
-function searchbox() {
-  return screen.getByRole("searchbox", { name: "Search races" });
+/** What the header does when somebody presses Enter: put the query in the address. */
+function searchFor(text: string) {
+  searchParams.current = new URLSearchParams(text ? { q: text } : {});
+  act(() => redraw?.());
 }
 
 /** The race names a region shows, in the order it shows them. Every card titles itself with an h3. */
@@ -150,6 +169,8 @@ function listed(region: HTMLElement) {
 }
 
 beforeEach(() => {
+  searchParams.current = new URLSearchParams();
+  replace.mockReset();
   listEvents.mockReset();
   fetchEventMetadata.mockReset();
   fetchEventMetadata.mockResolvedValue(UNAVAILABLE);
@@ -246,7 +267,7 @@ describe("Directory", () => {
       renderDirectory();
       await screen.findByRole("region", { name: "Featured races" });
 
-      await userEvent.type(searchbox(), "jakarta");
+      searchFor("jakarta");
 
       const results = await screen.findByRole("region", { name: "1 race matches" });
       expect(within(results).getByText("Monas Night Run")).toBeInTheDocument();
@@ -271,7 +292,7 @@ describe("Directory", () => {
       await waitFor(() =>
         expect(listed(list)).toEqual(["Elektro Dash", "Monas Night Run"]),
       );
-      expect(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "DI Yogyakarta" })).toBeInTheDocument();
     });
 
     it("settles the order as documents arrive, without hiding a race meanwhile", async () => {
@@ -362,7 +383,7 @@ describe("Directory", () => {
       renderDirectory();
       await screen.findByRole("region", { name: "All races" });
 
-      await userEvent.type(searchbox(), "night run");
+      searchFor("night run");
 
       const results = await screen.findByRole("region", { name: "2 races match" });
       await waitFor(() => expect(listed(results)).toEqual(["Sleman Night Run", "Monas Night Run"]));
@@ -487,12 +508,15 @@ describe("Directory", () => {
       renderDirectory();
       await screen.findByText("Jakarta Marathon 0");
 
-      await userEvent.type(searchbox(), "nowhere");
+      searchFor("nowhere");
 
       expect(await screen.findByText("No races match")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("button", { name: "Clear search and filters" }));
+      // Clearing is a navigation now: the page asks for the address without a
+      // query, and the header's box follows it.
+      expect(replace).toHaveBeenCalledWith("/");
+      searchFor("");
       expect(await screen.findByText("Jakarta Marathon 0")).toBeInTheDocument();
-      expect(searchbox()).toHaveValue("");
     });
 
     it("says no race matches, not that the chosen place is empty", async () => {
@@ -505,7 +529,7 @@ describe("Directory", () => {
       renderDirectory();
       await screen.findByText("Jakarta Marathon 0");
 
-      await userEvent.type(searchbox(), "nowhere");
+      searchFor("nowhere");
 
       expect(await screen.findByText("No races match")).toBeInTheDocument();
       expect(screen.queryByText(/No races in/)).not.toBeInTheDocument();
@@ -518,10 +542,13 @@ describe("Directory", () => {
       listEvents.mockResolvedValue({ events: [summary(0)], unreadable: [] });
       renderDirectory();
       await screen.findByText("Jakarta Marathon 0");
-      await userEvent.type(searchbox(), "nowhere");
+      searchFor("nowhere");
       await screen.findByText("No races match");
 
       await userEvent.click(screen.getByRole("button", { name: "Clear search and filters" }));
+      // The heading is only called "All races" again once the address has lost
+      // its query, which is the navigation the press asked for.
+      searchFor("");
 
       expect(await screen.findByRole("heading", { level: 2, name: "All races" })).toHaveFocus();
     });
@@ -671,7 +698,7 @@ describe("Directory, asking where the visitor is", () => {
       renderDirectory();
 
       expect(
-        await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" }),
+        await screen.findByRole("button", { name: "DI Yogyakarta" }),
       ).toBeInTheDocument();
     });
 
@@ -680,7 +707,7 @@ describe("Directory, asking where the visitor is", () => {
       twoRaces();
       renderDirectory();
 
-      await userEvent.click(await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" }));
+      await userEvent.click(await screen.findByRole("button", { name: "DI Yogyakarta" }));
       const dialog = await screen.findByRole("dialog", { name: "Location" });
       await userEvent.click(await within(dialog).findByRole("button", { name: "All locations" }));
 

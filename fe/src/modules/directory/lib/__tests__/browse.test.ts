@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Area, Nearby } from "@/lib/place/area";
 import {
   entriesLine,
+  featureReason,
   inArea,
   matchesSearch,
   pickFeatured,
@@ -453,6 +454,71 @@ describe("publicEvents", () => {
 
     it("returns an empty list rather than throwing on an empty one", () => {
       expect(publicEvents([])).toEqual([]);
+    });
+  });
+});
+
+describe("why a race is featured (Ancung, 2026-09-23)", () => {
+  /** A race with one distance, so the share of places left is exact. */
+  function race(eventId: number, startsAt: bigint, quota = 100, left = 100) {
+    return entry(
+      summary(eventId, { startsAt }, [
+        category(0, { quota, enteredCount: quota - left, slotsLeft: left }),
+      ]),
+      metadata(),
+    );
+  }
+
+  describe("positive", () => {
+    it("says almost full at a tenth of the places left, and not at a ninth", () => {
+      expect(featureReason(race(1, NOW + 200n * DAY, 100, 10), NOW, 99)).toBe("almost-full");
+      expect(featureReason(race(1, NOW + 200n * DAY, 100, 11), NOW, 99)).toBeNull();
+    });
+
+    it("says closing soon inside a fortnight of race day", () => {
+      expect(featureReason(race(1, NOW + 13n * DAY), NOW, 99)).toBe("closing-soon");
+      expect(featureReason(race(1, NOW + 15n * DAY), NOW, 99)).toBeNull();
+    });
+
+    it("says just added for the newest race, which is the largest id", () => {
+      // The registry hands ids out in order and there is no created-at on chain.
+      expect(featureReason(race(9, NOW + 200n * DAY), NOW, 9)).toBe("just-added");
+      expect(featureReason(race(8, NOW + 200n * DAY), NOW, 9)).toBeNull();
+    });
+
+    it("gives one reason, the one that costs a runner most to ignore", () => {
+      // Nearly full, days away and newest, all at once.
+      const urgent = race(9, NOW + DAY, 100, 5);
+      expect(featureReason(urgent, NOW, 9)).toBe("almost-full");
+      expect(featureReason(race(9, NOW + DAY, 100, 90), NOW, 9)).toBe("closing-soon");
+    });
+  });
+
+  describe("negative", () => {
+    it("says nothing about a sold-out race, since there is nothing left to hurry for", () => {
+      expect(featureReason(race(1, NOW + 200n * DAY, 100, 0), NOW, 99)).toBeNull();
+    });
+
+    it("says nothing about a race with no distances yet", () => {
+      expect(featureReason(entry(summary(1, { startsAt: NOW + 200n * DAY }), metadata()), NOW, 99)).toBeNull();
+    });
+  });
+
+  describe("the row picks three that differ", () => {
+    it("takes the soonest, then covers reasons the row does not have", () => {
+      // Every one of these is open, upcoming and has a poster, so the old rule
+      // would have taken the three soonest and shown three of the same thing.
+      const soonest = race(1, NOW + 2n * DAY);
+      const alsoSoon = race(2, NOW + 3n * DAY);
+      const nearlyFull = race(3, NOW + 200n * DAY, 100, 5);
+      const newest = race(9, NOW + 300n * DAY);
+
+      expect(ids(pickFeatured([soonest, alsoSoon, nearlyFull, newest], NOW))).toEqual([1, 3, 9]);
+    });
+
+    it("falls back to the order it had when there are not three different reasons", () => {
+      const entries = [1, 2, 3, 4].map((id) => race(id, NOW + BigInt(id) * DAY));
+      expect(ids(pickFeatured(entries, NOW))).toEqual([1, 2, 3]);
     });
   });
 });
