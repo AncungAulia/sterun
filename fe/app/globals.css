@@ -345,14 +345,16 @@ button:not(:disabled),
   own easing, and it read as a stutter rather than a wheel. A single eased
   translate per step is what the original does too.
 
-  **The first word is repeated at the end of the list.** The track travels a
-  whole item height by 100%, landing on that copy, which looks exactly like the
-  start; without it the loop jumps back up the wheel in one frame. So the list
-  is four items to show three.
+  **The first word is repeated at the end of the list**, and the track stops on
+  that copy rather than past it. Four items means each step is a quarter and the
+  last one sits at -75%; the first version ended at -100%, which is one line
+  below the last word, so the wheel showed an empty slot before snapping back.
+  Landing on the copy and restarting at 0 shows the same word twice in a row,
+  which is to say no change at all.
 
-  Each word holds about 1.6s and each turn takes about 0.6s. Nothing on the page
-  depends on it: the overlay is gone the moment somebody types, and it is never
-  read aloud, because the field's own label says what it is for.
+  Each word holds about 2.3s and each turn takes about 0.65s. Nothing on the
+  page depends on it: the overlay is gone the moment somebody types, and it is
+  never read aloud, because the field's own label says what it is for.
 */
 .roll-track {
   animation: roll-words 9s ease-in-out infinite;
@@ -360,23 +362,20 @@ button:not(:disabled),
 
 @keyframes roll-words {
   0%,
-  18% {
+  26% {
     transform: translateY(0);
   }
-  25%,
-  43% {
+  33.33%,
+  59.33% {
     transform: translateY(-25%);
   }
-  50%,
-  68% {
+  66.66%,
+  92.66% {
     transform: translateY(-50%);
   }
-  75%,
-  93% {
-    transform: translateY(-75%);
-  }
+  /* The copy of the first word. Restarting from here changes nothing on screen. */
   100% {
-    transform: translateY(-100%);
+    transform: translateY(-75%);
   }
 }
 
