@@ -371,6 +371,12 @@ What is settled:
   makes the text block taller than the card, `min-h-min` grows the card to fit it, and the poster
   vanishes under the fade. A layout fact the card cannot see has to be told to it, and `className`
   cannot carry this one, because the size is a class on the heading rather than on the card.
+- **An empty state is a column, not a box** (`components/feedback/EmptyState.tsx`, Ancung
+  2026-09-23, from loket.com's own empty search): a mark, the sentence, then what to do, centred
+  where the list would have been. The dashed rectangle is gone, because a frame around an absence
+  emphasises the one thing on the page that needs no emphasis and read as a placeholder nobody had
+  filled. The icon is a prop: "no races match" and "no distances yet" are different absences, and
+  the glyph is what says which without being read.
 - **A list card has no frame** (Ancung, 2026-09-23, from loket.com and eventbrite.com): the poster
   carries the only shape, and the text sits under it on the page's own background, with no border,
   no white body and no shadow. What the frame used to do is done otherwise: the grid's gap and the

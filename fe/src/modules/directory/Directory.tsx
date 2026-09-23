@@ -38,6 +38,7 @@
  * and that still holds without it: the list is a React Query read that goes
  * back to the chain once it is stale and whenever the tab regains focus.
  */
+import { CalendarOffIcon, SearchXIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -160,7 +161,7 @@ export function Directory() {
       ) : null}
 
       {data && summaries.length === 0 ? (
-        <EmptyState title="No races yet">
+        <EmptyState title="No races yet" icon={CalendarOffIcon}>
           Refresh this page to check for races published since you opened it.
         </EmptyState>
       ) : null}
@@ -201,8 +202,10 @@ export function Directory() {
             ) : null}
             {results.length === 0 && narrowing ? (
               <>
-                <EmptyState title="No races match">Try a different search or fewer filters.</EmptyState>
-                <Button variant="link" className="self-center" onClick={clearNarrowing}>
+                <EmptyState title="No races match" icon={SearchXIcon}>
+                  Try a different search or fewer filters.
+                </EmptyState>
+                <Button variant="outline" className="-mt-6 self-center" onClick={clearNarrowing}>
                   Clear search and filters
                 </Button>
               </>
