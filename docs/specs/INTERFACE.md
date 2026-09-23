@@ -1,6 +1,6 @@
-# INTERFACE — the FROZEN Sterun contracts (v2.6.0)
+# INTERFACE — the FROZEN Sterun contracts (v2.7.0)
 
-> **Status: FROZEN 2026-09-17 (v2.6 — an organiser records many results in one signature).**
+> **Status: FROZEN 2026-09-23 (v2.7 — a desk hands over many race packs in one signature).**
 > This document is handoff contract number 1 in `docs/SYSTEM_DESIGN.md` §9: the function
 > signatures and `#[contractevent]` layouts that **James** (backend/indexer) and **Ancung**
 > (web app, QR pass, scanner PWA) hold, so they can work in parallel without waiting for
@@ -9,6 +9,36 @@
 > Any change to a signature, an event layout, or an error code after this PR is merged requires:
 > **a new PR + approval from Axel (PM) + fable**, an entry in `docs/specs/CHANGELOG.md`, and
 > **regenerated TS bindings** (STE-14). Error codes are public ABI — **never renumber them**.
+
+## What changed from v2.6.0 (MINOR, additive)
+
+STE-66, the sibling of v2.6 for the race pack desk. A desk works offline and queues every hand-over;
+sending that queue was one transaction and one wallet approval per runner, so a desk that handed over
+300 packs asked its volunteer to approve 300 times.
+
+| Change | Impact on clients |
+| --- | --- |
+| `claim_racepack_many(token_ids, operator)` new in C2 | additive |
+| New types: `SkippedClaim`, `ClaimSkipped` | additive |
+| New error code: `TooManyClaims(109)` | additive — nothing renumbered |
+| No new event: a batch emits `RacepackClaimed` per pack claimed | an indexer needs no change |
+| No changed signature, no changed event layout, no storage change | — |
+| Installed by `upgrade` at the **same** address (`CCVW7WVC…`) | no new address; existing records intact |
+
+Three things you must read before using this version:
+
+- **A batch is NOT atomic, and that is deliberate — the opposite of `record_results`.** A pack another
+  desk already handed over, or a token id that does not exist, is **skipped** and returned in
+  `Vec<SkippedClaim>` with a reason (`NotEntered`, `NotFound`). The two-desk race from STE-25 is the
+  ordinary outcome here, and the loser must not block the other 299 hand-overs. Results are atomic
+  because a bad row means a bad file; claims are not because a "bad" row means two desks met the same
+  runner.
+- **An operator who may not claim still reverts the whole batch** with `NotAuthorized(104)`. Authority
+  is checked per event, against the registry, for every distinct event in the batch — a desk
+  allowlisted on one race cannot claim in another through a mixed batch.
+- **At most 100 token ids per call**, `TooManyClaims(109)` above that, refused before anything is read.
+  Measured: a `racepack_claimed` carries the operator address, so a row costs 160 contract-event bytes
+  and the 16,384-byte limit ceilings at 102; the cap keeps two rows of headroom.
 
 ## What changed from v2.5.0 (MINOR, additive)
 
@@ -255,13 +285,13 @@ The artefacts used for this freeze:
 | Contract | Wasm | Wasm hash (sha256) | Size |
 | --- | --- | --- | ---: |
 | EventRegistry (C1, v2.5) | `sc/target/wasm32v1-none/release/event_registry.wasm` | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` | 35,814 B |
-| RaceRecord (C2, v2.6) | `sc/target/wasm32v1-none/release/race_record.wasm` | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` | 24,844 B |
+| RaceRecord (C2, v2.7) | `sc/target/wasm32v1-none/release/race_record.wasm` | `20abebd14dd7d4f4e1f5a07774845bcba2d5b963025cfe10269c966d80b7373a` | 27,055 B |
 
 Each version moves exactly one of the two. EventRegistry did **not** change in v2.2 (its v2.1 hash
 stood, and its address was not `upgrade`d); RaceRecord does **not** change in v2.3 — `bib_no` carries
 a different number, but no C2 code produced it, so its hash is exactly the one frozen at v2.2 — and
 it does not change in v2.4 or v2.5 either, which touch C1 alone. v2.6 touches C2 alone, so
-EventRegistry's v2.5 hash stands.
+EventRegistry's v2.5 hash stands, and v2.7 touches C2 alone, so it stands there too.
 
 > RaceRecord's `bib_no` doc comment, wrong since v2.3 ("the category sequence"), was corrected in
 > v2.6, the first C2 wasm change since then, as this note promised.
@@ -278,6 +308,7 @@ its transactions are in `docs/deployments.md`):
 | RaceRecord v2.0.0 | `c90a428152f0d8605cbb7466128b32b6dc821aa4735d930c280fe6fd4b58c0fc` | 21,795 B |
 | RaceRecord v2.0.1/v2.1.0 | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | 21,814 B |
 | RaceRecord v2.2.0–v2.5.0 | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | 23,051 B |
+| RaceRecord v2.6.0 | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` | 24,844 B |
 
 Six of those artefacts are also **committed**, each as the "before" of an upgrade test that
 deploys the genuinely live code, writes state with it, then replaces it with the current build:
@@ -593,6 +624,7 @@ One **non-transferable** record per entry, bound to the runner's address. Design
 | `record_finish` | `token_id: u32, finish_time_s: u32` | `Result<(), Error>` | **that event's organiser** (read from the registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidFinishTime(105)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `record_finish_untimed` | `token_id: u32` | `Result<(), Error>` | **that event's organiser** (read from the registry) | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `record_dnf` | `token_id: u32` | `Result<(), Error>` | **that event's organiser** | `NotInitialized(100)`, `RecordNotFound(101)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
+| `claim_racepack_many` | `token_ids: Vec<u32>, operator: Address` | `Result<Vec<SkippedClaim>, Error>` (what it did NOT claim) | the **`operator`**, who must be the organiser or an allowlisted scanner **of every event in the batch** | `NotInitialized(100)`, `TooManyClaims(109)`, `NotAuthorized(104)`, propagated `EventNotFound(2)` |
 | `record_results` | `event_id: u32, results: Vec<ResultEntry>` | `Result<(), Error>` | **`event_id`'s organiser** (read from the registry), once for the batch | `NotInitialized(100)`, `RecordNotFound(101)`, `ResultForAnotherEvent(108)`, `InvalidFinishTime(105)`, `InvalidState(103)`, propagated `EventNotFound(2)` |
 | `extend_record_ttl` | `token_id: u32` | `Result<(), Error>` | **nobody — permissionless** | `RecordNotFound(101)` |
 | `record_of` | `token_id: u32` | `Result<RecordData, Error>` | — (view) | `RecordNotFound(101)` |
@@ -642,6 +674,13 @@ Important notes for D2/D3:
   gate (a scanner may check a runner in, but never publish a result), the same `RacepackClaimed`
   guard, the same terminal `Finished`. It leaves `finish_time_s` as `None` and writes `result_at`.
   It has no `finish_time_s` argument, so it cannot revert `InvalidFinishTime(105)`.
+- **`claim_racepack_many` hands over many race packs in one signature** (v2.7), and is **not**
+  atomic. A token whose record is missing, or is no longer `Entered` because another desk claimed it,
+  comes back in `Vec<SkippedClaim>` with `ClaimSkipped::NotFound` / `NotEntered` while the rest of the
+  batch lands; that is the two-desk case, and it is the ordinary outcome at a busy desk. What DOES
+  revert the batch: an operator who is neither the organiser nor a scanner of an event in it
+  (`NotAuthorized(104)`), and more than **100** ids (`TooManyClaims(109)`, refused before reading).
+  It emits one `RacepackClaimed` per pack claimed, in row order, and nothing for a skipped row.
 - **`record_results` records many results in one signature** (v2.6). Each row is a `token_id` and a
   `ResultOutcome`: `Timed(t)` is `record_finish(token_id, t)`, `Untimed` is
   `record_finish_untimed(token_id)`, `Dnf` is `record_dnf(token_id)`. Each row runs the same code as
@@ -671,6 +710,15 @@ RecordData {
 }
 
 RecordState = Entered | RacepackClaimed | Finished | Dnf
+
+// what a claim_racepack_many batch did NOT claim (v2.7)
+SkippedClaim {
+  reason: ClaimSkipped,
+  token_id: u32,
+}
+
+// NotFound = no such record; NotEntered = already claimed, finished or DNF
+ClaimSkipped = NotFound | NotEntered
 
 // one row of record_results (v2.6)
 ResultEntry {
@@ -747,6 +795,7 @@ it carries each unit's `seq` and the `price` actually charged.
 | 106 | `TooManyAddOns` | `addon_ids` is longer than `addon_count(event_id)` or than 16 |
 | 107 | `DuplicateAddOn` | `addon_ids` holds the same id twice |
 | 108 | `ResultForAnotherEvent` | a `record_results` row names a record of a different event than `event_id` |
+| 109 | `TooManyClaims` | `claim_racepack_many` with more than 100 token ids |
 
 Plus the OZ enum embedded in RaceRecord's spec (not ours, do not reuse):
 
@@ -888,6 +937,7 @@ changes, no regenerated bindings.
 | STE-35 | Paid add-ons (Ancung) | `add_addon`, `get_addon`, `addon_count`, `enter(addon_ids)`, `AddOnReserved` |
 | STE-41 | Untimed finish | `record_finish_untimed`, `RecordFinishedUntimed`, and `finish_time_s == None` on a `Finished` record — consumed by the `be/` indexer + CSV (James) and the `fe/` profile (Ancung) |
 | STE-46 | Registration closes on its own | `set_registration_closes`, `get_registration_closes`, `RegistrationClosesSet`, `RegistrationClosed(20)` — consumed by the `be/` indexer and the SDK (James) and the `fe/` wizard, console header and "Reopen and extend" flow, which must pair a later date with a signed announcement (Ancung) |
+| STE-66 | Many race packs in one signature | `claim_racepack_many`, `SkippedClaim`, `ClaimSkipped`, `TooManyClaims(109)` — consumed by the SDK's `claimRacepackMany` (James) and the `fe/` scanner's `send-claims.ts`, which sends the offline queue in chunks of 100 and puts what came back skipped on the flagged list (Ancung) |
 | STE-60 | Many results in one signature | `record_results`, `ResultEntry`, `ResultOutcome`, `ResultForAnotherEvent(108)` — consumed by the SDK's `recordResults` (James) and the `fe/` results screen, which records a preview's `publishable` rows in batches of at most 120 (Ancung, STE-58) |
 | STE-55 | Raising a sold-out quota | `increase_quota`, `QuotaIncreased`, `QuotaNotIncreased(19)` — consumed by the `be/` indexer (James) and the `fe/` console's "add capacity" flow, which must pair it with a signed announcement (Ancung) |
 
