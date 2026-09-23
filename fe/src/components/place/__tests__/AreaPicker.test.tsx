@@ -20,7 +20,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Area, Place } from "@/lib/place/area";
-import { AreaPicker } from "@/modules/directory/components/AreaPicker";
+import { AreaPicker } from "@/components/place/AreaPicker";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -70,7 +70,7 @@ describe("AreaPicker", () => {
 
     it("names the saved place on the button", () => {
       const { rerender } = render(<AreaPicker place={YOGYA} onSave={vi.fn()} onClear={vi.fn()} />);
-      expect(screen.getByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "DI Yogyakarta" })).toBeInTheDocument();
 
       rerender(<AreaPicker place={INDONESIA} onSave={vi.fn()} onClear={vi.fn()} />);
       expect(screen.getByRole("button", { name: "Indonesia" })).toBeInTheDocument();
@@ -87,14 +87,14 @@ describe("AreaPicker", () => {
 
       expect(onSave).toHaveBeenCalledTimes(1);
       expect(onSave.mock.calls[0][0]).toStrictEqual(YOGYA);
-      expect(await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "DI Yogyakarta" })).toBeInTheDocument();
     });
 
     it("saves All of Indonesia as the whole country, and the button names only the country", async () => {
       const onSave = vi.fn();
       render(<Harness initial={YOGYA} onSave={onSave} />);
 
-      await openPicker("DI Yogyakarta, Indonesia");
+      await openPicker("DI Yogyakarta");
       await userEvent.click(await screen.findByRole("combobox", { name: "Province" }));
       await userEvent.click(await screen.findByRole("option", { name: "All of Indonesia" }));
       await userEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -108,7 +108,7 @@ describe("AreaPicker", () => {
       const onClear = vi.fn();
       render(<Harness initial={YOGYA} onClear={onClear} />);
 
-      const dialog = await openPicker("DI Yogyakarta, Indonesia");
+      const dialog = await openPicker("DI Yogyakarta");
       await userEvent.click(within(dialog).getByRole("button", { name: "All locations" }));
 
       expect(onClear).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe("AreaPicker", () => {
       await userEvent.click(screen.getByRole("button", { name: "Apply" }));
 
       expect(onSave.mock.calls[0][0]).toStrictEqual(YOGYA);
-      expect(await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "DI Yogyakarta" })).toBeInTheDocument();
     });
 
     it("offers a way back out of Near you", async () => {
@@ -184,7 +184,7 @@ describe("AreaPicker", () => {
     it("starts from the saved province when opened", async () => {
       render(<AreaPicker place={YOGYA} onSave={vi.fn()} onClear={vi.fn()} />);
 
-      await openPicker("DI Yogyakarta, Indonesia");
+      await openPicker("DI Yogyakarta");
 
       expect(await screen.findByRole("combobox", { name: "Province" })).toHaveTextContent("DI Yogyakarta");
     });
@@ -223,7 +223,7 @@ describe("AreaPicker", () => {
     it("keeps the province when the same country is picked again", async () => {
       render(<AreaPicker place={YOGYA} onSave={vi.fn()} onClear={vi.fn()} />);
 
-      await openPicker("DI Yogyakarta, Indonesia");
+      await openPicker("DI Yogyakarta");
       await userEvent.click(await screen.findByRole("combobox", { name: "Country" }));
       await userEvent.click(await screen.findByRole("option", { name: "Indonesia" }));
 
@@ -234,7 +234,7 @@ describe("AreaPicker", () => {
       const onSave = vi.fn();
       render(<Harness initial={YOGYA} onSave={onSave} />);
 
-      await openPicker("DI Yogyakarta, Indonesia");
+      await openPicker("DI Yogyakarta");
       await userEvent.click(await screen.findByRole("combobox", { name: "Country" }));
       await userEvent.type(await screen.findByPlaceholderText("Select country"), "Malaysia");
       await userEvent.click(await screen.findByRole("option", { name: "Malaysia" }));
@@ -294,12 +294,12 @@ describe("AreaPicker", () => {
       const onSave = vi.fn();
       render(<Harness initial={YOGYA} onSave={onSave} />);
 
-      await openPicker("DI Yogyakarta, Indonesia");
+      await openPicker("DI Yogyakarta");
       await userEvent.click(await screen.findByRole("combobox", { name: "Province" }));
       await userEvent.click(await screen.findByRole("option", { name: "All of Indonesia" }));
       await userEvent.keyboard("{Escape}");
 
-      expect(await screen.findByRole("button", { name: "DI Yogyakarta, Indonesia" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "DI Yogyakarta" })).toBeInTheDocument();
       expect(onSave).not.toHaveBeenCalled();
     });
   });

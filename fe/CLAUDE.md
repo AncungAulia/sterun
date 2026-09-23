@@ -373,6 +373,30 @@ What is settled:
   Dialog's scroll lock stops its list from scrolling by wheel or touch.
 - All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
 
+### What the site header carries (2026-09-23)
+
+The lockup, the place, the search, **For organisers** and the wallet. Loket and Eventbrite both keep
+search in the bar, and the reason it belongs there rather than on the directory is that it is the
+visitor's rather than the page's: from a race page there was no way to look for another race without
+going back first.
+
+- **The query lives in the address** (`HeaderSearch` writes `/?q=…`, `Directory` reads it). State
+  inside the directory could not move up: a box that sets state on a page you are not looking at
+  does nothing. It also makes a search shareable and Back meaningful. It is **submitted, not typed**:
+  a push per keystroke fills the history with half-typed words.
+- **`useSearchParams` needs a Suspense boundary.** It is around `HeaderSearch` in the header and
+  around `Directory` in `app/(browse)/page.tsx`, so the lockup and the wallet still render while the
+  query is read. A test that renders either must mock `next/navigation`.
+- **Filters stayed with the list**, on its heading row. The drawer counts what would be left while
+  you choose ("Show 12 races"), which needs the list itself, and a filter button in a bar that is on
+  every page would do nothing on most of them.
+- **The place shows the province alone** ("DI Yogyakarta", not "DI Yogyakarta, Indonesia"): the
+  country adds nothing to somebody standing in it, and the pair was most of a header. It is in the
+  bar from `lg` and in the directory's own header below that. `AreaPicker` and `AreaForm` moved to
+  `components/place/` on this second reader.
+- **For organisers is an outlined button with an icon**, not a plain link (Ancung): a door rather
+  than a footer link, and still not competing with the wallet, the one filled control here.
+
 ### Who renders the site header (2026-09-13)
 
 **`app/layout.tsx` renders no `<Header />` and no `<main>`.** It holds `<html>`, `<body>` and

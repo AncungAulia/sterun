@@ -38,14 +38,14 @@
  * and that still holds without it: the list is a React Query read that goes
  * back to the chain once it is stale and whenever the tab regains focus.
  */
-import { SearchIcon } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useArea } from "@/hooks/useArea";
+import { AreaPicker } from "@/components/place/AreaPicker";
 import { useEventDocuments } from "@/modules/directory/hooks/useEventDocuments";
 import { useEvents } from "@/hooks/useEvents";
 import { useNearbyPrompt } from "@/modules/directory/hooks/useNearbyPrompt";
@@ -59,7 +59,6 @@ import {
   type DateOrder,
   type DirectoryEntry,
 } from "./lib/browse";
-import { AreaPicker } from "./components/AreaPicker";
 import { DirectorySkeleton } from "./components/DirectorySkeleton";
 import { EventCard } from "./components/EventCard";
 import { FeaturedEvents } from "./components/FeaturedEvents";
@@ -80,7 +79,13 @@ export function Directory() {
   useNearbyPrompt();
 
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const [query, setQuery] = useState("");
+  /*
+    The search lives in the address and is typed in the header (2026-09-23), so
+    it works from a race page and can be sent to somebody. This page only reads
+    it.
+  */
+  const router = useRouter();
+  const query = useSearchParams().get("q") ?? "";
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [order, setOrder] = useState<DateOrder>("soonest");
 
@@ -116,7 +121,9 @@ export function Directory() {
     : "All races";
 
   function clearNarrowing() {
-    setQuery("");
+    // `replace`, not `push`: the search being cleared is the same page, and a
+    // Back that walks through every cleared search is not a history.
+    if (query) router.replace("/");
     setFilters(NO_FILTERS);
     // Focus follows the change the press made. The button that was focused is
     // about to be removed with the empty state, and focus would otherwise fall
@@ -130,38 +137,15 @@ export function Directory() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-8 sm:py-10">
       <header className="flex flex-col gap-6">
-        <div className="flex items-center gap-4">
+        {/* The place is in the site header from `lg`. Below that the header
+            has room for the lockup, the search and the wallet and no more, so
+            it stays here rather than disappearing on a phone. */}
+        <div className="flex items-center gap-4 lg:hidden">
           <AreaPicker place={place} onSave={setPlace} onClear={clearPlace} />
         </div>
 
         <div className="flex flex-col items-center gap-5 text-center">
           <h1 className="heading-hero text-4xl text-ink sm:text-5xl">Browse races</h1>
-          <div className="flex w-full max-w-xl items-center gap-2">
-            <div className="relative flex-1">
-              <SearchIcon
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-n-400"
-              />
-              <Input
-                type="search"
-                aria-label="Search races"
-                placeholder="Search by race, venue or city"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <FilterDrawer
-              entries={searched}
-              filters={filters}
-              order={order}
-              onApply={(nextFilters, nextOrder) => {
-                setFilters(nextFilters);
-                setOrder(nextOrder);
-              }}
-            />
-          </div>
-          <FilterChips filters={filters} onChange={setFilters} onClear={() => setFilters(NO_FILTERS)} />
         </div>
       </header>
 
@@ -186,15 +170,32 @@ export function Directory() {
           <FeaturedEvents entries={featured} />
 
           <section aria-labelledby="directory-list" className="flex flex-col gap-4">
-            <h2
-              id="directory-list"
-              ref={headingRef}
-              // Not in the tab order, but a target focus can be moved to.
-              tabIndex={-1}
-              className="heading-strong text-2xl text-ink"
-            >
-              {heading}
-            </h2>
+            {/* Filters sit on the list's own heading row (Ancung, 2026-09-23).
+                Under the hero they read as a button belonging to nothing, and
+                they cannot follow the search into the site header: the drawer
+                counts what would be left ("Show 12 races") while you choose,
+                which needs the list itself. */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2
+                id="directory-list"
+                ref={headingRef}
+                // Not in the tab order, but a target focus can be moved to.
+                tabIndex={-1}
+                className="heading-strong text-2xl text-ink"
+              >
+                {heading}
+              </h2>
+              <FilterDrawer
+                entries={searched}
+                filters={filters}
+                order={order}
+                onApply={(nextFilters, nextOrder) => {
+                  setFilters(nextFilters);
+                  setOrder(nextOrder);
+                }}
+              />
+            </div>
+            <FilterChips filters={filters} onChange={setFilters} onClear={() => setFilters(NO_FILTERS)} />
             {results.length > 0 ? (
               <EventGrid entries={results} pending={documents.pending} />
             ) : null}

@@ -119,7 +119,7 @@ export function parseStoredPlace(raw: string | null): StoredPlace {
 }
 
 /**
- * "DI Yogyakarta, Indonesia", "Indonesia", or "Near you".
+ * "DI Yogyakarta", "Indonesia", or "Near you".
  *
  * Coordinates get no name because naming them needs a geocoding service. "Near
  * you" is what the visitor already knows to be true, which is better than a
@@ -127,7 +127,14 @@ export function parseStoredPlace(raw: string | null): StoredPlace {
  */
 export function placeLabel(place: Place): string {
   if (place.mode === "nearby") return "Near you";
-  return place.province ? `${place.province}, ${place.country}` : place.country;
+  /*
+    The province alone once there is one (Ancung, 2026-09-23). "DI Yogyakarta,
+    Indonesia" is most of a header on a laptop and more than a phone can hold,
+    and the country adds nothing to somebody who is standing in it. A
+    country-only place still says the country, since "All of Indonesia" is the
+    whole meaning there.
+  */
+  return place.province ?? place.country;
 }
 
 const listeners = new Set<() => void>();
