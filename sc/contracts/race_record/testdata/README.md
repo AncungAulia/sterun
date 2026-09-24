@@ -1,10 +1,11 @@
-# `testdata/` — the wasm the upgrade replaces
+# `testdata/` — the wasm each upgrade replaced
 
-One file, and it is not a build artifact of this repo:
+Neither file is a build artifact of this repo:
 
 | File | sha256 | What it is |
 | --- | --- | --- |
 | `race_record_live_pre_untimed.wasm` | `27749180046a9a4e62e85ec46cb6b61cd35a0914db4f4eb61d66616febd4302b` | RaceRecord v2.0.1, the executable running at `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` before STE-41 |
+| `race_record_live_pre_results.wasm` | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` | RaceRecord v2.2, running at the same address before STE-60 (`record_results`); fetched the same way |
 
 Fetched from testnet as-is, before the upgrade:
 
@@ -32,9 +33,14 @@ run it.
 
 Same pattern, same reasoning as `sc/contracts/event_registry/testdata/`.
 
-## When to replace this file
+`records_the_live_wasm_minted_take_a_batch_of_results` does the same for STE-60: records the running
+code minted and checked in take a batch after the upgrade, and a terminal record it wrote stays
+terminal.
 
-Only after the next in-place upgrade has genuinely landed on testnet: fetch it again, and update the
-hash in this table **and** `LIVE_PRE_UNTIMED_HASH` in `src/test.rs`. Do not replace it with the output
-of a local `stellar contract build` — the moment this file becomes a copy of the current build, the
-test stops proving anything.
+## Adding the next one
+
+Add a file, never overwrite one: each keeps proving the upgrade it was captured for. After the next
+in-place upgrade has genuinely landed on testnet, fetch the executable that was live before it, add a
+row above and a `LIVE_PRE_<change>_HASH` constant in `src/test.rs`. Never use the output of a local
+`stellar contract build` — the moment a fixture becomes a copy of the current build, its test stops
+proving anything.

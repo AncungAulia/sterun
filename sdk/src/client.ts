@@ -164,6 +164,41 @@ export interface EnterArgs {
 }
 
 /**
+ * The most results one `recordResults` call can hold (contracts v2.6, STE-60).
+ *
+ * Measured, not computed: every row a timed finish (the largest event, 136
+ * bytes), against the per-transaction limits live on testnet and mainnet alike
+ * on 2026-09-17. The 16,384 bytes of contract events bind at 120; 121 is
+ * refused by the network's own simulation. If the network's limits change,
+ * this has to be measured again, not scaled.
+ */
+export const RECORD_RESULTS_MAX_BATCH = 120;
+
+/**
+ * One result for {@link SterunClient.recordResults}. `kind` uses the same words
+ * as the backend's results preview (`publishable[].kind`), so a reviewed row
+ * maps across without translation.
+ */
+export type SterunResult =
+  | { tokenId: number; kind: "timed"; finishTimeS: number }
+  | { tokenId: number; kind: "untimed" }
+  | { tokenId: number; kind: "dnf" };
+
+/**
+ * Split `results` into batches for {@link SterunClient.recordResults}, in
+ * order. Each batch is atomic on chain, so a failure leaves the batches before
+ * it recorded and the ones after it untouched.
+ */
+export function chunkResults<T>(results: readonly T[], size = RECORD_RESULTS_MAX_BATCH): T[][] {
+  if (!Number.isInteger(size) || size < 1 || size > RECORD_RESULTS_MAX_BATCH) {
+    throw new RangeError(`size must be a whole number from 1 to ${RECORD_RESULTS_MAX_BATCH}, got ${size}`);
+  }
+  const batches: T[][] = [];
+  for (let i = 0; i < results.length; i += size) batches.push(results.slice(i, i + size));
+  return batches;
+}
+
+/**
  * Who a single call acts as.
  *
  * One Sterun flow involves several different signers, often within seconds of
@@ -661,6 +696,51 @@ export class SterunClient {
     return runWrite(
       "recordDnf",
       () => this.record.record_dnf({ token_id: tokenId }, this.callOptions(options)),
+    );
+  }
+
+  /**
+   * Record many results for one event in one organiser signature (contracts
+   * v2.6, STE-60). **Atomic**: one invalid row reverts the whole batch — a
+   * record not checked in for a finish, a terminal record, a zero time, or a
+   * record from another event (`ResultForAnotherEvent(108)`). Each row obeys
+   * exactly the rules of `recordFinish` / `recordFinishUntimed` / `recordDnf`
+   * and emits the same event.
+   *
+   * At most {@link RECORD_RESULTS_MAX_BATCH} rows; split a longer list with
+   * {@link chunkResults}. Refused here, before anything is signed: an empty
+   * list, too many rows, a token listed twice, and a time that is not a whole
+   * number of seconds from 1 to u32.
+   */
+  async recordResults(
+    eventId: number,
+    results: readonly SterunResult[],
+    options?: CallOptions,
+  ): Promise<SentResult<void>> {
+    if (results.length === 0) throw new RangeError("recordResults needs at least one result");
+    if (results.length > RECORD_RESULTS_MAX_BATCH) {
+      throw new RangeError(
+        `recordResults takes at most ${RECORD_RESULTS_MAX_BATCH} results per call, got ${results.length}; split them with chunkResults`,
+      );
+    }
+    const seen = new Set<number>();
+    const rows = results.map((r) => {
+      if (seen.has(r.tokenId)) throw new RangeError(`token ${r.tokenId} is listed twice`);
+      seen.add(r.tokenId);
+      switch (r.kind) {
+        case "timed":
+          if (!Number.isInteger(r.finishTimeS) || r.finishTimeS < 1 || r.finishTimeS > 0xffff_ffff) {
+            throw new RangeError(`token ${r.tokenId}: finishTimeS must be whole seconds from 1 to 4294967295, got ${r.finishTimeS}`);
+          }
+          return { token_id: r.tokenId, outcome: { tag: "Timed" as const, values: [r.finishTimeS] as const } };
+        case "untimed":
+          return { token_id: r.tokenId, outcome: { tag: "Untimed" as const, values: undefined } };
+        case "dnf":
+          return { token_id: r.tokenId, outcome: { tag: "Dnf" as const, values: undefined } };
+      }
+    });
+    return runWrite("recordResults", () =>
+      this.record.record_results({ event_id: eventId, results: rows }, this.callOptions(options)),
     );
   }
 

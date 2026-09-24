@@ -25,7 +25,8 @@
     "e2e:chain-link": "tsx scripts/e2e-chain-link.ts",
     "e2e:announcements": "tsx scripts/e2e-announcements.ts",
     "e2e:claim-race": "tsx scripts/e2e-claim-race.ts",
-    "e2e:registration-closes": "tsx scripts/e2e-registration-closes.ts"
+    "e2e:registration-closes": "tsx scripts/e2e-registration-closes.ts",
+    "e2e:record-results": "tsx scripts/e2e-record-results.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

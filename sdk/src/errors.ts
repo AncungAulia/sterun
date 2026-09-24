@@ -77,6 +77,7 @@ export const RACE_RECORD_ERRORS = {
   105: "InvalidFinishTime",
   106: "TooManyAddOns",
   107: "DuplicateAddOn",
+  108: "ResultForAnotherEvent",
 } as const satisfies Readonly<Record<number, string>>;
 
 /** INTERFACE.md §2.4 — OpenZeppelin, embedded in the RaceRecord spec. */
