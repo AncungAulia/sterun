@@ -18,17 +18,16 @@
  *
  * ## Authentication, and why it is a wallet signature
  *
- * Every authenticated backend route works the same way (be/src/auth.ts): ask
- * for a nonce, sign it, send `x-sterun-address` / `x-sterun-nonce` /
- * `x-sterun-signature`. The organiser already holds a Stellar keypair and is
- * about to sign `create_event` with it, so there is no second credential to
- * invent. The nonce is single-use and expires in two minutes, which is why one
- * is fetched per upload rather than cached.
+ * The challenge, the signature and the three headers live in
+ * `lib/api/signed.ts`, which the results preview also uses. The organiser
+ * already holds a Stellar keypair and is about to sign `create_event` with it,
+ * so there is no second credential to invent.
  *
  * The upload is authenticated but NOT authorised against an event: there is no
  * event yet, that is the whole ordering of the wizard.
  */
-import { ApiError, apiFetch } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/client";
+import { signedFetch, type MessageSigner } from "@/lib/api/signed";
 
 /**
  * Mirrors `MAX_FILE_BYTES` in `be/src/routes/files.ts`. Duplicated rather than
@@ -50,11 +49,7 @@ export interface UploadedFile {
   created: boolean;
 }
 
-/** Just enough of `lib/wallet`'s signer to test this without a wallet. */
-export type MessageSigner = (
-  message: string,
-  opts?: { address?: string },
-) => Promise<string>;
+export type { MessageSigner };
 
 export interface UploadRequest {
   /**
@@ -82,31 +77,19 @@ export async function uploadEventFile({
   expectedSha256,
   sign,
 }: UploadRequest): Promise<UploadedFile> {
-  const challenge = await apiFetch<{ nonce: string; expires_at: string }>("/auth/challenge", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address }),
-  });
-
-  // Before the bytes, deliberately. A wallet rejection here should cost the
-  // organiser nothing: no upload attempted, no rate limit spent.
-  const signature = await sign(challenge.nonce, { address });
-
-  const stored = await apiFetch<{
+  const stored = await signedFetch<{
     url: string;
     sha256: string;
     size: number;
     content_type: string;
     created: boolean;
-  }>("/events/files", {
+  }>({
+    path: "/events/files",
     method: "POST",
-    headers: {
-      "content-type": contentType,
-      "x-sterun-address": address,
-      "x-sterun-nonce": challenge.nonce,
-      "x-sterun-signature": signature,
-    },
+    address,
+    sign,
     body: bytes,
+    contentType,
   });
 
   // Content-addressing makes these equal by construction, so a mismatch means

@@ -621,11 +621,10 @@ knowing before adding a page there:
 `modules/organiser/race/RaceConsole.tsx`. Plan:
 `docs/superpowers/plans/2026-09-13-org-event-console-tabs.md`. What is settled:
 
-- **Three tabs, Overview, Entries, Scanners, and the tab is in the address** (`?tab=`, parsed by
-  `race-tab.ts`, which has no `"use client"` because the route imports it). The bell already links to
-  `?tab=scanners`, and the rail lives in a layout that must not remount. **Results is deferred**
-  until the backend accepts untimed finishes and DNF rows and there is a way to record many results
-  without one signature per runner (STE-44); `?tab=results` opens Overview until then.
+- **Four tabs, Overview, Entries, Scanners, Results, and the tab is in the address** (`?tab=`,
+  parsed by `race-tab.ts`, which has no `"use client"` because the route imports it). The bell
+  already links to `?tab=scanners`, and the rail lives in a layout that must not remount. Results
+  was deferred until 2026-09-24 and is now built (STE-58, below).
 - **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
@@ -649,6 +648,49 @@ knowing before adding a page there:
 - **A `beforeEach` that resets a mock needs braces.** `beforeEach(() => mock.mockReset())` returns the
   mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
   with an error that points at the mock rather than at the cause.
+
+### Recording a finish list (STE-58)
+
+`modules/organiser/race/` (`components/ResultsTab.tsx`, `ResultsDrop.tsx`, `ResultsReviewPanel.tsx`,
+`RecordResults.tsx`, `ResultsContext.tsx`, `hooks/useResultsRun.ts`, `lib/results-preview.ts`,
+`lib/publish-results.ts`). Mockup:
+`docs/superpowers/specs/2026-09-24-results-upload-mockup.html`, which reproduces block 5 of the
+2026-09-13 console mockup rather than redesigning it. What is settled:
+
+- **One fact shapes every screen: a result is terminal on chain.** Nobody, including the organiser,
+  can correct or remove a published result. So the file is reviewed before a signature is spent, and
+  **nothing the review held can be sent at all**: there is no "send it anyway" on a flagged row. A
+  corrected file costs nothing; a published wrong time costs forever.
+- **The empty tab is the drop card and nothing else**, and a loaded file is shaped like Entries:
+  three counts, a search, the table, with the signing button in the **header**, where every tab
+  keeps its one action. That is why `ResultsContext` exists: the file lives in the tab, the button
+  lives above it, and `RaceConsole` wraps both. On the Results tab the status action steps aside;
+  it is on the other three.
+- **The two severities are said in words, never as codes.** `wrong` (the chain accepts it and the
+  record is false: an ambiguous bib, the same bib twice, an impossible time, a malformed row) and
+  `reverts` (the chain refuses it and nothing changes: an unknown bib, a runner who never collected
+  a race pack, a result already recorded). Both are held; the severity only decides how loudly the
+  strip talks. The backend's own sentence is shown as it is, because an organiser can act on "bib 88
+  exists in both 10K and 5K" and can do nothing with `ambiguous_bib`.
+- **The button counts what will be published**, never the rows in the file.
+- **Batches are the contract's, and the atomicity is the whole design.** `publish-results.ts` plans
+  them with `chunkResults` at `RECORD_RESULTS_MAX_BATCH` (120, measured against the live network in
+  STE-60), labelled by **runner** rather than by transaction ("Runners 1 to 120"): a line number
+  means nothing once rows have been held. A batch records every row in it or none, so a failure
+  leaves the batches before it recorded and the ones after it untouched, and the dialog says exactly
+  that. The button is **Continue**, never "try again".
+- **A failed batch is checked against the chain, and one read settles it** (`useResultsRun`).
+  Because the batch is atomic, reading **one** of its runners answers for all 120. If that runner
+  now carries a result the batch landed, the run marks it done and clears the error: telling
+  somebody to send again what already landed is how a race gets a second result it can never
+  remove. This is the scanner's rule (STE-62) at a hundredth of the cost.
+- **Once results exist the tab shows them**, with the drop card underneath for the runners who have
+  none. "No official time" is a result, never a zero.
+- **`lib/api/signed.ts`** is the challenge, signature and three headers, moved up from `upload.ts`
+  on this second reader. Copying those header names into a second file is how one gets spelled
+  differently, which arrives as a 401 with nothing pointing at the cause.
+- **`formatFinishTime` moved to `utils/format.ts`** for the same reason: a finish time printed two
+  ways in one product is a bug nobody notices until a runner compares two screens.
 
 ### Adding places to a distance (STE-57)
 

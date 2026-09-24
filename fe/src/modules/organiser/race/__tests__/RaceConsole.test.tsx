@@ -110,7 +110,7 @@ describe("RaceConsole", () => {
       expect(await screen.findByRole("heading", { name: /Fun Run Sleman/ })).toBeInTheDocument();
       const tabs = screen.getByRole("navigation", { name: "Race sections" });
       const links = within(tabs).getAllByRole("link");
-      expect(links.map((link) => link.textContent)).toEqual(["Overview", "Entries", "Scanners"]);
+      expect(links.map((link) => link.textContent)).toEqual(["Overview", "Entries", "Scanners", "Results"]);
       expect(within(tabs).getByRole("link", { name: "Scanners" })).toHaveAttribute(
         "aria-current",
         "page",

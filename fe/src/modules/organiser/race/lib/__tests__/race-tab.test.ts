@@ -12,10 +12,9 @@ describe("parseRaceTab", () => {
   });
 
   describe("negative", () => {
-    it("lands on Overview for a tab that does not exist yet", () => {
-      // The bell already links results to ?tab=results. Until that tab is
-      // built the link must still open the race, not a blank page.
-      expect(parseRaceTab("results")).toBe("overview");
+    it("lands on Overview for a tab that does not exist", () => {
+      // Results was this case until 2026-09-24 (STE-58); it is a real tab now.
+      expect(parseRaceTab("results")).toBe("results");
       expect(parseRaceTab("banana")).toBe("overview");
     });
   });

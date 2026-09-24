@@ -15,6 +15,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { readClient } from "@/lib/chain/sterun";
+import type { SterunResult } from "@sterunxyz/sdk";
 
 import { useChainWrite, type Actor } from "@/hooks/useChainWrite";
 
@@ -84,6 +85,23 @@ export function useSetEventStatus() {
 export interface ScannerInput {
   eventId: number;
   scanner: string;
+}
+
+export interface RecordResultsInput {
+  eventId: number;
+  /** At most `RECORD_RESULTS_MAX_BATCH`; split a longer list first. */
+  results: SterunResult[];
+}
+
+/**
+ * One batch of finish results, one signature (STE-60). Atomic on chain: the
+ * whole batch records or none of it does, which is what lets the run screen say
+ * exactly what landed when a later batch fails.
+ */
+export function useRecordResults() {
+  return useChainWrite<RecordResultsInput, void>((input, actor) =>
+    readClient.recordResults(input.eventId, input.results, actor),
+  );
 }
 
 export function useAddScanner() {

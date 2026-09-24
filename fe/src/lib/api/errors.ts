@@ -68,6 +68,9 @@ const OUR_OWN_METHODS: ReadonlySet<string> = new Set([
   "removeScanner",
   "addOrganiser",
   "removeOrganiser",
+  // Reaches RaceRecord and nothing else: no token transfer, so the band still
+  // names the source (STE-58).
+  "recordResults",
 ]);
 
 /**
@@ -93,6 +96,11 @@ const CONTRACT_MESSAGES: Partial<Record<`${ContractErrorSource}:${string}`, stri
   "event-registry:QuotaNotIncreased":
     "This distance already has that many entries or more. Enter a higher number.",
   "event-registry:InvalidStatus": "This race cannot be moved to that status any more.",
+  // STE-58. A batch is atomic, so each of these is about the whole batch.
+  "race-record:InvalidState":
+    "One of these runners already has a result, or never collected a race pack. Upload the file again to see which.",
+  "race-record:ResultForAnotherEvent": "One of these runners entered a different race.",
+  "race-record:NotAuthorized": "Only the wallet that created this race can record its results.",
 };
 
 /** Said as a cancellation, because that is what it is. Nobody has to fix it. */
