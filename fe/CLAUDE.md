@@ -628,11 +628,18 @@ knowing before adding a page there:
 - **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
-- **The header's action is the status move** (`status-action.ts`): open, close or reopen
-  entries, always behind a dialog. **A race that can still take entries also gets Add entries**
-  (STE-57), the one exception to one action: closing must stay reachable until entries close on
-  their own (STE-46), and adding entries is the main button beside it. The dialog for opening states that a race which has opened never
-  returns to not open. Completing and cancelling are not offered here.
+- **The header holds one button and a menu** (`components/RaceActions.tsx`, STE-69). Which button
+  leads is decided by `headerPlan` in `lib/close-date.ts`, a pure function, and the rest fold into
+  a kebab. This restores the console's one-action rule that STE-57 broke on purpose: a menu is one
+  button. Draft leads with Open entries; Open leads with Add entries, because a sold-out distance
+  is money not being taken right now; a race closed **by a date that has passed** leads with
+  Change closing date, because reopening the status alone changes a word and lets nobody in; a race
+  closed by hand leads with Reopen. `Completed` and `Cancelled` get nothing at all, since both are
+  terminal on chain. Every one of them is behind a dialog, because each is a signature.
+  `StatusAction` and `AddPlaces` each render either a button or a menu item (`variant`) and keep
+  their own dialog: splitting the dialog out would leave the wallet write in one file and the words
+  that explain it in another. A menu item opens its dialog on the **next frame**
+  (`setTimeout(…, 0)`), or Radix's focus return fights the dialog for it.
 - **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
   (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
   `modules/organiser/shared/lib/records.ts` and `modules/organiser/shared/lib/scanners.ts`. The column or card that needs one is drawn once the data
@@ -722,6 +729,41 @@ knowing before adding a page there:
   the real signed announcement on testnet event 23.
 - **stellar-sdk's crypto fails under jsdom** (see Tests): the announcement tests run with
   `// @vitest-environment node`, and component tests mock `lib/event/announcements`.
+
+### The registration close date (STE-69)
+
+`lib/close-date.ts`, `components/CloseDateDialog.tsx`, `hooks/useCloseDate.ts`, and the card on
+Overview. Mockup: `docs/superpowers/specs/2026-09-24-registration-close-date-mockup.html`.
+
+**Two dates are in play and they are not the same thing.** The event **document** carries the
+registration window, hashed when the race was published, and that is what runners were promised.
+The **chain** carries `registration_closes` (STE-46, live 2026-09-24), and that is what refuses an
+entry. Until this ticket the app set only the first, so a race page could promise a date the
+contract ignored. Everything here is about the second one, and where the two disagree a screen
+shows the enforced one.
+
+- **The wizard sets what it publishes**, as one more signature straight after `create_event`
+  (`create/lib/run.ts`, step `closeDate`), from the same field the document took it from. The
+  wizard requires a registration window, so every race created from now on has one on chain.
+- **Moving it is the same shape as raising a quota**: one form holding the new date, the sentence
+  the page writes from the two dates, and an optional note; sign the announcement, move the date,
+  publish. That runner is `lib/announced-change.ts`, shared with STE-57 rather than copied, and
+  `add-places-run.ts` is now a thin wrapper over it. The chain cannot check that anybody was told,
+  so the console is the only thing that can.
+- **The date moves either way.** A date already past stops entries the moment it is signed, and the
+  field says so in a hint rather than a panel: it is information, not an alarm. Moving it earlier
+  is allowed because `Close entries` already stops entries instantly, so it adds no power to harm;
+  it does take away days a runner was promised, which is why the announcement is not optional for
+  it either. The sentence never says "extended": it names both dates.
+- **The bound is race pack collection**, from the document, falling back to race day
+  (`closeDateBound`). Handing packs out while entries are still open means somebody paying for a
+  race whose pack has already gone out.
+- **A runner is told which refusal they met.** `entryGate` answers `registration-over` with the
+  date, separately from `closed`: one is a decision that may be undone, the other a date that will
+  not come back. The gate checks the status first, exactly as the contract does, and waits for a
+  clock rather than guessing on the first render.
+- **`useRegistrationCloses` lives in `src/hooks/`**, not in this module: the entry flow is its
+  second reader.
 
 ### `/organisers` — the way in for somebody who runs races (2026-09-23)
 

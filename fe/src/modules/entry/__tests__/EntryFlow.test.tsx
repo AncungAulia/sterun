@@ -152,7 +152,7 @@ describe("before the form", () => {
   it("says entries are closed for a race that is not open", async () => {
     getEventSummary.mockResolvedValue(summary("Closed"));
     renderFlow();
-    expect(await screen.findByText("Entries for this race are closed.")).toBeInTheDocument();
+    expect(await screen.findByText("The organiser has closed entries.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to the race" })).toHaveAttribute("href", "/events/2");
     expect(screen.queryByRole("region", { name: "Distance" })).not.toBeInTheDocument();
   });

@@ -14,6 +14,10 @@ const addCategory = vi.hoisted(() => vi.fn(async () => ({ value: 0, txHash: "tx2
 const setEventStatus = vi.hoisted(() =>
   vi.fn(async () => ({ value: undefined, txHash: "tx3", ledger: 1 })),
 );
+/* STE-69: the wizard sets on chain the date its document publishes. */
+const setRegistrationCloses = vi.hoisted(() =>
+  vi.fn(async () => ({ value: undefined, txHash: "tx-closes", ledger: 1 })),
+);
 const fetchEventMetadata = vi.hoisted(() => vi.fn());
 /*
  * Mocked rather than left to run. The real hook fetches the backend index, and
@@ -34,7 +38,7 @@ const uploadEventFile = vi.hoisted(() => vi.fn());
 const fetchCities = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/chain/sterun", () => ({
-  readClient: { createEvent, addCategory, setEventStatus, isOrganiser },
+  readClient: { createEvent, addCategory, setEventStatus, setRegistrationCloses, isOrganiser },
 }));
 vi.mock("@/modules/organiser/create/hooks/useExistingEventNames", () => ({ useExistingEventNames: existingNames }));
 vi.mock("@/lib/place/places", async (importOriginal) => ({
@@ -296,11 +300,11 @@ describe("CreateEvent", () => {
 
       // Not on the page until it is asked for: it is the one thing here that
       // has to be read, and a block on a long page is read by nobody.
-      expect(screen.queryByText(/ask you 4 times/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ask you 5 times/i)).not.toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Create race" }));
 
-      expect(await screen.findByText(/ask you 4 times/i)).toBeInTheDocument();
+      expect(await screen.findByText(/ask you 5 times/i)).toBeInTheDocument();
       expect(screen.getByText("Publish the event details")).toBeInTheDocument();
       expect(screen.getByText('Create "Jakarta Sunrise 10K"')).toBeInTheDocument();
       expect(screen.getByText("Add the 10K")).toBeInTheDocument();
@@ -346,10 +350,13 @@ describe("CreateEvent", () => {
       // The receipts used to live only in the run dialog, which this step
       // replaces the moment the run finishes. Losing them there meant the
       // proof went off screen before anybody could read it.
+      // Four since STE-69: create, the closing date, the distance, and opening.
       const receipts = screen.getAllByRole("link", { name: /receipt/i });
-      expect(receipts).toHaveLength(3);
+      expect(receipts).toHaveLength(4);
       expect(receipts[0]).toHaveAttribute("href", expect.stringContaining("tx1"));
-      expect(receipts[2]).toHaveAttribute("href", expect.stringContaining("tx3"));
+      // The closing date sits second, straight after the race exists.
+      expect(receipts[1]).toHaveAttribute("href", expect.stringContaining("tx-closes"));
+      expect(receipts[3]).toHaveAttribute("href", expect.stringContaining("tx3"));
     });
 
     it("records the address the store put the details file at", async () => {

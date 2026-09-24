@@ -9,6 +9,7 @@
  * is the question the runner is left with.
  */
 import Link from "next/link";
+import { formatEventDateTimeLong } from "@/utils/format";
 import { BadgeCheckIcon, BanIcon, CircleOffIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -40,7 +41,19 @@ export function GateNotice({
     case "closed":
       return (
         <Frame eventId={eventId} icon={<CircleOffIcon aria-hidden="true" className="size-6" />} title="Entries are closed">
-          Entries for this race are closed.
+          The organiser has closed entries.
+        </Frame>
+      );
+
+    /*
+      A different sentence from the one above, deliberately (STE-69). One is a
+      decision somebody made and may undo; the other is a date that passed and
+      will not come back. A runner deserves to know which.
+    */
+    case "registration-over":
+      return (
+        <Frame eventId={eventId} icon={<CircleOffIcon aria-hidden="true" className="size-6" />} title="Entries are closed">
+          {`Entries closed on ${formatEventDateTimeLong(gate.closesAt)}.`}
         </Frame>
       );
 

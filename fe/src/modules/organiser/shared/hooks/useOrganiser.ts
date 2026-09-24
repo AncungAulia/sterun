@@ -104,6 +104,25 @@ export function useRecordResults() {
   );
 }
 
+export interface RegistrationClosesInput {
+  eventId: number;
+  /** Unix seconds. The contract takes a date either way, past included. */
+  closesAt: bigint;
+}
+
+/**
+ * When entries stop by themselves (STE-46, live since 2026-09-24).
+ *
+ * The contract checks this date after the status, so a race can be `Open` and
+ * still refuse entries. There is deliberately no way to remove a date once set;
+ * a date can only move.
+ */
+export function useSetRegistrationCloses() {
+  return useChainWrite<RegistrationClosesInput, void>((input, actor) =>
+    readClient.setRegistrationCloses(input.eventId, input.closesAt, actor),
+  );
+}
+
 export function useAddScanner() {
   return useChainWrite<ScannerInput, void>(({ eventId, scanner }, actor) =>
     readClient.addScanner(eventId, scanner, actor),

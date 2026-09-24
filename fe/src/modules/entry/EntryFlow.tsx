@@ -57,6 +57,8 @@ import { Stepper } from "@/components/form/Stepper";
 import { WalletGate } from "@/components/wallet/WalletGate";
 import { Button } from "@/components/ui/button";
 import { useArea } from "@/hooks/useArea";
+import { useNowSeconds } from "@/hooks/useNowSeconds";
+import { useRegistrationCloses } from "@/hooks/useRegistrationCloses";
 import { useEntryAttempt, type EntryPlan } from "@/modules/entry/hooks/useEntryAttempt";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
@@ -174,6 +176,13 @@ function EntryForm({
   const race = useEvent(eventId);
   const onChain = useEventAddOns(eventId);
   const records = useRunnerRecords(address);
+  /*
+    The date entries stop on, from the chain (STE-69). The status alone is not
+    the whole answer any more: `enter` refuses a race whose date has passed
+    while its status still says Open.
+  */
+  const closes = useRegistrationCloses(eventId);
+  const nowS = useNowSeconds();
   const metadata = useEventMetadata(race.data?.event.uri ?? "", race.data?.event.metadataHash ?? "");
   /** The distance the gates first opened on. Once set, the form stays: see the header. */
   const [openedOn, setOpenedOn] = useState<number | null>(null);
@@ -214,7 +223,10 @@ function EntryForm({
   }
 
   const summary = race.data;
-  const gate = entryGate(summary, records.data, requestedCategory);
+  const gate = entryGate(summary, records.data, requestedCategory, {
+    closesAt: closes.data ?? null,
+    nowS,
+  });
   // Adjusted during render, React's pattern for state derived from props.
   if (gate.kind === "open" && openedOn === null) setOpenedOn(gate.categoryId);
   let openCategoryId: number;

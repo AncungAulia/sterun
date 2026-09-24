@@ -22,22 +22,19 @@
  *   a `published_at` more than ten minutes from its clock, so a publish retried
  *   after a coffee would fail forever on the old one.
  */
-import { ApiError } from "@/lib/api/client";
-import { friendlyError, isDeclined } from "@/lib/api/errors";
-import { announcementToSign } from "@/lib/event/announcements";
+import {
+  runAnnouncedChange,
+  SIGNATURE_FRESH_MS,
+  type AnnouncedState,
+  type SignedAnnouncement,
+} from "./announced-change";
 
 export type AddPlacesStep = "sign" | "raise" | "publish";
 
 export const STEP_ORDER: readonly AddPlacesStep[] = ["sign", "raise", "publish"];
 
-/** Nine minutes: one under the server's ten, for clocks that disagree a little. */
-export const SIGNATURE_FRESH_MS = 9 * 60 * 1000;
-
-export interface SignedAnnouncement {
-  publishedAt: string;
-  body: string;
-  signature: string;
-}
+export { SIGNATURE_FRESH_MS };
+export type { SignedAnnouncement };
 
 export interface AddPlacesState {
   signed: SignedAnnouncement | null;
@@ -79,6 +76,31 @@ export function isDone(state: AddPlacesState): boolean {
   return state.signed !== null && state.raised && state.published;
 }
 
+/** This run's words for the shared runner's, and back. */
+function toShared(state: AddPlacesState): AnnouncedState {
+  return {
+    signed: state.signed,
+    applied: state.raised,
+    published: state.published,
+    running: state.running === "raise" ? "apply" : state.running,
+    failed: state.failed
+      ? { step: state.failed.step === "raise" ? "apply" : state.failed.step, message: state.failed.message }
+      : null,
+  };
+}
+
+function fromShared(state: AnnouncedState): AddPlacesState {
+  return {
+    signed: state.signed,
+    raised: state.applied,
+    published: state.published,
+    running: state.running === "apply" ? "raise" : state.running,
+    failed: state.failed
+      ? { step: state.failed.step === "apply" ? "raise" : state.failed.step, message: state.failed.message }
+      : null,
+  };
+}
+
 /**
  * Runs whatever has not happened yet and returns where it stopped. Calling it
  * again with the returned state resumes: a landed step is never repeated.
@@ -88,62 +110,20 @@ export async function runAddPlaces(
   from: AddPlacesState,
   deps: AddPlacesDeps,
 ): Promise<AddPlacesState> {
-  let state: AddPlacesState = { ...from, failed: null };
-  const set = (patch: Partial<AddPlacesState>) => {
-    state = { ...state, ...patch };
-    deps.onChange(state);
-  };
-  const fail = (step: AddPlacesStep, error: unknown) => {
-    set({ running: null, failed: { step, message: friendlyError(error) } });
-    return state;
-  };
-
-  const stale =
-    state.signed !== null &&
-    !state.published &&
-    deps.now() - Date.parse(state.signed.publishedAt) > SIGNATURE_FRESH_MS;
-  if (state.signed === null || stale) {
-    set({ signed: null, running: "sign" });
-    try {
-      const publishedAt = new Date(deps.now()).toISOString();
-      const signature = await deps.signMessage(
-        announcementToSign({ eventId: plan.eventId, publishedAt, body: plan.body }),
-      );
-      set({ signed: { publishedAt, body: plan.body, signature } });
-    } catch (error) {
-      return fail("sign", error);
-    }
-  }
-
-  if (!state.raised) {
-    set({ running: "raise" });
-    try {
-      await deps.increaseQuota(plan);
-      set({ raised: true });
-    } catch (error) {
-      if (isDeclined(error)) return fail("raise", error);
-      const onChain = await deps.quotaOnChain(plan).catch(() => null);
+  const state = await runAnnouncedChange(
+    { eventId: plan.eventId, organiser: plan.organiser, body: plan.body },
+    toShared(from),
+    {
+      now: deps.now,
+      signMessage: deps.signMessage,
+      apply: () => deps.increaseQuota(plan),
       // Exactly the new number, not "at least": a quota already higher than
       // this plan means some other change, and announcing this one over it
       // would publish the wrong figures.
-      if (onChain !== plan.newQuota) return fail("raise", error);
-      set({ raised: true });
-    }
-  }
-
-  if (!state.published) {
-    const signed = state.signed as SignedAnnouncement;
-    set({ running: "publish" });
-    try {
-      await deps.publish({ ...signed, eventId: plan.eventId, signer: plan.organiser });
-      set({ published: true, running: null });
-    } catch (error) {
-      // Dated too far from the server's clock: the next press signs again.
-      if (error instanceof ApiError && error.code === "stale-announcement") set({ signed: null });
-      return fail("publish", error);
-    }
-  }
-
-  set({ running: null });
-  return state;
+      landed: async () => (await deps.quotaOnChain(plan)) === plan.newQuota,
+      publish: deps.publish,
+      onChange: (next) => deps.onChange(fromShared(next)),
+    },
+  );
+  return fromShared(state);
 }

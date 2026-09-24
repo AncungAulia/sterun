@@ -16,7 +16,7 @@ import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
 import { useEvent } from "@/hooks/useEvents";
 import { useWallet } from "@/hooks/useWallet";
 
-import { AddPlaces } from "./components/AddPlaces";
+import { RaceActions } from "./components/RaceActions";
 import { ConsoleHeader } from "@/modules/organiser/shared/components/ConsoleHeader";
 import { EntriesTab } from "./components/EntriesTab";
 import { useNeedsContext } from "@/modules/organiser/shared/components/NeedsContext";
@@ -27,7 +27,6 @@ import { RecordResults } from "./components/RecordResults";
 import { ResultsProvider } from "./components/ResultsContext";
 import { ResultsTab } from "./components/ResultsTab";
 import { ScannersTab } from "./components/ScannersTab";
-import { StatusAction } from "./components/StatusAction";
 import { UrgentBanner } from "@/modules/organiser/shared/components/UrgentBanner";
 import type { RaceTab } from "./lib/race-tab";
 
@@ -92,20 +91,9 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
           badge={<EventStatusBadge status={data.event.status} />}
           action={
             // One action per tab. On Results that action is signing the file
-            // the tab below is showing, so the status moves aside there; it is
-            // on the other three tabs, a press away.
-            tab === "results" ? (
-              <RecordResults eventId={eventId} />
-            ) : (
-              // Two buttons on a race that can still take entries (STE-57):
-              // closing stays, because until entries close on their own at the
-              // registration end date (STE-46) it is the only thing that stops
-              // them, and adding places is the main one.
-              <>
-                <StatusAction summary={data} />
-                <AddPlaces summary={data} />
-              </>
-            )
+            // the tab below is showing; everywhere else it is what can be done
+            // to the race, which is one button and a menu (STE-69).
+            tab === "results" ? <RecordResults eventId={eventId} /> : <RaceActions summary={data} />
           }
         />
         <RaceTabs eventId={eventId} current={tab} />

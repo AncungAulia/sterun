@@ -12,7 +12,7 @@
  * the pairing exists to prevent, so its only button is Publish the
  * announcement. Before anything landed, a failure offers Back and Try again.
  */
-import { CheckIcon, CircleAlertIcon, LoaderCircleIcon, MegaphoneIcon } from "lucide-react";
+import { MegaphoneIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -28,10 +28,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/utils/cn";
 import type { EventStatus, SterunCategory } from "@sterunxyz/sdk";
 
 import { useAddPlaces } from "../hooks/useAddPlaces";
+import { RunStep } from "./RunStep";
 import {
   STEP_ORDER,
   isDone,
@@ -305,7 +305,7 @@ function Steps({
 
       <ol className="flex flex-col gap-3 py-2">
         {STEP_ORDER.map((step, index) => (
-          <Step key={step} number={index + 1} state={stepState(step)} label={STEP_LABEL[step]} detail={detail(step)} />
+          <RunStep key={step} number={index + 1} state={stepState(step)} label={STEP_LABEL[step]} detail={detail(step)} />
         ))}
       </ol>
 
@@ -331,45 +331,5 @@ function Steps({
         </DialogFooter>
       ) : null}
     </>
-  );
-}
-
-function Step({
-  number,
-  state,
-  label,
-  detail,
-}: {
-  number: number;
-  state: "done" | "running" | "waiting" | "failed";
-  label: string;
-  detail?: string;
-}) {
-  return (
-    <li className="flex items-start gap-3">
-      <span
-        aria-hidden="true"
-        className={cn(
-          "numeric mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-sm",
-          state === "done" && "bg-success text-paper",
-          state === "running" && "text-teal-500",
-          state === "waiting" && "border border-n-300 text-n-500",
-          state === "failed" && "bg-danger text-paper",
-        )}
-      >
-        {state === "done" ? <CheckIcon className="size-4" /> : null}
-        {state === "running" ? <LoaderCircleIcon className="size-5 animate-spin" /> : null}
-        {state === "waiting" ? number : null}
-        {state === "failed" ? <CircleAlertIcon className="size-4" /> : null}
-      </span>
-      <div>
-        <p className="text-base text-ink">{label}</p>
-        {detail ? (
-          <p role={state === "failed" ? "alert" : undefined} className={cn("text-sm", state === "failed" ? "text-danger" : "text-n-500")}>
-            {detail}
-          </p>
-        ) : null}
-      </div>
-    </li>
   );
 }
