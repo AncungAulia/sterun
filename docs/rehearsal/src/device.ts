@@ -124,6 +124,17 @@ const handlers: Record<string, (msg: Message) => Promise<unknown>> = {
     };
   },
 
+  /**
+   * The TOTP window of the roster this desk stored: the very object verdictFor
+   * reads its `toleranceSteps` from (STE-67 waits on it, never on a constant).
+   */
+  async totp(msg) {
+    const eventId = Number(msg.eventId);
+    const roster = await readRoster(eventId);
+    if (!roster) throw new Error(`${role} has no roster for event ${eventId}`);
+    return roster.totp;
+  },
+
   async offline() {
     goOffline();
     return { offline };

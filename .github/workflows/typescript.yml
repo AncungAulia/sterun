@@ -152,8 +152,10 @@ jobs:
       # 0 mid-step, and run.sh reported a pass for a rehearsal that stopped. A
       # verification tool that can pass while broken is the worst bug it can
       # have, so that property is pinned with real child processes, offline.
-      - name: Test the rehearsal harness (a crashed device fails its step)
-        run: pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts
+      # STE-67: the stale-screenshot step waits until the scanner would refuse
+      # the code; the wait must never be shorter than the roster's tolerance.
+      - name: Test the rehearsal harness (a crashed device fails its step; the stale-QR wait)
+        run: pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts ../docs/rehearsal/test/stale-qr.test.ts
 
       - name: Build
         run: pnpm build

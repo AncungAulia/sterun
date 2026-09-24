@@ -47,12 +47,40 @@ Nothing in them is written by hand. A failing step stays failing, with its error
 | Q (STE-55) | organiser raises R10K to 5; the same number again → `QuotaNotIncreased(19)`; R9 enters, bib 9 |
 | B (STE-53/54) | bibs are 1..9, unique in the event; chain = API = roster = what the desk screen shows |
 | 4 | both desks download the roster online, go offline (fetch disabled), scan, then sync |
+| F (STE-67) | **a forwarded QR screenshot**: R9's QR is captured, the run waits in real time until the roster's `toleranceSteps` has passed, desk-A (offline) scans it → `expired`, no claim queued, R9's record untouched; then R9's **live** pass → GREEN at desk-B. See [the forwarded screenshot](#the-forwarded-screenshot-f1) for what this does and does not prove |
 | 5 | desk-A scans R2 twice → local RED; a second on-chain claim → `AlreadyClaimed(102)` |
 | 6 | **R4 is scanned at both offline desks**; both sync at the same moment; the chain keeps one, the other desk shows it in Flagged |
 | 7 | a results CSV with R6 at 2:10 for 5 km and an unknown bib 999 is held at preview; the corrected file previews clean |
 | 8 | 9 results recorded: timed, one **untimed** (R7, STE-41), one DNF (R3), one no-show as DNS (R8) |
 | 9 | per runner: chain state, API `/records/:id`, `/runners/:addr/records`, and the `participant_hash` recomputed with the spec's reference implementation from the submitted fields + salt, then `verify` true, and false with one letter changed |
 | N | non-allowlisted create (`18`); a non-organiser adding a category, cancelling, raising quota, adding a scanner; enter a Closed race and a Cancelled race (`EventNotOpen(4)`); a non-scanner claim (`104`); a finish before claim (`103`); re-uploading published results (`already_final`) |
+
+### The forwarded screenshot (F.1)
+
+The SOW asks for two fraud attempts caught on camera: a duplicate race pack collection (5.1, 5.2,
+6.1) and a forwarded QR screenshot (F.1). F.1 proves exactly this, and the evidence says it in
+these words:
+
+> **a screenshot goes stale in under a minute, and even a fresh one can only be used once**
+
+It does **not** prove "a forwarded QR is rejected", because that is not true. The desk accepts
+the code's step ±`toleranceSteps` (±1 step of 30 s, read from the roster, which is what the
+scanner reads), so a screenshot forwarded and shown **within 30–60 seconds** of being taken
+**passes** — longer if the desk's clock runs behind the phone's. That does not help an attacker:
+the code turns over every 30 seconds, so a screenshot is worthless within a minute, and a fresh
+one is worth what the runner's pass is worth — one claim on one record. Used by someone else, it
+spends the runner's claim; the runner is then refused "Already claimed", and two offline desks
+handing over two packs is the duplicate-collection case, where the chain keeps one claim and the
+other desk flags it.
+
+The wait is real time, never a mocked clock, and the step records how many seconds it took. That
+is also how it must be filmed: **take the screenshot, wait on camera, present it, get the
+refusal.** Cutting the wait out of the video is the one edit that turns the clip into a lie — it
+would show a fresh screenshot being refused, which the product does not do. The run prints the
+same note into F.1's observations for whoever holds the camera.
+
+R9 is used because it is the one runner nobody has scanned yet: the desk checks "already
+claimed" before the code, so a runner already queued at desk-A would read RED, not EXPIRED.
 
 Negative paths go through the web app's `readClient`, and the refusal is passed to the web app's
 own `friendlyError` / `classifyEnterFailure`, so the evidence also records the **sentence a person
@@ -78,7 +106,8 @@ Out of scope for STE-25 and left to Axel: screen footage, the team walkthrough, 
 
 ## How it is built
 
-`src/mock-race.ts` is the stage manager, `src/device.ts` a desk or phone, `src/device-process.ts`
+`src/mock-race.ts` is the stage manager, `src/device.ts` a desk or phone, `src/stale-qr.ts` the
+F.1 timing and wording, `src/device-process.ts`
 the stage manager's handle on one of those processes, `src/evidence.ts` the writer. `run.sh`
 bundles them with esbuild into `be/node_modules/.cache/` and `fe/node_modules/.cache/` — inside the package whose dependencies each one imports — so the
 rehearsal adds no workspace member, no lockfile change and no file in a teammate's folder.
@@ -106,7 +135,7 @@ So the harness is typechecked in `.github/workflows/typescript.yml`, which also 
 pnpm --filter @sterunxyz/sdk build     # the harness imports the SDK's dist/ types
 pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.device.json
 pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.stage.json
-pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts
+pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts ../docs/rehearsal/test/stale-qr.test.ts
 ```
 
 Both configs extend `fe/tsconfig.json` unchanged — `strict` included — and differ only in where
@@ -118,7 +147,10 @@ with `TS2353: … 'claimedAtOf' does not exist in type 'SendDeps'`.
 
 The test pins the other way this tool once lied: a desk or phone process that dies must fail the
 step, not leave its calls unsettled so that node exits 0 mid-run with no `EVIDENCE.md` (fixed in
-`14ef24a`). It runs real child processes and needs no network.
+`14ef24a`). It runs real child processes and needs no network. `stale-qr.test.ts` pins F.1's wait
+against the pass's own `timeStepOf` and the scanner's `|step − now| ≤ toleranceSteps`, so the
+wait can never be shorter than what the desk enforces, and pins the admission that a fresh
+screenshot passes.
 
 ## Runs
 

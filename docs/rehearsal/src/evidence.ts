@@ -193,7 +193,7 @@ export class Evidence {
       `| result | **${c.PASS} PASS**, **${c.FAIL} FAIL**, **${c["MANUAL REQUIRED"]} MANUAL REQUIRED**, **${c.BLOCKED} BLOCKED** of ${this.steps.length} steps |`,
     );
     lines.push("");
-    lines.push("Proof numbers refer to the nine evidence items in the STE-25 ticket; `S` = setup, `N` = negative path, `B` = bib agreement, `Q` = second batch, `U` = untimed finish, `M` = manual, `X` = extra check.");
+    lines.push("Proof numbers refer to the nine evidence items in the STE-25 ticket; `S` = setup, `N` = negative path, `B` = bib agreement, `Q` = second batch, `U` = untimed finish, `F` = forwarded-QR fraud attempt (STE-67), `M` = manual, `X` = extra check.");
     lines.push("");
     lines.push("## Steps");
     lines.push("");
