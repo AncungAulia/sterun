@@ -64,6 +64,7 @@ export const EVENT_REGISTRY_ERRORS = {
   17: "OrganiserNotFound",
   18: "NotAllowlistedOrganiser",
   19: "QuotaNotIncreased",
+  20: "RegistrationClosed",
 } as const satisfies Readonly<Record<number, string>>;
 
 /** INTERFACE.md §2.4 — RaceRecord (C2). */

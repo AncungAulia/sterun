@@ -18,6 +18,7 @@ import type {
   ContractCaller,
   SimulationResult,
 } from "../../src/chain/reader.js";
+import { ChainCallError } from "../../src/chain/reader.js";
 import type { EventStatus, RecordState } from "../../src/chain/decode.js";
 import { ContractRevertError, classifyContractError } from "../../src/chain/errors.js";
 
@@ -30,6 +31,8 @@ export interface FakeEvent {
   startsAt: bigint;
   status: EventStatus;
   scanners: string[];
+  /** v2.5 (STE-46): unix seconds, or null for no close date. */
+  registrationClosesAt: bigint | null;
 }
 
 export interface FakeCategory {
@@ -112,6 +115,12 @@ export class FakeChain implements ContractCaller {
   /** Every simulate() call, for asserting what was and was not asked for. */
   readonly calls: Array<{ contractId: string; method: string; args: unknown[] }> = [];
   latestLedger = 1_000;
+  /**
+   * Answer like the live EventRegistry before v2.5, which has no
+   * `get_registration_closes` at all: the host reports a missing function,
+   * not a contract error.
+   */
+  preCloseDate = false;
 
   constructor(readonly addresses: FakeChainAddresses) {}
 
@@ -137,6 +146,7 @@ export class FakeChain implements ContractCaller {
       startsAt: 1_800_000_000n,
       status: "Draft",
       scanners: [],
+      registrationClosesAt: null,
       ...event,
     };
     this.events.set(full.eventId, full);
@@ -249,6 +259,23 @@ export class FakeChain implements ContractCaller {
             quota: u32(category.quota),
           }),
           instance,
+        );
+      }
+
+      case "get_registration_closes": {
+        if (this.preCloseDate) {
+          throw new ChainCallError(
+            `get_registration_closes() on ${this.addresses.eventRegistry}`,
+            "HostError: Error(WasmVm, MissingValue)\n\nEvent log (newest first):",
+          );
+        }
+        const event = this.events.get(args[0] as number);
+        if (!event) this.revert(2, `get_registration_closes(${args[0]})`);
+        return this.result(
+          event.registrationClosesAt === null
+            ? xdr.ScVal.scvVoid()
+            : u64(event.registrationClosesAt),
+          [...instance, fakeLedgerKey(this.addresses.eventRegistry, `closes:${event.eventId}`)],
         );
       }
 

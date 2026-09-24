@@ -363,6 +363,30 @@ export class SterunClient {
   }
 
   /**
+   * Set when entries to an event stop on their own (contracts v2.5, STE-46).
+   * Organiser-only. `closesAt` is unix seconds, compared with the ledger's close
+   * time: from that second on, `enter` reverts `RegistrationClosed(20)` even
+   * though the event is still `Open`.
+   *
+   * The date moves either way. Earlier closes early, and a past date closes at
+   * once. Later is an extension, and also the only way to reopen after the date:
+   * `setEventStatus(…, "Open")` alone does not. An extension changes what runners
+   * were promised, so pair it with a signed announcement (`announcementMessage`);
+   * the contract does not check that you did. Setting the date the event
+   * already has changes nothing.
+   */
+  async setRegistrationCloses(
+    eventId: number,
+    closesAt: bigint | number,
+    options?: CallOptions,
+  ): Promise<SentResult<void>> {
+    const closes_at = toU64(closesAt, "closesAt");
+    return runWrite("setRegistrationCloses", () =>
+      this.registry.set_registration_closes({ event_id: eventId, closes_at }, this.callOptions(options)),
+    );
+  }
+
+  /**
    * Move the event through its lifecycle. Illegal transitions — including one
    * to the status it already has — revert `InvalidStatus(11)`.
    */
@@ -486,6 +510,19 @@ export class SterunClient {
     const addOns: SterunAddOn[] = [];
     for (let id = 0; id < count; id += 1) addOns.push(await this.getAddon(eventId, id));
     return addOns;
+  }
+
+  /**
+   * The event's registration close date in unix seconds, or `null` when it has
+   * none and entries stop only when the organiser closes them (contracts v2.5).
+   * Every event created before v2.5 answers `null`. Reverts `EventNotFound(2)`
+   * for an unknown event rather than answering `null`.
+   */
+  async getRegistrationCloses(eventId: number): Promise<bigint | null> {
+    const closesAt = await runRead("getRegistrationCloses", () =>
+      this.registry.get_registration_closes({ event_id: eventId }),
+    );
+    return closesAt ?? null;
   }
 
   async getOrganiser(eventId: number): Promise<string> {
@@ -750,4 +787,19 @@ export class SterunClient {
     for (const id of ids) documents.push(await this.raceRecordDocument(id));
     return documents;
   }
+}
+
+const U64_MAX = 2n ** 64n - 1n;
+
+/**
+ * A `u64` argument, refused here with its name rather than as an XDR encoding
+ * error from somewhere inside the bindings.
+ */
+function toU64(value: bigint | number, name: string): bigint {
+  if (typeof value === "number" && !Number.isSafeInteger(value)) {
+    throw new RangeError(`${name} must be a whole number of seconds, got ${value}`);
+  }
+  const n = BigInt(value);
+  if (n < 0n || n > U64_MAX) throw new RangeError(`${name} must fit in a u64, got ${n}`);
+  return n;
 }

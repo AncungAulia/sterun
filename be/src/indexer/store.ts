@@ -166,6 +166,32 @@ export async function upsertEvent(db: Queryable, ev: ChainEvent, at: Provenance)
 }
 
 /**
+ * The event's registration close date, for `registration_closes_set` and for a
+ * rebuild (v2.5, STE-46). `null` clears it, which only a rebuild does: the
+ * contract has no way to remove a date, but a rebuild writes what state says.
+ *
+ * False when the event is not indexed, the same orphan rule as
+ * {@link setEventStatus}.
+ */
+export async function setRegistrationCloses(
+  db: Queryable,
+  eventId: number,
+  closesAt: bigint | null,
+  at: Provenance,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE events
+        SET registration_closes_at = $2,
+            source = $3,
+            last_ledger = GREATEST(last_ledger, $4),
+            updated_at = now()
+      WHERE event_id = $1`,
+    [eventId, closesAt === null ? null : closesAt.toString(), at.source, at.ledger],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
  * Status-only update, for `event_status_changed`.
  *
  * Separate from {@link upsertEvent} because the event carries the status and
@@ -626,6 +652,8 @@ export interface EventRow {
   status: string;
   source: RowSource;
   lastLedger: number;
+  /** Unix seconds; entries are refused from here (v2.5). `null` = closes manually only. */
+  registrationClosesAt: bigint | null;
 }
 
 export interface CategoryRow {
@@ -666,6 +694,7 @@ interface RawEventRow {
   status: string;
   source: RowSource;
   last_ledger: number;
+  registration_closes_at: string | null;
 }
 
 interface RawRecordRow {
@@ -686,7 +715,8 @@ interface RawRecordRow {
 }
 
 const EVENT_COLUMNS =
-  "event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger";
+  "event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger, " +
+  "registration_closes_at";
 const RECORD_COLUMNS =
   "token_id, event_id, category_id, bib_no, runner_address, participant_hash, state, " +
   "entered_at, claimed_at, finish_time_s, result_at, source, last_ledger, addon_ids";
@@ -706,6 +736,7 @@ const toEventRow = (r: RawEventRow): EventRow => ({
   status: r.status,
   source: r.source,
   lastLedger: r.last_ledger,
+  registrationClosesAt: r.registration_closes_at === null ? null : BigInt(r.registration_closes_at),
 });
 
 const toRecordRow = (r: RawRecordRow): RecordRow => ({
