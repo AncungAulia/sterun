@@ -6,7 +6,8 @@
 #
 # Needs: Node >= 22, pnpm, network access, and STERUN_ADMIN_SECRET (testnet) in
 # the repo-root .env or the environment. Every other account is created fresh.
-# Takes 15-20 minutes: roughly 90 transactions, each waiting for its ledger.
+# Takes 15-20 minutes: roughly 90 transactions, each waiting for its ledger,
+# plus up to a minute of real waiting in F.1 (a QR screenshot going stale).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

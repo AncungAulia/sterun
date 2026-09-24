@@ -45,6 +45,8 @@ import {
   contractUrl,
 } from "./evidence";
 import { Device } from "./device-process";
+import { FILMING_NOTE, STALE_QR_CLAIM, honestyNote, staleFrom, waitUntilStale, type TotpWindow } from "./stale-qr";
+import { timeStepOf } from "../../../fe/src/lib/totp";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -689,8 +691,67 @@ async function main(): Promise<void> {
       s.check((await scanAt(s, deskA, "desk-A", r4)).kind === "green", "desk-A GREEN for R4");
       s.check((await scanAt(s, deskB, "desk-B", r4)).kind === "green", "desk-B GREEN for R4: offline, it cannot know desk-A handed a pack over");
       for (const r of [r1, r2, r3, r5]) s.check((await scanAt(s, deskA, "desk-A", r)).kind === "green", `desk-A GREEN for ${r.label}`);
-      for (const r of [r6, r7, r9]) s.check((await scanAt(s, deskB, "desk-B", r)).kind === "green", `desk-B GREEN for ${r.label}`);
+      for (const r of [r6, r7]) s.check((await scanAt(s, deskB, "desk-B", r)).kind === "green", `desk-B GREEN for ${r.label}`);
       s.note("R8 never comes to a desk: the no-show");
+      s.note("R9 comes to desk-B in F.1, after a screenshot of its pass has been tried at desk-A");
+    });
+
+    // STE-67: the SOW's second fraud attempt, a forwarded QR screenshot. The
+    // wait is real time, read from the roster; a mocked clock would prove the
+    // unit test, not the product.
+    await ev.step("F.1", "F", `A forwarded screenshot of R9's pass, shown after the wait, is refused; R9's live pass is accepted (${STALE_QR_CLAIM})`, "phones + desk processes: fe verdictFor (offline, real wait)", async (s) => {
+      const id = need(eventId, "event");
+      const token = need(r9.tokenId, "R9 token");
+      const stepStarted = Date.now();
+
+      const totp = await deskA.call<TotpWindow & { digits: number }>("totp", { eventId: id });
+      s.note(`roster totp as desk-A stored it: step ${totp.stepSeconds}s, tolerance ±${totp.toleranceSteps} step(s), ${totp.digits} digits`);
+      s.check(Number.isInteger(totp.toleranceSteps) && totp.toleranceSteps >= 0, "the roster carries a tolerance");
+      s.check(timeStepOf(3600) * totp.stepSeconds === 3600, `the pass and the roster count steps of the same length (${totp.stepSeconds}s)`);
+      s.note(honestyNote(totp));
+      s.note(FILMING_NOTE);
+
+      const queueBefore = await deskA.call<{ tokenId: number }[]>("claims", { eventId: id });
+      const recordBefore = await sterun.recordOf(token);
+      s.check(recordBefore.state === "Entered", `R9 is Entered before the screenshot, got ${recordBefore.state}`);
+
+      // 1. The screenshot: R9's QR text at one moment, the pass's own code.
+      const shot = await phones.call<{ qr: string; step: number }>("present", { tokenId: token, secretHex: need(r9.totpSecret, "secret") });
+      const takenAt = Date.now();
+      const refusedFrom = staleFrom(shot.step, totp) * 1000;
+      s.note(`screenshot of R9's pass taken ${new Date(takenAt).toISOString()} (step ${shot.step}); a desk on the same clock accepts it until ${new Date(refusedFrom - 1000).toISOString()} and refuses it from ${new Date(refusedFrom).toISOString()}`);
+
+      // 2. The wait, in real time, until the desk's own rule refuses the step.
+      const waitMs = waitUntilStale(shot.step, totp, Date.now());
+      s.note(`waiting ${(waitMs / 1000).toFixed(1)}s of real time (tolerance from the roster + 2s margin), no mocked clock`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+
+      // 3. The friend presents it at the other desk.
+      const presentedAt = Date.now();
+      const stale = await deskA.call<{ kind: string; shownBib: number | null; offline: boolean }>("scan", { eventId: id, qr: shot.qr });
+      const ageSeconds = (presentedAt - takenAt) / 1000;
+      s.note(`desk-A scans the screenshot ${ageSeconds.toFixed(1)}s after it was taken: ${stale.kind.toUpperCase()}, screen shows bib ${stale.shownBib}`);
+      s.check(stale.offline, "desk-A was offline during the scan");
+      s.check(presentedAt >= refusedFrom, "the screenshot was presented only after the scanner's tolerance had passed");
+
+      // 4. Refused, nothing queued, the record untouched.
+      s.check(stale.kind === "expired", `the stale screenshot is EXPIRED at desk-A, got ${stale.kind}`);
+      const queueAfter = await deskA.call<{ tokenId: number }[]>("claims", { eventId: id });
+      s.check(!queueAfter.some((c) => c.tokenId === token), "desk-A queued no claim for R9");
+      s.check(JSON.stringify(queueAfter) === JSON.stringify(queueBefore), `desk-A's queue is unchanged (${queueBefore.length} rows before and after)`);
+      const recordAfter = await sterun.recordOf(token);
+      s.check(
+        recordAfter.state === recordBefore.state && recordAfter.claimedAt === recordBefore.claimedAt,
+        `R9's record is untouched: ${recordAfter.state}, claimed_at ${recordAfter.claimedAt}`,
+      );
+
+      // Then the runner, with the live pass: the pass works, the screenshot does not.
+      const live = await scanAt(s, deskB, "desk-B", r9);
+      s.check(live.kind === "green", `R9's current code is GREEN at desk-B, got ${live.kind}`);
+      const queueB = await deskB.call<{ tokenId: number }[]>("claims", { eventId: id });
+      s.check(queueB.filter((c) => c.tokenId === token).length === 1, "desk-B queued R9 once");
+
+      s.note(`step took ${((Date.now() - stepStarted) / 1000).toFixed(1)}s, almost all of it the wait: the screenshot had to outlive the roster's ±${totp.toleranceSteps} step tolerance before it was shown`);
     });
 
     await ev.step("5.1", "5", "Double claim at the same desk: desk-A scans R2 again, still offline", "desk process: fe verdictFor", async (s) => {
@@ -772,6 +833,8 @@ async function main(): Promise<void> {
         s.check(record.state === "RacepackClaimed", `${r.label} RacepackClaimed on chain, got ${record.state}`);
       }
       s.check((await sterun.recordOf(need(r8.tokenId, "R8"))).state === "Entered", "R8 (no-show) still Entered");
+      const sentByA = syncs["desk-A"].flatMap((sync) => sync.claims).filter((c) => c.tokenId === r9.tokenId);
+      s.check(sentByA.length === 0, "desk-A, shown only R9's stale screenshot (F.1), never sent a claim for R9");
       s.note("chain: all 8 runners who came are RacepackClaimed; R8 is still Entered");
     });
 
