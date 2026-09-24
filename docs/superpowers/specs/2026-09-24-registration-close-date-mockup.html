@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sterun, the registration close date in the console (STE-69)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f8f8f8; --ink:#1e232b; --teal:#016985; --white:#fff;
+  --n100:#eef0f2; --n200:#dfe2e6; --n300:#c7ccd3; --n400:#9ba3ad; --n500:#6f7883; --n600:#515a66; --n700:#3a424c;
+  --teal50:#e8f4f8; --teal600:#015872;
+  --success:#067a38; --success-surface:#e6f6ec; --success-border:#a8dcbc;
+  --danger:#a31c11; --danger-surface:#fceae8; --danger-border:#f0b3aa;
+  --warning:#8f5200; --warning-surface:#fdf3e2; --warning-border:#edc07a;
+  --r-md:8px; --r-lg:16px;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
+  --display:'Big Shoulders Display',var(--sans);
+  --shadow-card:0 1px 2px rgb(30 35 43 / .06),0 4px 12px rgb(30 35 43 / .06);
+  --shadow-lifted:0 2px 4px rgb(30 35 43 / .08),0 12px 28px rgb(30 35 43 / .1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+.intro h1{font-style:italic;font-weight:600;font-size:28px;margin:0 0 8px}
+.intro p{margin:0 0 10px;color:var(--n600);font-size:15px;max-width:82ch;line-height:1.6}
+.intro p b{color:var(--ink);font-weight:500}
+.block{margin-top:44px}
+.block > h2{font-size:13px;font-weight:600;color:var(--teal);margin:0 0 4px}
+.block > h3{font-style:italic;font-weight:600;font-size:21px;margin:0 0 6px}
+.block > p{margin:0 0 16px;color:var(--n600);font-size:14px;max-width:82ch;line-height:1.6}
+.pair{display:grid;grid-template-columns:1fr 330px;gap:20px;align-items:start}
+.screen{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden}
+.cap{font-size:12.5px;color:var(--n500);margin:8px 2px 0}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--n100);border-radius:4px;padding:1px 5px}
+
+.chead{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--n200);background:#fff}
+.chead .t{font-style:italic;font-weight:600;font-size:18px}
+.hact{margin-left:auto;display:flex;gap:10px}
+.tabs{display:flex;gap:2px;padding:0 22px;background:#fff;border-bottom:1px solid var(--n200);font-size:14px}
+.tabs span{padding:11px 12px;color:var(--n500)}
+.tabs span.on{color:var(--ink);font-weight:500;box-shadow:inset 0 -2px 0 var(--teal)}
+.body{padding:20px 22px 26px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border:0;border-radius:var(--r-md);background:var(--teal);color:#fff;font-family:var(--sans);font-size:14.5px;font-weight:500;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--n300)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.pill{display:inline-flex;align-items:center;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;border:1px solid}
+.pill.ok{background:var(--success-surface);color:var(--success);border-color:var(--success-border)}
+.pill.warn{background:var(--warning-surface);color:var(--warning);border-color:var(--warning-border)}
+.pill.mut{background:var(--n100);color:var(--n600);border-color:var(--n200)}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.stat{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:13px 15px}
+.stat .l{font-size:12.5px;color:var(--n500)}
+.stat .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:3px}
+.stat .v small{font-size:13px;color:var(--n500);font-weight:400}
+.stat.due .v{color:var(--warning)}
+
+.panel{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:16px 18px}
+.panel h4{margin:0 0 4px;font-size:14px;font-weight:600}
+.panel p{margin:0;font-size:13.5px;color:var(--n600);line-height:1.6}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.row .grow{flex:1}
+
+.dim{background:rgba(30,35,43,.45);padding:26px;border-radius:var(--r-lg)}
+.dlg{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lifted);padding:20px 22px;max-width:540px;margin:0 auto}
+.dlg h4{margin:0 0 6px;font-style:italic;font-weight:600;font-size:19px}
+.dlg p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.dlg .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+.field{margin:14px 0}
+.field label{display:block;font-size:13px;font-weight:500;margin-bottom:5px}
+.input{height:40px;border:1px solid var(--n300);border-radius:var(--r-md);display:flex;align-items:center;padding:0 12px;font-size:14px;background:#fff;color:var(--ink);font-variant-numeric:tabular-nums}
+.input.area{height:auto;min-height:64px;align-items:flex-start;padding:10px 12px;color:var(--n400)}
+.frozen{background:var(--n100);border:1px solid var(--n200);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;line-height:1.55}
+.hint{font-size:12.5px;color:var(--n500);margin-top:5px}
+.hint.warn{color:var(--warning)}
+.picker{height:40px;border:1px solid var(--n300);border-radius:var(--r-md);display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:14px;background:#fff;font-variant-numeric:tabular-nums}
+.picker .cal{color:var(--n500);font-size:15px}
+.steps{list-style:none;margin:14px 0 0;padding:0}
+.steps li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--n100);font-size:13.5px}
+.steps li:first-child{border-top:0}
+.dot{width:18px;height:18px;border-radius:999px;border:2px solid var(--n300);flex:0 0 auto;margin-top:1px}
+.dot.done{background:var(--success);border-color:var(--success)}
+.dot.now{border-color:var(--teal);border-right-color:transparent}
+.steps .sub{display:block;color:var(--n500);font-size:12.5px;margin-top:2px}
+
+.warnbox{display:flex;gap:12px;background:var(--warning-surface);border:1px solid var(--warning-border);border-radius:var(--r-lg);padding:13px 15px;margin:14px 0}
+.warnbox b{font-weight:600;font-size:13.5px}
+.warnbox p{margin:3px 0 0;font-size:13px;color:var(--n700);line-height:1.55}
+
+.side{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:18px 20px}
+.side h4{margin:0 0 8px;font-size:14px;font-weight:600}
+.side p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.side b{color:var(--ink);font-weight:500}
+.kebab{width:40px;height:40px;border:1px solid var(--n300);border-radius:var(--r-md);background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:18px;line-height:1;color:var(--n600)}
+.kebab.sm{width:32px;height:32px;font-size:16px}
+.menu{position:absolute;right:0;top:44px;width:240px;background:#fff;border:1px solid var(--n200);border-radius:var(--r-md);box-shadow:var(--shadow-lifted);padding:6px;z-index:3;text-align:left}
+.mi{display:block;padding:9px 10px;border-radius:6px;font-size:14px}
+.mi.hover{background:var(--n100)}
+.mi small{display:block;color:var(--n500);font-size:12px;margin-top:2px}
+.hact{position:relative}
+table.matrix{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);overflow:hidden;font-size:13.5px}
+table.matrix th{text-align:left;font-weight:500;font-size:12px;color:var(--n500);padding:9px 12px;border-bottom:1px solid var(--n200);background:#fbfbfc}
+table.matrix td{padding:10px 12px;border-bottom:1px solid var(--n100);vertical-align:top}
+table.matrix tr:last-child td{border-bottom:0}
+table.matrix b{font-weight:600}
+
+/* runner side */
+.racecard{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:18px 20px;max-width:340px}
+.racecard .nm{font-style:italic;font-weight:600;font-size:18px;margin:0 0 3px}
+.racecard .meta{font-size:13px;color:var(--n600);margin:0 0 12px;font-variant-numeric:tabular-nums}
+.racecard .btn{width:100%}
+.racecard .closed{background:var(--n100);border:1px solid var(--n200);border-radius:var(--r-md);padding:11px 13px;font-size:13px;color:var(--n700);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>The registration close date, in the console (STE-69)</h1>
+  <p>The contract has enforced a close date since this morning (STE-46, spec v2.5.0): past it, <span class="code">enter</span> refuses with <span class="code">RegistrationClosed(20)</span> even while the race's status is still Open. <b>The web app calls none of it.</b> The wizard writes the date into the event document, which runners read, and nothing puts it on chain, so today a race page can promise a date the contract will ignore.</p>
+  <p>This is what closes that gap: the wizard sets what it publishes, the console shows the date and can move it, and a runner who arrives late is told which of the two refusals they met.</p>
+  <p><b>One rule the chain cannot enforce, and this screen must.</b> Moving the date is a real change to what runners were promised, so it is paired with a signed announcement, exactly as raising a quota is (STE-57). Never write it up as though the contract checks that.</p>
+</div>
+
+<div class="block">
+  <h2>SCREEN 1</h2>
+  <h3>The race console knows the date</h3>
+  <p>One more number on Overview, and the header's actions fold into <b>one button and a menu</b> (Ancung, 2026-09-24). No panel explaining any of it: the card already says the date, and a paragraph between the number and the button is furniture.</p>
+  <div class="pair">
+    <div>
+      <div class="screen">
+        <div class="chead">
+          <span class="t">Merdeka Run 2026</span>
+          <span class="pill ok">Open for entry</span>
+          <span class="hact">
+            <button class="btn sm">Add entries</button>
+            <button class="kebab sm">&#8942;</button>
+            <span class="menu">
+              <span class="mi hover">Change closing date<small>Entries stop on 12 Oct 2026</small></span>
+              <span class="mi">Close entries<small>Stops them now, whatever the date says</small></span>
+            </span>
+          </span>
+        </div>
+        <div class="tabs"><span class="on">Overview</span><span>Entries</span><span>Scanners</span><span>Results</span></div>
+        <div class="body">
+          <div class="stats">
+            <div class="stat"><div class="l">Entries</div><div class="v">412 <small>of 500</small></div></div>
+            <div class="stat"><div class="l">Race day</div><div class="v">15 Nov 2026</div></div>
+            <div class="stat due"><div class="l">Entries close on their own</div><div class="v">12 Oct 2026, 23:59</div></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 1. A race created before this existed has no date: the card reads "Anytime until you close them", and the header button says Set closing date rather than Change it.</p>
+    </div>
+    <div class="side">
+      <h4>The menu restores a rule rather than breaking one</h4>
+      <p>`ConsoleHeader` holds <b>one</b> action, and STE-57 already broke that on purpose to keep Close entries reachable. A third button would have made the exception the rule. A menu is one button, so the header is back to one thing, and the other two live where a second-tier action belongs.</p>
+      <p>Each item carries a line saying what it does, because "Change closing date" and "Close entries" are easy to confuse until you know that one is a date and the other is now.</p>
+      <p>The number keeps its card: it is a fact rather than an action, and it reads beside the other date an organiser thinks about, race day.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 1b</h2>
+  <h3>What the button and the menu hold, per status</h3>
+  <p>One pure function decides this, so it can be tested rather than scattered through the header. The main button is whatever that race most needs next; everything else folds into the menu.</p>
+  <table class="matrix">
+    <tr><th>Status</th><th>Main button</th><th>In the menu</th><th>Why that one is first</th></tr>
+    <tr>
+      <td><b>Draft</b></td>
+      <td>Open entries</td>
+      <td>Close date is already set by the wizard, so nothing</td>
+      <td>A draft race exists for exactly one reason: to be opened.</td>
+    </tr>
+    <tr>
+      <td><b>Open</b></td>
+      <td>Add entries</td>
+      <td>Change closing date, Close entries</td>
+      <td>A sold-out distance is money not being taken, right now. The other two are rarer and neither is urgent.</td>
+    </tr>
+    <tr>
+      <td><b>Closed</b>, date passed</td>
+      <td>Change closing date</td>
+      <td>Add entries, Reopen entries</td>
+      <td>It is the only thing that actually lets anybody enter again. Reopen alone changes a status and nothing else.</td>
+    </tr>
+    <tr>
+      <td><b>Closed</b>, no date passed</td>
+      <td>Reopen entries</td>
+      <td>Add entries, Change closing date</td>
+      <td>The organiser closed it by hand, so reopening by hand is the move that matches.</td>
+    </tr>
+    <tr>
+      <td><b>Completed</b> or <b>Cancelled</b></td>
+      <td>none</td>
+      <td>none</td>
+      <td>Both are terminal on chain. A header full of buttons that all revert is worse than an empty one.</td>
+    </tr>
+  </table>
+  <p class="cap">Screen 1b. Every race created from now on has a date, because the wizard already requires a registration window. Races that predate this keep none, and their menu simply has no closing date to change.</p>
+</div>
+
+<div class="block">
+  <h2>SCREEN 2</h2>
+  <h3>Moving the date, with the announcement in the same form</h3>
+  <p>Shaped like Add entries (STE-57), and for the same reason: the chain records the change but cannot record that anybody was told.</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Change when entries close</h4>
+          <p>Entries close on <b>12 Oct 2026, 23:59</b>. A later date opens them again; an earlier one stops them sooner.</p>
+          <div class="field">
+            <label>New closing date</label>
+            <div class="picker"><span>19 Oct 2026, 23:59</span><span class="cal">&#128197;</span></div>
+            <p class="hint">Race pack collection starts 1 Nov 2026, so entries have to close before then.</p>
+          </div>
+          <div class="field">
+            <label>What runners will be told</label>
+            <div class="frozen">Entries for Merdeka Run 2026 now close on 19 October 2026 instead of 12 October 2026.</div>
+            <p class="hint">Written from the dates and cannot be edited, so what is published always matches what changed.</p>
+          </div>
+          <div class="field">
+            <label>Anything to add (optional)</label>
+            <div class="input area">A week more for runners still waiting on their race pack size.</div>
+          </div>
+          <div class="foot">
+            <button class="btn ghost">Cancel</button>
+            <button class="btn">Sign and publish</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 2a. One form, one press, three signatures behind it.</p>
+    </div>
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Changing the closing date</h4>
+          <p>Do not close this until it finishes.</p>
+          <ul class="steps">
+            <li><span class="dot done"></span><span>Sign the announcement<span class="sub">Signed</span></span></li>
+            <li><span class="dot now"></span><span>Move the date on chain<span class="sub">Waiting for your wallet</span></span></li>
+            <li><span class="dot"></span><span>Publish the announcement<span class="sub">Not started</span></span></li>
+          </ul>
+        </div>
+      </div>
+      <p class="cap">Screen 2b. The announcement is signed <b>first</b>, so a decline moves nothing at all.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 2c</h2>
+  <h3>The same form, moving the date earlier</h3>
+  <p>The contract takes a date either way, and a date already in the past stops entries the moment it lands. The date field is the wizard's own picker, and the sentence is written from the two dates, so it says what actually happened rather than the word the button used.</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Change when entries close</h4>
+          <p>Entries close on <b>12 Oct 2026, 23:59</b>. A later date opens them again; an earlier one stops them sooner.</p>
+          <div class="field">
+            <label>New closing date</label>
+            <div class="picker"><span>28 Sep 2026, 23:59</span><span class="cal">&#128197;</span></div>
+            <p class="hint warn">That date has passed, so entries stop as soon as you sign.</p>
+          </div>
+          <div class="field">
+            <label>What runners will be told</label>
+            <div class="frozen">Entries for Merdeka Run 2026 now close on 28 September 2026 instead of 12 October 2026.</div>
+          </div>
+          <div class="foot">
+            <button class="btn ghost">Cancel</button>
+            <button class="btn">Sign and publish</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 2c. The past-date line is a hint under the field, not a panel: it is information, not an alarm.</p>
+    </div>
+    <div class="side">
+      <h4>What the picker refuses</h4>
+      <p>The same <span class="code">DateTimeField</span> the create-race wizard uses, with the month and year dropdowns it already has. Its bounds come from the race itself: a closing date may not sit after <b>race pack collection starts</b> where the document names one, and never after race day.</p>
+      <p>Handing packs out while people can still enter means a runner paying for a race whose pack has already gone out. The document's race pack window is optional, so where it is missing, race day is the bound.</p>
+      <h4 style="margin-top:16px">Why this is allowed at all</h4>
+      <p>Because an organiser can already stop entries this second with <b>Close entries</b>. Moving the date earlier adds no power to harm a runner; it only makes the stop automatic and announced.</p>
+      <p>What it does take away is days somebody was promised, which is why the announcement is not optional here either. Extending gives; bringing forward takes.</p>
+      <p>The sentence never says "extended". It names both dates and lets the reader see which direction they moved.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 3</h2>
+  <h3>Reopen entries has to stop lying</h3>
+  <p>Today the header offers Reopen entries on a Closed race and says nothing about dates. Past the close date that button changes the status and opens nothing, which is the worst kind of button: it succeeds and does not work.</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Reopen entries?</h4>
+          <div class="warnbox">
+            <div>
+              <b>This alone will not let anyone enter.</b>
+              <p>Entries for this race closed on their own on 12 October, and that date is what the contract checks. Reopening the status leaves them closed until the date moves.</p>
+            </div>
+          </div>
+          <p>You can do both: reopen the status, then set a new closing date. Runners are told about the new date.</p>
+          <div class="foot">
+            <button class="btn ghost">Reopen anyway</button>
+            <button class="btn">Change closing date</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 3. The main button is the one that actually works, and the other one is still there because the organiser may want the status right first.</p>
+    </div>
+    <div class="side">
+      <h4>Why not just hide Reopen</h4>
+      <p>Because the status is real and an organiser may genuinely want it back to Open before choosing a date, for instance while they decide. Hiding a control that works, to prevent a misunderstanding a sentence can prevent, trades one confusion for another.</p>
+      <p>On a race with <b>no</b> date this dialog is exactly what it is today. The warning appears only where it is true, which is the same rule the refund notice follows.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 4</h2>
+  <h3>What the runner sees</h3>
+  <p>Two refusals that look identical in the code and mean opposite things to a person: a date passed, or an organiser decided. One line each, because a runner who cannot enter wants the reason, not a paragraph about it.</p>
+  <div class="pair">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div class="racecard">
+        <p class="nm">Merdeka Run 2026</p>
+        <p class="meta">15 Nov 2026 &middot; FT UGM, Sleman</p>
+        <div class="closed"><b>Entries closed on 12 October.</b></div>
+      </div>
+      <div class="racecard">
+        <p class="nm">Borobudur Night Trail</p>
+        <p class="meta">2 Dec 2026 &middot; Jawa Tengah</p>
+        <div class="closed"><b>The organiser has closed entries.</b></div>
+      </div>
+      <div class="racecard">
+        <p class="nm">Merdeka Run 2026</p>
+        <p class="meta">15 Nov 2026 &middot; 88 places left</p>
+        <button class="btn">Enter this race</button>
+        <p class="hint" style="margin-top:8px">Entries close 12 Oct 2026, 23:59</p>
+      </div>
+    </div>
+    <div class="side">
+      <h4>One more line on an open race</h4>
+      <p>The third card is the ordinary state, with the closing date under the button. It comes from the <b>chain</b>, not from the document, so it is the date that will actually be enforced. Where the two disagree, a runner deserves the one that decides.</p>
+      <p>The race page keeps showing the document's own registration window in Timeline, unchanged: that is what was promised when the race was published, and an extension is a new fact beside it rather than a rewrite of it.</p>
+      <p>Neither card explains itself further. "Still on, registration is simply over" is a sentence the date already says.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 5</h2>
+  <h3>The wizard, one signature longer</h3>
+  <p>The date typed in step 1 already goes into the document. It now also goes on chain, in the same run, straight after the race itself exists.</p>
+  <div class="screen" style="max-width:560px">
+    <div class="body">
+      <ul class="steps">
+        <li><span class="dot done"></span><span>Publish the race details<span class="sub">Done</span></span></li>
+        <li><span class="dot done"></span><span>Create the race<span class="sub">Done</span></span></li>
+        <li><span class="dot now"></span><span>Set when entries close<span class="sub">Waiting for your wallet</span></span></li>
+        <li><span class="dot"></span><span>Add 10K<span class="sub">Not started</span></span></li>
+        <li><span class="dot"></span><span>Add 5K<span class="sub">Not started</span></span></li>
+        <li><span class="dot"></span><span>Open entries<span class="sub">Not started</span></span></li>
+      </ul>
+    </div>
+  </div>
+  <p class="cap">Screen 5. Only when a registration window was filled in. No window, no step, and the race behaves exactly as every race created before today.</p>
+</div>
+
+</div>
+</body>
+</html>
