@@ -1600,6 +1600,57 @@ error with no contract code, which is how every organiser-gated function behaves
 address, deploy the backend with migration 014, and record both here.
 
 ---
+
+## STE-46 LIVE — EventRegistry v2.5 upgraded in place (2026-09-24)
+
+Approved by Axel on STE-46, merged as [#58](https://github.com/AncungAulia/sterun/pull/58) (`4c20bd7`)
+under the 24 September decision that a PM ACC is enough for a frozen-spec change. **The address did
+not change.**
+
+| | |
+| --- | --- |
+| Contract | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` |
+| wasm before | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` (v2.4) |
+| wasm after | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` (v2.5, the INTERFACE.md hash) |
+| upgrade tx | [`5597d50efd9620a4ef11655161239eddc345707a3a7e2bdb9ab3ccb54983f17c`](https://stellar.expert/explorer/testnet/tx/5597d50efd9620a4ef11655161239eddc345707a3a7e2bdb9ab3ccb54983f17c) |
+
+The upgrade was run function by function rather than through `sc/scripts/upgrade-testnet.sh`: that
+script upgrades **both** contracts from the local build, and the local RaceRecord build on that branch
+was already v2.7. Upgrading one contract at a time is also what Axel asked for — one event in this
+file per upgrade.
+
+State written by the old code, read back through the new one:
+
+```
+event_count      38
+event 0          {"metadata_hash":"a4ea685c…","name":"Sterun Testnet Rehearsal","organiser":"GBGUI5MPV…
+category 0/0     {"code":"10K","distance_m":10000,"entered_count":3,"price_usdc":"50000000","quota":5}
+addon_count 0    2
+record 0         {"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":1788925897,…}
+total_supply     89
+get_registration_closes(0)   null      ← the new function, on an event created before it existed
+```
+
+`null` is the whole compatibility story: every event already on chain has no close date, so every one
+of them behaves exactly as it did yesterday.
+
+### The backend, same day
+
+Deployed from `4c20bd7` with **migration 014** (`events.registration_closes_at numeric(20,0)`), after a
+backup that went to R2 as well as the box (`sterun-20260924T105554Z.sql.gz`).
+
+```
+migrations: 013_event_announcements.sql:ad3aac8e 014_registration_closes.sql:6cb1b097
+column:     numeric
+indexer doctor: findings: []
+./deploy/verify-deployment.sh https://api.sterun.xyz   18 passed, 0 failed
+GET /events/0 → registration_closes_at: null, status Open
+```
+
+No rebuild was needed: the column starts empty, and `rebuild` fills it from
+`get_registration_closes` per event the next time it runs.
+
+---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
 Run on **2026-09-05** with `pnpm --filter be e2e:results`. Not a simulation: the event was genuinely
