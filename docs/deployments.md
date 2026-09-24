@@ -1705,6 +1705,39 @@ What only the real network could show:
 upgrade), prove it on the live address, and record it here.
 
 ---
+
+## STE-60 LIVE — RaceRecord v2.6 upgraded in place (2026-09-24)
+
+Approved by Axel on STE-60, merged as [#60](https://github.com/AncungAulia/sterun/pull/60)
+(`ca81d13`). **The address did not change**, and this is its own upgrade event — the EventRegistry
+upgrade an hour earlier is recorded separately above.
+
+| | |
+| --- | --- |
+| Contract | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` |
+| wasm before | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` (v2.2, live since STE-41) |
+| wasm after | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` (v2.6, the INTERFACE.md hash) |
+| upgrade tx | [`e8c51db30bd3ef9f7be8440a609a126d61857a4cb56f92c0e487b164db943781`](https://stellar.expert/explorer/testnet/tx/e8c51db30bd3ef9f7be8440a609a126d61857a4cb56f92c0e487b164db943781) |
+
+Read back on the upgraded contract:
+
+```
+record 0      {"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":1788925897,
+               "entered_at":1788925832,"event_id":0,"finish_time_s":3161,…}
+owner_of 0    GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR
+total_supply  89
+record_results present in the live interface:  yes
+transfer / transfer_from / approve / approve_for_all / burn / burn_from:  0
+```
+
+The last line is the one that matters beyond this ticket: the non-transferable claim is about the
+**deployed wasm**, so it is re-checked against the live contract after every upgrade, not assumed
+from the source.
+
+**The published `@sterunxyz/sdk` (0.3.1) does not have `recordResults` yet.** The methods are on
+`main`; a release is a separate step, and the console can use the workspace package meanwhile.
+
+---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
 Run on **2026-09-05** with `pnpm --filter be e2e:results`. Not a simulation: the event was genuinely
