@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { Asset, BASE_FEE, Keypair, Operation, TransactionBuilder, rpc } from "@stellar/stellar-sdk";
 import { TESTNET } from "@sterunxyz/sdk";
 
+import { wasmExports } from "./claims";
 import type { StepContext } from "./evidence";
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,21 @@ export async function addTrustline(kp: Keypair, asset: Asset): Promise<string> {
   const final = await server.pollTransaction(sent.hash, { attempts: 30 });
   if (final.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw new Error(`changeTrust ${final.status}`);
   return sent.hash;
+}
+
+/**
+ * Does the deployed wasm behind `contractId` export `fn`? Read from the wasm's
+ * own contract spec on chain; `null` when it could not be read, which callers
+ * must treat as "do not assume".
+ */
+export async function contractExports(contractId: string, fn: string): Promise<boolean | null> {
+  let wasm: Uint8Array;
+  try {
+    wasm = await server.getContractWasmByContractId(contractId);
+  } catch {
+    return null;
+  }
+  return wasmExports(wasm, fn);
 }
 
 export async function susdBalance(address: string, asset: Asset): Promise<bigint> {
