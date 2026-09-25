@@ -159,6 +159,9 @@ jobs:
       # choice and the clean-up rules, and the trustline read the first live
       # seed run tripped over: `getAssetBalance` throws for a missing trustline
       # instead of answering empty, and every other throw must still propagate.
+      # live-site pins the other way a rehearsal lies: a 200 from a parked
+      # domain is not a deploy, and a ticket's status is never evidence — S.2
+      # asserted "STE-32 is still Backlog" for two days after it shipped.
       # The stage tsconfig resolves the `@/`
       # paths of the web app code the document test runs. No network.
       - name: Test the rehearsal harness (a crashed device fails its step; the stale-QR wait; the demo seed)
@@ -172,6 +175,7 @@ jobs:
           ../docs/rehearsal/test/demo-plan.test.ts
           ../docs/rehearsal/test/demo-document.test.ts
           ../docs/rehearsal/test/trustline.test.ts
+          ../docs/rehearsal/test/live-site.test.ts
 
       - name: Build
         run: pnpm build
