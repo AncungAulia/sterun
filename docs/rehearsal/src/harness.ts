@@ -13,7 +13,7 @@ import { Asset, BASE_FEE, Keypair, Operation, TransactionBuilder, rpc } from "@s
 import { TESTNET } from "@sterunxyz/sdk";
 
 import { wasmExports } from "./claims";
-import type { StepContext } from "./evidence";
+import type { Evidence, StepContext } from "./evidence";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -186,4 +186,40 @@ export function expectRevert(
   if (result.enterFailure) s.note(`entry flow classification: ${JSON.stringify(result.enterFailure)}`);
   s.note("refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence");
   s.check(result.code === expected.code, `code ${expected.code} (${expected.variant}), got ${String(result.code)} ${String(result.variant)}`);
+}
+
+/**
+ * Every tx in the evidence is looked up on Horizon and the stellar.expert API,
+ * and every public URL is fetched, so the evidence says which links a reader
+ * can actually open. Written into `ev.meta`.
+ */
+export async function checkLinks(ev: Evidence, failedLabel: string): Promise<void> {
+  log("\n▸ Checking every link");
+  await sleep(20_000); // give stellar.expert a moment to ingest the last ledgers
+  for (const step of ev.steps) {
+    for (const tx of step.txs) {
+      const h = await fetch(`${HORIZON}/transactions/${tx.hash}`);
+      const body = h.ok ? ((await h.json()) as { successful: boolean; ledger: number }) : null;
+      tx.horizon = { status: h.status, successful: body?.successful ?? null, ledger: body?.ledger ?? null };
+      let expert = await fetch(`https://api.stellar.expert/explorer/testnet/tx/${tx.hash}`);
+      for (let i = 0; i < 6 && expert.status !== 200; i += 1) {
+        await sleep(expert.status === 429 ? 10_000 : 5_000);
+        expert = await fetch(`https://api.stellar.expert/explorer/testnet/tx/${tx.hash}`);
+      }
+      tx.expert = { status: expert.status };
+      await sleep(400);
+    }
+    for (const url of step.urls) {
+      if (/\/records\/\d+\/pass$|\/roster$|\/results\/preview$|\/faucet$|\/participants\//.test(url.url)) continue; // authenticated or POST-only
+      const res = await fetch(url.url.replace("https://stellar.expert/explorer/", "https://api.stellar.expert/explorer/"));
+      url.status = res.status;
+      await sleep(300);
+    }
+  }
+  const txs = ev.steps.flatMap((s) => s.txs);
+  const dead = txs.filter((t) => t.horizon?.status !== 200 || t.expert?.status !== 200);
+  ev.meta.finished = new Date().toISOString();
+  ev.meta["link check"] = `${txs.length - dead.length}/${txs.length} tx links resolve on Horizon and the stellar.expert API${dead.length ? `; not resolving: ${dead.map((t) => `${t.label} ${t.hash} (horizon ${t.horizon?.status}, expert ${t.expert?.status})`).join("; ")}` : ""}`;
+  ev.meta[failedLabel] = txs.filter((t) => t.horizon?.successful === false).map((t) => t.hash).join(", ") || "none";
+  ev.write();
 }
