@@ -1,0 +1,452 @@
+
+▸ [S.1] The live backend answers and serves the contracts in docs/deployments.md
+    url GET /health: https://api.sterun.xyz/health
+    url GET /config: https://api.sterun.xyz/config
+    · addresses match docs/deployments.md; vault true, indexer true, roster true, results true, faucet route true
+    url GET /indexer/status: https://api.sterun.xyz/indexer/status
+    · indexer last_ledger 4844935, updated 2026-09-24T11:11:05.644Z
+    url EventRegistry: https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+    url RaceRecord: https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
+  ✓ PASS
+
+▸ [S.2] Find the live web app and landing page
+    url https://sterun.xyz: https://sterun.xyz
+    · the only web origin named in the repo besides the API is sterun.xyz (used in fixture uris); it answers 200
+    · no Vercel URL for fe/ or landing-page/ exists anywhere in the repo or docs/deployments.md; STE-32 (Vercel deploy) is still Backlog
+    · MANUAL REQUIRED (Ancung): deploy fe/ and landing-page/ (STE-32), then repeat proofs 1, 2, 4 and 9 through the UI with a browser wallet, and record the URLs here
+  … MANUAL REQUIRED
+
+▸ [S.3] Fund 13 fresh testnet accounts (organiser, outsider, 2 desks, 9 runners)
+    url organiser: https://stellar.expert/explorer/testnet/account/GBCFKOCPQZSSRZVKEISEGWKWESQWOZT75IVPP656PT5Y6TE5LW3VY3OH
+    url outsider: https://stellar.expert/explorer/testnet/account/GDPPY2NWK7RR7BVW7PHOBFZWA7FSHJXPPWFUD42VQXBIUNQG6UYOZOKA
+    url desk-A: https://stellar.expert/explorer/testnet/account/GBCIBH45NBOUR6XC54Z5YCC2LACJGAPOYP5436BBHLV2WCNSWUF4TSRL
+    url desk-B: https://stellar.expert/explorer/testnet/account/GDPXKNC3DV5IRWKMTKYHSIIXGMGLVCOZUYTAFGROVLSP3UZFUW7MVHAH
+    url R1: https://stellar.expert/explorer/testnet/account/GD5V5QUSMBT7TUS5B63DMUE5HHZD5F56W6Y7MAMUY42GS4VNKQUAY7HC
+    url R2: https://stellar.expert/explorer/testnet/account/GD7CAKGOGUGDZ2FBTOI4MAUJYZDJ4HMVPTWYMYL43SBBDGOFK2P34BRD
+    url R3: https://stellar.expert/explorer/testnet/account/GD4DFIUHRLJHEXJTLCS4HLXBIDR257FKAGOA4ASDKXCUJHMYAKJ67R6O
+    url R4: https://stellar.expert/explorer/testnet/account/GABXYXNSNC4BTO2GCSBROLVNBJ44GR4ID2MPUBENHPTOBZHBNA2EZXQD
+    url R5: https://stellar.expert/explorer/testnet/account/GBULX25KIIZLUBKG2YE5LF5FK7EWUH5Y5D3B7HPDOGGZKPCG2TB5SXU3
+    url R6: https://stellar.expert/explorer/testnet/account/GC2ZR2OO2U6WUHBH6ZMG7BL2EJCGYTMBNZA7HOBCVYH3PLILCIVZHDWU
+    url R7: https://stellar.expert/explorer/testnet/account/GALJFITQSDS6VWYI74ZDBNDCWAUM6XAZL44GSGXCPDOUGPHXF7SZTIS7
+    url R8: https://stellar.expert/explorer/testnet/account/GC6XF6KM33EBBWHIYB5K7EHFCLHSNYXQPQAZTES67MYMW4SUJZKK6G4Q
+    url R9: https://stellar.expert/explorer/testnet/account/GCAUT3TQFWBHM3SQPD2XCX3U4DDQ2LXINJI7PM6ZZUSNSZ5KBO3RG7IG
+    · all 13 accounts are throwaway keys created by this run; only the admin key comes from .env
+  ✓ PASS
+
+▸ [S.4] Organiser and runners open an sUSD trustline
+    tx  organiser changeTrust: https://stellar.expert/explorer/testnet/tx/d41741faf5feb7953b1d56c2f29c20900b8686fe24698fc963fd0f8dbd022af8
+    tx  R1 changeTrust: https://stellar.expert/explorer/testnet/tx/2d1c5d1bd1f79bee85dfb189aaabca6e370c34fb8d3001f7a46ebf901645957b
+    tx  R2 changeTrust: https://stellar.expert/explorer/testnet/tx/3a0978eac782f55e79a8851c08096d96c67aa728597c0027a192e2e15f8d90b0
+    tx  R3 changeTrust: https://stellar.expert/explorer/testnet/tx/5e26984ccabf95da196144837d3dde96b43c21000358a33fe169f785b12ad9ce
+    tx  R4 changeTrust: https://stellar.expert/explorer/testnet/tx/d3a5f3256bc688b04a55ba5027380412cce255517689f1f720db855944774daf
+    tx  R5 changeTrust: https://stellar.expert/explorer/testnet/tx/29c4eb13ca61f609134874d9971e741e1e374180a48ee76f0b6c3fa30ae9a946
+    tx  R6 changeTrust: https://stellar.expert/explorer/testnet/tx/722527982367ed82d014360f88d5cf634e7d5e1a0af5b47756065b40cbefc0bd
+    tx  R7 changeTrust: https://stellar.expert/explorer/testnet/tx/44a11460e39d6c8e4dec8f599d2cfcd7e796a634739bedfe0a8beb394a251f00
+    tx  R8 changeTrust: https://stellar.expert/explorer/testnet/tx/e45ebd0af504e770fda8d8109e35945f76feac658688ff3851987d88c1270d32
+    tx  R9 changeTrust: https://stellar.expert/explorer/testnet/tx/46da05a21b4289d07926025587ee01cf24987f0828442e2c879ec11fa68f0226
+  ✓ PASS
+
+▸ [S.5] Each runner gets test sUSD from the web app's faucet route (POST /faucet)
+    tx  R1 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/8a25847c44cca5841e21ffd44dd24b7b03a50c169eb0e6a153c5a026294e96ba
+    tx  R2 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/6bdb1486d6219ed2553da7e714e807342497fdc0c4ecac4f4cd93b1a25d7105f
+    tx  R3 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/06fd80dbe1b2b8393d1eaad7279baf994b05ef00be125abccd1e3fe13f89c917
+    tx  R4 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/38dd54e2984a3290fdfdae6338efdd18ec48532bfbd81e091be2a10a6e523d6f
+    tx  R5 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/ddd930f0702b2acda6976a4c701b828c6c3e2c2480c15e1abdb28c647b58ca40
+    tx  R6 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/d25b54d2c1abc927dd6804e6661d95881d965ee254e34ef8211742eacdbb3b49
+    tx  R7 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/9e1615b418c3fd09efb7c5b0ae07d0b4c71a9709c7715b9b2a723c6a0b6acb54
+    tx  R8 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/019f88d99ce15f8808fb66fb742575235345512fc12cda247b6f25459710cb2a
+    tx  R9 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/99a217a987e20b9d009e71659df0e7feadbd61abe682b39b1fbd1fe4afa6aedc
+    url POST /faucet: https://api.sterun.xyz/faucet
+  ✓ PASS
+
+▸ [1.1] Admin allowlists the organiser (STE-36)
+    tx  add_organiser: https://stellar.expert/explorer/testnet/tx/cde143c66f7a744b1c662962894254b620b830b8aa4f2f735e86d67ac08f9e56
+  ✓ PASS
+
+▸ [N.1] A non-allowlisted wallet tries to create a race
+    · refused: createEvent reverted with NotAllowlistedOrganiser (#18, event-registry)
+    · sentence the web app shows: "This wallet cannot publish races yet. Send its address to the Sterun team to be added."
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+  ✓ PASS
+
+▸ [1.2] Organiser creates the race: 2 categories with quota and sUSD price, then opens entries
+    tx  create_event → event 38: https://stellar.expert/explorer/testnet/tx/aa096d3d7f4a9f6ad6466a2675dec0b3e7d9d1d381b8c9a95939023f062b7a13
+    tx  add_category R10K quota 4 @ 10 sUSD → 0: https://stellar.expert/explorer/testnet/tx/8182a3ae2cfcc0215e3c36088b9c68e87f2aa05c559e6249d594adee6b2b5ce3
+    tx  add_category R5K quota 4 @ 5 sUSD → 1: https://stellar.expert/explorer/testnet/tx/b9a8487a1a22da15051dea764f67fd5d000641cb68d8a13b2372bf7bbe132717
+    tx  set_event_status Open: https://stellar.expert/explorer/testnet/tx/7ec8cb222213edf39a394139473cf2ee8992f9aef2d774c6479dca9cc29b3d8e
+    url GET /events/38: https://api.sterun.xyz/events/38
+    · driven through @sterunxyz/sdk, the client the console uses; the console screens themselves are a separate MANUAL step (M.1)
+  ✓ PASS
+
+▸ [N.2] A wallet that is not this race's organiser tries to modify it
+    · addCategory: refused — addCategory could not be simulated: Transaction requires signatures from GBCFKOCPQZSSRZVKEISEGWKWESQWOZT75IVPP656PT5Y6TE5LW3VY3OH. See `needsNonInvokerSigningBy` for details.
+    · addCategory: web app sentence "This wallet cannot do this for this race. Switch to the wallet that created the race."
+    · setEventStatus: refused — setEventStatus could not be simulated: Transaction requires signatures from GBCFKOCPQZSSRZVKEISEGWKWESQWOZT75IVPP656PT5Y6TE5LW3VY3OH. See `needsNonInvokerSigningBy` for details.
+    · setEventStatus: web app sentence "This wallet cannot do this for this race. Switch to the wallet that created the race."
+    · increaseQuota: refused — increaseQuota could not be simulated: Transaction requires signatures from GBCFKOCPQZSSRZVKEISEGWKWESQWOZT75IVPP656PT5Y6TE5LW3VY3OH. See `needsNonInvokerSigningBy` for details.
+    · increaseQuota: web app sentence "This wallet cannot do this for this race. Switch to the wallet that created the race."
+    · addScanner: refused — addScanner could not be simulated: Transaction requires signatures from GBCFKOCPQZSSRZVKEISEGWKWESQWOZT75IVPP656PT5Y6TE5LW3VY3OH. See `needsNonInvokerSigningBy` for details.
+    · addScanner: web app sentence "This wallet cannot do this for this race. Switch to the wallet that created the race."
+    · chain state re-read afterwards: nothing changed. Refused at simulation (auth), so no transaction exists
+  ✓ PASS
+
+▸ [2.R1] R1 enters R10K through the entry flow and pays 10 sUSD
+    url POST /participants → 201 (participant_hash 8235ee9b7580…): https://api.sterun.xyz/participants/63535362-2639-483b-b5ba-c706f87c7188
+    tx  enter → token 89: https://stellar.expert/explorer/testnet/tx/a827d003ccd7a360389c7d1021b4872316d979731620fe75b004dace62c44eab
+    · bib 1, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 400000000 stroops, organiser 0 → 100000000 stroops
+  ✓ PASS
+
+▸ [2.R2] R2 enters R10K through the entry flow and pays 10 sUSD
+    url POST /participants → 201 (participant_hash e52c70b5179e…): https://api.sterun.xyz/participants/255b70a3-a362-4768-8284-a6e99e07129c
+    tx  enter → token 90: https://stellar.expert/explorer/testnet/tx/04bb563833a9bb00d4382f2a50e352d3222febe791ab49f61e147232ba463276
+    · bib 2, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 400000000 stroops, organiser 100000000 → 200000000 stroops
+  ✓ PASS
+
+▸ [2.R3] R3 enters R10K through the entry flow and pays 10 sUSD
+    url POST /participants → 201 (participant_hash c4f847a3cda2…): https://api.sterun.xyz/participants/a5e8b05f-d6d1-4620-9663-92fda1d7027c
+    tx  enter → token 91: https://stellar.expert/explorer/testnet/tx/b9568b03a7e72c2394dff4e9de5614a67f6d70b56b21e4f34e0f66d0ea5d6b25
+    · bib 3, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 400000000 stroops, organiser 200000000 → 300000000 stroops
+  ✓ PASS
+
+▸ [2.R4] R4 enters R10K through the entry flow and pays 10 sUSD
+    url POST /participants → 201 (participant_hash 9ff002b43111…): https://api.sterun.xyz/participants/648d20a6-e440-48f0-9fb7-f8e7ee205c32
+    tx  enter → token 92: https://stellar.expert/explorer/testnet/tx/f166ff333cd4a0ee37cfffb8f48e3e3b2f72ba83f8daca00f50ba904958cf778
+    · bib 4, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 400000000 stroops, organiser 300000000 → 400000000 stroops
+  ✓ PASS
+
+▸ [2.R5] R5 enters R5K through the entry flow and pays 5 sUSD
+    url POST /participants → 201 (participant_hash 16f937337013…): https://api.sterun.xyz/participants/671a6340-6ccf-4414-a65e-f56a26f27de4
+    tx  enter → token 93: https://stellar.expert/explorer/testnet/tx/bd2aea8c9fad33747093ecfdb5c4b680b0e285e0c700d9e15ce571af674fbfc5
+    · bib 5, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 450000000 stroops, organiser 400000000 → 450000000 stroops
+  ✓ PASS
+
+▸ [2.R6] R6 enters R5K through the entry flow and pays 5 sUSD
+    url POST /participants → 201 (participant_hash a95dc55cb0cd…): https://api.sterun.xyz/participants/6de3b769-81e2-4899-aa7e-3ec8a5ca3907
+    tx  enter → token 94: https://stellar.expert/explorer/testnet/tx/98778e2b67b01ec9b25ed21635910a009c4f0e65a9f24e123fd99e77cfd79249
+    · bib 6, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 450000000 stroops, organiser 450000000 → 500000000 stroops
+  ✓ PASS
+
+▸ [2.R7] R7 enters R5K through the entry flow and pays 5 sUSD
+    url POST /participants → 201 (participant_hash 63e5848c6cf5…): https://api.sterun.xyz/participants/32337584-5871-4a80-a065-bf6707687759
+    tx  enter → token 95: https://stellar.expert/explorer/testnet/tx/afdc9d5e46809b33a18998977646dcf4d06ffdc0f59dc1d84098dd3a9d9a278c
+    · bib 7, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 450000000 stroops, organiser 500000000 → 550000000 stroops
+  ✓ PASS
+
+▸ [2.R8] R8 enters R5K through the entry flow and pays 5 sUSD
+    url POST /participants → 201 (participant_hash 0251f476aabe…): https://api.sterun.xyz/participants/812291f4-518e-40b8-ae22-dfa6176c379b
+    tx  enter → token 96: https://stellar.expert/explorer/testnet/tx/105ab18239b5a8e1f31af4d2719435bad20e6f84c7e8818087a96ee43110ae1b
+    · bib 8, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 450000000 stroops, organiser 550000000 → 600000000 stroops
+  ✓ PASS
+
+▸ [3.1] R9 tries to enter R10K after it sold out (4/4)
+    · R10K entered_count 4 of quota 4
+    · refused: enter reverted with QuotaFull (#5, event-registry)
+    · sentence the web app shows: "Something went wrong. Please try again."
+    · entry flow classification: {"kind":"sold-out"}
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+  ✓ PASS
+
+▸ [Q.1] Organiser opens a second batch: R10K quota 4 → 5 (STE-55)
+    tx  increase_quota 4 → 5: https://stellar.expert/explorer/testnet/tx/0567051e6cfcc755e8c673daf7d14ec2990bb6b72cc6d803d54e5ae32f980320
+    · refused: increaseQuota reverted with QuotaNotIncreased (#19, event-registry)
+    · sentence the web app shows: "This distance already has that many entries or more. Enter a higher number."
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+  ✓ PASS
+
+▸ [Q.2] R9 enters R10K in the second batch, and the bib numbering continues
+    tx  enter → token 97: https://stellar.expert/explorer/testnet/tx/67d5eecb9be58f1d2a8e3b01ccf67d32250f10fdcd814d66e9c5dbf94980374f
+    · bib 9, state Entered, owner_of = runner
+    · sUSD runner 500000000 → 400000000 stroops, organiser 600000000 → 700000000 stroops
+  ✓ PASS
+
+▸ [Q.3] The index shows the new quota and the rise as a dated fact (STE-56)
+    url GET /events/38: https://api.sterun.xyz/events/38
+    · index: quota 5, entered 5, history [[4,5]]
+  ✓ PASS
+
+▸ [B.1] Bibs are unique within the event and count from 1 (STE-54): chain vs API
+    · chain bibs in entry order: R1=1, R2=2, R3=3, R4=4, R5=5, R6=6, R7=7, R8=8, R9=9
+    url GET /events/38/records: https://api.sterun.xyz/events/38/records
+    · API /events/:id/records agrees with chain get_record for every bib
+  ✓ PASS
+
+▸ [N.3] Entries close; a runner tries to enter the Closed race
+    tx  set_event_status Closed: https://stellar.expert/explorer/testnet/tx/2053b96f32912d9ecb4931d950453ffb0661b06fb1bf43c97fed832638604281
+    · refused: enter reverted with EventNotOpen (#4, event-registry)
+    · sentence the web app shows: "Something went wrong. Please try again."
+    · entry flow classification: {"kind":"closed"}
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+    · participant_hash here is random: the vault's one-entry-per-person rule would refuse a second submit first, and what is under test is the contract gate
+  ✓ PASS
+
+▸ [N.4] A second race is cancelled; a runner tries to enter it
+    tx  create_event → event 39: https://stellar.expert/explorer/testnet/tx/b78fc17a0335108fe71dade04389a1c71a495ca477d1e248b2d2c8d113a8c051
+    tx  add_category R5K: https://stellar.expert/explorer/testnet/tx/c18b9c23fede14e4fe0e611552e4031e9e548dc6e8f4f019f19707713b857c9c
+    tx  set_event_status Open: https://stellar.expert/explorer/testnet/tx/ae343d9488119b7761ebeab797b8ce0435678327fa30aed9a2687f07b54d5aa7
+    tx  set_event_status Cancelled: https://stellar.expert/explorer/testnet/tx/247899ce72adc14cf7da4602784a1f5fef8dd8716d2fdb08433cbaea6089993b
+    · refused: enter reverted with EventNotOpen (#4, event-registry)
+    · sentence the web app shows: "Something went wrong. Please try again."
+    · entry flow classification: {"kind":"closed"}
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+    · entry flow classification for a cancelled race: {"kind":"closed"}
+    · reopening refused: setEventStatus reverted with InvalidStatus (#11, event-registry)
+  ✓ PASS
+
+▸ [4.0] Organiser adds two scanner wallets, one per desk
+    tx  add_scanner desk-A: https://stellar.expert/explorer/testnet/tx/d66e7f57606072a6c81483d1ed133e5d4746bf151d55277fa35bc2aeeeb07892
+    tx  add_scanner desk-B: https://stellar.expert/explorer/testnet/tx/024bae838e4ec547261bc00e1bbc261324500c6bbfd7dd7362f8a12688968373
+  ✓ PASS
+
+▸ [N.5] A wallet that is not a scanner tries to claim a race pack
+    · refused: claimRacepack reverted with NotAuthorized (#104, race-record)
+    · sentence the web app shows: "Something went wrong. Please try again."
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+  ✓ PASS
+
+▸ [X.1] Every runner's pass is restorable from the vault, linked from chain without a confirm call (STE-52/59)
+    url GET /records/:tokenId/pass (wallet-signed): https://api.sterun.xyz/records/89/pass
+    · all 9 passes answered 200 to their own wallet with the secret shown once at submit
+  ✓ PASS
+
+▸ [4.1] Both desks download the roster while online
+    · desk-A: 9 entries, snapshot ledger 4845024, missing_from_index 0, clock drift 0s
+    · desk-B: 9 entries, snapshot ledger 4845026, missing_from_index 0, clock drift 0s
+    url GET /events/38/roster (scanner-signed): https://api.sterun.xyz/events/38/roster
+    · B: roster bib_no equals chain bib for all 9 runners on both desks
+  ✓ PASS
+
+▸ [4.2] Both desks lose signal; R4 shows the pass at BOTH desks, others at one
+    · desk-A scans R4: GREEN, screen shows bib 4 (chain bib 4)
+    · desk-B scans R4: GREEN, screen shows bib 4 (chain bib 4)
+    · desk-A scans R1: GREEN, screen shows bib 1 (chain bib 1)
+    · desk-A scans R2: GREEN, screen shows bib 2 (chain bib 2)
+    · desk-A scans R3: GREEN, screen shows bib 3 (chain bib 3)
+    · desk-A scans R5: GREEN, screen shows bib 5 (chain bib 5)
+    · desk-B scans R6: GREEN, screen shows bib 6 (chain bib 6)
+    · desk-B scans R7: GREEN, screen shows bib 7 (chain bib 7)
+    · R8 never comes to a desk: the no-show
+    · R9 comes to desk-B in F.1, after a screenshot of its pass has been tried at desk-A
+  ✓ PASS
+
+▸ [F.1] A forwarded screenshot of R9's pass, shown after the wait, is refused; R9's live pass is accepted (a screenshot goes stale in under a minute, and even a fresh one can only be used once)
+    · roster totp as desk-A stored it: step 30s, tolerance ±1 step(s), 6 digits
+    · What this step proves: a screenshot goes stale in under a minute, and even a fresh one can only be used once. What it does NOT prove: that a forwarded QR is rejected. The desk accepts the code's step ±1 (a 90-second window around its own clock), so a screenshot forwarded and shown within 30–60 seconds of being taken DOES pass (longer if the desk's clock runs behind the phone's). That does not help an attacker: the code turns over every 30 seconds, so the screenshot is worthless within a minute, and a fresh one is worth exactly what the runner's own pass is worth: one claim on one record. Used by someone else it spends the runner's claim, not a new one — the runner is then refused "Already claimed" (5.1, 5.2), and if two offline desks both hand a pack over, that is the duplicate-collection case: the chain keeps one claim and the other desk flags it (6.1).
+    · FOR WHOEVER FILMS THIS: take the screenshot, WAIT on camera until the desk would refuse it, present it, show the refusal. Do not cut the wait. Without the wait the clip shows a fresh screenshot being refused, which the product does not do — a fresh screenshot passes (see above). Then show the runner's own live pass being accepted at the next desk.
+    · screenshot of R9's pass taken 2026-09-24T11:18:41.025Z (step 59674957); a desk on the same clock accepts it until 2026-09-24T11:19:29.000Z and refuses it from 2026-09-24T11:19:30.000Z
+    · waiting 51.0s of real time (tolerance from the roster + 2s margin), no mocked clock
+    · desk-A scans the screenshot 51.0s after it was taken: EXPIRED, screen shows bib 9
+    · desk-B scans R9: GREEN, screen shows bib 9 (chain bib 9)
+    · step took 51.8s, almost all of it the wait: the screenshot had to outlive the roster's ±1 step tolerance before it was shown
+  ✓ PASS
+
+▸ [5.1] Double claim at the same desk: desk-A scans R2 again, still offline
+    · desk-A scans R2: CLAIMED, screen shows bib 2 (chain bib 2), claimed at this desk
+  ✓ PASS
+
+▸ [4.3] Signal returns: both desks press Send at the same moment
+    · network calls attempted while offline: desk-A 0, desk-B 0
+    tx  desk-A claim_racepack R1 (bib 1): https://stellar.expert/explorer/testnet/tx/e9c24679e858d0c837f9a335ae50f7570f88b6103f2f04719ab0d196feadd3c1
+    tx  desk-A claim_racepack R2 (bib 2): https://stellar.expert/explorer/testnet/tx/89fe2d868c7da17edebafa26d88d3a9f27cde1f7cb8f8fc49a2a2931ddea5659
+    tx  desk-A claim_racepack R3 (bib 3): https://stellar.expert/explorer/testnet/tx/fe294dd4a8ef527a915f7e01675dc4fec92cfd7e2c4ed9d3800e049d98ef4305
+    tx  desk-A claim_racepack R5 (bib 5): https://stellar.expert/explorer/testnet/tx/de07b4c031cc954ae22b5e32937975e382e1cd0d54e79566a2f71a8413251d3b
+    · desk-A started 2026-09-24T11:19:35.437Z, stop reason null
+    · desk-A raw error sending R4: SterunContractError: claimRacepack failed on the ledger with AlreadyClaimed (#102, race-record) in transaction 6ddcca3c8b5952e265fa9530d5da28c224c6c0868b9d701b21916546203863b2
+    · desk-A row R4: refused (already-claimed)
+    · desk-A row R1: sent
+    · desk-A row R2: sent
+    · desk-A row R3: sent
+    · desk-A row R5: sent
+    tx  desk-B claim_racepack R4 (bib 4): https://stellar.expert/explorer/testnet/tx/d4a09adbee746100ae6267c10e8db660845d83d73d580805125f9489c1c9d1e4
+    tx  desk-B claim_racepack R6 (bib 6): https://stellar.expert/explorer/testnet/tx/1843297bb540242ba26d5678481c1213c66107b072f1f52e9edd47205db40458
+    tx  desk-B claim_racepack R7 (bib 7): https://stellar.expert/explorer/testnet/tx/38f0d664478a00c2bc7363b7230a876ff001cb5d94093697db7d75b0576c894c
+    tx  desk-B claim_racepack R9 (bib 9): https://stellar.expert/explorer/testnet/tx/864d11599d3b5d8780d5ba94ef938566f1f035fbbb6414ee21ff0860a7bd4ef2
+    · desk-B started 2026-09-24T11:19:35.437Z, stop reason null
+    · desk-B row R4: sent
+    · desk-B row R6: sent
+    · desk-B row R7: sent
+    · desk-B row R9: sent
+  ✓ PASS
+
+▸ [4.4] A desk whose run stopped does what its screen says: presses Send again
+    · no desk stopped, so nobody had to press Send twice
+    · chain: all 8 runners who came are RacepackClaimed; R8 is still Entered
+  ✓ PASS
+
+▸ [6.1] Two offline desks claimed R4: the chain keeps one, the other desk flags it
+    · desk-A R4 row: {"tokenId":92,"bibNo":4,"eventId":38,"scannedAt":"2026-09-24T11:18:40.601Z","status":"refused","reason":"already-claimed","claimedAt":"1790248777"}
+    · desk-B R4 row: {"tokenId":92,"bibNo":4,"eventId":38,"scannedAt":"2026-09-24T11:18:40.606Z","status":"sent","txHash":"d4a09adbee746100ae6267c10e8db660845d83d73d580805125f9489c1c9d1e4","ledger":4845038}
+    tx  winner desk-B claim_racepack R4: https://stellar.expert/explorer/testnet/tx/d4a09adbee746100ae6267c10e8db660845d83d73d580805125f9489c1c9d1e4
+    · chain: R4 RacepackClaimed, claimed_at 1790248777; one pack is recorded, the second handover is what the flag is for
+    url desk-A transactions incl. failed (Horizon): https://horizon-testnet.stellar.org/accounts/GBCIBH45NBOUR6XC54Z5YCC2LACJGAPOYP5436BBHLV2WCNSWUF4TSRL/transactions?include_failed=true&order=asc&limit=50
+    tx  desk-A claim that FAILED on the ledger: https://stellar.expert/explorer/testnet/tx/6ddcca3c8b5952e265fa9530d5da28c224c6c0868b9d701b21916546203863b2
+    · 6ddcca3c…: status FAILED, ledger 4845038 (winner in ledger 4845038), diagnostic host_fn_failed contract error 102 = AlreadyClaimed
+    · desk-A Flagged screen: ["Already collected elsewhere at 18:19"]
+    · desk-A "copy for organiser": "Refused claims for STE-25 Rehearsal Run 2026-09-24\nBib 4: Already collected elsewhere at 18:19. Handed over at this desk at 18:18."
+    · two desks = two OS processes, each with its own IndexedDB and queue, running the web app's scanner code; the two-phone repeat is M.3
+  ✓ PASS
+
+▸ [5.2] Double claim on chain: desk-A sends a claim for R2 again
+    · refused: claimRacepack reverted with AlreadyClaimed (#102, race-record)
+    · sentence the web app shows: "Something went wrong. Please try again."
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+  ✓ PASS
+
+▸ [N.6] Organiser tries to record a finish for the no-show R8 (never claimed)
+    · refused: recordFinish reverted with InvalidState (#103, race-record)
+    · sentence the web app shows: "Something went wrong. Please try again."
+    · refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence
+  ✓ PASS
+
+▸ [X.2] The index shows the claims and each desk's check-in count (STE-43)
+    url GET /events/38/scanners: https://api.sterun.xyz/events/38/scanners
+    · scanners: [{"address":"GBCIBH45NBOUR6XC54Z5YCC2LACJGAPOYP5436BBHLV2WCNSWUF4TSRL","added_ledger":4845024,"added_at":"1790248707","scans":4},{"address":"GDPXKNC3DV5IRWKMTKYHSIIXGMGLVCOZUYTAFGROVLSP3UZFUW7MVHAH","added_ledger":4845025,"added_at":"1790248712","scans":4}]
+  ✓ PASS
+
+▸ [7.1] Results CSV with a deliberate anomaly is held at preview
+    · CSV rows: 1,0:52:41,finished | 2,0:55:20,finished | 3,,dnf | 4,1:05:05,finished | 5,0:27:30,finished | 6,0:02:10,finished | 7,,untimed | 8,,dns | 9,1:07:00,finished | 999,0:45:00,finished
+    url POST /events/38/results/preview: https://api.sterun.xyz/events/38/results/preview
+    · source_sha256 a04c6a3c9a7813d97174fd8fb0d2e4908f228a6dcb2d4ccc8f961ab1ff6fdd3d; counts {"total":10,"publishable":8,"malformed_row":0,"unknown_bib":1,"ambiguous_bib":0,"duplicate_bib":0,"not_claimed":0,"already_final":0,"impossible_time":1}
+    · held: line 7 bib 6 → impossible_time/wrong: 130s over 5000m is 38.5 m/s, faster than any human over this distance — a time like 52:41 read as 5241 seconds does this
+    · held: line 11 bib 999 → unknown_bib/reverts: no entry with bib 999 in this event
+  ✓ PASS
+
+▸ [7.2] The organiser corrects R6's time; the corrected file previews clean
+    · source_sha256 d8d93a1f1615f995ee0bf688aa18b059d2f74bada4d82fbca5fdbfc96b671dd6; counts {"total":9,"publishable":9,"malformed_row":0,"unknown_bib":0,"ambiguous_bib":0,"duplicate_bib":0,"not_claimed":0,"already_final":0,"impossible_time":0}
+    url POST /events/38/results/preview: https://api.sterun.xyz/events/38/results/preview
+  ✓ PASS
+
+▸ [8.1] Organiser records the 9 results, one transaction each
+    tx  record_finish 0:52:41 R1 (bib 1): https://stellar.expert/explorer/testnet/tx/2de55590cfb8e0883f6789a2e08f7a92a26141af7ef1f1b01bf683966065e492
+    tx  record_finish 0:55:20 R2 (bib 2): https://stellar.expert/explorer/testnet/tx/c02f93b3335afa5adaf4fd68a9eda84955c69b16f002ceba4bb38c32ecd78337
+    tx  record_dnf R3 (bib 3): https://stellar.expert/explorer/testnet/tx/e37f3054e481a159044546e8c611b24c107d8d0fa84d69a4ecbb676c16d17840
+    tx  record_finish 1:05:05 R4 (bib 4): https://stellar.expert/explorer/testnet/tx/336588f773e32c4ae90bcbc7cdbcca569ae0336db8fddeeb276cefc410e9fce3
+    tx  record_finish 0:27:30 R5 (bib 5): https://stellar.expert/explorer/testnet/tx/c0abe782b15b15a7c9338045c9d6561dcefdf4e17a313ae05e4aab7fc835fd45
+    tx  record_finish 0:29:59 R6 (bib 6): https://stellar.expert/explorer/testnet/tx/a11575ac524158ff7559820717045c8e0cdbbccfa72752f0fb73f776d49b533e
+    tx  record_finish_untimed R7 (bib 7): https://stellar.expert/explorer/testnet/tx/b233f8cad43e77015bb6f7bb85c23490f442ed1df8996a8c8157f402b95e994c
+    tx  record_dnf R8 (bib 8): https://stellar.expert/explorer/testnet/tx/c884f10a9df6feaefa131f5a084f6b8780f43626b77dd480e03ecd8fc654d851
+    tx  record_finish 1:07:00 R9 (bib 9): https://stellar.expert/explorer/testnet/tx/da57ac5636cffe1477e54394e30ab198ec8c895fa3fac7e7c2d65ed2cd4326bc
+    · 'batch' is nine signatures: the contract has no multi-result call yet (STE-60), and the console's CSV upload screen is STE-58 (Backlog)
+  ✓ PASS
+
+▸ [N.7] Re-uploading the same CSV after publishing: every row is held as already_final
+    · counts {"total":9,"publishable":0,"malformed_row":0,"unknown_bib":0,"ambiguous_bib":0,"duplicate_bib":0,"not_claimed":0,"already_final":9,"impossible_time":0}
+  ✓ PASS
+
+▸ [9.R1] Anyone can verify R1's final record from chain and API, without a wallet
+    · chain: state Finished, bib 1, finish_time_s 3161, claimed_at 1790248782, result_at 1790248812
+    url GET /records/89: https://api.sterun.xyz/records/89
+    url GET /runners/R1/records: https://api.sterun.xyz/runners/GD5V5QUSMBT7TUS5B63DMUE5HHZD5F56W6Y7MAMUY42GS4VNKQUAY7HC/records
+    url R1 on stellar.expert: https://stellar.expert/explorer/testnet/account/GD5V5QUSMBT7TUS5B63DMUE5HHZD5F56W6Y7MAMUY42GS4VNKQUAY7HC
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":89,"owner":"GD5V5QUSMBT7TUS5B63DMUE5HHZD5F56W6Y7MAMUY42GS4VNKQUAY7HC","bib_no":1,"participant_hash":"8235ee9b7580b7d04c1cb3df1307dff6b9a00f1f5ea88a916fe7
+  ✓ PASS
+
+▸ [9.R2] Anyone can verify R2's final record from chain and API, without a wallet
+    · chain: state Finished, bib 2, finish_time_s 3320, claimed_at 1790248787, result_at 1790248817
+    url GET /records/90: https://api.sterun.xyz/records/90
+    url GET /runners/R2/records: https://api.sterun.xyz/runners/GD7CAKGOGUGDZ2FBTOI4MAUJYZDJ4HMVPTWYMYL43SBBDGOFK2P34BRD/records
+    url R2 on stellar.expert: https://stellar.expert/explorer/testnet/account/GD7CAKGOGUGDZ2FBTOI4MAUJYZDJ4HMVPTWYMYL43SBBDGOFK2P34BRD
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":90,"owner":"GD7CAKGOGUGDZ2FBTOI4MAUJYZDJ4HMVPTWYMYL43SBBDGOFK2P34BRD","bib_no":2,"participant_hash":"e52c70b5179e9f07eec03bd42fa26b40e99d711eca91c9ca6e21
+  ✓ PASS
+
+▸ [9.R3] Anyone can verify R3's final record from chain and API, without a wallet
+    · chain: state Dnf, bib 3, finish_time_s null, claimed_at 1790248792, result_at 1790248822
+    url GET /records/91: https://api.sterun.xyz/records/91
+    url GET /runners/R3/records: https://api.sterun.xyz/runners/GD4DFIUHRLJHEXJTLCS4HLXBIDR257FKAGOA4ASDKXCUJHMYAKJ67R6O/records
+    url R3 on stellar.expert: https://stellar.expert/explorer/testnet/account/GD4DFIUHRLJHEXJTLCS4HLXBIDR257FKAGOA4ASDKXCUJHMYAKJ67R6O
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":91,"owner":"GD4DFIUHRLJHEXJTLCS4HLXBIDR257FKAGOA4ASDKXCUJHMYAKJ67R6O","bib_no":3,"participant_hash":"c4f847a3cda24be100d4234cbe71e0440fdb23c2724a10f3490c
+  ✓ PASS
+
+▸ [9.R4] Anyone can verify R4's final record from chain and API, without a wallet
+    · chain: state Finished, bib 4, finish_time_s 3905, claimed_at 1790248777, result_at 1790248827
+    url GET /records/92: https://api.sterun.xyz/records/92
+    url GET /runners/R4/records: https://api.sterun.xyz/runners/GABXYXNSNC4BTO2GCSBROLVNBJ44GR4ID2MPUBENHPTOBZHBNA2EZXQD/records
+    url R4 on stellar.expert: https://stellar.expert/explorer/testnet/account/GABXYXNSNC4BTO2GCSBROLVNBJ44GR4ID2MPUBENHPTOBZHBNA2EZXQD
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":92,"owner":"GABXYXNSNC4BTO2GCSBROLVNBJ44GR4ID2MPUBENHPTOBZHBNA2EZXQD","bib_no":4,"participant_hash":"9ff002b43111bf68f0d5db4b910a2010bc096b5c5f224131c5d8
+  ✓ PASS
+
+▸ [9.R5] Anyone can verify R5's final record from chain and API, without a wallet
+    · chain: state Finished, bib 5, finish_time_s 1650, claimed_at 1790248797, result_at 1790248832
+    url GET /records/93: https://api.sterun.xyz/records/93
+    url GET /runners/R5/records: https://api.sterun.xyz/runners/GBULX25KIIZLUBKG2YE5LF5FK7EWUH5Y5D3B7HPDOGGZKPCG2TB5SXU3/records
+    url R5 on stellar.expert: https://stellar.expert/explorer/testnet/account/GBULX25KIIZLUBKG2YE5LF5FK7EWUH5Y5D3B7HPDOGGZKPCG2TB5SXU3
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":93,"owner":"GBULX25KIIZLUBKG2YE5LF5FK7EWUH5Y5D3B7HPDOGGZKPCG2TB5SXU3","bib_no":5,"participant_hash":"16f9373370138c10a39dc6dc561304847eb159c7080bc8be0a0d
+  ✓ PASS
+
+▸ [9.R6] Anyone can verify R6's final record from chain and API, without a wallet
+    · chain: state Finished, bib 6, finish_time_s 1799, claimed_at 1790248782, result_at 1790248837
+    url GET /records/94: https://api.sterun.xyz/records/94
+    url GET /runners/R6/records: https://api.sterun.xyz/runners/GC2ZR2OO2U6WUHBH6ZMG7BL2EJCGYTMBNZA7HOBCVYH3PLILCIVZHDWU/records
+    url R6 on stellar.expert: https://stellar.expert/explorer/testnet/account/GC2ZR2OO2U6WUHBH6ZMG7BL2EJCGYTMBNZA7HOBCVYH3PLILCIVZHDWU
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":94,"owner":"GC2ZR2OO2U6WUHBH6ZMG7BL2EJCGYTMBNZA7HOBCVYH3PLILCIVZHDWU","bib_no":6,"participant_hash":"a95dc55cb0cd54cb174d32b63f73928af1bd8e34f50490cc2602
+  ✓ PASS
+
+▸ [9.R7] Anyone can verify R7's final record from chain and API, without a wallet
+    · chain: state Finished, bib 7, finish_time_s null, claimed_at 1790248787, result_at 1790248842
+    url GET /records/95: https://api.sterun.xyz/records/95
+    url GET /runners/R7/records: https://api.sterun.xyz/runners/GALJFITQSDS6VWYI74ZDBNDCWAUM6XAZL44GSGXCPDOUGPHXF7SZTIS7/records
+    url R7 on stellar.expert: https://stellar.expert/explorer/testnet/account/GALJFITQSDS6VWYI74ZDBNDCWAUM6XAZL44GSGXCPDOUGPHXF7SZTIS7
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":95,"owner":"GALJFITQSDS6VWYI74ZDBNDCWAUM6XAZL44GSGXCPDOUGPHXF7SZTIS7","bib_no":7,"participant_hash":"63e5848c6cf5268e71fafad86120b2c651891e01d2608a4bef60
+  ✓ PASS
+
+▸ [9.R8] Anyone can verify R8's final record from chain and API, without a wallet
+    · chain: state Dnf, bib 8, finish_time_s null, claimed_at null, result_at 1790248847
+    url GET /records/96: https://api.sterun.xyz/records/96
+    url GET /runners/R8/records: https://api.sterun.xyz/runners/GC6XF6KM33EBBWHIYB5K7EHFCLHSNYXQPQAZTES67MYMW4SUJZKK6G4Q/records
+    url R8 on stellar.expert: https://stellar.expert/explorer/testnet/account/GC6XF6KM33EBBWHIYB5K7EHFCLHSNYXQPQAZTES67MYMW4SUJZKK6G4Q
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":96,"owner":"GC6XF6KM33EBBWHIYB5K7EHFCLHSNYXQPQAZTES67MYMW4SUJZKK6G4Q","bib_no":8,"participant_hash":"0251f476aabe4b32e113c4a87891047054e7fd39742b5983a48a
+  ✓ PASS
+
+▸ [9.R9] Anyone can verify R9's final record from chain and API, without a wallet
+    · chain: state Finished, bib 9, finish_time_s 4020, claimed_at 1790248792, result_at 1790248852
+    url GET /records/97: https://api.sterun.xyz/records/97
+    url GET /runners/R9/records: https://api.sterun.xyz/runners/GCAUT3TQFWBHM3SQPD2XCX3U4DDQ2LXINJI7PM6ZZUSNSZ5KBO3RG7IG/records
+    url R9 on stellar.expert: https://stellar.expert/explorer/testnet/account/GCAUT3TQFWBHM3SQPD2XCX3U4DDQ2LXINJI7PM6ZZUSNSZ5KBO3RG7IG
+    · recomputed hash matches; a one-character change does not verify
+    · public JSON (C6): {"schema_version":"1.0.0","network":{"passphrase":"Test SDF Network ; September 2015","event_registry":"CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU","race_record":"CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW"},"token_id":97,"owner":"GCAUT3TQFWBHM3SQPD2XCX3U4DDQ2LXINJI7PM6ZZUSNSZ5KBO3RG7IG","bib_no":9,"participant_hash":"a5f43991286f154e641515b9baf2b677449572df019a18be1366
+  ✓ PASS
+
+▸ [X.3] The race is marked Completed
+    tx  set_event_status Completed: https://stellar.expert/explorer/testnet/tx/41fa482f62bfaf6ccaa0178874442e69df6cc25013961bdfb8266ae60da1eb56
+  ✓ PASS
+
+▸ [M.1] Create the race through the organiser console UI
+    · MANUAL REQUIRED (Ancung): open /org/new on a deployed web app (none exists: S.2), connect an allowlisted wallet, create a race with two distances, quota and sUSD price, open it; record the event id and the tx hashes the wallet shows
+  … MANUAL REQUIRED
+
+▸ [M.2] Enter a race and pay through the entry flow UI with a browser wallet
+    · MANUAL REQUIRED (Ancung): on the deployed app, as a runner: Get test sUSD, fill the form, sign enter in Freighter; confirm the pass shows the same bib as GET /records/:id; repeat with a second wallet after the distance sells out and check the sold-out sentence
+  … MANUAL REQUIRED
+
+▸ [M.3] Two physical phones as offline desks, one runner at both
+    · MANUAL REQUIRED (Axel (coordination) + Ancung): two volunteers open /scan on two phones, connect two scanner wallets, download the roster, then switch BOTH to airplane mode; one runner shows the same pass QR to both cameras (both must show HAND OVER); turn signal back on and press Send on both phones within the same few seconds; record both phones' claims lists, the flagged screen on the losing phone, and the winner's tx hash. 6.1 ran the same code in two processes; this is the device-level repeat
+  … MANUAL REQUIRED
+
+▸ [M.4] Public runner profile page
+    · MANUAL REQUIRED (Ancung): build the public profile (STE-24, Backlog), open it for each rehearsal runner address in the evidence header and check state, finish time ('no official time' for R7, never 0) and the verify-hash panel
+  … MANUAL REQUIRED
+
+▸ [M.5] Screen footage, the team walkthrough, the demo video
+    · MANUAL REQUIRED (Axel): out of scope for this ticket by the brief: record screen footage, schedule the team walkthrough with every owner, and cut the demo video (STE-28)
+  … MANUAL REQUIRED
+
+▸ Checking every link
+
+RESULT 50 PASS, 0 FAIL, 6 MANUAL REQUIRED, 0 BLOCKED of 56
+evidence: /home/ulinuha/orca/sterun/docs/rehearsal/runs/after-v25-v26/EVIDENCE.md
+links: 61/61 tx links resolve on Horizon and the stellar.expert API
