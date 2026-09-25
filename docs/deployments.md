@@ -3365,3 +3365,98 @@ dashboard; every other `NEXT_PUBLIC_*` value is public and committed in `fe/.env
 - The STE-25 rehearsal's `MANUAL REQUIRED` steps can now be run at last: create a race through the
   console, enter and pay, two phones as two desks with one runner scanned at both, and the public
   profile.
+
+## STE-68 — the demo a reviewer clicks through, seeded on live testnet (2026-09-25)
+
+One run of `docs/rehearsal/seed.sh` left this behind. **RESULT 22 PASS, 0 FAIL, 1 MANUAL REQUIRED,
+0 BLOCKED of 23**; evidence in `docs/rehearsal/runs/2026-09-25T09-08-01Z-seed/`.
+
+The SOW §3 asks for *"at least 3 events and 20 issued records, including two deliberate fraud
+attempts."* This is **4 races and 25 records**, with both fraud attempts among them rather than
+staged separately.
+
+### What a reviewer opens, with no wallet
+
+| Race | Records | URL |
+| --- | --- | --- |
+| Directory | — | [`https://app.sterun.xyz/`](https://app.sterun.xyz/) |
+| Solo Heritage Run 2026 (run, Completed) | 12 | [`/events/40`](https://app.sterun.xyz/events/40) |
+| Kota Tua 10K 2026 | 6 | [`/events/41`](https://app.sterun.xyz/events/41) |
+| Braga Night Run 2026 | 4 | [`/events/42`](https://app.sterun.xyz/events/42) |
+| Sanur Sunrise Half Marathon 2026 | 3 | [`/events/43`](https://app.sterun.xyz/events/43) |
+
+Solo Heritage Run has been run, so the directory lists it behind **"Show races that have finished"**;
+the other three are on the first screen.
+
+Runner profiles, each a real address with records across more than one race:
+
+- Budi Santoso (solo, kotatua, sanur) — [`/runner/GDLFVS26…PTC5`](https://app.sterun.xyz/runner/GDLFVS26CWYAH5CK6RN7Z23Q7MLOOWIXHD4NNLSEU7GASERIF463PTC5)
+- Siti Rahayu (solo, kotatua) — [`/runner/GD26E6ES…HDLD`](https://app.sterun.xyz/runner/GD26E6ES5XCDTUBCD64JLIKKKGECGVGQD37TNGBK6KLGYGV62HJSHDLD)
+- Andi Wijaya (solo, braga) — [`/runner/GBOHN3BZ…7TYB`](https://app.sterun.xyz/runner/GBOHN3BZNYXY6CA4IFNWTAPLIAAEASGOODTOYOMAZ4IDPOJLDSHR7TYB)
+- Dewi Lestari (solo, braga) — [`/runner/GA7ZJBWM…VKSV`](https://app.sterun.xyz/runner/GA7ZJBWMPCIUZRY6XF3SECDVTDAW7SFEY5PZI4HIKKYAZY57G6EMVKSV)
+- Rizky Pratama (solo, kotatua) — [`/runner/GABYDUKN…CPV3`](https://app.sterun.xyz/runner/GABYDUKNZY6RVH2BEKJ3VRCRDTTTI6IE6KGCVNDJCGHYI5QUGKQDCPV3)
+- Nur Aini (solo, kotatua) — [`/runner/GBHKQY6R…XKJY`](https://app.sterun.xyz/runner/GBHKQY6RBYC6ACO6VG5WGHX3HJI74TV7QZ4KZOISP33RLE2WOO34XKJY)
+
+The demo organiser is `GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF`; its key is in the
+repo-root `.env` as `STERUN_DEMO_ORGANISER_SECRET` (gitignored, 0600), so the organiser console at
+[`/org`](https://app.sterun.xyz/org) can be opened as it.
+
+### The transactions behind it
+
+| What | Transaction |
+| --- | --- |
+| `create_event` → 40 | [`852bdf33`](https://stellar.expert/explorer/testnet/tx/852bdf33a91a7c9a17ec2f09c4e51aaf96e4c33ffd0690d77c9d831b47d4d00e) |
+| `create_event` → 41 | [`d24a6b03`](https://stellar.expert/explorer/testnet/tx/d24a6b03ab0e24070358eee243838a412bedb0b530c24554ac5ca9acd8f1465d) |
+| `create_event` → 42 | [`58f01bdc`](https://stellar.expert/explorer/testnet/tx/58f01bdc7fa766e8d2670c5bd78c02223850d87ebd7e0e9b4c1c0185756e9620) |
+| `create_event` → 43 | [`c87780c9`](https://stellar.expert/explorer/testnet/tx/c87780c9f8cba81d1d58ae0f0ab04a6396d55346fdd2d5ea4c7f875fcae562f4) |
+| `claim_racepack_many` ×9, one signature | [`70c5e862`](https://stellar.expert/explorer/testnet/tx/70c5e8625fae94b4482725e39310d09c9997964190aac801fe5edea18cb20376) |
+| `record_results` ×12, one signature | [`4b386a72`](https://stellar.expert/explorer/testnet/tx/4b386a72993086692d837efd2837edf15065c564e812ca65f5889689e183d73d) |
+| `set_event_status Completed` | [`d142f6ce`](https://stellar.expert/explorer/testnet/tx/d142f6cef65705dcbba3d7cf0470b214fdfc450e2eb5ad7de90fb740d81d9f93) |
+
+**The two batch calls are the STE-66 upgrades earning their keep.** Nine race packs handed over in
+one signature and twelve results recorded in one, against the live RaceRecord v2.7
+(`CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW`). Before that upgrade this run would
+have needed twenty-one separate transactions.
+
+### The two fraud attempts, and what they actually prove
+
+**F.2, duplicate collection — caught.** R05 collected at both offline desks, which is what an offline
+desk is supposed to allow. When signal returned and both desks pressed Send at the same moment, the
+chain kept one claim (`claimed_at 1790328192`) and desk-B's row came back
+`{"status":"refused","reason":"already-claimed"}`. Desk-B's claim never reached the ledger: it was
+refused at simulation because the winner's transaction had already closed.
+
+**F.1, a forwarded screenshot — refused once stale, and the honest limit.** The step proves a
+screenshot goes stale in under a minute and that even a fresh one can only be used once. It does
+**not** prove that a forwarded QR is rejected: the desk accepts the code's step ±1, a 90-second
+window around its own clock, so a screenshot shown within 30–60 seconds of being taken **does** pass.
+That does not help an attacker — the code turns over every 30 seconds, and a fresh screenshot is
+worth exactly what the runner's own pass is worth, one claim on one record. Used by someone else it
+spends the runner's claim, and the runner is then refused "Already claimed".
+
+Whoever films this must **wait on camera** until the desk would refuse the screenshot. Cutting the
+wait produces a clip showing a fresh screenshot being refused, which the product does not do.
+
+### The untimed finish
+
+Bib 12 is `state Finished` with `finish_time_s: null` on chain — a finish the timing mat missed, not
+a zero. Read back from `GET /events/40/records`: twelve records, nine with times, and three null
+(bib 7 `Dnf`, bib 10 `Dnf`, bib 12 `Finished`). The public profile renders `null` as **"No official
+time"** (`fe/src/modules/profile/lib/record-meaning.ts`), never as `0:00:00`.
+
+### Posters and documents
+
+Each race carries a metadata document and a poster through `POST /events/files`. All four posters
+serve 200 `image/jpeg` from `api.sterun.xyz` (122–170 KB) and render on the directory cards at their
+full 1600×900. Race pages carry venue and city: Stadion Manahan Surakarta, Taman Fatahillah Jakarta
+Barat, Jalan Braga Bandung, Pantai Sanur Denpasar.
+
+### What is still not clean, and is not ours to fix
+
+Seven races created with **Ancung's wallet**
+(`GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7`) are **still on the directory's first
+screen**, mixed in with the demo: events 3, 4, 12, 13, 28, 36 and 37 — "LARI TEKNIK (TESTING)",
+"TESTING LARI 3", "Elektro Dash 2026 (TESTING)" and the rest. There is no delete, and only the
+organiser wallet can cancel, so the seed deliberately left them and said so rather than failing.
+Until they are cancelled in the console, a reviewer's first screen still reads as a test board.
+
