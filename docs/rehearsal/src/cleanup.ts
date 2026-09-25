@@ -20,7 +20,7 @@
  *
  * What is cancelled is deliberately narrow: a race is only ever cancelled by
  * the key that created it, and the sweep only touches races whose NAME says
- * they are a sanity check. A demo race or a real one is never matched by
+ * they are a sanity check or a rehearsal. A demo race or a real one is never matched by
  * accident, and an organiser we do not hold a key for is reported, not
  * attempted — it would fail as a non-organiser, and that is correct.
  */
@@ -58,13 +58,14 @@ export function visible(race: RaceState, nowS: bigint): boolean {
   return race.status !== "Cancelled" && race.startsAt >= nowS;
 }
 
-const SANITY = /\bsanity\b/i;
+/** What the sc/ scripts name their races: "Sterun … sanity <date>", "Sterun Testnet Rehearsal". */
+const FIXTURE = /\b(sanity|rehearsal)\b/i;
 /** Names that read as a test to a reviewer, whoever made them. Reported, never cancelled on a name alone. */
 const TESTY = /\b(sanity|test|testing|rehearsal)\b/i;
 
 /** A sanity race one of `ours` created and could still cancel. */
 export function isOurSanityRace(race: RaceState, ours: ReadonlySet<string>): boolean {
-  return ours.has(race.organiser) && SANITY.test(race.name) && !TERMINAL.includes(race.status);
+  return ours.has(race.organiser) && FIXTURE.test(race.name) && !TERMINAL.includes(race.status);
 }
 
 /**

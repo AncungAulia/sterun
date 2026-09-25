@@ -29,6 +29,7 @@ const DIRECTORY: RaceState[] = [
   race(14, "Sterun untimed finish sanity 2026-09-11", OURS, "Closed"),
   race(7, "Sterun allowlist sanity 2026-09-09", OURS, "Draft"),
   race(12, "Sterun sanity already done", OURS, "Cancelled"),
+  race(3, "Sterun Testnet Rehearsal", OURS, "Open", 1_789_000_000n),
   race(30, "Jakarta Kota Tua 10K 2026", OURS),
   race(21, "LARI TEKNIK (TESTING)", ANCUNG),
   race(22, "TechSprint UGM 2026 (TESTING 3)", ANCUNG),
@@ -38,9 +39,9 @@ const DIRECTORY: RaceState[] = [
   race(26, "Semarang 10K", ANCUNG),
 ];
 
-test("the five sanity rows are cancellable, in any non-terminal status", () => {
+test("the five sanity rows, and deploy-testnet.sh's rehearsal race, are cancellable in any non-terminal status", () => {
   const { cancellable } = litter(DIRECTORY, new Set([OURS]), NOW);
-  assert.deepEqual(cancellable.map((r) => r.eventId), [19, 18, 17, 14, 7]);
+  assert.deepEqual(cancellable.map((r) => r.eventId), [19, 18, 17, 14, 7, 3]);
 });
 
 test("a race of ours without 'sanity' in its name is never cancelled by the sweep", () => {
