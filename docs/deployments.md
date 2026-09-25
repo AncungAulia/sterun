@@ -1776,6 +1776,48 @@ is one transaction and one signature for what used to be 100 wallet prompts.
 **Still to do after ACC:** upgrade `CCVW7WVC…` from v2.6 to v2.7, its own entry here with its tx hash.
 
 ---
+
+## STE-66 LIVE — RaceRecord v2.7 upgraded in place (2026-09-25)
+
+ACC by Axel on STE-66, merged as [#68](https://github.com/AncungAulia/sterun/pull/68) (`809ad95`).
+**Address unchanged**, and the third upgrade event of this release, each with its own entry as asked.
+
+| | |
+| --- | --- |
+| Contract | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` |
+| wasm before | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` (v2.6, live since yesterday) |
+| wasm after | `20abebd14dd7d4f4e1f5a07774845bcba2d5b963025cfe10269c966d80b7373a` (v2.7, the INTERFACE.md hash) |
+| upgrade tx | [`ef3b21cba0422c1e8f4ad39f58bf51fb1395c32074d4665a7836d5ec8ae4fc6f`](https://stellar.expert/explorer/testnet/tx/ef3b21cba0422c1e8f4ad39f58bf51fb1395c32074d4665a7836d5ec8ae4fc6f) |
+
+Read back on the upgraded contract:
+
+```
+record 0        {"addon_ids":[0,1],"bib_no":0,"claimed_at":1788925897,"entered_at":1788925832,…}
+owner_of 0      GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR
+total_supply    98
+claim_racepack_many in the live interface:   yes
+record_results still there (v2.6):           yes
+transfer / transfer_from / approve / approve_for_all / burn / burn_from:  0
+./deploy/verify-deployment.sh https://api.sterun.xyz   18 passed, 0 failed
+```
+
+`total_supply` is 98 rather than yesterday's 89 because the rehearsal run between the two upgrades
+entered nine more runners — the index and the chain agree on that number, which is the point of
+checking it here.
+
+### The three upgrades of this release
+
+| Contract | Version | tx |
+| --- | --- | --- |
+| EventRegistry | v2.4 → v2.5 (STE-46) | [`5597d50e…`](https://stellar.expert/explorer/testnet/tx/5597d50efd9620a4ef11655161239eddc345707a3a7e2bdb9ab3ccb54983f17c) |
+| RaceRecord | v2.2 → v2.6 (STE-60) | [`e8c51db3…`](https://stellar.expert/explorer/testnet/tx/e8c51db30bd3ef9f7be8440a609a126d61857a4cb56f92c0e487b164db943781) |
+| RaceRecord | v2.6 → v2.7 (STE-66) | [`ef3b21cb…`](https://stellar.expert/explorer/testnet/tx/ef3b21cba0422c1e8f4ad39f58bf51fb1395c32074d4665a7836d5ec8ae4fc6f) |
+
+Neither address moved, and the rehearsal run between the first two (50 PASS · 0 FAIL · 6 MANUAL,
+`docs/rehearsal/runs/2026-09-24T11-11-08Z`) found nothing disturbed in entries, bibs, quota, claims or
+results.
+
+---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
 Run on **2026-09-05** with `pnpm --filter be e2e:results`. Not a simulation: the event was genuinely
