@@ -26,14 +26,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import {
-  Asset,
-  BASE_FEE,
-  Keypair,
-  Operation,
-  TransactionBuilder,
-  rpc,
-} from "@stellar/stellar-sdk";
+import { Asset, Keypair, rpc } from "@stellar/stellar-sdk";
 import { SterunClient, TESTNET, type SterunRecord } from "@sterunxyz/sdk";
 
 import { parseDeployments, type Deployments } from "../../../be/src/deployments";
@@ -45,158 +38,44 @@ import {
   contractUrl,
 } from "./evidence";
 import { Device } from "./device-process";
+import {
+  API,
+  HORIZON,
+  REPO,
+  SUSD,
+  addTrustline,
+  api,
+  big,
+  bigintJson,
+  expectRevert,
+  friendbot,
+  log,
+  newAccount,
+  readEnvFile,
+  remember,
+  secrets,
+  server,
+  signedHeaders,
+  sleep,
+  susdBalance,
+  waitFor,
+} from "./harness";
 import { FILMING_NOTE, STALE_QR_CLAIM, honestyNote, staleFrom, waitUntilStale, type TotpWindow } from "./stale-qr";
 import { timeStepOf } from "../../../fe/src/lib/totp";
 
 // ---------------------------------------------------------------------------
-// Configuration
+// Configuration (the shared half lives in harness.ts)
 // ---------------------------------------------------------------------------
 
-const REPO = process.env.STERUN_REPO_ROOT ?? process.cwd();
-const API = (process.env.STERUN_API_URL ?? "https://api-sterun.jameshub.fun").replace(/\/+$/, "");
 const RUN_DIR = process.env.REHEARSAL_RUN_DIR ?? join(REPO, "docs", "rehearsal", "runs", "local");
 const DEVICE_BUNDLE = process.env.REHEARSAL_DEVICE_BUNDLE ?? "";
-const HORIZON = "https://horizon-testnet.stellar.org";
-const FRIENDBOT = "https://friendbot.stellar.org";
-const RPC_URL = TESTNET.rpcUrl;
-const PASSPHRASE = TESTNET.networkPassphrase;
 
-const SUSD = 10_000_000n;
 const PRICE_10K = 10n * SUSD;
 const PRICE_5K = 5n * SUSD;
 
-const log = (message: string) => console.log(message);
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // Desks and phones are child processes; see device-process.ts for why that handle
 // has its own module.
 const newDevice = (role: string) => new Device(role, DEVICE_BUNDLE, [`--env-file=${join(REPO, "fe", ".env")}`]);
-
-const bigintJson = (value: unknown) =>
-  JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
-
-/** Reads KEY=value lines. Values are never printed; only names are. */
-function readEnvFile(path: string): Map<string, string> {
-  const out = new Map<string, string>();
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    return out;
-  }
-  for (const line of text.split(/\r?\n/)) {
-    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (!match) continue;
-    out.set(match[1]!, match[2]!.replace(/^(['"])(.*)\1$/, "$2"));
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Secrets that must never reach the evidence files
-// ---------------------------------------------------------------------------
-
-const secrets: string[] = [];
-const remember = <T extends string>(secret: T): T => {
-  secrets.push(secret);
-  return secret;
-};
-
-function newAccount(): Keypair {
-  const kp = Keypair.random();
-  remember(kp.secret());
-  return kp;
-}
-
-const big = (value: bigint) => ({ $bigint: value.toString() });
-
-// ---------------------------------------------------------------------------
-// Chain and API helpers
-// ---------------------------------------------------------------------------
-
-const server = new rpc.Server(RPC_URL);
-
-async function friendbot(address: string): Promise<void> {
-  const res = await fetch(`${FRIENDBOT}?addr=${encodeURIComponent(address)}`);
-  if (!res.ok) throw new Error(`friendbot answered ${res.status} for ${address}`);
-}
-
-async function addTrustline(kp: Keypair, asset: Asset): Promise<string> {
-  const account = await server.getAccount(kp.publicKey());
-  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: PASSPHRASE })
-    .addOperation(Operation.changeTrust({ asset }))
-    .setTimeout(120)
-    .build();
-  tx.sign(kp);
-  const sent = await server.sendTransaction(tx);
-  if (sent.status !== "PENDING") throw new Error(`changeTrust send status ${sent.status}`);
-  const final = await server.pollTransaction(sent.hash, { attempts: 30 });
-  if (final.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw new Error(`changeTrust ${final.status}`);
-  return sent.hash;
-}
-
-async function susdBalance(address: string, asset: Asset): Promise<bigint> {
-  const { balanceEntry } = await server.getAssetBalance(address, asset, PASSPHRASE);
-  return balanceEntry ? BigInt(balanceEntry.amount) : 0n;
-}
-
-async function signedHeaders(kp: Keypair): Promise<Record<string, string>> {
-  const res = await fetch(`${API}/auth/challenge`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address: kp.publicKey() }),
-  });
-  if (!res.ok) throw new Error(`/auth/challenge answered ${res.status}`);
-  const { nonce } = (await res.json()) as { nonce: string };
-  return {
-    "x-sterun-address": kp.publicKey(),
-    "x-sterun-nonce": nonce,
-    "x-sterun-signature": Buffer.from(kp.signMessage(nonce)).toString("base64"),
-  };
-}
-
-async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<{ status: number; body: T }> {
-  const res = await fetch(`${API}${path}`, init);
-  const text = await res.text();
-  let body: unknown = text;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    // not JSON; keep the text
-  }
-  return { status: res.status, body: body as T };
-}
-
-async function waitFor<T>(what: string, read: () => Promise<T | undefined>, timeoutMs = 180_000, everyMs = 5_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  let last: unknown;
-  while (Date.now() < deadline) {
-    try {
-      const value = await read();
-      if (value !== undefined) return value;
-    } catch (error) {
-      last = error;
-    }
-    await sleep(everyMs);
-  }
-  throw new Error(`timed out after ${timeoutMs / 1000}s waiting for ${what}${last ? ` (last error: ${String(last)})` : ""}`);
-}
-
-/** A contract revert expected at simulation: no transaction exists, so the evidence is the error. */
-function expectRevert(
-  s: StepContext,
-  result: Record<string, unknown>,
-  expected: { code: number; variant: string },
-): void {
-  if (result.sent) {
-    s.tx("UNEXPECTEDLY ACCEPTED", String(result.txHash));
-    throw new Error(`expected ${expected.variant}(${expected.code}), but the call was accepted`);
-  }
-  s.note(`refused: ${String(result.message)}`);
-  s.note(`sentence the web app shows: "${String(result.friendly)}"`);
-  if (result.enterFailure) s.note(`entry flow classification: ${JSON.stringify(result.enterFailure)}`);
-  s.note("refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence");
-  s.check(result.code === expected.code, `code ${expected.code} (${expected.variant}), got ${String(result.code)} ${String(result.variant)}`);
-}
 
 // ---------------------------------------------------------------------------
 // The cast
