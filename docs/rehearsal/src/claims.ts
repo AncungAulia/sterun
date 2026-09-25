@@ -71,11 +71,17 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
 /** The two ways a desk can send, as `SterunClient` exposes them. */
 export interface ClaimClient {
   claimRacepack(tokenId: number, operator: string, options?: unknown): Promise<{ txHash: string }>;
-  claimRacepackMany?: (
+  // Method syntax, like `claimRacepack` above, and not a function property:
+  // under `strictFunctionTypes` a property's parameters are checked
+  // contravariantly, so `options?: unknown` would reject the real
+  // `SterunClient.claimRacepackMany`, whose `options` is the precise
+  // `CallOptions`. Methods are bivariant, which is what this structural
+  // "does the build have it" type needs (STE-66).
+  claimRacepackMany?(
     tokenIds: readonly number[],
     operator: string,
     options?: unknown,
-  ) => Promise<{ txHash: string; value: { tokenId: number; reason: string }[] }>;
+  ): Promise<{ txHash: string; value: { tokenId: number; reason: string }[] }>;
 }
 
 export function sdkHasBatch(client: object): boolean {

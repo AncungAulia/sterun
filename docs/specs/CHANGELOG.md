@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.6.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.7.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,81 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.7.0] — 2026-09-23
+
+**MINOR — a desk hands over many race packs in one signature (STE-66).** One new function, two new
+types, one new error code at the next free C2 number. No new event, no signature or event layout
+moved, no storage change, nothing renumbered.
+
+### Why
+
+The scanner works offline: the roster is on the phone, the decision is made on the phone, and every
+hand-over is queued locally. Sending that queue was one transaction — and one wallet approval — per
+runner. At the scale this product is for (Merdeka Run 2026 filled 8,100 slots), a desk that handed
+over 300 packs asked its volunteer to approve 300 prompts.
+
+### What was added
+
+| | |
+| --- | --- |
+| `claim_racepack_many(token_ids: Vec<u32>, operator: Address) -> Result<Vec<SkippedClaim>, Error>` | the operator authorises once; authority is checked against the registry per event in the batch |
+| `SkippedClaim { reason: ClaimSkipped, token_id: u32 }` | one pack the batch did not claim |
+| `ClaimSkipped = NotFound \| NotEntered` | why: no such record, or no longer `Entered` |
+| `TooManyClaims = 109` | more than 100 ids, refused before anything is read |
+
+The next free C2 code is now **110**.
+
+### The decision that matters: this batch is NOT atomic
+
+v2.6's `record_results` reverts on the first bad row. This one does the opposite, and the difference
+is not taste:
+
+| | `record_results` (v2.6) | `claim_racepack_many` (v2.7) |
+| --- | --- | --- |
+| a row the chain refuses | reverts the batch | **skipped and reported** |
+| why | a bad row means a bad file, and the preview is where a file is fixed | a bad row means **two desks met the same runner** — the STE-25 case, and the ordinary outcome at a busy desk |
+| what still reverts | — | `NotAuthorized(104)`: a misconfigured desk, not a race |
+
+Skipping an unauthorised operator instead of reverting would hand a volunteer half a drained queue
+with no explanation. Reverting on an already-claimed pack would let one runner block the other 299.
+
+### The cap is 100 — measured
+
+Both contracts from wasm, under the per-transaction limits live on testnet and mainnet (2026-09-23):
+
+| Resource for `n` packs | Measured | Live limit | Binds at |
+| --- | --- | --- | ---: |
+| contract event bytes | `160n` (a `racepack_claimed` carries the operator address) | 16,384 | 102 |
+| written entries | `n + 1` | 200 | 199 |
+| footprint entries | `2n + 8` (testutils; the network reports less) | 400 | 196 |
+| CPU instructions | 38.7 M at 100 | 400 M | — |
+
+The cap is **100**, two rows below the ceiling: being short costs one more transaction, being over
+costs a volunteer's queue at the counter. `a_full_queue_of_race_packs_fits_the_network_limits` pins it
+and computes the headroom from that run rather than from the constant. Note the contrast with v2.6,
+where a row costs 136 bytes and the cap is 120 — the operator address is the whole difference.
+
+### Impact on existing data and running clients
+
+- **Existing records:** unchanged, and `claim_racepack` is untouched — it and every batch row share one
+  code path, and its 85 tests pass unchanged.
+- **Indexers:** no new event. A batch is indistinguishable from the same hand-overs one at a time,
+  except that they share a transaction.
+- **Vectors:** none added, none changed. `HASH_AND_TOTP.md` is untouched.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| `cd sc && cargo test` | RaceRecord 97 (12 new), EventRegistry 107 |
+| mutations | unauthorised skipped instead of fatal, already-claimed fatal instead of skipped, no cap, authority checked once for any event, no operator signature, a missing record fatal, `claimed_at` not written: each fails a test |
+| wasm | `20abebd14dd7d4f4e1f5a07774845bcba2d5b963025cfe10269c966d80b7373a`, 27,055 B |
+
+**Not yet upgraded on testnet.** Stacked on v2.6.0 (STE-60) and approved the same way: Axel and fable,
+then an in-place upgrade of `CCVW7WVC…`.
 
 ---
 

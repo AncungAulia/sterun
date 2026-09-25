@@ -175,6 +175,29 @@ export interface EnterArgs {
 export const RECORD_RESULTS_MAX_BATCH = 120;
 
 /**
+ * The most race packs one `claimRacepackMany` call can hand over (contracts
+ * v2.7, STE-66). The contract refuses more with `TooManyClaims(109)`.
+ *
+ * Measured: a `racepack_claimed` event carries the operator address, so a row
+ * costs 160 contract-event bytes and the network's 16,384-byte limit ceilings at
+ * 102. The cap keeps two rows of headroom — being short costs one more
+ * transaction, being over costs a desk's queue at the counter.
+ */
+export const CLAIM_MAX_BATCH = 100;
+
+/**
+ * One race pack a batch did NOT hand over, and why (contracts v2.7).
+ *
+ * `not-entered` is the two-desk case: another desk claimed this runner first,
+ * or the record is already finished or DNF. `not-found` is a token id no record
+ * exists for — a roster from another race, or a typo.
+ */
+export interface SkippedClaim {
+  tokenId: number;
+  reason: "not-found" | "not-entered";
+}
+
+/**
  * One result for {@link SterunClient.recordResults}. `kind` uses the same words
  * as the backend's results preview (`publishable[].kind`), so a reviewed row
  * maps across without translation.
@@ -648,6 +671,44 @@ export class SterunClient {
       "claimRacepack",
       () => this.record.claim_racepack({ token_id: tokenId, operator }, this.callOptions(options)),
     );
+  }
+
+  /**
+   * Hand over many race packs in one signature (contracts v2.7, STE-66), for a
+   * scanner sending the queue it collected offline.
+   *
+   * **Not atomic, and deliberately so.** A pack another desk already handed
+   * over, or a token id with no record, is skipped and comes back in the return
+   * value; the rest of the queue lands. That is the two-desk case, and at a busy
+   * desk it is the ordinary outcome rather than an error.
+   *
+   * What does fail the whole call: an `operator` who is neither the organiser
+   * nor an allowlisted scanner of an event in the batch (`NotAuthorized(104)`),
+   * and more than {@link CLAIM_MAX_BATCH} ids — refused here, before signing,
+   * and by the contract as `TooManyClaims(109)`. Split a longer queue with
+   * {@link chunkResults}.
+   */
+  async claimRacepackMany(
+    tokenIds: readonly number[],
+    operator: string,
+    options?: CallOptions,
+  ): Promise<SentResult<SkippedClaim[]>> {
+    if (tokenIds.length === 0) throw new RangeError("claimRacepackMany needs at least one token id");
+    if (tokenIds.length > CLAIM_MAX_BATCH) {
+      throw new RangeError(
+        `claimRacepackMany takes at most ${CLAIM_MAX_BATCH} race packs per call, got ${tokenIds.length}; split the queue with chunkResults`,
+      );
+    }
+    const sent = await runWrite("claimRacepackMany", () =>
+      this.record.claim_racepack_many({ token_ids: [...tokenIds], operator }, this.callOptions(options)),
+    );
+    return {
+      ...sent,
+      value: sent.value.map((skipped) => ({
+        tokenId: skipped.token_id,
+        reason: skipped.reason.tag === "NotFound" ? ("not-found" as const) : ("not-entered" as const),
+      })),
+    };
   }
 
   /**

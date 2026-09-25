@@ -1738,6 +1738,44 @@ from the source.
 `main`; a release is a separate step, and the console can use the workspace package meanwhile.
 
 ---
+
+## STE-66 — a desk's whole queue in one signature, on a throwaway deployment (2026-09-24)
+
+**The live RaceRecord was NOT upgraded for this.** v2.7 waits for its ACC, so
+`bash sc/scripts/throwaway-pair-testnet.sh e2e:claim-many` deployed a throwaway pair from the branch
+(EventRegistry v2.5, RaceRecord v2.7) and ran `be/scripts/e2e-claim-many.ts` against it: one race,
+two allowlisted desks, a second race neither desk may touch, and 101 runners.
+
+| | Address | wasm |
+| --- | --- | --- |
+| RaceRecord v2.7 (throwaway) | [`CCVQAQZVJ44PYTDFGNPDYF5CMFUTH6OEFHQZWXA35CEHOGYCOTBAMQFE`](https://stellar.expert/explorer/testnet/contract/CCVQAQZVJ44PYTDFGNPDYF5CMFUTH6OEFHQZWXA35CEHOGYCOTBAMQFE) | `20abebd1…` (the INTERFACE.md v2.7.0 hash) |
+
+```
+▸ Desk A hands one pack over first, the way a second desk's queue goes stale
+  token 0 is RacepackClaimed before desk B sends anything
+▸ Refused before signing: an empty queue, and one over the cap
+  RangeError for 0 and for 101 ids
+▸ A desk that is not allowlisted for the race reverts the whole batch
+  NotAuthorized (#104); the record did not move
+▸ Desk B sends its whole queue of 100 in one signature
+  tx 58010474e29159ee54edfe9073093b868a05d1039ee8632896bd1f3d77ef1ff8 in ledger 4844695
+  skipped: 0 not-entered, 999999 not-found
+  every one of the 99 real packs is RacepackClaimed, including the ones after the two strays
+▸ The events that transaction emitted, decoded by the indexer's own decoder
+  98 racepack_claimed, in row order, operator desk B, and nothing for the two skipped rows
+✓ a desk drains a 100-pack queue with one signature, and a stale row costs that row alone
+```
+
+The three numbers in that run are the whole design: **100** sent, **2** skipped and reported, **98**
+claimed and announced. A pack another desk had already handed over cost exactly that row — the packs
+listed after it still landed, which is what an atomic batch could not do.
+
+[`58010474…`](https://stellar.expert/explorer/testnet/tx/58010474e29159ee54edfe9073093b868a05d1039ee8632896bd1f3d77ef1ff8)
+is one transaction and one signature for what used to be 100 wallet prompts.
+
+**Still to do after ACC:** upgrade `CCVW7WVC…` from v2.6 to v2.7, its own entry here with its tx hash.
+
+---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
 Run on **2026-09-05** with `pnpm --filter be e2e:results`. Not a simulation: the event was genuinely

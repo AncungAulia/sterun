@@ -48,7 +48,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
-    Address, BytesN, Env, MuxedAddress, String, Vec,
+    Address, BytesN, Env, Map, MuxedAddress, String, Vec,
 };
 use stellar_tokens::non_fungible::{enumerable::Enumerable, Base, NFTStorageKey};
 
@@ -82,6 +82,18 @@ const BUMP_TO: u32 = 180 * DAY_IN_LEDGERS;
 /// cannot turn one entry into a thousand cross-contract calls plus a quadratic
 /// duplicate scan. Sixteen is far past any real race-day merch table.
 const MAX_ADDONS_PER_ENTRY: u32 = 16;
+
+/// The most race packs one [`RaceRecord::claim_racepack_many`] call may carry
+/// (v2.7, STE-66).
+///
+/// Measured rather than chosen: every row reads and writes one record and emits
+/// one `RacepackClaimed`, and against the per-transaction limits live on testnet
+/// and mainnet (2026-09-23) the 16,384 bytes of contract events bind first. The
+/// constant leaves headroom below that and is enforced here, so a desk that
+/// sends too many gets [`Error::TooManyClaims`] from simulation instead of a
+/// transaction that dies on the network's resource limits. The measurement and
+/// what binds are in `sc/contracts/race_record/CLAUDE.md`.
+pub const MAX_CLAIMS_PER_CALL: u32 = 100;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,6 +137,29 @@ pub struct RecordData {
     /// v2.2) — never a zero-second race.
     pub finish_time_s: Option<u32>,
     pub result_at: Option<u64>,
+}
+
+/// Why one race pack in a [`RaceRecord::claim_racepack_many`] batch was left
+/// alone (v2.7).
+///
+/// Neither is an error: a desk that hands over 300 packs offline will have rows
+/// the chain already knows about, and the batch's job is to land the other 299.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClaimSkipped {
+    /// No record with that `token_id`. A roster from another race, or a typo.
+    NotFound,
+    /// The record is not `Entered`: another desk got there first, or the runner
+    /// is already finished or DNF. Same condition as [`Error::AlreadyClaimed`].
+    NotEntered,
+}
+
+/// One race pack a batch did not claim, and why (v2.7).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SkippedClaim {
+    pub token_id: u32,
+    pub reason: ClaimSkipped,
 }
 
 /// What one row of a [`RaceRecord::record_results`] batch records (v2.6):
@@ -216,6 +251,10 @@ pub enum Error {
     /// the one the batch is for (v2.6). The organiser signs for one event; a
     /// row for another event is never theirs to record.
     ResultForAnotherEvent = 108,
+    /// `claim_racepack_many` with more than [`MAX_CLAIMS_PER_CALL`] token ids
+    /// (v2.7). Refused before anything is read, so an oversized queue costs a
+    /// simulation rather than a transaction that dies on the network's limits.
+    TooManyClaims = 109,
 }
 
 // ---------------------------------------------------------------------------
@@ -472,7 +511,7 @@ impl RaceRecord {
         operator.require_auth();
         bump_instance(&env);
 
-        let mut record = read_record(&env, token_id)?;
+        let record = read_record(&env, token_id)?;
         let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
         if operator != registry.get_organiser(&record.event_id)
             && !registry.is_scanner(&record.event_id, &operator)
@@ -483,18 +522,90 @@ impl RaceRecord {
             return Err(Error::AlreadyClaimed);
         }
 
-        record.state = RecordState::RacepackClaimed;
-        record.claimed_at = Some(env.ledger().timestamp());
-        let event_id = record.event_id;
-        write_record(&env, token_id, &record);
-
-        RacepackClaimed {
-            token_id,
-            event_id,
-            operator,
-        }
-        .publish(&env);
+        hand_over_racepack(&env, token_id, record, operator);
         Ok(())
+    }
+
+    // STE-66. A race pack desk works offline and queues each hand-over; when
+    // signal returns the queue is sent, and one call per runner means one wallet
+    // prompt per runner. A desk that handed over 300 packs asked its volunteer to
+    // approve 300 times.
+    //
+    // Two rules, and the second is the whole point:
+    //
+    // - **Authorisation is per event, exactly as `claim_racepack` checks it.**
+    //   The operator authorises once, then each record's event is checked
+    //   against the registry. `NotAuthorized` REVERTS the batch: that is a
+    //   misconfigured desk, not a race, and skipping it would hand a volunteer a
+    //   half-done queue with no clue why. Each event is checked once per call —
+    //   a desk sends one event's queue, so this is one pair of cross-contract
+    //   calls, not one per runner.
+    // - **An already-claimed pack does NOT revert the batch.** That is the
+    //   two-desk case from STE-25: the loser of a race would otherwise block the
+    //   other 299 hand-overs. Those tokens come back in the return value with a
+    //   reason, and the scanner shows them on its flagged list.
+    //
+    // It emits one `RacepackClaimed` per pack actually claimed, in row order, so
+    // the indexer needs no new handler.
+
+    /// Hands over many race packs in one signature. Organiser or an allowlisted
+    /// scanner, per event. Returns the ids it did NOT claim, with the reason;
+    /// an unauthorised event reverts the whole batch.
+    pub fn claim_racepack_many(
+        env: Env,
+        token_ids: Vec<u32>,
+        operator: Address,
+    ) -> Result<Vec<SkippedClaim>, Error> {
+        if token_ids.len() > MAX_CLAIMS_PER_CALL {
+            return Err(Error::TooManyClaims);
+        }
+        operator.require_auth();
+        bump_instance(&env);
+
+        let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
+        // Events this operator has already been cleared for in THIS call. A desk
+        // sends one event's queue, so without it the batch would repeat the same
+        // two cross-contract reads for every runner.
+        let mut cleared: Map<u32, ()> = Map::new(&env);
+        let mut skipped: Vec<SkippedClaim> = Vec::new(&env);
+
+        for token_id in token_ids.iter() {
+            let record = match env
+                .storage()
+                .persistent()
+                .get::<_, RecordData>(&DataKey::Record(token_id))
+            {
+                Some(record) => record,
+                None => {
+                    skipped.push_back(SkippedClaim {
+                        token_id,
+                        reason: ClaimSkipped::NotFound,
+                    });
+                    continue;
+                }
+            };
+
+            if !cleared.contains_key(record.event_id) {
+                if operator != registry.get_organiser(&record.event_id)
+                    && !registry.is_scanner(&record.event_id, &operator)
+                {
+                    return Err(Error::NotAuthorized);
+                }
+                cleared.set(record.event_id, ());
+            }
+
+            if record.state != RecordState::Entered {
+                skipped.push_back(SkippedClaim {
+                    token_id,
+                    reason: ClaimSkipped::NotEntered,
+                });
+                continue;
+            }
+
+            hand_over_racepack(&env, token_id, record, operator.clone());
+        }
+
+        Ok(skipped)
     }
 
     /// Publishes a finish time. Organiser only.
@@ -720,6 +831,26 @@ fn check_addon_ids(addon_ids: &Vec<u32>, addon_count: u32) -> Result<(), Error> 
         }
     }
     Ok(())
+}
+
+/// The one place a race pack is handed over — shared by `claim_racepack` and
+/// every row of `claim_racepack_many`, so a batch cannot write a record the
+/// single call would have written differently.
+///
+/// The caller has already authorised the operator for this record's event and
+/// checked that the record is `Entered`.
+fn hand_over_racepack(env: &Env, token_id: u32, mut record: RecordData, operator: Address) {
+    record.state = RecordState::RacepackClaimed;
+    record.claimed_at = Some(env.ledger().timestamp());
+    let event_id = record.event_id;
+    write_record(env, token_id, &record);
+
+    RacepackClaimed {
+        token_id,
+        event_id,
+        operator,
+    }
+    .publish(env);
 }
 
 /// The one place a result is validated, written and announced — shared by

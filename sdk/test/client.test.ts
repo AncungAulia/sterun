@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 import type { Client as EventRegistryClient } from "../vendor-dist/event-registry.js";
 import type { Client as RaceRecordClient } from "../vendor-dist/race-record.js";
-import { RECORD_RESULTS_MAX_BATCH, SterunClient, chunkResults } from "../src/client.js";
+import { CLAIM_MAX_BATCH, RECORD_RESULTS_MAX_BATCH, SterunClient, chunkResults } from "../src/client.js";
 import { SterunContractError } from "../src/errors.js";
 
 const HASH = "feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29";
@@ -200,6 +200,51 @@ describe("organiser flow maps onto EventRegistry", () => {
       code: 20,
       source: "event-registry",
       method: "enter",
+    });
+  });
+
+  it("claimRacepackMany sends the queue and maps what came back skipped (v2.7)", async () => {
+    const skipped = [
+      { token_id: 7, reason: { tag: "NotEntered", values: undefined } },
+      { token_id: 9, reason: { tag: "NotFound", values: undefined } },
+    ];
+    const { client, record } = clientWith({}, { claim_racepack_many: good(ok(skipped)) });
+
+    const sent = await client.claimRacepackMany([7, 8, 9], SCANNER);
+
+    expect(record.calls[0]?.method).toBe("claim_racepack_many");
+    expect(record.calls[0]?.args).toEqual({ token_ids: [7, 8, 9], operator: SCANNER });
+    expect(sent.value).toEqual([
+      { tokenId: 7, reason: "not-entered" },
+      { tokenId: 9, reason: "not-found" },
+    ]);
+  });
+
+  it("claimRacepackMany refuses an empty queue and one over the cap, before signing", async () => {
+    const { client, record } = clientWith({}, { claim_racepack_many: good(ok([])) });
+
+    await expect(client.claimRacepackMany([], SCANNER)).rejects.toThrow(/at least one token id/);
+    await expect(
+      client.claimRacepackMany(Array.from({ length: CLAIM_MAX_BATCH + 1 }, (_, i) => i), SCANNER),
+    ).rejects.toThrow(/at most 100 race packs per call, got 101/);
+    expect(record.calls).toHaveLength(0);
+
+    // The cap itself is legal, and a full queue comes back with nothing skipped.
+    const full = await client.claimRacepackMany(
+      Array.from({ length: CLAIM_MAX_BATCH }, (_, i) => i),
+      SCANNER,
+    );
+    expect(full.value).toEqual([]);
+    expect(record.calls).toHaveLength(1);
+  });
+
+  it("names NotAuthorized(104) from claimRacepackMany as a RaceRecord error", async () => {
+    const { client } = clientWith({}, { claim_racepack_many: reverting(104) });
+    await expect(client.claimRacepackMany([1], SCANNER)).rejects.toMatchObject({
+      variant: "NotAuthorized",
+      code: 104,
+      source: "race-record",
+      method: "claimRacepackMany",
     });
   });
 
