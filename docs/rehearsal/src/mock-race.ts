@@ -38,6 +38,7 @@ import {
   contractUrl,
 } from "./evidence";
 import { Device } from "./device-process";
+import { FaucetStoppedError, fundFromFaucet } from "./faucet";
 import {
   API,
   HORIZON,
@@ -51,6 +52,7 @@ import {
   friendbot,
   log,
   newAccount,
+  postFaucet,
   readEnvFile,
   remember,
   secrets,
@@ -234,25 +236,17 @@ async function main(): Promise<void> {
 
     await ev.step("S.5", "S", "Each runner gets test sUSD from the web app's faucet route (POST /faucet)", "API", async (s) => {
       const failures: string[] = [];
+      let paid = 0;
       for (const r of runners) {
-        let res = await api<{ tx_hash?: string; paid_stroops?: string; error?: string; message?: string }>("/faucet", {
-          method: "POST",
-          headers: { ...(await signedHeaders(r.kp)), "content-type": "application/json" },
-          body: "{}",
-        });
-        if (res.status === 429) {
-          s.note(`${r.label}: 429 from the per-client rate limit (6/min); waiting 65s, as a person would`);
-          await sleep(65_000);
-          res = await api("/faucet", {
-            method: "POST",
-            headers: { ...(await signedHeaders(r.kp)), "content-type": "application/json" },
-            body: "{}",
-          });
-        }
-        if (res.status === 200 && res.body.tx_hash) {
-          s.tx(`${r.label} faucet ${Number(BigInt(res.body.paid_stroops ?? "0") / SUSD)} sUSD`, res.body.tx_hash);
-        } else {
-          failures.push(`${r.label}: ${res.status} ${JSON.stringify(res.body)}`);
+        try {
+          const payout = await fundFromFaucet(postFaucet(r.kp), r.label, paid);
+          paid += 1;
+          s.tx(`${r.label} faucet ${Number(payout.paidStroops / SUSD)} sUSD`, payout.txHash);
+        } catch (error) {
+          // The daily cap, a dry float or no faucet: every later runner would
+          // be refused the same way, so stop asking and fail with the reason.
+          if (error instanceof FaucetStoppedError) throw error;
+          failures.push(`${r.label}: ${error instanceof Error ? error.message : String(error)}`);
         }
         await sleep(10_500);
       }

@@ -132,6 +132,14 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
   return { status: res.status, body: body as T };
 }
 
+/** `POST /faucet` for `kp`, signed the way the web app's "Get test sUSD" signs it. */
+export const postFaucet = (kp: Keypair) => async () =>
+  api<unknown>("/faucet", {
+    method: "POST",
+    headers: { ...(await signedHeaders(kp)), "content-type": "application/json" },
+    body: "{}",
+  });
+
 export async function waitFor<T>(what: string, read: () => Promise<T | undefined>, timeoutMs = 180_000, everyMs = 5_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   let last: unknown;
