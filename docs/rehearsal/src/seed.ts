@@ -66,6 +66,7 @@ import {
   checkLinks,
   contractExports,
   friendbot,
+  hasTrustline,
   log,
   newAccount,
   postFaucet,
@@ -197,8 +198,9 @@ async function main(): Promise<void> {
       await friendbot(organiser.publicKey());
       s.note("funded with Friendbot");
     }
-    const { balanceEntry } = await server.getAssetBalance(organiser.publicKey(), susd, TESTNET.networkPassphrase);
-    if (!balanceEntry) s.tx("organiser changeTrust sUSD", await addTrustline(organiser, susd));
+    if (!(await hasTrustline(organiser.publicKey(), susd))) {
+      s.tx("organiser changeTrust sUSD", await addTrustline(organiser, susd));
+    }
     if (!(await sterun.isOrganiser(organiser.publicKey()))) {
       if (!admin) throw new Error("STERUN_ADMIN_SECRET is not set (repo root .env), and the organiser is not allowlisted yet");
       s.tx("add_organiser", (await sterun.addOrganiser(organiser.publicKey(), SterunClient.as(admin))).txHash);
