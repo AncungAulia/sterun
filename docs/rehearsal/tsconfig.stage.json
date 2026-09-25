@@ -3,11 +3,12 @@
   "compilerOptions": {
     "incremental": false,
     "paths": {
+      "@/*": ["../../fe/src/*"],
       "@stellar/stellar-sdk": ["../../be/node_modules/@stellar/stellar-sdk"],
       "@sterunxyz/sdk": ["../../be/node_modules/@sterunxyz/sdk"]
     },
     "typeRoots": ["../../be/node_modules/@types"]
   },
-  "include": ["src/mock-race.ts", "src/evidence.ts", "src/device-process.ts", "test/**/*.ts"],
+  "include": ["src/mock-race.ts", "src/seed.ts", "src/sweep.ts", "src/evidence.ts", "src/device-process.ts", "test/**/*.ts"],
   "exclude": []
 }
