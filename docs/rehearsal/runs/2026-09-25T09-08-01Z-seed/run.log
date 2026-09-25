@@ -1,0 +1,238 @@
+
+▸ [S.1] Preflight: the live backend serves these contracts, the faucet can pay this run, the claim path
+    url GET /health: https://api.sterun.xyz/health
+    url GET /config: https://api.sterun.xyz/config
+    · faucet: 50 sUSD a payout, 100 payouts per 24h; this run needs 16
+    · claim path: BATCH — the live RaceRecord exports claim_racepack_many and this SDK build has claimRacepackMany
+  ✓ PASS
+
+▸ [S.2] The demo organiser: funded, sUSD trustline, allowlisted
+    · the demo organiser from .env (STERUN_DEMO_ORGANISER_SECRET)
+    url organiser: https://stellar.expert/explorer/testnet/account/GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF
+    tx  organiser changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/b5f224fb4dff63786560e60d99d420d02ac01f35d24aae1e2fa8f282e05652f1
+    tx  add_organiser: https://stellar.expert/explorer/testnet/tx/3a6c7a5ee6390b961c40eb3c3181fcaff54d87b8315e5f2d84effc3fbd3578fe
+    url organiser console (connect this wallet): https://app.sterun.xyz/org
+  ✓ PASS
+
+▸ [D.1] Retire the previous demo: cancel this organiser's races from an earlier seed that are still open
+    · no earlier demo race of this organiser is open
+  ✓ PASS
+
+▸ [S.3] Fund 16 runners and 2 desks; runners get test sUSD from the web app's faucet route
+    · runner and desk keys written to .env.demo (0600, gitignored) for showing a pass on a phone; values not printed
+    tx  R01 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/3746a531e2e494907437d99596cc6bc45fb62f30cdba68afb30d9970ba610e4b
+    tx  R01 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/c07ef14799b6eb02e7859dd6ef72cbc4696a01dbf2b68c5cc8dee409f9a33f03
+    tx  R02 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/fd9dd493124556780efe522a24ecbe3bc3bcad91377b977f56da120154932c0d
+    tx  R02 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/02315ce033ec9267541b871f923de3c828f4b33065a6f94ebde65a95c4b6f7b2
+    tx  R03 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/c197b5f76254a4b0aeca1b722b4615cc3dd8c5d618a9df45e11bb420eb4f3286
+    tx  R03 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/0776aa622bf3bb5032b9aeabddf5f3ea349d0e959660079c39ba49019c2f2583
+    tx  R04 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/f1d30898360cff285e7c3f4dd0970250847ef8e20f9d62beeb9ab7bb53edfb19
+    tx  R04 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/e35953081af7f977783ba99fd12139d83393b5b09097ee1c90d2c404390b1005
+    tx  R05 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/d8149b1a889651445a8f4892d27e74745cc4a0ab7403c746a6f0d2a3027c1ef3
+    tx  R05 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/b086a8fef8ab52ca91f42b0811b9b7dc14dfcdad5452fc1ef1d9b6a8b645c157
+    tx  R06 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/3874a70dbe3919be133bce6ff65dd01a822e68185b50fd33114c385232c9ad34
+    tx  R06 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/87eba5081a7d6f9bc5b72036552ad8a21e575125118018204b9c8be4cd5a9bdb
+    tx  R07 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/c2dd34f773bccb760305351989d132c263fdac2c7c5488cbfae1bb748e8f7e9d
+    tx  R07 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/99bff03f065914edae81bdb918d21eb7064615d2d8f7be115e0c52627d47b318
+    tx  R08 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/dafe23e3508d14acb7f21cf8dad7b58eaa75d17d798986d5d1615db0c3b8ea47
+    tx  R08 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/e55ccdd3299709bf5b7de27978ab40347d66197ee199b56e44baf6df3f2a80fd
+    tx  R09 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/ccfd2d483104a8b2f481511404bb54812f15a0ae34dad7ea57fdc0f5e47d7833
+    tx  R09 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/fcf5c22e8e1674a8d7c556a57ce356040bc1cb225bcdf93071f1058fc33ea928
+    tx  R10 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/823f19796f9aaab606c506a6925da60039ed50b868789ef444854719eeaafa22
+    tx  R10 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/ecbb2e252bda416869a540ad9fd35cf88081dd3bdeb058794e354f435f57d744
+    tx  R11 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/53cdb6785fcda0dff5feffddcba65cd1c53f9d57474cd641d9026e82bc6ae769
+    tx  R11 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/940778b10e775adccc7c78921a6aa8609ef7bcb876a3cc2f69b98e5772ccb7a4
+    tx  R12 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/ca7b35a7d2744b116da4e4a3d1c9eba10a4863b3ae768ff4db306b477d1c4c69
+    tx  R12 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/6b91faec42abf8c265e29134c54ccd80e6a75defcfd8c8fd48b0328e4c74c0b2
+    tx  R13 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/5b2b333867b5833618097be2855bc0e31a7a84499163e2bf01435a32da49bf0b
+    tx  R13 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/24a6b697320dde210950efac087638e18539048996bdb5edfaef8d563cc8e118
+    tx  R14 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/40c5cb03edf85108dabe44914ecd7a5efbbc63abbabab0f1f7d7812119de429d
+    tx  R14 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/51cb9f25d52030f0ab42a8572f3116c64e6f57892f311a567a268e9bd9cbea6e
+    tx  R15 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/3f68174e31c2c1c51c2b77f5f34fea67f2a2b2b0040e2317e2d68469daedf331
+    tx  R15 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/61debdf6976d05d3ce8b480d787bd3826261cadb9fcee6624cf92341f2ef41f4
+    tx  R16 changeTrust sUSD: https://stellar.expert/explorer/testnet/tx/0658d24d7c3c138884204ca37f23001512caff8cbd35371955d3101eb90d3eae
+    tx  R16 faucet 50 sUSD: https://stellar.expert/explorer/testnet/tx/cfd04f0a21280692141542df0232c91e302f263b461a21547262ad5c5b7a9344
+    url POST /faucet: https://api.sterun.xyz/faucet
+  ✓ PASS
+
+▸ [P.solo] Publish Solo Heritage Run 2026: poster and document through POST /events/files, then create, distances, add-ons, open
+    · race day 2026-09-20 05:30 Asia/Jakarta (starts_at 1789857000, 2026-09-19T22:30:00.000Z)
+    url poster solo-heritage-run.jpg: https://api.sterun.xyz/files/c0faa3d93c34ec40a91d5258bc54ff608d053056df80d538f19d17ec5d9413a8.jpg
+    url event document: https://api.sterun.xyz/files/08ff6dfc0e8d0152a768f5176dff0223663ada1551b5926155b6e4168af06a38.json
+    tx  create_event → event 40: https://stellar.expert/explorer/testnet/tx/852bdf33a91a7c9a17ec2f09c4e51aaf96e4c33ffd0690d77c9d831b47d4d00e
+    tx  add_category 10K quota 150 @ 12 sUSD → 0: https://stellar.expert/explorer/testnet/tx/f1b2099b60fdc9c37259bf817e660f94a980cc7a24d6c08ab9ff9dd4f2e99483
+    tx  add_category 5K quota 250 @ 8 sUSD → 1: https://stellar.expert/explorer/testnet/tx/8aef36c0b084a621a93df6853aa34d73186410766c641b9a4bf7797fd5210277
+    tx  set_event_status Open: https://stellar.expert/explorer/testnet/tx/d43c43e8ebe8c1e68820038b397f622f16849f617b9eaa72745a363f863574c7
+    url race page: https://app.sterun.xyz/events/40
+    url GET /events/40: https://api.sterun.xyz/events/40
+  ✓ PASS
+
+▸ [P.kotatua] Publish Kota Tua 10K 2026: poster and document through POST /events/files, then create, distances, add-ons, open
+    · race day 2026-10-11 05:00 Asia/Jakarta (starts_at 1791669600, 2026-10-10T22:00:00.000Z)
+    url poster kota-tua-10k.jpg: https://api.sterun.xyz/files/6ce3f86a711f1d6f4587f898f17d0868cb76a032d72b3bd3ec39554302d8023a.jpg
+    url event document: https://api.sterun.xyz/files/8c0b911703f26b22262de9ab3e45e8757b7df67edef205025f6b5ff928d77e63.json
+    tx  create_event → event 41: https://stellar.expert/explorer/testnet/tx/d24a6b03ab0e24070358eee243838a412bedb0b530c24554ac5ca9acd8f1465d
+    tx  add_category 10K quota 400 @ 15 sUSD → 0: https://stellar.expert/explorer/testnet/tx/0f005e65c3b57eb9ddd3d01d13222122bd87fdc2b8f24deba64905b2f25112b6
+    tx  add_category 5K quota 600 @ 10 sUSD → 1: https://stellar.expert/explorer/testnet/tx/d3f98ed34486e1ddcf32ca1a448a3f10c851c00b781185112edda4c9fcb56916
+    tx  add_addon TUMBLER 4 sUSD ×300 → 0: https://stellar.expert/explorer/testnet/tx/d83838f4c63c2253368a861b43ba16435aba4b5b9b95448a31de1a728c2234bb
+    tx  set_registration_closes 2026-10-04T16:59:00.000Z: https://stellar.expert/explorer/testnet/tx/73e19d5b27e86ad36bee71a99372d84fce6eb028672e8d96d79d899a9d781fa1
+    tx  set_event_status Open: https://stellar.expert/explorer/testnet/tx/a3b8235e879660cb624e112cd5ab5c9f224316858dec94302d11787d2aaea7a6
+    url race page: https://app.sterun.xyz/events/41
+    url GET /events/41: https://api.sterun.xyz/events/41
+  ✓ PASS
+
+▸ [P.braga] Publish Braga Night Run 2026: poster and document through POST /events/files, then create, distances, add-ons, open
+    · race day 2026-11-07 19:00 Asia/Jakarta (starts_at 1794052800, 2026-11-07T12:00:00.000Z)
+    url poster braga-night-run.jpg: https://api.sterun.xyz/files/babb5ee696ea40ed4bf53faf715d69fc11b9ed4c838388e7900f62c0e77c7ebb.jpg
+    url event document: https://api.sterun.xyz/files/0429f45ac9a0ebb58d6419701615388c658a30df2d584b332cd8c70cf3844658.json
+    tx  create_event → event 42: https://stellar.expert/explorer/testnet/tx/58f01bdc7fa766e8d2670c5bd78c02223850d87ebd7e0e9b4c1c0185756e9620
+    tx  add_category 7K quota 300 @ 11 sUSD → 0: https://stellar.expert/explorer/testnet/tx/b68e6f56df24acfd757a2895eb5fdf38ad024d9a156940718b5aa888b8749e4c
+    tx  add_category 3K quota 200 @ 0 sUSD → 1: https://stellar.expert/explorer/testnet/tx/edf3e4994bcfa70ad31d2ba65181d8888bc3189d621eff73d11c46944d836ad3
+    tx  set_registration_closes 2026-11-02T16:59:00.000Z: https://stellar.expert/explorer/testnet/tx/ad0184a301e9653ac6069d383926918bc0c649fc8f19588f8ed13458bd5c60a5
+    tx  set_event_status Open: https://stellar.expert/explorer/testnet/tx/3a6570f879488a7201c403f4ba03c1a1f1b8f34a5b6a772566b226489d4ddac0
+    url race page: https://app.sterun.xyz/events/42
+    url GET /events/42: https://api.sterun.xyz/events/42
+  ✓ PASS
+
+▸ [P.sanur] Publish Sanur Sunrise Half Marathon 2026: poster and document through POST /events/files, then create, distances, add-ons, open
+    · race day 2026-12-06 05:00 Asia/Makassar (starts_at 1796504400, 2026-12-05T21:00:00.000Z)
+    url poster sanur-sunrise-half.jpg: https://api.sterun.xyz/files/7ebdac71bbdba29565e1455a69a181e4ab2c24a4cb9a2e7e9f32be1826013589.jpg
+    url event document: https://api.sterun.xyz/files/5cc0fa7663c7f1b8b1544cd37d0ffaaecc32aa61af330681477b1e13ae8241f0.json
+    tx  create_event → event 43: https://stellar.expert/explorer/testnet/tx/c87780c9f8cba81d1d58ae0f0ab04a6396d55346fdd2d5ea4c7f875fcae562f4
+    tx  add_category HM quota 200 @ 20 sUSD → 0: https://stellar.expert/explorer/testnet/tx/c79d0345969f5df708ccbd2c55e92c7bf8d8aba446ffaf50b975fb606c15c6f3
+    tx  add_category 10K quota 300 @ 15 sUSD → 1: https://stellar.expert/explorer/testnet/tx/5e3e01dbbd88f96eb786826a99d86c755a4af8c790df47aac7530b5db0521667
+    tx  set_registration_closes 2026-11-26T15:59:00.000Z: https://stellar.expert/explorer/testnet/tx/f0586d6a3ad0a6a6283fd670c8c8cca5bfd474f90adc144c9c23127b9e69d7fc
+    tx  set_event_status Open: https://stellar.expert/explorer/testnet/tx/4710d69b5981ed8a895638885d35dcb002ff01a1440b5a7c6ff7e7a2a9148a67
+    url race page: https://app.sterun.xyz/events/43
+    url GET /events/43: https://api.sterun.xyz/events/43
+  ✓ PASS
+
+▸ [E.solo] Runners enter Solo Heritage Run 2026 through the entry flow and pay sUSD
+    tx  R01 Budi Santoso enters 10K → token 98, bib 1: https://stellar.expert/explorer/testnet/tx/2b1a198cca792b593573b6503e76f8b8ab85d2e1f51d12cbd3fccfea6f628857
+    tx  R02 Siti Rahayu enters 10K → token 99, bib 2: https://stellar.expert/explorer/testnet/tx/c686c93b9431a0d5a9dcf6a5c7b6232e65e69f423be1f22852093f448c35a1b8
+    tx  R03 Andi Wijaya enters 10K → token 100, bib 3: https://stellar.expert/explorer/testnet/tx/26a1080f81f4c09fbd03d4ae161c4b296e91ef75031775de43ba3873df3644dd
+    tx  R04 Dewi Lestari enters 5K → token 101, bib 4: https://stellar.expert/explorer/testnet/tx/34566cdf51293ef434abffc97af0db36173be212f26b9a3a944a267e9f547ec9
+    tx  R05 Rizky Pratama enters 10K → token 102, bib 5: https://stellar.expert/explorer/testnet/tx/5c1b5553222904218083ba3d91216855426f589866f7839518d7bf26ec3368aa
+    tx  R06 Putri Ayu Maharani enters 5K → token 103, bib 6: https://stellar.expert/explorer/testnet/tx/9e15c82abae022ea58d45aa8612b00af8ceb83f50dfcbefee33a669815e1b330
+    tx  R07 Agus Setiawan enters 10K → token 104, bib 7: https://stellar.expert/explorer/testnet/tx/0675dee5fb9153e908273746cb686d2040964f8af0ff8865cb543206d86c4bec
+    tx  R08 Nur Aini enters 5K → token 105, bib 8: https://stellar.expert/explorer/testnet/tx/8ed8aae91edd14ab91ed6eaf33e7c04c04c94d29bcca398601a25380131d4fda
+    tx  R09 Fajar Nugroho enters 10K → token 106, bib 9: https://stellar.expert/explorer/testnet/tx/a86173ff4c1a0032faf118b469dda7b4365da4d71cdfb835ecbe56f861e5cf4d
+    tx  R10 Maya Anggraini enters 5K → token 107, bib 10: https://stellar.expert/explorer/testnet/tx/d738a60a799b7b84baaa8da2299d4ecdc31be9ec3cb1cebb72441d5e2a16b88c
+    tx  R11 Yoga Prasetyo enters 10K → token 108, bib 11: https://stellar.expert/explorer/testnet/tx/e98396ac544eeb9a7d6ad0f2c911ea11ab6bd08818d91c5a0b287dc6c19d80c2
+    tx  R12 Intan Permatasari enters 5K → token 109, bib 12: https://stellar.expert/explorer/testnet/tx/5833cc0d3998909f542dfc5b0c29e5265f268b83830c0aae25d04c464521831f
+  ✓ PASS
+
+▸ [E.kotatua] Runners enter Kota Tua 10K 2026 through the entry flow and pay sUSD
+    tx  R01 Budi Santoso enters 10K → token 110, bib 1: https://stellar.expert/explorer/testnet/tx/bcb8ab6b46b9b0d28366c66daf7d1e5d1f64d72941199cfe67916d2cb5496661
+    tx  R02 Siti Rahayu enters 10K + TUMBLER → token 111, bib 2: https://stellar.expert/explorer/testnet/tx/e6d922dbf40003d72349b4119676ca684c0af1d4f8ee4a056a625d8270614ed8
+    tx  R05 Rizky Pratama enters 5K + TUMBLER → token 112, bib 3: https://stellar.expert/explorer/testnet/tx/0ecfbd3af49b885bb3c73a5f85daa7d377236085bc3ddc4902422546cd181bed
+    tx  R13 Dimas Ardiansyah enters 10K → token 113, bib 4: https://stellar.expert/explorer/testnet/tx/758ce73fb544e05702efd989393002368980cf7181b07dcc1b6319fbb2429f10
+    tx  R14 Ratna Sari enters 5K → token 114, bib 5: https://stellar.expert/explorer/testnet/tx/3aac8a2ac85454bc6b70b2fbea4b6af47b2c7a12879aa03208249c8b280e75af
+    tx  R08 Nur Aini enters 5K → token 115, bib 6: https://stellar.expert/explorer/testnet/tx/a1c77ac1f104c6fa599d225b0ef8798a3ec43e058615b1c750026715b7905a8a
+  ✓ PASS
+
+▸ [E.braga] Runners enter Braga Night Run 2026 through the entry flow and pay sUSD
+    tx  R03 Andi Wijaya enters 7K → token 116, bib 1: https://stellar.expert/explorer/testnet/tx/cc69dcc5d339443299081622d737299f93f6d5701b9bb463501593c9f4555f9e
+    tx  R04 Dewi Lestari enters 3K → token 117, bib 2: https://stellar.expert/explorer/testnet/tx/2bc2ec23ebe3f7baf4c6c2ce0ca856db7ef9ca9179a3352c04aa8f4f08fd4a6c
+    tx  R15 Hendra Gunawan enters 7K → token 118, bib 3: https://stellar.expert/explorer/testnet/tx/ab28eb9802459758218372b50eeacb29d0e0bb97cd2cc1fac996155ea3cc750d
+    tx  R14 Ratna Sari enters 3K → token 119, bib 4: https://stellar.expert/explorer/testnet/tx/2b6a3a5ad40651d138d086e5a26e774d6053a023820973a6aa9faaddf9c3bc84
+  ✓ PASS
+
+▸ [E.sanur] Runners enter Sanur Sunrise Half Marathon 2026 through the entry flow and pay sUSD
+    tx  R01 Budi Santoso enters HM → token 120, bib 1: https://stellar.expert/explorer/testnet/tx/f89a36dbeac3d50859be81d6552b1e7577a97abf58710b00c1f2f526cc4441b0
+    tx  R09 Fajar Nugroho enters 10K → token 121, bib 2: https://stellar.expert/explorer/testnet/tx/d873632c1e60d1876c33399215e3c1fbfef87637265a2646d42c2e0e60bba732
+    tx  R16 Larasati Wibowo enters HM → token 122, bib 3: https://stellar.expert/explorer/testnet/tx/a6a5cbccc93fa79f0d600fe657f58c81ca8b76e9070345dd98a7689daa4a9900
+  ✓ PASS
+
+▸ [K.1] Solo Heritage Run 2026: entries close, and the organiser adds two scanner desks
+    tx  set_event_status Closed: https://stellar.expert/explorer/testnet/tx/f88f87ccd81c277131cb28a93e9edd4e9d926d20e5e69e9b879457d7c54ae27f
+    tx  add_scanner desk-A: https://stellar.expert/explorer/testnet/tx/3451f7e31da5463d4dc06e53f6985852523648b11138e9b6a5fd3b52f656298f
+    tx  add_scanner desk-B: https://stellar.expert/explorer/testnet/tx/c2e3a83459a2046c1c73ebb22824ee2c65f4f0506186d031b5f498012a0f3cde
+  ✓ PASS
+
+▸ [K.2] The main desk hands over 9 race packs
+    · claim path: the live RaceRecord exports claim_racepack_many and this SDK build has claimRacepackMany
+    tx  claim_racepack_many ×9 (tokens 98, 99, 100, 101, 103, 104, 105, 106, 109): https://stellar.expert/explorer/testnet/tx/70c5e8625fae94b4482725e39310d09c9997964190aac801fe5edea18cb20376
+    · R05 and R11 come to the offline desks (F.1, F.2); R10 never comes
+  ✓ PASS
+
+▸ [K.3] Both desks download the roster online, then lose signal
+    · desk-A: 12 entries, snapshot ledger 4860907
+    · desk-B: 12 entries, snapshot ledger 4860908
+    url GET /events/40/roster (scanner-signed): https://api.sterun.xyz/events/40/roster
+  ✓ PASS
+
+▸ [F.1] Fraud attempt 1: a forwarded screenshot of R11's pass is refused once stale; the live pass is accepted
+    · roster totp as desk-A stored it: step 30s, tolerance ±1 step(s), 6 digits
+    · What this step proves: a screenshot goes stale in under a minute, and even a fresh one can only be used once. What it does NOT prove: that a forwarded QR is rejected. The desk accepts the code's step ±1 (a 90-second window around its own clock), so a screenshot forwarded and shown within 30–60 seconds of being taken DOES pass (longer if the desk's clock runs behind the phone's). That does not help an attacker: the code turns over every 30 seconds, so the screenshot is worthless within a minute, and a fresh one is worth exactly what the runner's own pass is worth: one claim on one record. Used by someone else it spends the runner's claim, not a new one — the runner is then refused "Already claimed" (5.1, 5.2), and if two offline desks both hand a pack over, that is the duplicate-collection case: the chain keeps one claim and the other desk flags it (6.1).
+    · FOR WHOEVER FILMS THIS: take the screenshot, WAIT on camera until the desk would refuse it, present it, show the refusal. Do not cut the wait. Without the wait the clip shows a fresh screenshot being refused, which the product does not do — a fresh screenshot passes (see above). Then show the runner's own live pass being accepted at the next desk.
+    · screenshot of R11's pass taken 2026-09-25T09:22:13.949Z (step 59677604); a desk on the same clock accepts it until 2026-09-25T09:22:59.000Z and refuses it from 2026-09-25T09:23:00.000Z
+    · waiting 48.1s of real time (tolerance from the roster + 2s margin), no mocked clock
+    · desk-A scans the screenshot 48.1s after it was taken: EXPIRED, screen shows bib 11
+    · desk-B scans R11: GREEN, screen shows bib 11 (chain bib 11)
+    · step took 49.0s, almost all of it the wait: the screenshot had to outlive the roster's ±1 step tolerance before it was shown
+  ✓ PASS
+
+▸ [F.2a] Fraud attempt 2: R05 collects at BOTH offline desks
+    · desk-A scans R05: GREEN, screen shows bib 5 (chain bib 5)
+    · desk-B scans R05: GREEN, screen shows bib 5 (chain bib 5)
+  ✓ PASS
+
+▸ [K.4] Signal returns: both desks press Send at the same moment
+    · desk-A row token 102: sent
+    tx  desk-A claim_racepack token 102: https://stellar.expert/explorer/testnet/tx/8d04dad5a75301e0737537c522eeb4d9978fa265ea9ed7b8b5530a9b36cb8b58
+    · desk-B row token 108: sent
+    tx  desk-B claim_racepack token 108: https://stellar.expert/explorer/testnet/tx/f0705653d43ddef1dee5d080c353a54f2e356cac6b7196917de025d8ffafe408
+    · desk-B row token 102: refused (already-claimed)
+  ✓ PASS
+
+▸ [F.2] Fraud attempt 2, caught: the chain keeps one claim for R05, the other desk flags it
+    · desk-A R05 row: {"tokenId":102,"bibNo":5,"eventId":40,"scannedAt":"2026-09-25T09:23:02.472Z","status":"sent","txHash":"8d04dad5a75301e0737537c522eeb4d9978fa265ea9ed7b8b5530a9b36cb8b58","ledger":4860921}
+    · desk-B R05 row: {"tokenId":102,"bibNo":5,"eventId":40,"scannedAt":"2026-09-25T09:23:02.473Z","status":"refused","reason":"already-claimed","claimedAt":"1790328192"}
+    tx  winner desk-A claim_racepack R05: https://stellar.expert/explorer/testnet/tx/8d04dad5a75301e0737537c522eeb4d9978fa265ea9ed7b8b5530a9b36cb8b58
+    · chain: R05 RacepackClaimed, claimed_at 1790328192; one pack is recorded, the second handover is what the flag is for
+    url desk-B transactions incl. failed (Horizon): https://horizon-testnet.stellar.org/accounts/GCM6W7OQ5N4ZXTCSM4VRKYGF47THH5MX3IXMMVJYFKSQGAGFKELPARC4/transactions?include_failed=true&order=asc&limit=50
+    · desk-B's claim never reached the ledger: it was refused at simulation because the winner's transaction had already closed
+    · desk-B Flagged screen: ["Already collected elsewhere at 16:23"]
+    · desk-B "copy for organiser": "Refused claims for Solo Heritage Run 2026\nBib 5: Already collected elsewhere at 16:23. Handed over at this desk at 16:23."
+    · two desks = two OS processes, each with its own IndexedDB and queue, running the web app's scanner code
+  ✓ PASS
+
+▸ [R.1] Solo Heritage Run 2026: the results file previews clean
+    · CSV: 1,0:47:12,finished | 2,0:58:40,finished | 3,0:52:05,finished | 4,0:31:18,finished | 5,0:49:57,finished | 6,0:27:44,finished | 7,,dnf | 8,0:36:02,finished | 9,1:01:29,finished | 10,,dns | 11,0:44:51,finished | 12,,untimed
+    url POST /events/40/results/preview: https://api.sterun.xyz/events/40/results/preview
+    · counts {"total":12,"publishable":12,"malformed_row":0,"unknown_bib":0,"ambiguous_bib":0,"duplicate_bib":0,"not_claimed":0,"already_final":0,"impossible_time":0}
+  ✓ PASS
+
+▸ [R.2] The organiser records all 12 results in one signature, and the race is Completed
+    tx  record_results ×12: https://stellar.expert/explorer/testnet/tx/4b386a72993086692d837efd2837edf15065c564e812ca65f5889689e183d73d
+    tx  set_event_status Completed: https://stellar.expert/explorer/testnet/tx/d142f6cef65705dcbba3d7cf0470b214fdfc450e2eb5ad7de90fb740d81d9f93
+    · an untimed finish reads finish_time_s null on chain — the pages must say 'no official time', never 0
+  ✓ PASS
+
+▸ [V.1] What a reviewer opens, with no wallet: the directory, each race, the runners
+    url directory: https://app.sterun.xyz/
+    · Solo Heritage Run 2026 has run, so the directory lists it behind "Show races that have finished"; the other 3 are on the first screen
+    url Solo Heritage Run 2026 (12 records): https://app.sterun.xyz/events/40
+    url Kota Tua 10K 2026 (6 records): https://app.sterun.xyz/events/41
+    url Braga Night Run 2026 (4 records): https://app.sterun.xyz/events/42
+    url Sanur Sunrise Half Marathon 2026 (3 records): https://app.sterun.xyz/events/43
+    url runner Budi Santoso (solo, kotatua, sanur): https://app.sterun.xyz/runner/GDLFVS26CWYAH5CK6RN7Z23Q7MLOOWIXHD4NNLSEU7GASERIF463PTC5
+    url runner Siti Rahayu (solo, kotatua): https://app.sterun.xyz/runner/GD26E6ES5XCDTUBCD64JLIKKKGECGVGQD37TNGBK6KLGYGV62HJSHDLD
+    url runner Andi Wijaya (solo, braga): https://app.sterun.xyz/runner/GBOHN3BZNYXY6CA4IFNWTAPLIAAEASGOODTOYOMAZ4IDPOJLDSHR7TYB
+    url runner Dewi Lestari (solo, braga): https://app.sterun.xyz/runner/GA7ZJBWMPCIUZRY6XF3SECDVTDAW7SFEY5PZI4HIKKYAZY57G6EMVKSV
+    url runner Rizky Pratama (solo, kotatua): https://app.sterun.xyz/runner/GABYDUKNZY6RVH2BEKJ3VRCRDTTTI6IE6KGCVNDJCGHYI5QUGKQDCPV3
+    url runner Nur Aini (solo, kotatua): https://app.sterun.xyz/runner/GBHKQY6RBYC6ACO6VG5WGHX3HJI74TV7QZ4KZOISP33RLE2WOO34XKJY
+    url organiser console (connect the demo organiser's wallet): https://app.sterun.xyz/org
+    url EventRegistry: https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU
+    url RaceRecord: https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW
+  ✓ PASS
+
+▸ [M.1] Open the demo in a browser, and film the two fraud attempts
+    · MANUAL REQUIRED (Axel): open the V.1 links with no wallet and check each race page shows its poster, venue and city, and that the untimed finish reads 'no official time'; for the video, repeat F.1 and F.2 with two phones running /scan, using the runner keys in .env.demo — take the screenshot, wait on camera, present it
+  … MANUAL REQUIRED
+
+▸ Checking every link
+
+RESULT 22 PASS, 0 FAIL, 1 MANUAL REQUIRED, 0 BLOCKED of 23
+evidence: /Users/axelurwawuskaatarubby/orca/workspaces/sterun/sterun-seed-run/docs/rehearsal/runs/2026-09-25T09-08-01Z-seed/EVIDENCE.md
