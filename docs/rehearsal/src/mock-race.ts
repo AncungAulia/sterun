@@ -26,14 +26,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import {
-  Asset,
-  BASE_FEE,
-  Keypair,
-  Operation,
-  TransactionBuilder,
-  rpc,
-} from "@stellar/stellar-sdk";
+import { Asset, Keypair } from "@stellar/stellar-sdk";
 import { SterunClient, TESTNET, type SterunRecord } from "@sterunxyz/sdk";
 
 import { parseDeployments, type Deployments } from "../../../be/src/deployments";
@@ -44,159 +37,47 @@ import {
   accountUrl,
   contractUrl,
 } from "./evidence";
+import { cancelRaces, pendingCleanupNote } from "./cleanup";
 import { Device } from "./device-process";
-import { FILMING_NOTE, STALE_QR_CLAIM, honestyNote, staleFrom, waitUntilStale, type TotpWindow } from "./stale-qr";
-import { timeStepOf } from "../../../fe/src/lib/totp";
+import { forwardedScreenshot, oneWinnerOneFlag, scanAt as scanAtDesk, type PassHolder } from "./fraud";
+import { FaucetStoppedError, fundFromFaucet } from "./faucet";
+import {
+  API,
+  REPO,
+  SUSD,
+  addTrustline,
+  api,
+  big,
+  bigintJson,
+  checkLinks,
+  expectRevert,
+  friendbot,
+  log,
+  newAccount,
+  postFaucet,
+  readEnvFile,
+  remember,
+  secrets,
+  signedHeaders,
+  sleep,
+  susdBalance,
+  waitFor,
+} from "./harness";
+import { STALE_QR_CLAIM } from "./stale-qr";
 
 // ---------------------------------------------------------------------------
-// Configuration
+// Configuration (the shared half lives in harness.ts)
 // ---------------------------------------------------------------------------
 
-const REPO = process.env.STERUN_REPO_ROOT ?? process.cwd();
-const API = (process.env.STERUN_API_URL ?? "https://api-sterun.jameshub.fun").replace(/\/+$/, "");
 const RUN_DIR = process.env.REHEARSAL_RUN_DIR ?? join(REPO, "docs", "rehearsal", "runs", "local");
 const DEVICE_BUNDLE = process.env.REHEARSAL_DEVICE_BUNDLE ?? "";
-const HORIZON = "https://horizon-testnet.stellar.org";
-const FRIENDBOT = "https://friendbot.stellar.org";
-const RPC_URL = TESTNET.rpcUrl;
-const PASSPHRASE = TESTNET.networkPassphrase;
 
-const SUSD = 10_000_000n;
 const PRICE_10K = 10n * SUSD;
 const PRICE_5K = 5n * SUSD;
 
-const log = (message: string) => console.log(message);
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // Desks and phones are child processes; see device-process.ts for why that handle
 // has its own module.
 const newDevice = (role: string) => new Device(role, DEVICE_BUNDLE, [`--env-file=${join(REPO, "fe", ".env")}`]);
-
-const bigintJson = (value: unknown) =>
-  JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
-
-/** Reads KEY=value lines. Values are never printed; only names are. */
-function readEnvFile(path: string): Map<string, string> {
-  const out = new Map<string, string>();
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    return out;
-  }
-  for (const line of text.split(/\r?\n/)) {
-    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (!match) continue;
-    out.set(match[1]!, match[2]!.replace(/^(['"])(.*)\1$/, "$2"));
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Secrets that must never reach the evidence files
-// ---------------------------------------------------------------------------
-
-const secrets: string[] = [];
-const remember = <T extends string>(secret: T): T => {
-  secrets.push(secret);
-  return secret;
-};
-
-function newAccount(): Keypair {
-  const kp = Keypair.random();
-  remember(kp.secret());
-  return kp;
-}
-
-const big = (value: bigint) => ({ $bigint: value.toString() });
-
-// ---------------------------------------------------------------------------
-// Chain and API helpers
-// ---------------------------------------------------------------------------
-
-const server = new rpc.Server(RPC_URL);
-
-async function friendbot(address: string): Promise<void> {
-  const res = await fetch(`${FRIENDBOT}?addr=${encodeURIComponent(address)}`);
-  if (!res.ok) throw new Error(`friendbot answered ${res.status} for ${address}`);
-}
-
-async function addTrustline(kp: Keypair, asset: Asset): Promise<string> {
-  const account = await server.getAccount(kp.publicKey());
-  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: PASSPHRASE })
-    .addOperation(Operation.changeTrust({ asset }))
-    .setTimeout(120)
-    .build();
-  tx.sign(kp);
-  const sent = await server.sendTransaction(tx);
-  if (sent.status !== "PENDING") throw new Error(`changeTrust send status ${sent.status}`);
-  const final = await server.pollTransaction(sent.hash, { attempts: 30 });
-  if (final.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw new Error(`changeTrust ${final.status}`);
-  return sent.hash;
-}
-
-async function susdBalance(address: string, asset: Asset): Promise<bigint> {
-  const { balanceEntry } = await server.getAssetBalance(address, asset, PASSPHRASE);
-  return balanceEntry ? BigInt(balanceEntry.amount) : 0n;
-}
-
-async function signedHeaders(kp: Keypair): Promise<Record<string, string>> {
-  const res = await fetch(`${API}/auth/challenge`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address: kp.publicKey() }),
-  });
-  if (!res.ok) throw new Error(`/auth/challenge answered ${res.status}`);
-  const { nonce } = (await res.json()) as { nonce: string };
-  return {
-    "x-sterun-address": kp.publicKey(),
-    "x-sterun-nonce": nonce,
-    "x-sterun-signature": Buffer.from(kp.signMessage(nonce)).toString("base64"),
-  };
-}
-
-async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<{ status: number; body: T }> {
-  const res = await fetch(`${API}${path}`, init);
-  const text = await res.text();
-  let body: unknown = text;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    // not JSON; keep the text
-  }
-  return { status: res.status, body: body as T };
-}
-
-async function waitFor<T>(what: string, read: () => Promise<T | undefined>, timeoutMs = 180_000, everyMs = 5_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  let last: unknown;
-  while (Date.now() < deadline) {
-    try {
-      const value = await read();
-      if (value !== undefined) return value;
-    } catch (error) {
-      last = error;
-    }
-    await sleep(everyMs);
-  }
-  throw new Error(`timed out after ${timeoutMs / 1000}s waiting for ${what}${last ? ` (last error: ${String(last)})` : ""}`);
-}
-
-/** A contract revert expected at simulation: no transaction exists, so the evidence is the error. */
-function expectRevert(
-  s: StepContext,
-  result: Record<string, unknown>,
-  expected: { code: number; variant: string },
-): void {
-  if (result.sent) {
-    s.tx("UNEXPECTEDLY ACCEPTED", String(result.txHash));
-    throw new Error(`expected ${expected.variant}(${expected.code}), but the call was accepted`);
-  }
-  s.note(`refused: ${String(result.message)}`);
-  s.note(`sentence the web app shows: "${String(result.friendly)}"`);
-  if (result.enterFailure) s.note(`entry flow classification: ${JSON.stringify(result.enterFailure)}`);
-  s.note("refused at simulation, so no transaction was submitted and no hash exists; the refusal text above is the evidence");
-  s.check(result.code === expected.code, `code ${expected.code} (${expected.variant}), got ${String(result.code)} ${String(result.variant)}`);
-}
 
 // ---------------------------------------------------------------------------
 // The cast
@@ -291,6 +172,49 @@ async function main(): Promise<void> {
   ev.meta.runners = runners.map((r) => `${r.label} ${r.kp.publicKey()}`).join(", ");
   ev.write();
 
+  // STE-68: every race this run creates is cancelled at the end unless it
+  // finished (Completed) or was cancelled on purpose. The organiser key exists
+  // only in this process, so if the run leaves a race open nobody can close it
+  // later. Until cleanup has run, the evidence says so in as many words.
+  const createdRaces: number[] = [];
+  const madeRace = (id: number) => {
+    createdRaces.push(id);
+    ev.meta.cleanup = pendingCleanupNote(createdRaces);
+    ev.write();
+  };
+  let cleaning: Promise<void> | undefined;
+  const cleanup = () =>
+    (cleaning ??= ev
+      .step("C.1", "C", "Cleanup: cancel every race this run created that did not finish (STE-68)", "SDK", async (s) => {
+        if (createdRaces.length === 0) {
+          s.note("this run created no race");
+          ev.meta.cleanup = "nothing to cancel: the run created no race";
+          return;
+        }
+        const outcomes = await cancelRaces(sterun, createdRaces, SterunClient.as(organiser));
+        for (const o of outcomes) {
+          if (o.txHash) s.tx(`set_event_status Cancelled — race ${o.eventId} was ${o.before}`, o.txHash);
+          else if (o.error) s.note(`race ${o.eventId} (${o.before}): cancelling FAILED — ${o.error}`);
+          else s.note(`race ${o.eventId} is ${o.before}, terminal: left as it is`);
+          s.url(`GET /events/${o.eventId}`, `${API}/events/${o.eventId}`);
+        }
+        const failed = outcomes.filter((o) => o.error);
+        ev.meta.cleanup = failed.length
+          ? `INCOMPLETE: race(s) ${failed.map((o) => o.eventId).join(", ")} could not be cancelled (see C.1)`
+          : `done: ${outcomes.map((o) => `race ${o.eventId} ${o.txHash ? `${o.before} → Cancelled` : `${o.before} (left)`}`).join(", ")}`;
+        s.check(failed.length === 0, `every race this run left open is cancelled; failed: ${failed.map((o) => `${o.eventId} ${o.error}`).join("; ")}`);
+      })
+      .then(() => undefined));
+  // Ctrl-C mid-run: cancel what is open, write the evidence, then stop. tee
+  // dies with the same signal, so writes to stdout may fail from here on.
+  process.stdout.on("error", () => {});
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.once(signal, () => {
+      console.error(`\n${signal}: cancelling this run's open races before exiting`);
+      void cleanup().finally(() => process.exit(130));
+    });
+  }
+
   const deskA = newDevice("desk-A");
   const deskB = newDevice("desk-B");
   const phones = newDevice("phones");
@@ -355,25 +279,17 @@ async function main(): Promise<void> {
 
     await ev.step("S.5", "S", "Each runner gets test sUSD from the web app's faucet route (POST /faucet)", "API", async (s) => {
       const failures: string[] = [];
+      let paid = 0;
       for (const r of runners) {
-        let res = await api<{ tx_hash?: string; paid_stroops?: string; error?: string; message?: string }>("/faucet", {
-          method: "POST",
-          headers: { ...(await signedHeaders(r.kp)), "content-type": "application/json" },
-          body: "{}",
-        });
-        if (res.status === 429) {
-          s.note(`${r.label}: 429 from the per-client rate limit (6/min); waiting 65s, as a person would`);
-          await sleep(65_000);
-          res = await api("/faucet", {
-            method: "POST",
-            headers: { ...(await signedHeaders(r.kp)), "content-type": "application/json" },
-            body: "{}",
-          });
-        }
-        if (res.status === 200 && res.body.tx_hash) {
-          s.tx(`${r.label} faucet ${Number(BigInt(res.body.paid_stroops ?? "0") / SUSD)} sUSD`, res.body.tx_hash);
-        } else {
-          failures.push(`${r.label}: ${res.status} ${JSON.stringify(res.body)}`);
+        try {
+          const payout = await fundFromFaucet(postFaucet(r.kp), r.label, paid);
+          paid += 1;
+          s.tx(`${r.label} faucet ${Number(payout.paidStroops / SUSD)} sUSD`, payout.txHash);
+        } catch (error) {
+          // The daily cap, a dry float or no faucet: every later runner would
+          // be refused the same way, so stop asking and fail with the reason.
+          if (error instanceof FaucetStoppedError) throw error;
+          failures.push(`${r.label}: ${error instanceof Error ? error.message : String(error)}`);
         }
         await sleep(10_500);
       }
@@ -400,7 +316,12 @@ async function main(): Promise<void> {
     });
 
     await ev.step("1.2", "1", "Organiser creates the race: 2 categories with quota and sUSD price, then opens entries", "SDK (console equivalent)", async (s) => {
-      const startsAt = BigInt(Math.floor(Date.now() / 1000) + 3 * 86_400);
+      // The moment it is created (STE-68). The directory's default list hides
+      // a race whose start has passed, so a rehearsal race is never on it —
+      // not while the run is going and not in the three days after, which is
+      // where a Completed race dated "+3 days" used to sit. Nothing on chain
+      // or in the backend reads starts_at, so the scenario is unchanged.
+      const startsAt = BigInt(Math.floor(Date.now() / 1000));
       const created = await sterun.createEvent(
         {
           organiser: organiser.publicKey(),
@@ -412,6 +333,7 @@ async function main(): Promise<void> {
         SterunClient.as(organiser),
       );
       eventId = created.value;
+      madeRace(eventId);
       s.tx(`create_event → event ${eventId}`, created.txHash);
       const a = await sterun.addCategory({ eventId, code: "R10K", distanceM: 10_000, quota: 4, priceStroops: PRICE_10K }, SterunClient.as(organiser));
       cat10k = a.value;
@@ -606,6 +528,7 @@ async function main(): Promise<void> {
         SterunClient.as(organiser),
       );
       cancelledId = created.value;
+      madeRace(cancelledId);
       s.tx(`create_event → event ${cancelledId}`, created.txHash);
       const c = await sterun.addCategory({ eventId: cancelledId, code: "R5K", distanceM: 5_000, quota: 10, priceStroops: PRICE_5K }, SterunClient.as(organiser));
       s.tx("add_category R5K", c.txHash);
@@ -675,14 +598,13 @@ async function main(): Promise<void> {
     });
 
     // ------------------------------------------------------------ offline scanning
-    const scanAt = async (s: StepContext, desk: Device, deskName: string, r: Runner) => {
-      const { qr } = await phones.call<{ qr: string }>("present", { tokenId: need(r.tokenId, `${r.label} token`), secretHex: need(r.totpSecret, "secret") });
-      const verdict = await desk.call<{ kind: string; shownBib: number | null; claimedHere: boolean | null; offline: boolean }>("scan", { eventId: need(eventId, "event"), qr });
-      s.check(verdict.offline, `${deskName} was offline during the scan`);
-      s.note(`${deskName} scans ${r.label}: ${verdict.kind.toUpperCase()}, screen shows bib ${verdict.shownBib} (chain bib ${r.bib})${verdict.claimedHere ? ", claimed at this desk" : ""}`);
-      s.check(verdict.shownBib === r.bib, `the desk shows ${r.label}'s chain bib`);
-      return verdict;
-    };
+    const holder = (r: Runner): PassHolder => ({
+      label: r.label,
+      tokenId: need(r.tokenId, `${r.label} token`),
+      bib: need(r.bib, `${r.label} bib`),
+      totpSecret: need(r.totpSecret, `${r.label} pass secret`),
+    });
+    const scanAt = (s: StepContext, desk: Device, deskName: string, r: Runner) => scanAtDesk(s, phones, desk, deskName, need(eventId, "event"), holder(r));
 
     await ev.step("4.2", "4", "Both desks lose signal; R4 shows the pass at BOTH desks, others at one", "desk processes (offline: fetch disabled)", async (s) => {
       await deskA.call("offline");
@@ -700,58 +622,14 @@ async function main(): Promise<void> {
     // wait is real time, read from the roster; a mocked clock would prove the
     // unit test, not the product.
     await ev.step("F.1", "F", `A forwarded screenshot of R9's pass, shown after the wait, is refused; R9's live pass is accepted (${STALE_QR_CLAIM})`, "phones + desk processes: fe verdictFor (offline, real wait)", async (s) => {
-      const id = need(eventId, "event");
-      const token = need(r9.tokenId, "R9 token");
-      const stepStarted = Date.now();
-
-      const totp = await deskA.call<TotpWindow & { digits: number }>("totp", { eventId: id });
-      s.note(`roster totp as desk-A stored it: step ${totp.stepSeconds}s, tolerance ±${totp.toleranceSteps} step(s), ${totp.digits} digits`);
-      s.check(Number.isInteger(totp.toleranceSteps) && totp.toleranceSteps >= 0, "the roster carries a tolerance");
-      s.check(timeStepOf(3600) * totp.stepSeconds === 3600, `the pass and the roster count steps of the same length (${totp.stepSeconds}s)`);
-      s.note(honestyNote(totp));
-      s.note(FILMING_NOTE);
-
-      const queueBefore = await deskA.call<{ tokenId: number }[]>("claims", { eventId: id });
-      const recordBefore = await sterun.recordOf(token);
-      s.check(recordBefore.state === "Entered", `R9 is Entered before the screenshot, got ${recordBefore.state}`);
-
-      // 1. The screenshot: R9's QR text at one moment, the pass's own code.
-      const shot = await phones.call<{ qr: string; step: number }>("present", { tokenId: token, secretHex: need(r9.totpSecret, "secret") });
-      const takenAt = Date.now();
-      const refusedFrom = staleFrom(shot.step, totp) * 1000;
-      s.note(`screenshot of R9's pass taken ${new Date(takenAt).toISOString()} (step ${shot.step}); a desk on the same clock accepts it until ${new Date(refusedFrom - 1000).toISOString()} and refuses it from ${new Date(refusedFrom).toISOString()}`);
-
-      // 2. The wait, in real time, until the desk's own rule refuses the step.
-      const waitMs = waitUntilStale(shot.step, totp, Date.now());
-      s.note(`waiting ${(waitMs / 1000).toFixed(1)}s of real time (tolerance from the roster + 2s margin), no mocked clock`);
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-
-      // 3. The friend presents it at the other desk.
-      const presentedAt = Date.now();
-      const stale = await deskA.call<{ kind: string; shownBib: number | null; offline: boolean }>("scan", { eventId: id, qr: shot.qr });
-      const ageSeconds = (presentedAt - takenAt) / 1000;
-      s.note(`desk-A scans the screenshot ${ageSeconds.toFixed(1)}s after it was taken: ${stale.kind.toUpperCase()}, screen shows bib ${stale.shownBib}`);
-      s.check(stale.offline, "desk-A was offline during the scan");
-      s.check(presentedAt >= refusedFrom, "the screenshot was presented only after the scanner's tolerance had passed");
-
-      // 4. Refused, nothing queued, the record untouched.
-      s.check(stale.kind === "expired", `the stale screenshot is EXPIRED at desk-A, got ${stale.kind}`);
-      const queueAfter = await deskA.call<{ tokenId: number }[]>("claims", { eventId: id });
-      s.check(!queueAfter.some((c) => c.tokenId === token), "desk-A queued no claim for R9");
-      s.check(JSON.stringify(queueAfter) === JSON.stringify(queueBefore), `desk-A's queue is unchanged (${queueBefore.length} rows before and after)`);
-      const recordAfter = await sterun.recordOf(token);
-      s.check(
-        recordAfter.state === recordBefore.state && recordAfter.claimedAt === recordBefore.claimedAt,
-        `R9's record is untouched: ${recordAfter.state}, claimed_at ${recordAfter.claimedAt}`,
-      );
-
-      // Then the runner, with the live pass: the pass works, the screenshot does not.
-      const live = await scanAt(s, deskB, "desk-B", r9);
-      s.check(live.kind === "green", `R9's current code is GREEN at desk-B, got ${live.kind}`);
-      const queueB = await deskB.call<{ tokenId: number }[]>("claims", { eventId: id });
-      s.check(queueB.filter((c) => c.tokenId === token).length === 1, "desk-B queued R9 once");
-
-      s.note(`step took ${((Date.now() - stepStarted) / 1000).toFixed(1)}s, almost all of it the wait: the screenshot had to outlive the roster's ±${totp.toleranceSteps} step tolerance before it was shown`);
+      await forwardedScreenshot(s, {
+        sterun,
+        eventId: need(eventId, "event"),
+        phones,
+        staleDesk: ["desk-A", deskA],
+        liveDesk: ["desk-B", deskB],
+        runner: holder(r9),
+      });
     });
 
     await ev.step("5.1", "5", "Double claim at the same desk: desk-A scans R2 again, still offline", "desk process: fe verdictFor", async (s) => {
@@ -840,41 +718,15 @@ async function main(): Promise<void> {
 
     await ev.step("6.1", "6", "Two offline desks claimed R4: the chain keeps one, the other desk flags it", "desk processes + chain + RPC + Horizon", async (s) => {
       const finalRow = (name: "desk-A" | "desk-B") => syncs[name].at(-1)?.claims.find((c) => c.tokenId === r4.tokenId);
-      const a = finalRow("desk-A");
-      const b = finalRow("desk-B");
-      s.note(`desk-A R4 row: ${JSON.stringify(a)}`);
-      s.note(`desk-B R4 row: ${JSON.stringify(b)}`);
-      const winners = [a, b].filter((c) => c?.status === "sent");
-      const losers = [a, b].filter((c) => c?.status === "refused");
-      s.check(winners.length === 1 && losers.length === 1, `exactly one sent and one refused, got ${[a, b].map((c) => c?.status).join("/")}`);
-      const winnerName = a?.status === "sent" ? "desk-A" : "desk-B";
-      const loserName = winnerName === "desk-A" ? "desk-B" : "desk-A";
-      s.tx(`winner ${winnerName} claim_racepack R4`, winners[0]!.txHash!);
-      s.check(losers[0]!.reason === "already-claimed", "loser refused as already-claimed");
-      const record = await sterun.recordOf(need(r4.tokenId, "R4"));
-      s.note(`chain: R4 ${record.state}, claimed_at ${record.claimedAt}; one pack is recorded, the second handover is what the flag is for`);
-
-      const loserKey = loserName === "desk-A" ? deskKeys.A : deskKeys.B;
-      const historyUrl = `${HORIZON}/accounts/${loserKey.publicKey()}/transactions?include_failed=true&order=asc&limit=50`;
-      const history = (await (await fetch(historyUrl)).json()) as { _embedded: { records: { hash: string; successful: boolean; ledger: number }[] } };
-      const failed = history._embedded.records.filter((t) => !t.successful);
-      s.url(`${loserName} transactions incl. failed (Horizon)`, historyUrl);
-      const winnerTx = await server.getTransaction(winners[0]!.txHash!);
-      for (const t of failed) {
-        s.tx(`${loserName} claim that FAILED on the ledger`, t.hash);
-        const got = await server.getTransaction(t.hash);
-        const diagnostics = JSON.stringify(got.status === rpc.Api.GetTransactionStatus.FAILED ? got.diagnosticEventsXdr ?? [] : []);
-        const code = /"host_fn_failed"\},\{"error":\{"contract":(\d+)\}/.exec(diagnostics)?.[1];
-        s.note(`${t.hash.slice(0, 8)}…: status ${got.status}, ledger ${t.ledger} (winner in ledger ${"ledger" in winnerTx ? winnerTx.ledger : "?"}), diagnostic host_fn_failed contract error ${code ?? "not found"}${code === "102" ? " = AlreadyClaimed" : ""}`);
-      }
-      if (failed.length === 0) {
-        s.note(`${loserName}'s claim never reached the ledger: it was refused at simulation because the winner's transaction had already closed`);
-      }
-      const flagged = await (loserName === "desk-A" ? deskA : deskB).call<{ lines: string[]; copied: string }>("flagged", { eventId: need(eventId, "event") });
-      s.note(`${loserName} Flagged screen: ${JSON.stringify(flagged.lines)}`);
-      s.note(`${loserName} "copy for organiser": ${JSON.stringify(flagged.copied)}`);
-      s.check(flagged.lines.length === 1 && /Already collected elsewhere/.test(flagged.lines[0]!), "the flag appears on the losing desk");
-      s.note("two desks = two OS processes, each with its own IndexedDB and queue, running the web app's scanner code; the two-phone repeat is M.3");
+      await oneWinnerOneFlag(s, {
+        sterun,
+        eventId: need(eventId, "event"),
+        runner: { label: r4.label, tokenId: need(r4.tokenId, "R4") },
+        rows: { "desk-A": finalRow("desk-A"), "desk-B": finalRow("desk-B") },
+        devices: { "desk-A": deskA, "desk-B": deskB },
+        addresses: { "desk-A": deskKeys.A.publicKey(), "desk-B": deskKeys.B.publicKey() },
+      });
+      s.note("the two-phone repeat is M.3");
     });
 
     await ev.step("5.2", "5", "Double claim on chain: desk-A sends a claim for R2 again", "web app readClient", async (s) => {
@@ -1047,37 +899,11 @@ async function main(): Promise<void> {
     });
   } finally {
     for (const device of [deskA, deskB, phones, consoleDevice]) device.stop();
+    await cleanup();
   }
 
   // ---------------------------------------------------------------- link check
-  log("\n▸ Checking every link");
-  await sleep(20_000); // give stellar.expert a moment to ingest the last ledgers
-  for (const step of ev.steps) {
-    for (const tx of step.txs) {
-      const h = await fetch(`${HORIZON}/transactions/${tx.hash}`);
-      const body = h.ok ? ((await h.json()) as { successful: boolean; ledger: number }) : null;
-      tx.horizon = { status: h.status, successful: body?.successful ?? null, ledger: body?.ledger ?? null };
-      let expert = await fetch(`https://api.stellar.expert/explorer/testnet/tx/${tx.hash}`);
-      for (let i = 0; i < 6 && expert.status !== 200; i += 1) {
-        await sleep(expert.status === 429 ? 10_000 : 5_000);
-        expert = await fetch(`https://api.stellar.expert/explorer/testnet/tx/${tx.hash}`);
-      }
-      tx.expert = { status: expert.status };
-      await sleep(400);
-    }
-    for (const url of step.urls) {
-      if (/\/records\/\d+\/pass$|\/roster$|\/results\/preview$|\/faucet$|\/participants\//.test(url.url)) continue; // authenticated or POST-only
-      const res = await fetch(url.url.replace("https://stellar.expert/explorer/", "https://api.stellar.expert/explorer/"));
-      url.status = res.status;
-      await sleep(300);
-    }
-  }
-  const txs = ev.steps.flatMap((s) => s.txs);
-  const dead = txs.filter((t) => t.horizon?.status !== 200 || t.expert?.status !== 200);
-  ev.meta.finished = new Date().toISOString();
-  ev.meta["link check"] = `${txs.length - dead.length}/${txs.length} tx links resolve on Horizon and the stellar.expert API${dead.length ? `; not resolving: ${dead.map((t) => `${t.label} ${t.hash} (horizon ${t.horizon?.status}, expert ${t.expert?.status})`).join("; ")}` : ""}`;
-  ev.meta["failed txs on the ledger (expected only for 6.1's losing desk, if any)"] = txs.filter((t) => t.horizon?.successful === false).map((t) => t.hash).join(", ") || "none";
-  ev.write();
+  await checkLinks(ev, "failed txs on the ledger (expected only for 6.1's losing desk, if any)");
 
   const counts = ev.counts();
   log(`\nRESULT ${counts.PASS} PASS, ${counts.FAIL} FAIL, ${counts["MANUAL REQUIRED"]} MANUAL REQUIRED, ${counts.BLOCKED} BLOCKED of ${ev.steps.length}`);

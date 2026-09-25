@@ -154,8 +154,20 @@ jobs:
       # have, so that property is pinned with real child processes, offline.
       # STE-67: the stale-screenshot step waits until the scanner would refuse
       # the code; the wait must never be shorter than the roster's tolerance.
-      - name: Test the rehearsal harness (a crashed device fails its step; the stale-QR wait)
-        run: pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts ../docs/rehearsal/test/stale-qr.test.ts
+      # STE-68: the demo seed's plan against the SOW's numbers, the document the
+      # race page reads back, the faucet's named refusals, the batch-claim
+      # choice and the clean-up rules. The stage tsconfig resolves the `@/`
+      # paths of the web app code the document test runs. No network.
+      - name: Test the rehearsal harness (a crashed device fails its step; the stale-QR wait; the demo seed)
+        run: >-
+          pnpm --filter be exec tsx --tsconfig ../docs/rehearsal/tsconfig.stage.json --test
+          ../docs/rehearsal/test/device-process.test.ts
+          ../docs/rehearsal/test/stale-qr.test.ts
+          ../docs/rehearsal/test/faucet.test.ts
+          ../docs/rehearsal/test/claims.test.ts
+          ../docs/rehearsal/test/cleanup.test.ts
+          ../docs/rehearsal/test/demo-plan.test.ts
+          ../docs/rehearsal/test/demo-document.test.ts
 
       - name: Build
         run: pnpm build

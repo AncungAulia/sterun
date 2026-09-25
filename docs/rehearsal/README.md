@@ -1,7 +1,7 @@
 # STE-25 — the mock race rehearsal
 
 A full race, run on **live testnet** against the **live backend**
-(`https://api-sterun.jameshub.fun`) and the v2 contracts in
+(`https://api.sterun.xyz`, the same box as `api-sterun.jameshub.fun`) and the v2 contracts in
 [`../deployments.md`](../deployments.md): an organiser creates a race, runners enter and pay
 sUSD, two volunteer desks check them in offline, results are uploaded and recorded, and anyone
 verifies the records from chain afterwards.
@@ -23,6 +23,9 @@ Each run writes three files into its own directory, **while it runs**:
 | `run.log` | stdout as it happened |
 
 Nothing in them is written by hand. A failing step stays failing, with its error.
+
+The same directory also holds the **demo seed** (`seed.sh`, STE-68): one run that leaves a demo a
+reviewer can click through. It is described [below](#ste-68--the-demo-seed-seedsh).
 
 ## The cast
 
@@ -104,11 +107,32 @@ spec's reference implementation).
 
 Out of scope for STE-25 and left to Axel: screen footage, the team walkthrough, the demo video.
 
+### Cleaning up after itself (STE-68)
+
+A rehearsal organiser is a fresh key that is never saved, so a race the run leaves open can only be
+closed by that same process. So:
+
+- **Every race the run creates is tracked, and step `C.1` cancels whatever is not `Completed` or
+  `Cancelled`** when the run ends — normally, on an exception, or on Ctrl-C / SIGTERM. Each
+  cancellation is a transaction in the evidence; a refusal fails the step.
+- **Until `C.1` has run, the evidence header says it has not**, naming the races. A run killed with
+  SIGKILL leaves that sentence behind instead of silence.
+- **The rehearsal race's `starts_at` is the moment it is created.** The race that ran ends
+  `Completed`, which is terminal and cannot be cancelled; dated "three days from now", it sat on the
+  directory's default list for three days after every run. The list hides races whose start has
+  passed, and nothing on chain or in the backend reads `starts_at`, so the scenario is unchanged.
+
+The sanity races that were at the top of the directory on 2026-09-25 were **not** the rehearsal's:
+they come from `sc/scripts/*-testnet.sh` (see [the seed](#ste-68--the-demo-seed-seedsh)).
+
 ## How it is built
 
 `src/mock-race.ts` is the stage manager, `src/device.ts` a desk or phone, `src/stale-qr.ts` the
 F.1 timing and wording, `src/device-process.ts`
-the stage manager's handle on one of those processes, `src/evidence.ts` the writer. `run.sh`
+the stage manager's handle on one of those processes, `src/evidence.ts` the writer. Shared with the
+demo seed: `src/harness.ts` (accounts, chain and API helpers, the link check), `src/fraud.ts` (F.1
+and the "one winner, one flag" check, one implementation for both), `src/faucet.ts` (every faucet
+refusal named) and `src/cleanup.ts` (what gets cancelled, and what only gets reported). `run.sh`
 bundles them with esbuild into `be/node_modules/.cache/` and `fe/node_modules/.cache/` — inside the package whose dependencies each one imports — so the
 rehearsal adds no workspace member, no lockfile change and no file in a teammate's folder.
 
@@ -135,8 +159,15 @@ So the harness is typechecked in `.github/workflows/typescript.yml`, which also 
 pnpm --filter @sterunxyz/sdk build     # the harness imports the SDK's dist/ types
 pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.device.json
 pnpm --filter fe exec tsc -p ../docs/rehearsal/tsconfig.stage.json
-pnpm --filter be exec tsx --test ../docs/rehearsal/test/device-process.test.ts ../docs/rehearsal/test/stale-qr.test.ts
+pnpm --filter be exec tsx --tsconfig ../docs/rehearsal/tsconfig.stage.json --test \
+  ../docs/rehearsal/test/device-process.test.ts ../docs/rehearsal/test/stale-qr.test.ts \
+  ../docs/rehearsal/test/faucet.test.ts ../docs/rehearsal/test/claims.test.ts \
+  ../docs/rehearsal/test/cleanup.test.ts ../docs/rehearsal/test/demo-plan.test.ts \
+  ../docs/rehearsal/test/demo-document.test.ts
 ```
+
+`--tsconfig` is there for `demo-document.test.ts`, which runs the web app's document writer and
+reader and so needs their `@/` paths; the stage config maps them.
 
 Both configs extend `fe/tsconfig.json` unchanged — `strict` included — and differ only in where
 bare packages resolve, mirroring where `run.sh` puts each bundle: `tsconfig.device.json` (the
@@ -151,6 +182,97 @@ step, not leave its calls unsettled so that node exits 0 mid-run with no `EVIDEN
 against the pass's own `timeStepOf` and the scanner's `|step − now| ≤ toleranceSteps`, so the
 wait can never be shorter than what the desk enforces, and pins the admission that a fresh
 screenshot passes.
+
+## STE-68 — the demo seed (`seed.sh`)
+
+The SOW (§3) asks for "a live demo seeded with **at least 3 events and 20 issued records**,
+including two deliberate fraud attempts", and a reviewer's first screen is the directory. A
+rehearsal leaves 2 races and 9 records, and on 2026-09-25 the directory's top five rows were
+sanity races. One seed run fixes both.
+
+```bash
+docs/rehearsal/seed.sh                # sweep + seed, 20–25 minutes; evidence in runs/<UTC time>-seed/
+docs/rehearsal/seed.sh --sweep-only   # only take the sc/ sanity races off the directory
+docs/rehearsal/seed.sh --no-sweep     # seed without the sweep
+```
+
+### What one run leaves on testnet
+
+The plan is data, in [`src/demo-plan.ts`](src/demo-plan.ts), and `test/demo-plan.test.ts` holds
+it to the SOW's numbers so an edit cannot quietly fall short.
+
+| Race | Where | When | Distances | Records |
+| --- | --- | --- | --- | --- |
+| Solo Heritage Run 2026 | Stadion Manahan, Surakarta | **last Sunday**, 05:30 WIB — **already run, Completed** | 10K 12 sUSD · 5K 8 sUSD | 12 — times, one DNF, one untimed finish, one no-show; **both fraud attempts** |
+| Kota Tua 10K 2026 | Taman Fatahillah, Jakarta Barat | Sunday +3 weeks, 05:00 WIB | 10K 15 · 5K 10 · tumbler add-on 4 | 6 |
+| Braga Night Run 2026 | Jalan Braga, Bandung | Saturday before Sunday +7 weeks, 19:00 WIB | 7K 11 · 3K free | 4 |
+| Sanur Sunrise Half Marathon 2026 | Pantai Sanur, Denpasar | Sunday +11 weeks, 05:00 **WITA** | HM 20 · 10K 15 | 3 |
+
+**25 records** from 16 runners, eight of whom hold records in two or more races, so their
+`/runner/[address]` pages carry more than one. Every race has a poster and an event document
+published through `POST /events/files`, written by the console's own `buildEventDocument` in the
+race's own time zone. Every description says it is a Stellar testnet demo.
+
+Dates are computed from the moment of the run — never fixed, because a fixed date is right for a
+week — and no two races share a timestamp. The Solo race is behind **"Show races that have
+finished"** on the directory, because the list hides races that have run; the other three are on
+the first screen.
+
+At the Solo race's pack desks (steps `K`, `F`):
+
+| Step | What happens |
+| --- | --- |
+| K.2 | the main desk hands over nine packs — in **one signature** with `claim_racepack_many` when the live contract exports it **and** the SDK build has `claimRacepackMany`, otherwise one signature each; the evidence says which and why ([`src/claims.ts`](src/claims.ts)) |
+| F.1 | **fraud attempt 1**: a forwarded screenshot of R11's pass, shown after the wait, is refused; R11's live pass is accepted. The same step as the rehearsal's F.1, with the same honesty note |
+| F.2a, K.4, F.2 | **fraud attempt 2**: R05 collects at both offline desks; both send at the same moment; the chain keeps one claim and the losing desk flags it "Already collected elsewhere" |
+| R.1, R.2 | the results file previews clean; all 12 results go in one `record_results` signature; the race is `Completed` |
+| V.1 | the links a reviewer opens with no wallet: the directory, each race page, six runner pages, the console |
+
+### Accounts and keys
+
+| Who | Key | Where it lives |
+| --- | --- | --- |
+| admin | `STERUN_ADMIN_SECRET` | repo-root `.env`; only to allowlist the organiser on the first run |
+| demo organiser | `STERUN_DEMO_ORGANISER_SECRET` | **written to `.env` by the first run**, reused after. Import it into a wallet to open the organiser console as it |
+| sanity organiser | `stellar keys secret sterun-organiser`, or `STERUN_SANITY_ORGANISER_SECRET` | the stellar CLI; for the sweep only |
+| 16 runners, 2 desks | fresh each run | **`.env.demo`** (gitignored, 0600), overwritten each run — a pass can only be shown from its runner's wallet, which the video needs |
+
+No secret is printed or written to the evidence; the writer and `seed.sh` both refuse it.
+
+### Re-running
+
+A re-run **replaces** the demo: step `D.1` cancels the demo organiser's earlier races that are
+still open, then publishes a fresh set. A `Completed` Solo race from an earlier run cannot be
+cancelled, and is off the default list by its date anyway.
+
+Every run uses **16 faucet payouts** of the faucet's 100 a day (`dailyCapStroops` ÷ the payout).
+Preflight checks that 16 fit before anything is created. If the cap is reached mid-run anyway —
+someone else used the faucet today — the run stops with `FaucetDailyCapReached` and the time the
+cap lifts. Run again after that time; do not loop.
+
+A failed step is reported, never cleaned up automatically: a half-seeded demo is recoverable by
+re-running, and a cancellation is not.
+
+### The sweep, and the races it does not touch
+
+`sc/scripts/*-testnet.sh` prove each contract upgrade on the live network by creating a race named
+"Sterun … sanity <date>" with a 2027 fixture date, and none cancels it. `sc/` is outside STE-68, so
+the next upgrade script will add another; the sweep (`D.0`, first in every seed run) takes it off
+again. It is deliberately narrow ([`src/cleanup.ts`](src/cleanup.ts)): it cancels only a race the
+sanity key created **and** whose name says "sanity" or "rehearsal", and only if not already
+terminal.
+
+Test-named races created by **other** wallets are listed in `D.0` and never attempted — cancelling
+would fail as a non-organiser, and that is correct. On 2026-09-25 those were Ancung's `LARI TEKNIK
+(TESTING)`, `TechSprint UGM 2026 (TESTING 3)`, `TESTING LARI 4` and `Jogja Run 2026 (Testing)`: hers
+to cancel in the console.
+
+### Not run yet
+
+The seed was built while RaceRecord was being upgraded for STE-66, and **has not been run against
+testnet**: the demo should be created on the final contract version. What was verified without a
+network is the test suite above and a smoke run against a dead API (preflight fails, nothing is
+created, `.env` is untouched).
 
 ## Runs
 
