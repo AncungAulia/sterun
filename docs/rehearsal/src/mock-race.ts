@@ -38,11 +38,13 @@ import {
   contractUrl,
 } from "./evidence";
 import { cancelRaces, pendingCleanupNote } from "./cleanup";
+import { verdictFor } from "./live-site";
 import { Device } from "./device-process";
 import { forwardedScreenshot, oneWinnerOneFlag, scanAt as scanAtDesk, type PassHolder } from "./fraud";
 import { FaucetStoppedError, fundFromFaucet } from "./faucet";
 import {
   API,
+  APP,
   REPO,
   SUSD,
   addTrustline,
@@ -247,18 +249,43 @@ async function main(): Promise<void> {
       s.url("RaceRecord", contractUrl(deployments.raceRecord));
     });
 
-    await ev.step("S.2", "S", "Find the live web app and landing page", "repo search + HTTP", async (s) => {
-      const res = await fetch("https://sterun.xyz", { redirect: "follow" });
-      const text = await res.text();
-      const parked = /Parked Domain/i.test(text);
-      s.url("https://sterun.xyz", "https://sterun.xyz");
-      s.note(`the only web origin named in the repo besides the API is sterun.xyz (used in fixture uris); it answers ${res.status}${parked ? " with a Hostinger 'Parked Domain' page, not the app" : ""}`);
-      s.note("no Vercel URL for fe/ or landing-page/ exists anywhere in the repo or docs/deployments.md; STE-32 (Vercel deploy) is still Backlog");
-      s.manual(
-        "Ancung",
-        "deploy fe/ and landing-page/ (STE-32), then repeat proofs 1, 2, 4 and 9 through the UI with a browser wallet, and record the URLs here",
-        "STE-32",
-      );
+    await ev.step("S.2", "S", "Find the live web app and landing page", "HTTP", async (s) => {
+      /**
+       * Measured, never asserted. Until 2026-09-25 this step carried the
+       * sentence "STE-32 (Vercel deploy) is still Backlog" as a hardcoded
+       * note. STE-32 shipped on 2026-09-23, so every run after that told
+       * Ancung to do a deploy she had already done, and said something false
+       * about docs/deployments.md on the way. A 200 is not enough either:
+       * sterun.xyz answered 200 for weeks as a Hostinger parked page.
+       */
+      const reach = async (url: string) => {
+        try {
+          const res = await fetch(url, { redirect: "follow" });
+          const body = await res.text();
+          return { url, server: res.headers.get("server") ?? "unknown", ...verdictFor(url, { status: res.status, body }) };
+        } catch (error) {
+          return { url, server: "unreachable", ...verdictFor(url, { status: 0, body: String(error) }) };
+        }
+      };
+
+      const [landing, app] = await Promise.all([reach("https://sterun.xyz"), reach(APP)]);
+      for (const site of [landing, app]) {
+        s.url(site.url, site.url);
+        s.note(`${site.reason}; served by ${site.server}`);
+      }
+
+      if (!landing.live || !app.live) {
+        s.manual(
+          "Ancung",
+          `deploy the missing side of STE-32 (${[!landing.live && "landing-page/", !app.live && "fe/"].filter(Boolean).join(" and ")}), then repeat proofs 1, 2, 4 and 9 through the UI with a browser wallet, and record the URLs here`,
+          "STE-32",
+        );
+        return;
+      }
+
+      s.check(app.live, `the web app is live at ${APP}`);
+      s.check(landing.live, "the landing page is live at https://sterun.xyz");
+      s.note("STE-32 is deployed, so the UI proofs below (M.1, M.2, M.4) are the only thing standing between this run and a full pass");
     });
 
     await ev.step("S.3", "S", "Fund 13 fresh testnet accounts (organiser, outsider, 2 desks, 9 runners)", "Friendbot", async (s) => {
@@ -879,10 +906,10 @@ async function main(): Promise<void> {
 
     // ------------------------------------------------------------ manual
     await ev.step("M.1", "1", "Create the race through the organiser console UI", "human + browser wallet", async (s) => {
-      s.manual("Ancung", "open /org/new on a deployed web app (none exists: S.2), connect an allowlisted wallet, create a race with two distances, quota and sUSD price, open it; record the event id and the tx hashes the wallet shows", "STE-32");
+      s.manual("Ancung", `open ${APP}/org/new, connect an allowlisted wallet, create a race with two distances, quota and sUSD price, open it; record the event id and the tx hashes the wallet shows`, "STE-32");
     });
     await ev.step("M.2", "2", "Enter a race and pay through the entry flow UI with a browser wallet", "human + browser wallet", async (s) => {
-      s.manual("Ancung", "on the deployed app, as a runner: Get test sUSD, fill the form, sign enter in Freighter; confirm the pass shows the same bib as GET /records/:id; repeat with a second wallet after the distance sells out and check the sold-out sentence", "STE-32");
+      s.manual("Ancung", `on ${APP}, as a runner: Get test sUSD, fill the form, sign enter in Freighter; confirm the pass shows the same bib as GET /records/:id; repeat with a second wallet after the distance sells out and check the sold-out sentence`, "STE-32");
     });
     await ev.step("M.3", "6", "Two physical phones as offline desks, one runner at both", "humans + 2 phones + camera", async (s) => {
       s.manual(
@@ -892,7 +919,15 @@ async function main(): Promise<void> {
       );
     });
     await ev.step("M.4", "9", "Public runner profile page", "human + browser", async (s) => {
-      s.manual("Ancung", "build the public profile (STE-24, Backlog), open it for each rehearsal runner address in the evidence header and check state, finish time ('no official time' for R7, never 0) and the verify-hash panel", "STE-24");
+      // STE-24 shipped on 2026-09-16 (PR #54). Until 2026-09-25 this step still
+      // asked Ancung to "build the public profile (STE-24, Backlog)", nine days
+      // after it was Done — the page was live and the note said it did not exist.
+      for (const r of runners) s.url(`profile ${r.label}`, `${APP}/runner/${r.kp.publicKey()}`);
+      s.manual(
+        "Axel",
+        "the profile page is live (STE-24): open the runner URLs above with no wallet and check each row's state, its finish time ('no official time' for R7, never 0) and the transaction link; then enter the real identity data plus salt in the verify panel and confirm it reads matched, and that changing one character reads not matched",
+        "STE-24",
+      );
     });
     await ev.step("M.5", "M", "Screen footage, the team walkthrough, the demo video", "Axel", async (s) => {
       s.manual("Axel", "out of scope for this ticket by the brief: record screen footage, schedule the team walkthrough with every owner, and cut the demo video (STE-28)", "STE-28");

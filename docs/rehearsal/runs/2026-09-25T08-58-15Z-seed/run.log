@@ -1,0 +1,49 @@
+
+▸ [D.0] Take the sc/ sanity races off the directory (cancel; there is no delete)
+    · read 40 races from the live registry
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 3 "LARI TEKNIK (TESTING)" (Open)
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 4 "LARI TEKNIK (TESTING 2)" (Open)
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 12 "TechSprint UGM 2026 (TESTING 3)" (Open)
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 13 "Elektro Dash 2026 (TESTING)" (Open)
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 28 "TESTING LARI 3" (Open)
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 36 "TESTING LARI 4" (Open)
+    · NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 37 "Jogja Run 2026 (Testing)" (Open)
+    · the races above were created by a wallet this machine holds no key for; cancelling them would fail as a non-organiser, which is correct — ask their organiser to cancel them in the console
+    · sanity organiser GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN, key from the stellar CLI identity sterun-organiser
+    · ours: race 0 "Sterun Testnet Rehearsal" (Open)
+    · ours: race 7 "Sterun allowlist sanity 2026-09-09" (Draft)
+    · ours: race 14 "Sterun untimed finish sanity 2026-09-11" (Open)
+    · ours: race 17 "Sterun bib uniqueness sanity 2026-09-15" (Open)
+    · ours: race 18 "Sterun quota increase sanity 2026-09-15" (Open)
+    · ours: race 19 "Sterun quota increase sanity 2026-09-15" (Open)
+    tx  set_event_status Cancelled — race 0 was Open: https://stellar.expert/explorer/testnet/tx/80e4d13e89bf17cc88d048f28b7b528c8bd2a9f626b7f3b154b87eccb67da0bf
+    url GET /events/0: https://api.sterun.xyz/events/0
+    tx  set_event_status Cancelled — race 7 was Draft: https://stellar.expert/explorer/testnet/tx/c8d5eeb4451a69b1028f73cbdb079541b4913d224d8e395567fbb6e4dec6fd05
+    url GET /events/7: https://api.sterun.xyz/events/7
+    tx  set_event_status Cancelled — race 14 was Open: https://stellar.expert/explorer/testnet/tx/da7d4a012d8beef3d369a9313ed44e5535be6762c7a222e138e33cf03456359e
+    url GET /events/14: https://api.sterun.xyz/events/14
+    tx  set_event_status Cancelled — race 17 was Open: https://stellar.expert/explorer/testnet/tx/908ab41abd896b0f398a222f4eb2fd837af2ce84d2df6510a5b952070ac349c2
+    url GET /events/17: https://api.sterun.xyz/events/17
+    tx  set_event_status Cancelled — race 18 was Open: https://stellar.expert/explorer/testnet/tx/3fa748488fea4dc8c93771e9906ddd6804a1dbec593c0595a74153798179bc3f
+    url GET /events/18: https://api.sterun.xyz/events/18
+    tx  set_event_status Cancelled — race 19 was Open: https://stellar.expert/explorer/testnet/tx/2ccdb4c775155d283edab823075ed54a441f84a25845b614a6634f36a7e4434e
+    url GET /events/19: https://api.sterun.xyz/events/19
+  ✓ PASS
+
+▸ [S.1] Preflight: the live backend serves these contracts, the faucet can pay this run, the claim path
+    url GET /health: https://api.sterun.xyz/health
+    url GET /config: https://api.sterun.xyz/config
+    · faucet: 50 sUSD a payout, 100 payouts per 24h; this run needs 16
+    · claim path: BATCH — the live RaceRecord exports claim_racepack_many and this SDK build has claimRacepackMany
+  ✓ PASS
+
+▸ [S.2] The demo organiser: funded, sUSD trustline, allowlisted
+    · a new demo organiser was created; its secret was appended to .env as STERUN_DEMO_ORGANISER_SECRET (value not printed)
+    url organiser: https://stellar.expert/explorer/testnet/account/GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF
+    · funded with Friendbot
+  ✗ FAIL — Error: Trustline for sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW not found for GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF
+
+▸ Checking every link
+
+RESULT 2 PASS, 1 FAIL, 0 MANUAL REQUIRED, 0 BLOCKED of 3
+evidence: /Users/axelurwawuskaatarubby/orca/workspaces/sterun/sterun-seed-run/docs/rehearsal/runs/2026-09-25T08-58-15Z-seed/EVIDENCE.md

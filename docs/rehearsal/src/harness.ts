@@ -14,6 +14,7 @@ import { TESTNET } from "@sterunxyz/sdk";
 
 import { wasmExports } from "./claims";
 import type { Evidence, StepContext } from "./evidence";
+import { readBalance, readHasTrustline } from "./trustline";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -116,9 +117,14 @@ export async function contractExports(contractId: string, fn: string): Promise<b
   return wasmExports(wasm, fn);
 }
 
+/** Does `address` hold a trustline for `asset`? See `trustline.ts` for the why. */
+export async function hasTrustline(address: string, asset: Asset): Promise<boolean> {
+  return readHasTrustline(server, address, asset, PASSPHRASE);
+}
+
+/** The address's balance of `asset`; no trustline is a zero balance, not a failure. */
 export async function susdBalance(address: string, asset: Asset): Promise<bigint> {
-  const { balanceEntry } = await server.getAssetBalance(address, asset, PASSPHRASE);
-  return balanceEntry ? BigInt(balanceEntry.amount) : 0n;
+  return readBalance(server, address, asset, PASSPHRASE);
 }
 
 export async function signedHeaders(kp: Keypair): Promise<Record<string, string>> {

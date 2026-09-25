@@ -1,0 +1,199 @@
+{
+  "meta": {
+    "started": "2026-09-25T08:58:16.463Z",
+    "network": "Stellar testnet",
+    "api": "https://api.sterun.xyz",
+    "app": "https://app.sterun.xyz",
+    "EventRegistry": "CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU",
+    "RaceRecord": "CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW",
+    "sUSD SAC": "CBQ6444FXNECVHSPECYHUO26V2HFLPAXXGOTWDA5F3RPGH6TD7RDMOOU",
+    "git": "640d297",
+    "organiser": "GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF",
+    "finished": "2026-09-25T08:59:38.889Z",
+    "link check": "6/6 tx links resolve on Horizon and the stellar.expert API",
+    "failed txs on the ledger (expected only for the losing desk's duplicate claim, if any)": "none"
+  },
+  "steps": [
+    {
+      "id": "D.0",
+      "proof": "D",
+      "title": "Take the sc/ sanity races off the directory (cancel; there is no delete)",
+      "driver": "SDK + stellar CLI key",
+      "status": "PASS",
+      "startedAt": "2026-09-25T08:58:16.466Z",
+      "endedAt": "2026-09-25T08:59:02.174Z",
+      "txs": [
+        {
+          "label": "set_event_status Cancelled — race 0 was Open",
+          "hash": "80e4d13e89bf17cc88d048f28b7b528c8bd2a9f626b7f3b154b87eccb67da0bf",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4860626
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Cancelled — race 7 was Draft",
+          "hash": "c8d5eeb4451a69b1028f73cbdb079541b4913d224d8e395567fbb6e4dec6fd05",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4860627
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Cancelled — race 14 was Open",
+          "hash": "da7d4a012d8beef3d369a9313ed44e5535be6762c7a222e138e33cf03456359e",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4860628
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Cancelled — race 17 was Open",
+          "hash": "908ab41abd896b0f398a222f4eb2fd837af2ce84d2df6510a5b952070ac349c2",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4860629
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Cancelled — race 18 was Open",
+          "hash": "3fa748488fea4dc8c93771e9906ddd6804a1dbec593c0595a74153798179bc3f",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4860630
+          },
+          "expert": {
+            "status": 200
+          }
+        },
+        {
+          "label": "set_event_status Cancelled — race 19 was Open",
+          "hash": "2ccdb4c775155d283edab823075ed54a441f84a25845b614a6634f36a7e4434e",
+          "horizon": {
+            "status": 200,
+            "successful": true,
+            "ledger": 4860631
+          },
+          "expert": {
+            "status": 200
+          }
+        }
+      ],
+      "urls": [
+        {
+          "label": "GET /events/0",
+          "url": "https://api.sterun.xyz/events/0",
+          "status": 200
+        },
+        {
+          "label": "GET /events/7",
+          "url": "https://api.sterun.xyz/events/7",
+          "status": 200
+        },
+        {
+          "label": "GET /events/14",
+          "url": "https://api.sterun.xyz/events/14",
+          "status": 200
+        },
+        {
+          "label": "GET /events/17",
+          "url": "https://api.sterun.xyz/events/17",
+          "status": 200
+        },
+        {
+          "label": "GET /events/18",
+          "url": "https://api.sterun.xyz/events/18",
+          "status": 200
+        },
+        {
+          "label": "GET /events/19",
+          "url": "https://api.sterun.xyz/events/19",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "read 40 races from the live registry",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 3 \"LARI TEKNIK (TESTING)\" (Open)",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 4 \"LARI TEKNIK (TESTING 2)\" (Open)",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 12 \"TechSprint UGM 2026 (TESTING 3)\" (Open)",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 13 \"Elektro Dash 2026 (TESTING)\" (Open)",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 28 \"TESTING LARI 3\" (Open)",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 36 \"TESTING LARI 4\" (Open)",
+        "NOT OURS, left for its organiser GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7: race 37 \"Jogja Run 2026 (Testing)\" (Open)",
+        "the races above were created by a wallet this machine holds no key for; cancelling them would fail as a non-organiser, which is correct — ask their organiser to cancel them in the console",
+        "sanity organiser GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN, key from the stellar CLI identity sterun-organiser",
+        "ours: race 0 \"Sterun Testnet Rehearsal\" (Open)",
+        "ours: race 7 \"Sterun allowlist sanity 2026-09-09\" (Draft)",
+        "ours: race 14 \"Sterun untimed finish sanity 2026-09-11\" (Open)",
+        "ours: race 17 \"Sterun bib uniqueness sanity 2026-09-15\" (Open)",
+        "ours: race 18 \"Sterun quota increase sanity 2026-09-15\" (Open)",
+        "ours: race 19 \"Sterun quota increase sanity 2026-09-15\" (Open)"
+      ]
+    },
+    {
+      "id": "S.1",
+      "proof": "S",
+      "title": "Preflight: the live backend serves these contracts, the faucet can pay this run, the claim path",
+      "driver": "API + RPC",
+      "status": "PASS",
+      "startedAt": "2026-09-25T08:59:02.175Z",
+      "endedAt": "2026-09-25T08:59:03.475Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "GET /health",
+          "url": "https://api.sterun.xyz/health",
+          "status": 200
+        },
+        {
+          "label": "GET /config",
+          "url": "https://api.sterun.xyz/config",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "faucet: 50 sUSD a payout, 100 payouts per 24h; this run needs 16",
+        "claim path: BATCH — the live RaceRecord exports claim_racepack_many and this SDK build has claimRacepackMany"
+      ]
+    },
+    {
+      "id": "S.2",
+      "proof": "S",
+      "title": "The demo organiser: funded, sUSD trustline, allowlisted",
+      "driver": "Friendbot + SDK",
+      "status": "FAIL",
+      "startedAt": "2026-09-25T08:59:03.476Z",
+      "endedAt": "2026-09-25T08:59:07.878Z",
+      "txs": [],
+      "urls": [
+        {
+          "label": "organiser",
+          "url": "https://stellar.expert/explorer/testnet/account/GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF",
+          "status": 200
+        }
+      ],
+      "observations": [
+        "a new demo organiser was created; its secret was appended to .env as STERUN_DEMO_ORGANISER_SECRET (value not printed)",
+        "funded with Friendbot"
+      ],
+      "error": "Error: Trustline for sUSD:GCYJNYCUMUTLTOI7C2TPGSZBPBMTJU4UP4TW7JPDMOF4OB36I2PAFQCW not found for GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF"
+    }
+  ]
+}
