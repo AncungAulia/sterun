@@ -37,6 +37,7 @@ import {
   accountUrl,
   contractUrl,
 } from "./evidence";
+import { cancelRaces, pendingCleanupNote } from "./cleanup";
 import { Device } from "./device-process";
 import { FaucetStoppedError, fundFromFaucet } from "./faucet";
 import {
@@ -172,6 +173,49 @@ async function main(): Promise<void> {
   ev.meta.runners = runners.map((r) => `${r.label} ${r.kp.publicKey()}`).join(", ");
   ev.write();
 
+  // STE-68: every race this run creates is cancelled at the end unless it
+  // finished (Completed) or was cancelled on purpose. The organiser key exists
+  // only in this process, so if the run leaves a race open nobody can close it
+  // later. Until cleanup has run, the evidence says so in as many words.
+  const createdRaces: number[] = [];
+  const madeRace = (id: number) => {
+    createdRaces.push(id);
+    ev.meta.cleanup = pendingCleanupNote(createdRaces);
+    ev.write();
+  };
+  let cleaning: Promise<void> | undefined;
+  const cleanup = () =>
+    (cleaning ??= ev
+      .step("C.1", "C", "Cleanup: cancel every race this run created that did not finish (STE-68)", "SDK", async (s) => {
+        if (createdRaces.length === 0) {
+          s.note("this run created no race");
+          ev.meta.cleanup = "nothing to cancel: the run created no race";
+          return;
+        }
+        const outcomes = await cancelRaces(sterun, createdRaces, SterunClient.as(organiser));
+        for (const o of outcomes) {
+          if (o.txHash) s.tx(`set_event_status Cancelled — race ${o.eventId} was ${o.before}`, o.txHash);
+          else if (o.error) s.note(`race ${o.eventId} (${o.before}): cancelling FAILED — ${o.error}`);
+          else s.note(`race ${o.eventId} is ${o.before}, terminal: left as it is`);
+          s.url(`GET /events/${o.eventId}`, `${API}/events/${o.eventId}`);
+        }
+        const failed = outcomes.filter((o) => o.error);
+        ev.meta.cleanup = failed.length
+          ? `INCOMPLETE: race(s) ${failed.map((o) => o.eventId).join(", ")} could not be cancelled (see C.1)`
+          : `done: ${outcomes.map((o) => `race ${o.eventId} ${o.txHash ? `${o.before} → Cancelled` : `${o.before} (left)`}`).join(", ")}`;
+        s.check(failed.length === 0, `every race this run left open is cancelled; failed: ${failed.map((o) => `${o.eventId} ${o.error}`).join("; ")}`);
+      })
+      .then(() => undefined));
+  // Ctrl-C mid-run: cancel what is open, write the evidence, then stop. tee
+  // dies with the same signal, so writes to stdout may fail from here on.
+  process.stdout.on("error", () => {});
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.once(signal, () => {
+      console.error(`\n${signal}: cancelling this run's open races before exiting`);
+      void cleanup().finally(() => process.exit(130));
+    });
+  }
+
   const deskA = newDevice("desk-A");
   const deskB = newDevice("desk-B");
   const phones = newDevice("phones");
@@ -273,7 +317,12 @@ async function main(): Promise<void> {
     });
 
     await ev.step("1.2", "1", "Organiser creates the race: 2 categories with quota and sUSD price, then opens entries", "SDK (console equivalent)", async (s) => {
-      const startsAt = BigInt(Math.floor(Date.now() / 1000) + 3 * 86_400);
+      // The moment it is created (STE-68). The directory's default list hides
+      // a race whose start has passed, so a rehearsal race is never on it —
+      // not while the run is going and not in the three days after, which is
+      // where a Completed race dated "+3 days" used to sit. Nothing on chain
+      // or in the backend reads starts_at, so the scenario is unchanged.
+      const startsAt = BigInt(Math.floor(Date.now() / 1000));
       const created = await sterun.createEvent(
         {
           organiser: organiser.publicKey(),
@@ -285,6 +334,7 @@ async function main(): Promise<void> {
         SterunClient.as(organiser),
       );
       eventId = created.value;
+      madeRace(eventId);
       s.tx(`create_event → event ${eventId}`, created.txHash);
       const a = await sterun.addCategory({ eventId, code: "R10K", distanceM: 10_000, quota: 4, priceStroops: PRICE_10K }, SterunClient.as(organiser));
       cat10k = a.value;
@@ -479,6 +529,7 @@ async function main(): Promise<void> {
         SterunClient.as(organiser),
       );
       cancelledId = created.value;
+      madeRace(cancelledId);
       s.tx(`create_event → event ${cancelledId}`, created.txHash);
       const c = await sterun.addCategory({ eventId: cancelledId, code: "R5K", distanceM: 5_000, quota: 10, priceStroops: PRICE_5K }, SterunClient.as(organiser));
       s.tx("add_category R5K", c.txHash);
@@ -920,6 +971,7 @@ async function main(): Promise<void> {
     });
   } finally {
     for (const device of [deskA, deskB, phones, consoleDevice]) device.stop();
+    await cleanup();
   }
 
   // ---------------------------------------------------------------- link check
