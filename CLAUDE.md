@@ -83,6 +83,7 @@ must **never** be edited by hand.
 | STE-54 | **bibs unique within an event, from 1** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` keeps its duplicate-bib guard and `fe/` renders the number as-is (teammates' tickets) |
 | STE-55 | **`increase_quota`** — a sold-out distance can open a second batch (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer handler for `QuotaIncreased` and the `fe/` console flow are teammates' tickets |
 | STE-25 | **mock race rehearsal** on live testnet (C14) | script + evidence done — `docs/rehearsal/`; run 3: **49 PASS · 0 FAIL · 6 MANUAL REQUIRED**. The two-desk race from run 2 is fixed (STE-61 SDK, STE-62 scanner); the UI steps wait on STE-32 (no deployed web app) and the manual walkthrough |
+| STE-68 | **demo data** on testnet (SOW §3) + the rehearsal cleans up after itself | script done — `docs/rehearsal/seed.sh`: 4 races with poster + document, 25 records, one race run with results, both fraud attempts; sweeps the `sc/` sanity races off the directory. **Not run yet** (waits for the STE-66 upgrade) |
 | — | event metadata files (`POST /events/files`) | done, live e2e |
 | — | **R2** object storage (`sterun-files`, APAC) | done — the API is stateless, the replica blocker is gone |
 | — | migrate `be/` + `fe/` to the v2 addresses | done — index and vault truncated, v2 e2e passed |
