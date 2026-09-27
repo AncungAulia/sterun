@@ -7,7 +7,7 @@ It follows §6.1 of the SOW, one section per deliverable, in the order the check
 for them. Where something is **not done yet**, the row says so and names the date it is expected,
 rather than being left out.
 
-Last updated: **2026-09-24**. Network: **Stellar testnet** throughout.
+Last updated: **2026-09-27**. Network: **Stellar testnet** throughout.
 
 ---
 
@@ -67,7 +67,7 @@ and a read-back of the data that survived it.
 | JSON schema v1.0 | [`sdk/schema/race-record-v1.0.json`](https://github.com/AncungAulia/sterun/blob/main/sdk/schema/race-record-v1.0.json) | A race record has one published shape that another system can validate against. |
 | The hash and code definitions | [`docs/specs/HASH_AND_TOTP.md`](https://github.com/AncungAulia/sterun/blob/main/docs/specs/HASH_AND_TOTP.md) | How a runner's identity is hashed and how the check-in code is derived, byte by byte, with test vectors two independent implementations are checked against. |
 | The API the app runs on | [api.sterun.xyz](https://api.sterun.xyz/config) | The live backend, answering with the contract addresses it is pointed at. |
-| **Recorded SDK run** | **not yet — due 2026-09-26** | A screen recording of the SDK creating a race, issuing a record and verifying it against testnet. The run itself is already automated and green; what is missing is the recording. |
+| Recorded SDK run | [sterun-sdk-e2e-testnet-2026-09-27.mp4](https://drive.google.com/file/d/1UFF2HPFzeD4MHnQCcWqo7yumtLIJ1gPI/view?usp=sharing) | The SDK alone, against live testnet: a race created, distances and add-ons added, entries opened, a runner entered and paid 5 sUSD, checked in, finished, then verified with no wallet at all. Every refusal the protocol owes is in it too, including a wallet that is not allowlisted being refused a race. |
 
 **The package was checked as a package, not as source.** Before publishing, the tarball was
 installed into an empty TypeScript project outside this repository, typechecked there, and used to
@@ -88,9 +88,9 @@ read the live contracts. The same check was repeated after publishing.
 | The organiser's way in | [app.sterun.xyz/organisers](https://app.sterun.xyz/organisers) | What publishing a race involves, and how to ask for access. |
 | The landing page | [sterun.xyz](https://sterun.xyz) | The product explained for someone who runs races. |
 | Deployment record | [`docs/deployments.md` §STE-32](https://github.com/AncungAulia/sterun/blob/main/docs/deployments.md) | When each of the three went live, and where. |
-| The full loop, rehearsed | [`docs/rehearsal/runs/`](https://github.com/AncungAulia/sterun/tree/main/docs/rehearsal/runs) | Three runs on live testnet. The last one: **49 passed, 0 failed, 6 steps that need a person**. Every step names what it proves and links its transactions. |
-| **Demo video, 3 minutes or less** | **not yet — recording 2026-09-25, published 2026-09-26** | The full loop end to end, plus both fraud attempts refused. |
-| **Screenshots** | **not yet — with the video** | The directory, a race, a pass, the scanner, a finished record. |
+| The full loop, rehearsed | [`docs/rehearsal/runs/`](https://github.com/AncungAulia/sterun/tree/main/docs/rehearsal/runs) | Five runs on live testnet. The last one: **51 passed, 0 failed, 6 steps that need a person**. Every step names what it proves and links its transactions. |
+| **Demo video, 3 minutes or less** | **not yet** | The full loop end to end, plus both fraud attempts refused. |
+| Screenshots | partly | The directory is done. A race, a pass, the scanner and a finished record come with the video. |
 
 ### What the rehearsal actually covers
 
@@ -104,6 +104,8 @@ somebody in, a finish recorded for a runner who never collected a race pack, and
 re-uploaded after it was published.
 
 ### The two deliberate fraud attempts
+
+Both are in the harness and in every run since 2026-09-24.
 
 **A duplicate race pack collection.** Covered three ways: the same desk scanning one runner twice
 while offline, the same desk sending that claim to the chain twice, and two desks that both checked
@@ -120,8 +122,8 @@ It does **not** prove that a forwarded QR is always rejected, because that would
 desk accepts a code within one step either side, so a screenshot shown within roughly thirty to
 sixty seconds still works. The protection is the pair: the code turns over every thirty seconds,
 and the race pack can only be handed over once. The step is in the harness
-(`docs/rehearsal/src/stale-qr.ts`) with its own tests; it lands in the evidence at the next full
-run.
+(`docs/rehearsal/src/stale-qr.ts`) with its own tests, and it is in the evidence of every run since
+2026-09-24 as **F.1**.
 
 ---
 
@@ -132,15 +134,15 @@ Stated here so nobody has to find it out later:
 - **There is no escrow.** The entry fee moves straight from the runner to the organiser in one
   transaction, so the contract never holds the money and no refund can be forced by anyone. Refunds
   are an off-chain promise between a runner and an organiser.
-- **Every race on the demo today is ours.** The races in the directory were created by this team to
-  exercise the system. No real event has been recorded on Sterun yet, and that, rather than any
-  feature, is what we consider the measure of whether this project should continue.
+- **Every race on the demo is ours.** The four in the directory were seeded by this team to exercise
+  the system, with posters and 25 records between them. No real event has been recorded on Sterun
+  yet, and that, rather than any feature, is what we consider the measure of whether this project
+  should continue.
 - **Testnet, not mainnet.** Entries are paid in sUSD, a test token we issue. Nothing here has moved
   real money.
-- **Two contract changes are waiting for review** at the time of writing: entries closing on their
-  own at the registration date, and recording many results in one signature. Both are built and
-  tested; neither is on the live contract yet, because a change to the frozen interface needs the
-  PM's approval first.
+- **The contracts moved three times since this page was first written**, each in place at the same
+  address: entries closing on their own at the registration date, many results in one signature, and
+  many race packs handed over in one signature. The evidence for each is in `docs/deployments.md`.
 
 ---
 
@@ -149,5 +151,5 @@ Stated here so nobody has to find it out later:
 | Deliverable | Present | Partial | Missing |
 | --- | --- | --- | --- |
 | 1 — contracts | ✅ | | |
-| 2 — SDK and schema | | ⚠️ recorded SDK run outstanding | |
-| 3 — app, scanner, demo | | ⚠️ video and screenshots outstanding | |
+| 2 — SDK and schema | ✅ | | |
+| 3 — app, scanner, demo | | ⚠️ the demo video is outstanding | |
