@@ -413,6 +413,36 @@ async function main(): Promise<void> {
     asOrganiser,
   });
 
+  /*
+   * Cancelling is the last thing the run does, and it is not a nicety.
+   *
+   * The event above is created on the **live** registry, so a run that simply
+   * ended left a race called "Sterun SDK e2e <date>" on the public directory
+   * for ever: its organiser is a throwaway Friendbot account nobody holds the
+   * key for once this process exits, so nothing and nobody could take it off
+   * again. The rehearsal learned the same lesson in STE-68.
+   *
+   * It is the last step so that everything above still runs against a live
+   * `Open` event, and it is `Cancelled` rather than `Completed` because the
+   * race did not happen: these were throwaway runners, and saying a race ran
+   * when it did not is the kind of claim this product exists to prevent.
+   *
+   * A failure here does not fail the run. Everything the e2e set out to prove
+   * has already been proved by this point, and turning a green run red over
+   * housekeeping would hide that. It does say so loudly, with the id somebody
+   * needs in order to finish the job by hand.
+   */
+  step("Cleaning up: the throwaway event is cancelled, so it leaves no race behind");
+  try {
+    const cancelled = await sterun.setEventStatus(eventId, "Cancelled", asOrganiser);
+    const after = await sterun.getEvent(eventId);
+    assert(after.status === "Cancelled", `expected Cancelled, got ${after.status}`);
+    log(`  ✓ event ${eventId} is Cancelled and off the directory — tx ${cancelled.txHash}`);
+  } catch (error) {
+    log(`  ! could not cancel event ${eventId}: ${String(error)}`);
+    log(`  ! it is still listed. Cancel it with the organiser above, or it stays on the board.`);
+  }
+
   step("Evidence for docs/deployments.md");
   log("```");
   log(`event_id            ${eventId}`);
