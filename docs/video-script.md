@@ -239,6 +239,53 @@ is offline, which is exactly the case the desk was built for: the queue lives in
 profile's own IndexedDB, so the two profiles cannot see each other's claims until they sync. The
 webcam is shared because the two scans happen one after the other.
 
+### Beat 5, step by step
+
+The desk answers in one of four ways: `green`, `expired`, `claimed`, `unknown`
+(`fe/src/modules/scanner/lib/verdict.ts`). Two facts decide how this beat has to be shot.
+
+**A QR carries the step it was made in**, and the desk refuses a step more than one away from its
+own before it computes anything. The step is 30 seconds and the tolerance is one step, so a
+screenshot stays good for **between 30 and 60 seconds** depending on where in a step it was taken.
+Waiting **90 seconds** puts it past that with room to spare, whatever the phone's clock is doing.
+
+**`claimed` is checked before the code is.** A runner who has already been queued at either desk
+reads `claimed`, not `expired` — so this beat needs a runner nobody has scanned yet, and it has to
+happen **before** that runner's own live claim.
+
+With desk A offline, on camera and in one take:
+
+1. Open runner 2's pass on the phone. The code is visibly counting.
+2. Screenshot it on the phone, so the screenshot is plainly of what is on screen.
+3. **Wait 90 seconds with the clock in frame.** This is the take. Do not cut it.
+4. Present the screenshot to desk A's camera → **EXPIRED**. Nothing is queued and the runner's
+   record is untouched: say that out loud, because the screen is showing a refusal, not a claim.
+5. Open the live pass on the phone and present it at desk B → **GREEN**.
+
+Step 3 is the one edit that would turn this clip into a lie, and it is also the step everybody wants
+to cut. The product does not refuse a fresh screenshot, and a clip that appears to show it doing so
+is a claim we would have to withdraw.
+
+### Beat 6, step by step
+
+Both desks offline, and one laptop offline makes both of them offline at once.
+
+1. Before going offline, make sure both profiles have their roster: open `/scan/<id>` in each while
+   there is still signal.
+2. **Turn the laptop's wifi off.** Both desks now show they are saving claims on this device.
+3. Desk A: present runner 3's pass → **GREEN**. Desk A hands over a race pack.
+4. Desk B: present the same pass → **GREEN** again. Desk B has no way to know, and that is the whole
+   point of the beat.
+5. **Turn wifi back on.**
+6. On each desk open `/scan/<id>/claims` and press **Send**. Send desk A, then desk B, close
+   together.
+7. One claim lands. The other is refused on the ledger with `AlreadyClaimed(102)`, and that desk
+   moves runner 3 into `/scan/<id>/flagged` — a list naming the runner to go and find.
+
+What this proves is not that the system stopped a duplicate before it happened: two packs really
+were handed over. It is that the chain keeps exactly one claim and tells the losing desk which
+runner to chase, which is the honest version and the one to narrate.
+
 ### Enter and pay **on the phone**, not on the laptop
 
 This is the decision that makes the rest work. A pass reaches a runner in the browser they entered
