@@ -794,6 +794,10 @@ shows the enforced one.
   clock rather than guessing on the first render.
 - **`useRegistrationCloses` lives in `src/hooks/`**, not in this module: the entry flow is its
   second reader.
+- **Overview shows the date only when there is one** (Ancung, 2026-09-27). The card used to read
+  "Anytime, until you close them" on a race without one, which is not a fact about that race: it is
+  the absence of one dressed as a number. Every race published before this ticket has no date, so
+  the card was noise on most of the board.
 
 ### `/organisers` — the way in for somebody who runs races (2026-09-23)
 

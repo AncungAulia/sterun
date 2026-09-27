@@ -45,7 +45,7 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={closesAt === null ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"}>
         <StatCard
           label="Entries"
           value={totals.entered.toLocaleString("en-US")}
@@ -62,22 +62,23 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
           unit={collected === null ? undefined : `of ${totals.entered.toLocaleString("en-US")}`}
         />
         {/*
-          From the chain, not from the event document (STE-69). The document's
-          registration window is what runners were promised; this is the date
-          that actually refuses an entry, and where the two disagree an
-          organiser needs the one that decides.
+          Only when there is one (Ancung, 2026-09-27). A race with no close
+          date read "Anytime, until you close them", which is not a fact about
+          this race: it is the absence of one, dressed as a number. Every race
+          published before STE-69 has none, so the card would have been noise on
+          most of the board and useful on none of it.
+
+          Where there is a date it stays, because it comes from the chain rather
+          than from the event document: the document's registration window is
+          what runners were promised, this is what actually refuses an entry,
+          and where the two disagree an organiser needs the one that decides.
         */}
-        <StatCard
-          label={closesAt !== null && datePassed(closesAt, nowS) ? "Entries closed on" : "Entries close on their own"}
-          value={
-            closes.isPending
-              ? "..."
-              : closesAt === null
-                ? "Anytime"
-                : formatEventDateTimeLong(closesAt)
-          }
-          unit={closesAt === null ? "until you close them" : undefined}
-        />
+        {closesAt !== null ? (
+          <StatCard
+            label={datePassed(closesAt, nowS) ? "Entries closed on" : "Entries close on their own"}
+            value={formatEventDateTimeLong(closesAt)}
+          />
+        ) : null}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
