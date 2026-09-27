@@ -89,14 +89,15 @@ timings are a budget, and the two fraud beats are the ones to protect if it runs
 
 | In | For | On screen | Voiceover |
 | --- | --- | --- | --- |
-| 0:00 | 18s | The directory at `app.sterun.xyz`, then open **Kota Tua 10K 2026** | "Three races are open. This is what a runner sees: distances, prices, what is left." |
-| 0:18 | 30s | Pick the 10K, add the finisher tumbler, the non-refundable line, wallet prompt, receipt | "One distance, one add-on. The entry and the tumbler are one payment, in one transaction, and nothing can be sold to them separately afterwards." |
-| 0:48 | 15s | The pass: bib number, name, QR, the code visibly turning over | "The pass is the runner's. The code changes every thirty seconds." |
-| 1:03 | 22s | Desk scans the live pass, GREEN, record moves to race pack collected | "At the desk, a scan is a claim on the chain. One entry, one race pack." |
-| 1:25 | **35s** | **Fraud 1, the forwarded screenshot.** Take the screenshot on camera, *wait with the clock visible*, present it at the desk → EXPIRED. Then the runner's live pass at the other desk → GREEN. | "Here is the same pass as a screenshot, sent to somebody else. We wait. A screenshot goes stale in under a minute, and even a fresh one can only be used once." |
-| 2:00 | 25s | **Fraud 2, the duplicate.** One pass at two offline desks, both hand a pack over, both sync at once. One claim stands; the losing desk shows the runner in **Flagged**. | "Two desks, both offline, both fooled. When they sync, the chain keeps one claim and the other desk is told which runner to go find." |
-| 2:25 | 20s | Upload the results CSV. The preview **holds** a 2:10 five-kilometre time and an unknown bib. Fix the file, publish. | "Results are reviewed before a single signature is spent, because a published finish time can never be corrected." |
-| 2:45 | 15s | The runner's profile: a finish with a time, a finish with no time, and the record open on stellar.expert | "And this is what the runner keeps. Anyone can check it, including years from now." |
+| 0:00 | 12s | **Creating the race.** The form filling, then the wallet prompts going by, then the race live on the directory. Speed this up; it is the only beat that may be a montage. | "A race is published by its organiser, and only by a wallet we have approved. Five signatures, and it is on chain." |
+| 0:12 | 14s | The directory at `app.sterun.xyz`, the new race among the others, then open it | "This is what a runner sees. Distances, price, what is left." |
+| 0:26 | 28s | Pick the 10K, add the finisher tumbler, the non-refundable line, wallet prompt, receipt | "One distance, one add-on. The entry and the tumbler are one payment, in one transaction, and neither can be sold away from the other." |
+| 0:54 | 14s | The pass: bib number, name, QR, the code visibly turning over | "The pass is the runner's. The code changes every thirty seconds." |
+| 1:08 | 20s | Desk scans the live pass, GREEN, record moves to race pack collected | "At the desk, a scan is a claim on the chain. One entry, one race pack." |
+| 1:28 | **32s** | **Fraud 1, the forwarded screenshot.** Take the screenshot on camera, *wait with the clock visible*, present it at the desk -> EXPIRED. Then the runner's live pass at the other desk -> GREEN. | "Here is the same pass as a screenshot, sent to somebody else. We wait. A screenshot goes stale in under a minute, and even a fresh one can only be used once." |
+| 2:00 | 24s | **Fraud 2, the duplicate.** One pass at two offline desks, both hand a pack over, both sync at once. One claim stands; the losing desk shows the runner in **Flagged**. | "Two desks, both offline, both fooled. When they sync, the chain keeps one claim and the other desk is told which runner to go find." |
+| 2:24 | 22s | Upload the results CSV. The review **holds** four rows, each with its reason. Fix the file, publish. | "Results are reviewed before a single signature is spent, because a published finish time can never be corrected." |
+| 2:46 | 14s | The runner's profile: a finish with a time, a finish with no time, and the record open on stellar.expert | "And this is what the runner keeps. Anyone can check it, including years from now." |
 
 ### The one edit that would make this a lie
 
@@ -162,7 +163,11 @@ device rather than by key; two wallets is simply closer to two volunteers with t
 ### Before the camera is on
 
 1. Create the race from `/org/new`. The whole brief is [below](#the-race-brief).
-3. Add both desk wallets as scanners from the race page.
+2. Add both desk wallets as scanners from the race page.
+3. **Record the screen while you do steps 1 and 2.** Creating the race is beat 0 and it happens
+   exactly once, so it is filmed while it is really being done rather than staged afterwards. The
+   entries are worth recording for the same reason: if a take of beat 2 goes wrong on shoot day,
+   this footage is already a usable one.
 4. On the phone, for each of **five** runner accounts: connect, press **Get test sUSD** (this funds
    the account from friendbot if it is new, opens the trustline, and pays 50 sUSD — one button), then
    enter the race and pay.
