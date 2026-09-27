@@ -120,7 +120,15 @@ export async function getEventSummary(
  * - `0` **enterable now**: open, still to come, with places left somewhere.
  * - `1` **still ahead**: not open yet, entries closed, or sold out. There is a
  *   race at the end of it, so it belongs above what is over.
- * - `2` **over**: already run, or cancelled whatever its date says.
+ * - `2` **over**: already run, or `Completed`, or `Cancelled`, whatever the
+ *   date says.
+ *
+ * **`Completed` counts as over even while its own start time is still ahead**
+ * (Ancung, 2026-09-27, from a rehearsal race sitting on the live board). An
+ * organiser marks a race Completed when it has been run and its results are
+ * recorded; a start time later the same day does not make it a race anybody can
+ * still enter. Reading the date alone left a card on the directory wearing a
+ * Finished badge, which is the board contradicting itself.
  *
  * A race whose categories could not be read counts as `1` rather than `0`: it
  * may be enterable, but nothing here can say so, and promising a way in that
@@ -128,7 +136,9 @@ export async function getEventSummary(
  */
 export function entryRank(summary: EventSummary, nowS: bigint): 0 | 1 | 2 {
   const { event, categories } = summary;
-  if (event.status === "Cancelled" || event.startsAt < nowS) return 2;
+  if (event.status === "Cancelled" || event.status === "Completed" || event.startsAt < nowS) {
+    return 2;
+  }
   const open = event.status === "Open" && categories.some((category) => category.slotsLeft > 0);
   return open ? 0 : 1;
 }

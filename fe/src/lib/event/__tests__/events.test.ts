@@ -248,6 +248,10 @@ describe("what can be entered comes first (Ancung, 2026-09-17)", () => {
     expect(entryRank(race(3, NOW_S + 100n, "Closed"), NOW_S)).toBe(1);
     expect(entryRank(race(4, NOW_S + 100n, "Cancelled"), NOW_S)).toBe(2);
     expect(entryRank(race(5, NOW_S - 100n, "Open"), NOW_S)).toBe(2);
+    // Completed is over even while its own start time is still ahead: a race
+    // whose results are recorded is not one anybody can still enter, and a
+    // Finished badge on the board was the directory contradicting itself.
+    expect(entryRank(race(6, NOW_S + 100n, "Completed"), NOW_S)).toBe(2);
   });
 
   it("puts a race months away that can be entered above one next week that cannot", () => {
