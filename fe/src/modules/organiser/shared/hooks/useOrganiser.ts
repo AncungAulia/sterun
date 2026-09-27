@@ -68,7 +68,13 @@ export function useAddAddon() {
 
 export interface SetEventStatusInput {
   eventId: number;
-  status: "Draft" | "Open" | "Closed" | "Completed";
+  /**
+   * `Cancelled` joined the list on 2026-09-27, when the console grew a way to
+   * withdraw a race (STE-71). It was left out deliberately while nothing
+   * offered it, so nobody could reach the one status that cannot be undone by
+   * accident. The guard is now the dialog that asks for the race's name.
+   */
+  status: "Draft" | "Open" | "Closed" | "Completed" | "Cancelled";
 }
 
 /**

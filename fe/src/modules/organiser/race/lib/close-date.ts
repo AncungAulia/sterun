@@ -20,7 +20,7 @@ import type { EventStatus } from "@sterunxyz/sdk";
 import type { EventMetadata } from "@/lib/event/metadata";
 
 /** What the header offers on this race, in the order it offers it. */
-export type RaceAction = "open" | "reopen" | "close" | "addPlaces" | "closeDate";
+export type RaceAction = "open" | "reopen" | "close" | "addPlaces" | "closeDate" | "cancel";
 
 export interface HeaderPlan {
   /** The one button. `null` on a race nothing can be done to. */
@@ -30,37 +30,34 @@ export interface HeaderPlan {
 }
 
 /**
- * Which action leads, and which fold into the menu.
+ * What the header offers: one button at most, and a menu for the rest.
  *
- * The console's rule is one action per tab, and until now this header carried
- * two (STE-57). A third would have made the exception the rule, so they fold
- * into one button and a menu, and **which one leads depends on the race**:
+ * `ConsoleHeader` holds one action per tab, and by STE-69 this header had
+ * three. They now live in a labelled menu, which is one control again, and the
+ * only race that keeps a button of its own is a **Draft**: a draft exists in
+ * order to be opened, and hiding that behind a menu leaves somebody's first
+ * race looking like a page nothing can be done to.
  *
- * - **Draft** exists to be opened, and nothing else is urgent.
- * - **Open** leads with adding places, because a sold-out distance is money not
- *   being taken right now. Closing and the date are both rarer and neither is
- *   losing anybody anything this minute.
- * - **Closed with a date that has passed** leads with the date, because that is
- *   the only thing that lets anybody enter again. Reopening the status alone
- *   changes a word and nothing else, which is the worst kind of button: it
- *   succeeds and does not work.
- * - **Closed by hand** leads with reopening, which is the move that matches.
- * - **Completed** and **Cancelled** are terminal on chain, so they get nothing.
- *   A header full of buttons that all revert is worse than an empty one.
+ * Everything else is in the menu, in the order an organiser would look for it,
+ * with cancelling last and apart. Nothing leads on an Open race deliberately
+ * (Ancung, 2026-09-27): none of these is what somebody opens the page to do,
+ * and the one that would have led, Close entries, is a button whose accidental
+ * press stops a race selling.
+ *
+ * `Completed` and `Cancelled` get nothing at all. Both are terminal on chain,
+ * and a menu of items that all revert is worse than no menu.
+ *
+ * It takes the status and nothing else. It used to take the close date too, to
+ * decide which of two ways back should lead on a race the date had closed; with
+ * every way back in one menu there is no such choice left to make.
  */
-export function headerPlan(
-  status: EventStatus,
-  closesAt: bigint | null,
-  nowS: bigint | undefined,
-): HeaderPlan {
+export function headerPlan(status: EventStatus): HeaderPlan {
   if (status === "Completed" || status === "Cancelled") return { primary: null, menu: [] };
-  if (status === "Draft") return { primary: "open", menu: ["closeDate"] };
-  if (status === "Open") return { primary: "addPlaces", menu: ["closeDate", "close"] };
-
-  // Closed. The date decides which of the two ways back leads.
-  return datePassed(closesAt, nowS)
-    ? { primary: "closeDate", menu: ["addPlaces", "reopen"] }
-    : { primary: "reopen", menu: ["addPlaces", "closeDate"] };
+  if (status === "Draft") return { primary: "open", menu: ["closeDate", "cancel"] };
+  if (status === "Open") {
+    return { primary: null, menu: ["addPlaces", "closeDate", "close", "cancel"] };
+  }
+  return { primary: null, menu: ["addPlaces", "closeDate", "reopen", "cancel"] };
 }
 
 /** True only when there is a date and it is behind us. No date is not "passed". */

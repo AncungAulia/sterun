@@ -64,42 +64,43 @@ beforeEach(() => {
 
 describe("RaceActions", () => {
   describe("positive", () => {
-    it("leads an open race with adding entries, and folds the rest away", async () => {
+    it("puts everything behind one labelled menu on a live race", async () => {
       draw();
 
-      expect(screen.getByRole("button", { name: "Add entries" })).toBeInTheDocument();
-      // One action in the header, which is the console's rule; the rest is a menu.
-      expect(screen.queryByRole("button", { name: /closing date/ })).not.toBeInTheDocument();
+      // Nothing leads: none of these is what somebody opens the page to do.
+      expect(screen.queryByRole("button", { name: "Add entries" })).not.toBeInTheDocument();
 
-      await userEvent.click(screen.getByRole("button", { name: "More for this race" }));
+      await userEvent.click(screen.getByRole("button", { name: "Manage race" }));
 
-      expect(await screen.findByRole("menuitem", { name: "Set closing date" })).toBeInTheDocument();
+      expect(await screen.findByRole("menuitem", { name: "Add entries" })).toBeInTheDocument();
+      expect(screen.getByRole("menuitem", { name: "Set closing date" })).toBeInTheDocument();
       expect(screen.getByRole("menuitem", { name: "Close entries" })).toBeInTheDocument();
+      expect(screen.getByRole("menuitem", { name: "Cancel this race" })).toBeInTheDocument();
+    });
+
+    it("keeps one button on a draft, the one thing a draft exists for", async () => {
+      draw({ status: "Draft" });
+
+      expect(screen.getByRole("button", { name: "Open entries" })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Manage race" }));
+      expect(await screen.findByRole("menuitem", { name: "Cancel this race" })).toBeInTheDocument();
     });
 
     it("says Set on a race with no date and Change on one that has", async () => {
       closes.value = NOW + 100n;
 
       draw();
-      await userEvent.click(screen.getByRole("button", { name: "More for this race" }));
+      await userEvent.click(screen.getByRole("button", { name: "Manage race" }));
 
       expect(await screen.findByRole("menuitem", { name: "Change closing date" })).toBeInTheDocument();
     });
 
-    it("leads a date-closed race with the date, because reopening alone lets nobody in", () => {
-      closes.value = NOW - 10n;
-
+    it("offers reopening on a closed race, from the same menu", async () => {
       draw({ status: "Closed" });
 
-      expect(screen.getByRole("button", { name: "Change closing date" })).toBeInTheDocument();
-    });
+      await userEvent.click(screen.getByRole("button", { name: "Manage race" }));
 
-    it("leads a race closed by hand with reopening", () => {
-      closes.value = NOW + 10_000n;
-
-      draw({ status: "Closed" });
-
-      expect(screen.getByRole("button", { name: "Reopen entries" })).toBeInTheDocument();
+      expect(await screen.findByRole("menuitem", { name: "Reopen entries" })).toBeInTheDocument();
     });
   });
 

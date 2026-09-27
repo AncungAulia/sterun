@@ -12,7 +12,7 @@
  * Offered on every distance, not only a full one (Ancung, 2026-09-17): a
  * second batch is often opened before the first quite runs out.
  */
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, UserPlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -80,11 +80,15 @@ export function AddPlaces({
               setTimeout(() => setCategoryId(only.categoryId), 0);
             }}
           >
+            <UserPlusIcon aria-hidden="true" />
             Add entries
           </DropdownMenuItem>
         ) : (
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Add entries</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>
+              <UserPlusIcon aria-hidden="true" />
+              Add entries
+            </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-72">
               <DropdownMenuLabel className="font-normal text-n-500">Which distance?</DropdownMenuLabel>
               {distances}

@@ -21,22 +21,24 @@ function metadata(schedule: EventMetadata["schedule"]): EventMetadata {
 
 describe("close-date", () => {
   describe("positive", () => {
-    it("leads with what each race most needs next", () => {
-      expect(headerPlan("Draft", null, NOW).primary).toBe("open");
-      expect(headerPlan("Open", null, NOW).primary).toBe("addPlaces");
-      // Closed by hand: reopening by hand is the move that matches.
-      expect(headerPlan("Closed", null, NOW).primary).toBe("reopen");
+    it("gives a draft the one button it exists for", () => {
+      const plan = headerPlan("Draft");
+
+      expect(plan.primary).toBe("open");
+      expect(plan.menu).toEqual(["closeDate", "cancel"]);
     });
 
-    it("leads a date-closed race with the date, because reopening alone does nothing", () => {
-      const plan = headerPlan("Closed", NOW - 10n, NOW);
-
-      expect(plan.primary).toBe("closeDate");
-      expect(plan.menu).toContain("reopen");
-    });
-
-    it("folds everything else into the menu rather than the header", () => {
-      expect(headerPlan("Open", RACE_DAY, NOW).menu).toEqual(["closeDate", "close"]);
+    it("leads with nothing on a live race, and puts every action in the menu", () => {
+      // None of these is what somebody opens the page to do, and the one that
+      // would have led, Close entries, stops a race selling if mispressed.
+      expect(headerPlan("Open")).toEqual({
+        primary: null,
+        menu: ["addPlaces", "closeDate", "close", "cancel"],
+      });
+      expect(headerPlan("Closed")).toEqual({
+        primary: null,
+        menu: ["addPlaces", "closeDate", "reopen", "cancel"],
+      });
     });
 
     it("takes race pack collection as the bound when the document names one", () => {
@@ -76,16 +78,14 @@ describe("close-date", () => {
 
   describe("negative", () => {
     it("gives a terminal race nothing at all", () => {
-      expect(headerPlan("Completed", RACE_DAY, NOW)).toEqual({ primary: null, menu: [] });
-      expect(headerPlan("Cancelled", RACE_DAY, NOW)).toEqual({ primary: null, menu: [] });
+      expect(headerPlan("Completed")).toEqual({ primary: null, menu: [] });
+      expect(headerPlan("Cancelled")).toEqual({ primary: null, menu: [] });
     });
 
     it("never calls a missing date passed, and never guesses without a clock", () => {
       expect(datePassed(null, NOW)).toBe(false);
       expect(datePassed(NOW - 10n, undefined)).toBe(false);
-      // The first render has no clock, so a Closed race must not be treated as
-      // date-closed before one arrives.
-      expect(headerPlan("Closed", NOW - 10n, undefined).primary).toBe("reopen");
+      // `headerPlan` needs neither, which is why it cannot get them wrong.
     });
 
     it("falls back to race day when the document has no race pack window", () => {

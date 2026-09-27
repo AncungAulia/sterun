@@ -98,9 +98,9 @@ body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webki
 .kebab{width:40px;height:40px;border:1px solid var(--n300);border-radius:var(--r-md);background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:18px;line-height:1;color:var(--n600)}
 .kebab.sm{width:32px;height:32px;font-size:16px}
 .menu{position:absolute;right:0;top:44px;width:240px;background:#fff;border:1px solid var(--n200);border-radius:var(--r-md);box-shadow:var(--shadow-lifted);padding:6px;z-index:3;text-align:left}
-.mi{display:block;padding:9px 10px;border-radius:6px;font-size:14px}
+.mi{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-size:14px}
 .mi.hover{background:var(--n100)}
-.mi small{display:block;color:var(--n500);font-size:12px;margin-top:2px}
+.mi svg{width:16px;height:16px;flex:0 0 auto;color:var(--n500)}
 .hact{position:relative}
 table.matrix{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);overflow:hidden;font-size:13.5px}
 table.matrix th{text-align:left;font-weight:500;font-size:12px;color:var(--n500);padding:9px 12px;border-bottom:1px solid var(--n200);background:#fbfbfc}
@@ -140,8 +140,14 @@ table.matrix b{font-weight:600}
             <button class="btn sm">Add entries</button>
             <button class="kebab sm">&#8942;</button>
             <span class="menu">
-              <span class="mi hover">Change closing date<small>Entries stop on 12 Oct 2026</small></span>
-              <span class="mi">Close entries<small>Stops them now, whatever the date says</small></span>
+              <span class="mi hover">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="16" cy="16" r="6"/><path d="M16 14v2l1 1"/></svg>
+                Change closing date
+              </span>
+              <span class="mi">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Close entries
+              </span>
             </span>
           </span>
         </div>
@@ -159,7 +165,7 @@ table.matrix b{font-weight:600}
     <div class="side">
       <h4>The menu restores a rule rather than breaking one</h4>
       <p>`ConsoleHeader` holds <b>one</b> action, and STE-57 already broke that on purpose to keep Close entries reachable. A third button would have made the exception the rule. A menu is one button, so the header is back to one thing, and the other two live where a second-tier action belongs.</p>
-      <p>Each item carries a line saying what it does, because "Change closing date" and "Close entries" are easy to confuse until you know that one is a date and the other is now.</p>
+      <p>One line per item, with a mark of its own rather than a sentence under it (Ancung, 2026-09-27): a menu is a list of things to do, and a paragraph under each turns choosing into reading. The marks are what tell two items that both stop entries apart before the words are read.</p>
       <p>The number keeps its card: it is a fact rather than an action, and it reads beside the other date an organiser thinks about, race day.</p>
     </div>
   </div>

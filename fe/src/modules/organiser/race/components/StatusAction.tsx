@@ -26,6 +26,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LockIcon, LockOpenIcon } from "lucide-react";
+
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { eventKeys } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
@@ -84,6 +86,11 @@ export function StatusAction({
             setTimeout(() => setOpen(true), 0);
           }}
         >
+          {move.to === "Open" ? (
+            <LockOpenIcon aria-hidden="true" />
+          ) : (
+            <LockIcon aria-hidden="true" />
+          )}
           {move.label}
         </DropdownMenuItem>
       ) : (

@@ -628,18 +628,48 @@ knowing before adding a page there:
 - **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
-- **The header holds one button and a menu** (`components/RaceActions.tsx`, STE-69). Which button
-  leads is decided by `headerPlan` in `lib/close-date.ts`, a pure function, and the rest fold into
-  a kebab. This restores the console's one-action rule that STE-57 broke on purpose: a menu is one
-  button. Draft leads with Open entries; Open leads with Add entries, because a sold-out distance
-  is money not being taken right now; a race closed **by a date that has passed** leads with
-  Change closing date, because reopening the status alone changes a word and lets nobody in; a race
-  closed by hand leads with Reopen. `Completed` and `Cancelled` get nothing at all, since both are
-  terminal on chain. Every one of them is behind a dialog, because each is a signature.
+- **The header holds a labelled menu, and at most one button** (`components/RaceActions.tsx`,
+  STE-69, reshaped by Ancung on 2026-09-27). `headerPlan` in `lib/close-date.ts` is the pure
+  function that decides, and it takes the status and nothing else:
+
+  | Status | Button | In **Manage race** |
+  | --- | --- | --- |
+  | Draft | Open entries | Set closing date, Cancel |
+  | Open | none | Add entries, Change closing date, Close entries, Cancel |
+  | Closed | none | Add entries, Change closing date, Reopen entries, Cancel |
+  | Completed, Cancelled | none | nothing at all |
+
+  **Nothing leads on a live race.** None of these is what somebody opens the page to do, and the one
+  that would have led, Close entries, is a button whose accidental press stops a race selling. A
+  draft keeps its button because a draft exists in order to be opened, and burying that leaves a
+  first race looking like a page nothing can be done to. Terminal races get no menu: a list of items
+  that all revert is worse than none.
+
+  **The trigger is labelled, not a bare kebab.** On a live race it is the only control on the page,
+  and three dots say nothing about what is behind them; the person most likely to need it is the one
+  opening the console for the first time.
+
+  **Each row is one line with a lucide mark and no sentence under it** (`CalendarClock`, `Lock`,
+  `LockOpen`, `UserPlus`, `CircleX`). A menu whose every item carries a paragraph turns choosing
+  into reading, and the mark does what the sentence was doing: two rows here both stop entries, and
+  the shape tells them apart before the words are read.
+
   `StatusAction` and `AddPlaces` each render either a button or a menu item (`variant`) and keep
   their own dialog: splitting the dialog out would leave the wallet write in one file and the words
   that explain it in another. A menu item opens its dialog on the **next frame**
   (`setTimeout(…, 0)`), or Radix's focus return fights the dialog for it.
+- **Cancelling a race** (`components/CancelRaceDialog.tsx`, 2026-09-27). Mockup:
+  `docs/superpowers/specs/2026-09-27-cancel-race-mockup.html`. The contract has taken `Cancelled`
+  since v2 and the console never offered it, which left an organiser who published a race by mistake
+  with no way to withdraw it. No contract work was needed; `SetEventStatusInput` simply had the
+  status left out of its type on purpose while nothing offered it.
+  Everything about the dialog follows from **terminal on chain**: it opens with what cancelling
+  costs other people, read from the chain (`raceTotals`), because there is **no escrow** and the
+  fee already moved to the organiser, so a cancelled race leaves a refund owed off chain. The
+  **race name has to be typed**, the guard that scales with a cost nothing can undo. The way out is
+  **Keep the race**, never a second button reading Cancel. And it never promises a delete: the page
+  keeps its URL, a search still reaches it, and what changes is that entries stop for good and the
+  directory drops it.
 - **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
   (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
   `modules/organiser/shared/lib/records.ts` and `modules/organiser/shared/lib/scanners.ts`. The column or card that needs one is drawn once the data

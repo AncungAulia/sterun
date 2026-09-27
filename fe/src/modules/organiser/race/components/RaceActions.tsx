@@ -11,13 +11,19 @@
  *
  * **Which one leads depends on the race**, and that decision is a pure function
  * (`lib/close-date.ts`, `headerPlan`) so it can be read and tested in one
- * place rather than inferred from nested conditions here. The short version: a
+ * place rather than inferred from nested conditions here.
+ *
+ * **Every menu row carries a mark and nothing else** (Ancung, 2026-09-27). The
+ * rows used to explain themselves in a second line, and a menu whose every item
+ * carries a sentence turns choosing into reading. The icon does the work the
+ * sentence was doing: two rows here both stop entries, and the shape tells them
+ * apart before the words are. The short version: a
  * Draft race exists to be opened, an Open race leads with adding places because
  * a sold-out distance is money not being taken right now, and a race closed by
  * a date that has passed leads with the date, because reopening the status
  * alone changes a word and lets nobody in.
  */
-import { EllipsisVerticalIcon } from "lucide-react";
+import { CalendarClockIcon, ChevronDownIcon, CircleXIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -28,23 +34,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
-import { useNowSeconds } from "@/hooks/useNowSeconds";
 import type { EventSummary } from "@/lib/event/events";
 
 import { headerPlan, type RaceAction } from "../lib/close-date";
 import { useRegistrationCloses } from "@/hooks/useRegistrationCloses";
 import { AddPlaces } from "./AddPlaces";
+import { CancelRaceDialog } from "./CancelRaceDialog";
 import { CloseDateDialog } from "./CloseDateDialog";
 import { StatusAction } from "./StatusAction";
 
 export function RaceActions({ summary }: { summary: EventSummary }) {
-  const nowS = useNowSeconds();
   const closes = useRegistrationCloses(summary.event.eventId);
   const metadata = useEventMetadata(summary.event.uri, summary.event.metadataHash);
   const [dateOpen, setDateOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const closesAt = closes.data ?? null;
-  const plan = headerPlan(summary.event.status, closesAt, nowS);
+  const plan = headerPlan(summary.event.status);
 
   /** One action, drawn as the header's button or as a row in the menu. */
   function render(action: RaceAction, variant: "primary" | "menu") {
@@ -55,6 +61,20 @@ export function RaceActions({ summary }: { summary: EventSummary }) {
       case "reopen":
       case "close":
         return <StatusAction key="status" summary={summary} variant={variant} />;
+      case "cancel":
+        return (
+          <DropdownMenuItem
+            key="cancel"
+            variant="destructive"
+            onSelect={(event) => {
+              event.preventDefault();
+              setTimeout(() => setCancelOpen(true), 0);
+            }}
+          >
+            <CircleXIcon aria-hidden="true" />
+            Cancel this race
+          </DropdownMenuItem>
+        );
       case "closeDate":
         return variant === "primary" ? (
           <Button key="closeDate" variant="outline" onClick={() => setDateOpen(true)}>
@@ -71,6 +91,7 @@ export function RaceActions({ summary }: { summary: EventSummary }) {
               setTimeout(() => setDateOpen(true), 0);
             }}
           >
+            <CalendarClockIcon aria-hidden="true" />
             {closesAt === null ? "Set closing date" : "Change closing date"}
           </DropdownMenuItem>
         );
@@ -83,14 +104,23 @@ export function RaceActions({ summary }: { summary: EventSummary }) {
       {plan.menu.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" aria-label="More for this race">
-              <EllipsisVerticalIcon aria-hidden="true" />
+            {/* Labelled rather than a bare kebab (Ancung, 2026-09-27). On a
+                live race this is the only control on the page, and three dots
+                say nothing about what is behind them; the people most likely to
+                need it are the ones opening the console for the first time. */}
+            <Button variant="outline">
+              Manage race
+              <ChevronDownIcon aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
             {plan.menu.map((action) => render(action, "menu"))}
           </DropdownMenuContent>
         </DropdownMenu>
+      ) : null}
+
+      {cancelOpen ? (
+        <CancelRaceDialog summary={summary} onClose={() => setCancelOpen(false)} />
       ) : null}
 
       {dateOpen ? (
