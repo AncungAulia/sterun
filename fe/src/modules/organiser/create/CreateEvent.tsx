@@ -276,6 +276,17 @@ function Wizard() {
     staleTime: Number.POSITIVE_INFINITY,
   });
 
+  /*
+    The same instant the document's registration window carries, so what a
+    runner reads on the race page is what the contract enforces (STE-69). The
+    wizard requires the window, so this is only null while the field is still
+    empty or half typed.
+  */
+  const registrationClosesAt = useMemo(() => {
+    const ms = Date.parse(toIso(details.registrationCloses));
+    return Number.isFinite(ms) ? BigInt(Math.floor(ms / 1000)) : null;
+  }, [details.registrationCloses]);
+
   const run = useEventRun({
     name: details.name,
     plan,
@@ -283,6 +294,7 @@ function Wizard() {
     startsAt,
     documentText,
     hash,
+    registrationClosesAt,
   });
 
   const existingNames = useExistingEventNames();

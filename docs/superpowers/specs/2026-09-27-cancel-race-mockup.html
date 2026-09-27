@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sterun, cancelling a race (STE-71)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f8f8f8; --ink:#1e232b; --teal:#016985; --white:#fff;
+  --n100:#eef0f2; --n200:#dfe2e6; --n300:#c7ccd3; --n400:#9ba3ad; --n500:#6f7883; --n600:#515a66; --n700:#3a424c;
+  --teal50:#e8f4f8; --teal600:#015872;
+  --success:#067a38; --success-surface:#e6f6ec; --success-border:#a8dcbc;
+  --danger:#a31c11; --danger-surface:#fceae8; --danger-border:#f0b3aa;
+  --warning:#8f5200; --warning-surface:#fdf3e2; --warning-border:#edc07a;
+  --r-md:8px; --r-lg:16px;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
+  --shadow-card:0 1px 2px rgb(30 35 43 / .06),0 4px 12px rgb(30 35 43 / .06);
+  --shadow-lifted:0 2px 4px rgb(30 35 43 / .08),0 12px 28px rgb(30 35 43 / .1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+.intro h1{font-style:italic;font-weight:600;font-size:28px;margin:0 0 8px}
+.intro p{margin:0 0 10px;color:var(--n600);font-size:15px;max-width:82ch;line-height:1.6}
+.intro p b{color:var(--ink);font-weight:500}
+.block{margin-top:44px}
+.block > h2{font-size:13px;font-weight:600;color:var(--teal);margin:0 0 4px}
+.block > h3{font-style:italic;font-weight:600;font-size:21px;margin:0 0 6px}
+.block > p{margin:0 0 16px;color:var(--n600);font-size:14px;max-width:82ch;line-height:1.6}
+.pair{display:grid;grid-template-columns:1fr 330px;gap:20px;align-items:start}
+.screen{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden}
+.cap{font-size:12.5px;color:var(--n500);margin:8px 2px 0}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--n100);border-radius:4px;padding:1px 5px}
+
+.chead{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--n200);background:#fff}
+.chead .t{font-style:italic;font-weight:600;font-size:18px}
+.hact{margin-left:auto;display:flex;gap:10px;position:relative}
+.tabs{display:flex;gap:2px;padding:0 22px;background:#fff;border-bottom:1px solid var(--n200);font-size:14px}
+.tabs span{padding:11px 12px;color:var(--n500)}
+.tabs span.on{color:var(--ink);font-weight:500;box-shadow:inset 0 -2px 0 var(--teal)}
+.body{padding:20px 22px 26px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border:0;border-radius:var(--r-md);background:var(--teal);color:#fff;font-family:var(--sans);font-size:14.5px;font-weight:500;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--n300)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.dis{background:var(--n300);color:#fff}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.kebab{width:40px;height:40px;border:1px solid var(--n300);border-radius:var(--r-md);background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:18px;color:var(--n600)}
+.kebab.sm{width:32px;height:32px;font-size:16px}
+.menu{position:absolute;right:0;top:44px;width:250px;background:#fff;border:1px solid var(--n200);border-radius:var(--r-md);box-shadow:var(--shadow-lifted);padding:6px;z-index:3;text-align:left}
+.mi{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-size:14px}
+.mi svg{width:16px;height:16px;flex:0 0 auto;color:var(--n500)}
+.mi.danger{color:var(--danger)}
+.mi.danger svg{color:var(--danger)}
+.sep{height:1px;background:var(--n200);margin:6px 4px}
+
+.pill{display:inline-flex;align-items:center;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;border:1px solid}
+.pill.ok{background:var(--success-surface);color:var(--success);border-color:var(--success-border)}
+.pill.bad{background:var(--danger-surface);color:var(--danger);border-color:var(--danger-border)}
+.pill.mut{background:var(--n100);color:var(--n600);border-color:var(--n200)}
+
+.dim{background:rgba(30,35,43,.45);padding:26px;border-radius:var(--r-lg)}
+.dlg{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lifted);padding:20px 22px;max-width:520px;margin:0 auto}
+.dlg h4{margin:0 0 6px;font-style:italic;font-weight:600;font-size:19px}
+.dlg p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.dlg .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+.hard{background:var(--danger-surface);border:1px solid var(--danger-border);border-radius:var(--r-lg);padding:13px 15px;margin:4px 0 14px}
+.hard b{font-weight:600;font-size:13.5px}
+.hard p{margin:4px 0 0;font-size:13px;color:var(--n700);line-height:1.55}
+.hard ul{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--n700);line-height:1.7}
+.field{margin:12px 0}
+.field label{display:block;font-size:13px;font-weight:500;margin-bottom:5px}
+.input{height:40px;border:1px solid var(--n300);border-radius:var(--r-md);display:flex;align-items:center;padding:0 12px;font-size:14px;background:#fff}
+.input.empty{color:var(--n400)}
+.hint{font-size:12.5px;color:var(--n500);margin-top:5px}
+
+.side{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:18px 20px}
+.side h4{margin:0 0 8px;font-size:14px;font-weight:600}
+.side p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.side b{color:var(--ink);font-weight:500}
+
+.racecard{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:18px 20px;max-width:330px}
+.racecard .nm{font-style:italic;font-weight:600;font-size:18px;margin:0 0 3px}
+.racecard .meta{font-size:13px;color:var(--n600);margin:0 0 12px}
+.racecard .note{background:var(--n100);border:1px solid var(--n200);border-radius:var(--r-md);padding:11px 13px;font-size:13px;color:var(--n700);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>Cancelling a race</h1>
+  <p>The console can open entries, close them and reopen them. It has never been able to <b>cancel</b>, and that was deliberate in STE-17. The gap shows the moment somebody publishes a race by mistake: today there is no way to withdraw it, and a name on chain cannot be edited.</p>
+  <p><b>No contract work.</b> `set_event_status` has accepted `Cancelled` since v2, from Draft, Open or Closed. What is missing is the screen, and the care around it.</p>
+  <p><b>This is the only action in the console that cannot be undone.</b> Cancelled is terminal on chain: the race cannot reopen, cannot be corrected, and cannot be deleted. Everything below follows from that one sentence.</p>
+</div>
+
+<div class="block">
+  <h2>SCREEN 1</h2>
+  <h3>Where it lives</h3>
+  <p>At the bottom of the menu, under a rule, in the danger colour. Never the button that leads: nobody opens a race page in order to cancel it.</p>
+  <p><b>One line per item, with its own mark</b> (Ancung, 2026-09-27). The explanatory second lines are gone: a menu is a list of things to do, and a sentence under each one turns choosing into reading. Lucide, matching what each does: <span class="code">CalendarClock</span> for the date, <span class="code">Lock</span> for closing and <span class="code">LockOpen</span> for reopening, <span class="code">UserPlus</span> for adding entries, <span class="code">CircleX</span> for cancelling.</p>
+  <div class="pair">
+    <div>
+      <div class="screen">
+        <div class="chead">
+          <span class="t">Merdeka Run 2026</span>
+          <span class="pill ok">Open for entry</span>
+          <span class="hact">
+            <button class="btn sm">Add entries</button>
+            <button class="kebab sm">&#8942;</button>
+            <span class="menu">
+              <span class="mi">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="16" cy="16" r="6"/><path d="M16 14v2l1 1"/></svg>
+                Change closing date
+              </span>
+              <span class="mi">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Close entries
+              </span>
+              <span class="sep"></span>
+              <span class="mi danger">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+                Cancel this race
+              </span>
+            </span>
+          </span>
+        </div>
+        <div class="tabs"><span class="on">Overview</span><span>Entries</span><span>Scanners</span><span>Results</span></div>
+        <div class="body" style="height:90px"></div>
+      </div>
+      <p class="cap">Screen 1. Separated by a rule, so it cannot be hit while reaching for Close entries.</p>
+    </div>
+    <div class="side">
+      <h4>Why not a button</h4>
+      <p>The header's one button is whatever a race needs next, and no race ever needs cancelling next. Putting it there would also place the one irreversible action where the pointer already is.</p>
+      <p>It is offered on <b>Draft</b>, <b>Open</b> and <b>Closed</b>, the three the contract accepts. A race already Completed or Cancelled has no menu at all.</p>
+      <p>The marks are wayfinding rather than decoration: in a list where two items both stop entries, the shape tells them apart before the words are read. The cancel one is the only red thing in the console.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 2</h2>
+  <h3>The confirmation, when people have paid</h3>
+  <p>The numbers come from the chain, not from the index, and they are the whole point of this screen: an organiser about to cancel should read what it costs other people before they read the button.</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Cancel Merdeka Run 2026?</h4>
+          <div class="hard">
+            <b>412 runners have entered, and they have paid 4,120 sUSD.</b>
+            <p>Sterun never held that money: it went straight to your wallet as each runner entered. Cancelling does not send any of it back, and no refund can be made from here.</p>
+            <ul>
+              <li>Entries stop at once and cannot reopen</li>
+              <li>Every entry stays on each runner's record, marked "Race cancelled"</li>
+              <li>The race page stays online, saying the race was cancelled</li>
+              <li>Nobody, including us, can undo this</li>
+            </ul>
+          </div>
+          <div class="field">
+            <label>Type the race name to confirm</label>
+            <div class="input empty">Merdeka Run 2026</div>
+            <p class="hint">Exactly as it appears above.</p>
+          </div>
+          <div class="foot">
+            <button class="btn ghost">Keep the race</button>
+            <button class="btn dis">Cancel this race</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 2. The confirm button stays dead until the name matches. The way out is "Keep the race", not "Cancel", because two buttons both meaning cancel is how people press the wrong one.</p>
+    </div>
+    <div class="side">
+      <h4>Why typing the name</h4>
+      <p>Every other dialog in this console guards a signature that can be undone by another signature. This one cannot be undone by anything. Typing the name is the only guard that scales with the cost, and it is the pattern people already know from deleting a repository.</p>
+      <h4 style="margin-top:16px">Why say the money out loud</h4>
+      <p>Because there is <b>no escrow</b>. The fee moved from runner to organiser at the moment of entry, so a cancelled race leaves the organiser holding money for a race that will not happen. That is a promise they now owe off chain, and a screen that stays quiet about it is helping somebody forget.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 3</h2>
+  <h3>When nobody has entered</h3>
+  <p>The common case, and the one that matters for a race published by mistake. Same dialog, no money paragraph, because inventing one would teach an organiser to skim the box that sometimes matters.</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Cancel TESTING LARI 3?</h4>
+          <div class="hard">
+            <b>Nobody has entered this race.</b>
+            <p>Nothing is owed to anyone. Cancelling is still permanent.</p>
+            <ul>
+              <li>Entries stop at once and cannot reopen</li>
+              <li>The race page stays online, saying the race was cancelled</li>
+              <li>It drops off the directory by itself</li>
+              <li>Nobody, including us, can undo this</li>
+            </ul>
+          </div>
+          <div class="field">
+            <label>Type the race name to confirm</label>
+            <div class="input">TESTING LARI 3</div>
+          </div>
+          <div class="foot">
+            <button class="btn ghost">Keep the race</button>
+            <button class="btn danger">Cancel this race</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 3. With the name typed, the button wakes up and wears the danger colour.</p>
+    </div>
+    <div class="side">
+      <h4>There is no delete, and the screen says so</h4>
+      <p>Cancelling hides a race from the directory, which is what "make it go away" means in practice. What it does not do is remove anything: the page keeps its URL for ever, a search still reaches it, and the name stays on chain.</p>
+      <p>Saying that here is the difference between an organiser who is surprised later and one who is not.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 4</h2>
+  <h3>Afterwards, on both sides</h3>
+  <p>The console keeps the race, because it still has entries, results and a history worth reading. The directory drops it. The runner's record keeps the entry and says what happened to it.</p>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <div class="screen" style="flex:1;min-width:420px">
+      <div class="chead">
+        <span class="t">TESTING LARI 3</span>
+        <span class="pill bad">Cancelled</span>
+      </div>
+      <div class="tabs"><span class="on">Overview</span><span>Entries</span><span>Scanners</span><span>Results</span></div>
+      <div class="body">
+        <p style="margin:0;font-size:13.5px;color:var(--n600);line-height:1.6">
+          This race was cancelled on 27 September 2026. Nothing here can be changed, and the tabs are read only from now on.
+        </p>
+      </div>
+    </div>
+    <div class="racecard">
+      <p class="nm">TESTING LARI 3</p>
+      <p class="meta">On the runner's race record</p>
+      <div class="note"><b>Race cancelled.</b> Your entry is still recorded, and it still proves you paid for a place.</div>
+    </div>
+  </div>
+  <p class="cap">Screen 4. Nothing is rewritten: a record that already carried a result keeps it. Only an entry that never ran reads as cancelled.</p>
+</div>
+
+</div>
+</body>
+</html>

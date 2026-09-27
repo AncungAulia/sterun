@@ -35,6 +35,7 @@ import {
   useAddCategory,
   useCreateEvent,
   useSetEventStatus,
+  useSetRegistrationCloses,
 } from "@/modules/organiser/shared/hooks/useOrganiser";
 import { useWallet } from "@/hooks/useWallet";
 import { friendlyError } from "@/lib/api/errors";
@@ -54,6 +55,12 @@ export interface EventRunInput {
   plan: PlannedCategory[];
   addOns: PlannedAddOn[];
   startsAt: bigint | null;
+  /**
+   * When entries stop by themselves (STE-69). The same instant the document's
+   * registration window carries, so the two can never disagree: what a runner
+   * reads on the race page is what the contract enforces.
+   */
+  registrationClosesAt?: bigint | null;
   /** The exact text to publish. Its bytes are what the hash covers. */
   documentText: string;
   hash: string;
@@ -69,12 +76,14 @@ export function useEventRun({
   startsAt,
   documentText,
   hash,
+  registrationClosesAt = null,
 }: EventRunInput) {
   const address = useWallet((state) => state.address);
   const createEvent = useCreateEvent();
   const addCategory = useAddCategory();
   const addAddon = useAddAddon();
   const setStatus = useSetEventStatus();
+  const setCloses = useSetRegistrationCloses();
 
   /*
    * Picks a half-finished run back up instead of starting a second one, but
@@ -114,8 +123,8 @@ export function useEventRun({
   const [document, setDocument] = useState<PublishedDocument | null>(null);
 
   const steps = useMemo(
-    () => planRun({ name, categories: plan, addOns }),
-    [name, plan, addOns],
+    () => planRun({ name, categories: plan, addOns, registrationClosesAt }),
+    [name, plan, addOns, registrationClosesAt],
   );
 
   const upload = useUploadPhase();
@@ -170,6 +179,14 @@ export function useEventRun({
         });
         state.eventId = sent.value;
         setEventId(sent.value);
+        return sent.txHash;
+      }
+      case "closeDate": {
+        if (state.eventId === null) throw new PlainError("The event does not exist yet.");
+        if (registrationClosesAt === null) {
+          throw new PlainError("This race has no registration window.");
+        }
+        const sent = await setCloses.write({ eventId: state.eventId, closesAt: registrationClosesAt });
         return sent.txHash;
       }
       case "category": {

@@ -621,19 +621,55 @@ knowing before adding a page there:
 `modules/organiser/race/RaceConsole.tsx`. Plan:
 `docs/superpowers/plans/2026-09-13-org-event-console-tabs.md`. What is settled:
 
-- **Three tabs, Overview, Entries, Scanners, and the tab is in the address** (`?tab=`, parsed by
-  `race-tab.ts`, which has no `"use client"` because the route imports it). The bell already links to
-  `?tab=scanners`, and the rail lives in a layout that must not remount. **Results is deferred**
-  until the backend accepts untimed finishes and DNF rows and there is a way to record many results
-  without one signature per runner (STE-44); `?tab=results` opens Overview until then.
+- **Four tabs, Overview, Entries, Scanners, Results, and the tab is in the address** (`?tab=`,
+  parsed by `race-tab.ts`, which has no `"use client"` because the route imports it). The bell
+  already links to `?tab=scanners`, and the rail lives in a layout that must not remount. Results
+  was deferred until 2026-09-24 and is now built (STE-58, below).
 - **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
-- **The header's action is the status move** (`status-action.ts`): open, close or reopen
-  entries, always behind a dialog. **A race that can still take entries also gets Add entries**
-  (STE-57), the one exception to one action: closing must stay reachable until entries close on
-  their own (STE-46), and adding entries is the main button beside it. The dialog for opening states that a race which has opened never
-  returns to not open. Completing and cancelling are not offered here.
+- **The header holds a labelled menu, and at most one button** (`components/RaceActions.tsx`,
+  STE-69, reshaped by Ancung on 2026-09-27). `headerPlan` in `lib/close-date.ts` is the pure
+  function that decides, and it takes the status and nothing else:
+
+  | Status | Button | In **Manage race** |
+  | --- | --- | --- |
+  | Draft | Open entries | Set closing date, Cancel |
+  | Open | none | Add entries, Change closing date, Close entries, Cancel |
+  | Closed | none | Add entries, Change closing date, Reopen entries, Cancel |
+  | Completed, Cancelled | none | nothing at all |
+
+  **Nothing leads on a live race.** None of these is what somebody opens the page to do, and the one
+  that would have led, Close entries, is a button whose accidental press stops a race selling. A
+  draft keeps its button because a draft exists in order to be opened, and burying that leaves a
+  first race looking like a page nothing can be done to. Terminal races get no menu: a list of items
+  that all revert is worse than none.
+
+  **The trigger is labelled, not a bare kebab.** On a live race it is the only control on the page,
+  and three dots say nothing about what is behind them; the person most likely to need it is the one
+  opening the console for the first time.
+
+  **Each row is one line with a lucide mark and no sentence under it** (`CalendarClock`, `Lock`,
+  `LockOpen`, `UserPlus`, `CircleX`). A menu whose every item carries a paragraph turns choosing
+  into reading, and the mark does what the sentence was doing: two rows here both stop entries, and
+  the shape tells them apart before the words are read.
+
+  `StatusAction` and `AddPlaces` each render either a button or a menu item (`variant`) and keep
+  their own dialog: splitting the dialog out would leave the wallet write in one file and the words
+  that explain it in another. A menu item opens its dialog on the **next frame**
+  (`setTimeout(…, 0)`), or Radix's focus return fights the dialog for it.
+- **Cancelling a race** (`components/CancelRaceDialog.tsx`, 2026-09-27). Mockup:
+  `docs/superpowers/specs/2026-09-27-cancel-race-mockup.html`. The contract has taken `Cancelled`
+  since v2 and the console never offered it, which left an organiser who published a race by mistake
+  with no way to withdraw it. No contract work was needed; `SetEventStatusInput` simply had the
+  status left out of its type on purpose while nothing offered it.
+  Everything about the dialog follows from **terminal on chain**: it opens with what cancelling
+  costs other people, read from the chain (`raceTotals`), because there is **no escrow** and the
+  fee already moved to the organiser, so a cancelled race leaves a refund owed off chain. The
+  **race name has to be typed**, the guard that scales with a cost nothing can undo. The way out is
+  **Keep the race**, never a second button reading Cancel. And it never promises a delete: the page
+  keeps its URL, a search still reaches it, and what changes is that entries stop for good and the
+  directory drops it.
 - **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
   (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
   `modules/organiser/shared/lib/records.ts` and `modules/organiser/shared/lib/scanners.ts`. The column or card that needs one is drawn once the data
@@ -649,6 +685,49 @@ knowing before adding a page there:
 - **A `beforeEach` that resets a mock needs braces.** `beforeEach(() => mock.mockReset())` returns the
   mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
   with an error that points at the mock rather than at the cause.
+
+### Recording a finish list (STE-58)
+
+`modules/organiser/race/` (`components/ResultsTab.tsx`, `ResultsDrop.tsx`, `ResultsReviewPanel.tsx`,
+`RecordResults.tsx`, `ResultsContext.tsx`, `hooks/useResultsRun.ts`, `lib/results-preview.ts`,
+`lib/publish-results.ts`). Mockup:
+`docs/superpowers/specs/2026-09-24-results-upload-mockup.html`, which reproduces block 5 of the
+2026-09-13 console mockup rather than redesigning it. What is settled:
+
+- **One fact shapes every screen: a result is terminal on chain.** Nobody, including the organiser,
+  can correct or remove a published result. So the file is reviewed before a signature is spent, and
+  **nothing the review held can be sent at all**: there is no "send it anyway" on a flagged row. A
+  corrected file costs nothing; a published wrong time costs forever.
+- **The empty tab is the drop card and nothing else**, and a loaded file is shaped like Entries:
+  three counts, a search, the table, with the signing button in the **header**, where every tab
+  keeps its one action. That is why `ResultsContext` exists: the file lives in the tab, the button
+  lives above it, and `RaceConsole` wraps both. On the Results tab the status action steps aside;
+  it is on the other three.
+- **The two severities are said in words, never as codes.** `wrong` (the chain accepts it and the
+  record is false: an ambiguous bib, the same bib twice, an impossible time, a malformed row) and
+  `reverts` (the chain refuses it and nothing changes: an unknown bib, a runner who never collected
+  a race pack, a result already recorded). Both are held; the severity only decides how loudly the
+  strip talks. The backend's own sentence is shown as it is, because an organiser can act on "bib 88
+  exists in both 10K and 5K" and can do nothing with `ambiguous_bib`.
+- **The button counts what will be published**, never the rows in the file.
+- **Batches are the contract's, and the atomicity is the whole design.** `publish-results.ts` plans
+  them with `chunkResults` at `RECORD_RESULTS_MAX_BATCH` (120, measured against the live network in
+  STE-60), labelled by **runner** rather than by transaction ("Runners 1 to 120"): a line number
+  means nothing once rows have been held. A batch records every row in it or none, so a failure
+  leaves the batches before it recorded and the ones after it untouched, and the dialog says exactly
+  that. The button is **Continue**, never "try again".
+- **A failed batch is checked against the chain, and one read settles it** (`useResultsRun`).
+  Because the batch is atomic, reading **one** of its runners answers for all 120. If that runner
+  now carries a result the batch landed, the run marks it done and clears the error: telling
+  somebody to send again what already landed is how a race gets a second result it can never
+  remove. This is the scanner's rule (STE-62) at a hundredth of the cost.
+- **Once results exist the tab shows them**, with the drop card underneath for the runners who have
+  none. "No official time" is a result, never a zero.
+- **`lib/api/signed.ts`** is the challenge, signature and three headers, moved up from `upload.ts`
+  on this second reader. Copying those header names into a second file is how one gets spelled
+  differently, which arrives as a 401 with nothing pointing at the cause.
+- **`formatFinishTime` moved to `utils/format.ts`** for the same reason: a finish time printed two
+  ways in one product is a bug nobody notices until a runner compares two screens.
 
 ### Adding places to a distance (STE-57)
 
@@ -680,6 +759,41 @@ knowing before adding a page there:
   the real signed announcement on testnet event 23.
 - **stellar-sdk's crypto fails under jsdom** (see Tests): the announcement tests run with
   `// @vitest-environment node`, and component tests mock `lib/event/announcements`.
+
+### The registration close date (STE-69)
+
+`lib/close-date.ts`, `components/CloseDateDialog.tsx`, `hooks/useCloseDate.ts`, and the card on
+Overview. Mockup: `docs/superpowers/specs/2026-09-24-registration-close-date-mockup.html`.
+
+**Two dates are in play and they are not the same thing.** The event **document** carries the
+registration window, hashed when the race was published, and that is what runners were promised.
+The **chain** carries `registration_closes` (STE-46, live 2026-09-24), and that is what refuses an
+entry. Until this ticket the app set only the first, so a race page could promise a date the
+contract ignored. Everything here is about the second one, and where the two disagree a screen
+shows the enforced one.
+
+- **The wizard sets what it publishes**, as one more signature straight after `create_event`
+  (`create/lib/run.ts`, step `closeDate`), from the same field the document took it from. The
+  wizard requires a registration window, so every race created from now on has one on chain.
+- **Moving it is the same shape as raising a quota**: one form holding the new date, the sentence
+  the page writes from the two dates, and an optional note; sign the announcement, move the date,
+  publish. That runner is `lib/announced-change.ts`, shared with STE-57 rather than copied, and
+  `add-places-run.ts` is now a thin wrapper over it. The chain cannot check that anybody was told,
+  so the console is the only thing that can.
+- **The date moves either way.** A date already past stops entries the moment it is signed, and the
+  field says so in a hint rather than a panel: it is information, not an alarm. Moving it earlier
+  is allowed because `Close entries` already stops entries instantly, so it adds no power to harm;
+  it does take away days a runner was promised, which is why the announcement is not optional for
+  it either. The sentence never says "extended": it names both dates.
+- **The bound is race pack collection**, from the document, falling back to race day
+  (`closeDateBound`). Handing packs out while entries are still open means somebody paying for a
+  race whose pack has already gone out.
+- **A runner is told which refusal they met.** `entryGate` answers `registration-over` with the
+  date, separately from `closed`: one is a decision that may be undone, the other a date that will
+  not come back. The gate checks the status first, exactly as the contract does, and waits for a
+  clock rather than guessing on the first render.
+- **`useRegistrationCloses` lives in `src/hooks/`**, not in this module: the entry flow is its
+  second reader.
 
 ### `/organisers` — the way in for somebody who runs races (2026-09-23)
 

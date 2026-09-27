@@ -19,7 +19,7 @@
  * arrived as a hairline and the strip read as though nothing was selected. A
  * shadow is drawn inside the padding box, where no overflow rule reaches it.
  */
-import { LayoutDashboardIcon, ScanLineIcon, UsersIcon, type LucideIcon } from "lucide-react";
+import { FlagIcon, LayoutDashboardIcon, ScanLineIcon, UsersIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { RACE_TABS, raceTabHref, type RaceTab } from "../lib/race-tab";
@@ -32,6 +32,7 @@ const ICONS: Record<RaceTab, LucideIcon> = {
   overview: LayoutDashboardIcon,
   entries: UsersIcon,
   scanners: ScanLineIcon,
+  results: FlagIcon,
 };
 
 export function RaceTabs({ eventId, current }: { eventId: number; current: RaceTab }) {

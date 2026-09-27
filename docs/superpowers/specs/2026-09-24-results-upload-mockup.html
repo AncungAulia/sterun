@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sterun, recording a finish list (STE-58)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f8f8f8; --ink:#1e232b; --teal:#016985; --white:#ffffff;
+  --n100:#eef0f2; --n200:#dfe2e6; --n300:#c7ccd3; --n400:#9ba3ad; --n500:#6f7883; --n600:#515a66; --n700:#3a424c;
+  --teal50:#e8f4f8; --teal100:#cbe8f0; --teal600:#015872;
+  --success:#067a38; --success-surface:#e6f6ec; --success-border:#a8dcbc;
+  --danger:#a31c11; --danger-surface:#fceae8; --danger-border:#f0b3aa;
+  --warning:#8f5200; --warning-surface:#fdf3e2; --warning-border:#edc07a;
+  --r-md:8px; --r-lg:16px;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
+  --display:'Big Shoulders Display',var(--sans);
+  --shadow-card:0 1px 2px rgb(30 35 43 / .06),0 4px 12px rgb(30 35 43 / .06);
+  --shadow-lifted:0 2px 4px rgb(30 35 43 / .08),0 12px 28px rgb(30 35 43 / .1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+.intro h1{font-style:italic;font-weight:600;font-size:28px;margin:0 0 8px}
+.intro p{margin:0 0 10px;color:var(--n600);font-size:15px;max-width:82ch;line-height:1.6}
+.intro p b{color:var(--ink);font-weight:500}
+.block{margin-top:44px}
+.block > h2{font-size:13px;font-weight:600;color:var(--teal);margin:0 0 4px}
+.block > h3{font-style:italic;font-weight:600;font-size:21px;margin:0 0 6px}
+.block > p{margin:0 0 16px;color:var(--n600);font-size:14px;max-width:82ch;line-height:1.6}
+.pair{display:grid;grid-template-columns:1fr 330px;gap:20px;align-items:start}
+.screen{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden}
+.cap{font-size:12.5px;color:var(--n500);margin:8px 2px 0}
+
+/* console chrome */
+.chead{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--n200);background:#fff}
+.chead .t{font-style:italic;font-weight:600;font-size:18px}
+.hact{margin-left:auto;display:flex;gap:10px}
+.tabs{display:flex;gap:2px;padding:0 22px;background:#fff;border-bottom:1px solid var(--n200);font-size:14px}
+.tabs span{padding:11px 12px;color:var(--n500);display:inline-flex;gap:7px;align-items:center}
+.tabs span.on{color:var(--ink);font-weight:500;box-shadow:inset 0 -2px 0 var(--teal)}
+.body{padding:20px 22px 26px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border:0;border-radius:var(--r-md);background:var(--teal);color:#fff;font-family:var(--sans);font-size:14.5px;font-weight:500;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--n300)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.dis{background:var(--n300);color:#fff}
+.pill{display:inline-flex;align-items:center;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;border:1px solid}
+.pill.ok{background:var(--success-surface);color:var(--success);border-color:var(--success-border)}
+.pill.warn{background:var(--warning-surface);color:var(--warning);border-color:var(--warning-border)}
+.pill.bad{background:var(--danger-surface);color:var(--danger);border-color:var(--danger-border)}
+.pill.mut{background:var(--n100);color:var(--n600);border-color:var(--n200)}
+
+/* drop zone */
+.drop{border:1px dashed var(--n300);border-radius:var(--r-lg);background:#fff;padding:34px 20px;text-align:center}
+.drop .big{font-weight:600;font-size:17px;margin:0 0 4px}
+.drop p{margin:0 0 14px;color:var(--n600);font-size:13.5px}
+.needs{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px}
+.need{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:12px 14px}
+.need b{display:block;font-weight:600;font-size:13.5px;margin-bottom:3px}
+.need span{font-size:12.5px;color:var(--n600);line-height:1.5}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--n100);border-radius:4px;padding:1px 5px}
+
+/* terminal warning */
+.warnbox{display:flex;gap:12px;background:var(--warning-surface);border:1px solid var(--warning-border);border-radius:var(--r-lg);padding:13px 15px;margin:16px 0}
+.warnbox b{font-weight:600;font-size:13.5px}
+.warnbox p{margin:3px 0 0;font-size:13px;color:var(--n700);line-height:1.55}
+
+/* summary */
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:2px 0 16px}
+.stat{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:13px 15px}
+.stat .l{font-size:12.5px;color:var(--n500)}
+.stat .v{font-family:var(--display);font-weight:700;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat.bad .v{color:var(--danger)}
+.stat.ok .v{color:var(--success)}
+
+/* tables */
+.group{margin-bottom:18px}
+.group h4{margin:0 0 3px;font-weight:600;font-size:14.5px}
+.group .why{margin:0 0 9px;font-size:13px;color:var(--n600);max-width:80ch;line-height:1.55}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);overflow:hidden;font-size:13px}
+th{text-align:left;font-weight:500;font-size:12px;color:var(--n500);padding:9px 12px;border-bottom:1px solid var(--n200);background:var(--n50,#fbfbfc)}
+td{padding:9px 12px;border-bottom:1px solid var(--n100);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.n{font-variant-numeric:tabular-nums}
+td .reason{color:var(--n600);font-size:12.5px}
+.rowbad{background:#fdf6f5}
+.rowrev{background:#fbfbfc}
+
+/* dialog */
+.dim{background:rgba(30,35,43,.45);padding:26px;border-radius:var(--r-lg)}
+.dlg{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lifted);padding:20px 22px;max-width:520px;margin:0 auto}
+.dlg h4{margin:0 0 6px;font-style:italic;font-weight:600;font-size:19px}
+.dlg p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.dlg .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+.steps{list-style:none;margin:14px 0 0;padding:0}
+.steps li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--n100);font-size:13.5px}
+.steps li:first-child{border-top:0}
+.dot{width:18px;height:18px;border-radius:999px;border:2px solid var(--n300);flex:0 0 auto;margin-top:1px}
+.dot.done{background:var(--success);border-color:var(--success)}
+.dot.now{border-color:var(--teal);border-right-color:transparent}
+.steps .sub{display:block;color:var(--n500);font-size:12.5px;margin-top:2px;font-variant-numeric:tabular-nums}
+
+.side{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:18px 20px}
+.side h4{margin:0 0 8px;font-size:14px;font-weight:600}
+.side p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.side b{color:var(--ink);font-weight:500}
+.tbar{display:flex;gap:10px;align-items:center;margin:14px 0 12px}
+.tbar .search{flex:1;max-width:280px;height:36px;border:1px solid var(--n300);border-radius:var(--r-md);padding:0 12px;font-family:var(--sans);font-size:13.5px;color:var(--n400);background:#fff;display:flex;align-items:center}
+.tbar .cnt{margin-left:auto;font-size:12.5px;color:var(--n500);font-variant-numeric:tabular-nums}
+.held{display:flex;gap:12px;background:var(--danger-surface);border:1px solid var(--danger-border);border-radius:var(--r-lg);padding:13px 15px;margin-bottom:16px}
+.held b{font-weight:600;font-size:13.5px}
+.held p{margin:3px 0 0;font-size:13px;color:var(--n700);line-height:1.55}
+.held ul{margin:7px 0 0;padding-left:17px;font-size:12.5px;color:var(--n700);line-height:1.7}
+.none{color:var(--n500)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>Recording a finish list (STE-58)</h1>
+  <p>The last tab of the race console. An organiser uploads the timing system's CSV, reads what the backend found wrong with it, and records the rest on chain.</p>
+  <p><b>One fact shapes every screen: a result is permanent.</b> `record_finish` moves a record to Finished and nothing can take it back, so the file is reviewed before anything is signed, and nothing the review flagged can be sent at all. That is not a nicety, it is the whole reason this screen has three steps instead of one button.</p>
+  <p><b>What changed today:</b> the contract now records up to 120 results in one signature (STE-60, live since this morning). A 312-runner race used to mean 312 wallet prompts; it is now three.</p>
+  <p><b>The first two screens are not new.</b> They are block 5 of <span class="code">2026-09-13-org-console-mockup.html</span>, which Ancung already approved: an empty tab holds the drop card and nothing else, and a loaded file is shaped like Entries, with the signing button in the header where every tab keeps its one action. What this file adds is what happens after that button: the held rows, the confirmation, the run, and the tab once results exist.</p>
+</div>
+
+<div class="block">
+  <h2>SCREEN 1</h2>
+  <h3>Before a file</h3>
+  <p>Nothing but the drop card. There is no table to filter and no count to read, so the tab holds one thing and says what it wants. Unchanged from the console mockup.</p>
+  <div class="screen" style="max-width:820px">
+    <div class="chead">
+      <span class="t">Merdeka Run 2026</span>
+      <span class="pill mut">Closed</span>
+    </div>
+    <div class="tabs">
+      <span>Overview</span><span>Entries</span><span>Scanners</span><span class="on">Results</span>
+    </div>
+    <div class="body">
+      <div class="drop">
+        <p class="big">Drop the timing file here</p>
+        <p>A bib column and a finish time. Runners with no time are fine.</p>
+        <button class="btn">Choose a file</button>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Screen 1. No warnings and no explaining: the file is checked the moment it arrives, and everything worth saying is said about the real file.</p>
+</div>
+
+<div class="block">
+  <h2>SCREEN 2</h2>
+  <h3>A file is loaded</h3>
+  <p>Shaped like Entries, as decided in the console mockup: three counts, a search, the table, and the one action in the header. What is new is the strip above them, which only exists when the file has rows that cannot be published.</p>
+  <div class="pair">
+    <div>
+      <div class="screen">
+        <div class="chead">
+          <span class="t">Merdeka Run 2026</span>
+          <span class="pill mut">Closed</span>
+          <span class="hact"><button class="btn sm">Sign and record 308 results</button></span>
+        </div>
+        <div class="tabs">
+          <span>Overview</span><span>Entries</span><span>Scanners</span><span class="on">Results</span>
+        </div>
+        <div class="body">
+          <div class="held">
+            <div>
+              <b>4 rows are being left out.</b>
+              <p>Fix them in the file and upload it again. Nothing on this list can be recorded.</p>
+              <ul>
+                <li>Line 41, bib 88: exists in both 10K and 5K. Add a category column so the row points at one runner.</li>
+                <li>Lines 77 and 203, bib 104: the same bib twice, with different times. Both are held.</li>
+                <li>Line 150, bib 219: never collected a race pack, so no finish time can be recorded. Check them in first.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="sum">
+            <div class="stat"><div class="l">Finished with a time</div><div class="v">296</div></div>
+            <div class="stat"><div class="l">Finished, no time</div><div class="v">9</div></div>
+            <div class="stat"><div class="l">Did not finish</div><div class="v">3</div></div>
+          </div>
+
+          <div class="tbar">
+            <span class="search">Search a bib number</span>
+            <button class="btn ghost sm">Choose another file</button>
+            <button class="btn ghost sm">Remove file</button>
+            <span class="cnt">merdeka-finish.csv &middot; 312 rows</span>
+          </div>
+
+          <table>
+            <tr><th>Bib</th><th>Distance</th><th>Time</th><th>Status</th></tr>
+            <tr><td class="n">1</td><td>10K</td><td class="n">38:41</td><td><span class="pill ok">Finished</span></td></tr>
+            <tr><td class="n">2</td><td>10K</td><td class="n">39:02</td><td><span class="pill ok">Finished</span></td></tr>
+            <tr><td class="n">77</td><td>5K</td><td class="none">No official time</td><td><span class="pill ok">Finished</span></td></tr>
+            <tr class="rowbad"><td class="n">88</td><td class="none">10K or 5K</td><td class="n">52:41</td><td><span class="pill bad">Held</span></td></tr>
+            <tr><td class="n">96</td><td>21K</td><td class="none">&mdash;</td><td><span class="pill warn">Did not finish</span></td></tr>
+            <tr class="rowbad"><td class="n">104</td><td>10K</td><td class="n">52:41</td><td><span class="pill bad">Held</span></td></tr>
+          </table>
+        </div>
+      </div>
+      <p class="cap">Screen 2. The button counts what will be published, never the rows in the file.</p>
+    </div>
+    <div class="side">
+      <h4>Two kinds of wrong, and only one is expensive</h4>
+      <p><b>The chain would refuse it.</b> An unknown bib, a runner who never checked in, a result already recorded. Cost: a failed transaction, nothing changes.</p>
+      <p><b>The chain would accept a lie.</b> A bib two runners could claim, the same bib twice, an impossible time, a malformed row. Cost: a permanent false record. This is the kind the review exists for.</p>
+      <p>Held is held: there is deliberately no way to force one through from this screen. The way forward is a corrected file, which costs nothing.</p>
+      <p>The organiser never sees the backend's codes, only the sentence and what to do about it.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 3</h2>
+  <h3>The confirmation, and the run</h3>
+  <p>Signing is a second press, and the dialog says the irreversible thing one last time before the wallet opens.</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Record 308 results?</h4>
+          <p>Each result is written to that runner's race record permanently. It cannot be changed, corrected or removed afterwards, by anyone.</p>
+          <p>Your wallet will ask you <b>3 times</b>, once per batch of runners. You can stop between batches; whatever has already been recorded stays recorded.</p>
+          <div class="foot">
+            <button class="btn ghost">Cancel</button>
+            <button class="btn">Start</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 3a. "Your wallet will ask you 3 times" is the same sentence the create-race wizard uses.</p>
+    </div>
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Recording results</h4>
+          <p>Do not close this until it finishes.</p>
+          <ul class="steps">
+            <li><span class="dot done"></span><span>Runners 1 to 120<span class="sub">Recorded</span></span></li>
+            <li><span class="dot now"></span><span>Runners 121 to 240<span class="sub">Waiting for your wallet</span></span></li>
+            <li><span class="dot"></span><span>Runners 241 to 308<span class="sub">Not started</span></span></li>
+          </ul>
+        </div>
+      </div>
+      <p class="cap">Screen 3b. One line per batch, named by runners rather than by transaction.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 4</h2>
+  <h3>When a batch fails</h3>
+  <p>The one screen that has to be right. Each batch is atomic, so a failure leaves the batches before it recorded and the ones after it untouched, and the screen has to say exactly that rather than "something went wrong".</p>
+  <div class="pair">
+    <div>
+      <div class="dim">
+        <div class="dlg">
+          <h4>Stopped after 120 results</h4>
+          <p><b>120 results were recorded and are permanent.</b> The remaining 188 were not sent, and nothing about them changed.</p>
+          <p>Your wallet did not answer on the second batch. Press Continue to send the rest; the runners already recorded are skipped, so nobody can be recorded twice.</p>
+          <ul class="steps">
+            <li><span class="dot done"></span><span>Runners 1 to 120<span class="sub">Recorded</span></span></li>
+            <li><span class="dot"></span><span>Runners 121 to 240<span class="sub">Not sent</span></span></li>
+            <li><span class="dot"></span><span>Runners 241 to 308<span class="sub">Not sent</span></span></li>
+          </ul>
+          <div class="foot">
+            <button class="btn ghost">Close</button>
+            <button class="btn">Continue</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 4. Never "try again", which would read as repeating what already landed.</p>
+    </div>
+    <div class="side">
+      <h4>Why this wording, precisely</h4>
+      <p>A batch that landed cannot be undone, so the screen must not suggest a retry undoes it. And a batch that was <b>sent without an answer</b> is not the same as one that failed: the console re-reads the records before continuing, and any runner already Finished is dropped from what remains.</p>
+      <p>This mirrors the scanner's rule from the race-day work: <b>no answer is never read as sent</b>, and the truth is settled by asking the chain, not by guessing from the error.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 5</h2>
+  <h3>Afterwards</h3>
+  <p>The tab does not go back to an upload box. A race with results shows what was published, because that is what the organiser opens it for from then on.</p>
+  <div class="screen" style="max-width:760px">
+    <div class="chead">
+      <span class="t">Merdeka Run 2026</span>
+      <span class="pill ok">Completed</span>
+    </div>
+    <div class="tabs"><span>Overview</span><span>Entries</span><span>Scanners</span><span class="on">Results</span></div>
+    <div class="body">
+      <div class="sum">
+        <div class="stat"><div class="l">Results recorded</div><div class="v">308</div></div>
+        <div class="stat"><div class="l">With a time</div><div class="v">296</div></div>
+        <div class="stat"><div class="l">Untimed or DNF</div><div class="v">12</div></div>
+      </div>
+      <table>
+        <tr><th>Bib</th><th>Distance</th><th>Result</th><th>Recorded</th></tr>
+        <tr><td class="n">1</td><td>10K</td><td class="n">38:41</td><td class="n">24 Sep 2026</td></tr>
+        <tr><td class="n">2</td><td>10K</td><td class="n">39:02</td><td class="n">24 Sep 2026</td></tr>
+        <tr><td class="n">77</td><td>5K</td><td><span class="pill mut">No official time</span></td><td class="n">24 Sep 2026</td></tr>
+        <tr><td class="n">104</td><td>10K</td><td><span class="pill mut">Did not finish</span></td><td class="n">24 Sep 2026</td></tr>
+      </table>
+      <p style="margin:12px 0 0;font-size:13px;color:var(--n600)">Runners who are still missing a result can be added by uploading another file. Nothing already recorded is touched.</p>
+    </div>
+  </div>
+  <p class="cap">Screen 5. "No official time" is never drawn as 0, on this screen or anywhere else.</p>
+</div>
+
+</div>
+</body>
+</html>

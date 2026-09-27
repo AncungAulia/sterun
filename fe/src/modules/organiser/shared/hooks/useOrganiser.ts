@@ -15,6 +15,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { readClient } from "@/lib/chain/sterun";
+import type { SterunResult } from "@sterunxyz/sdk";
 
 import { useChainWrite, type Actor } from "@/hooks/useChainWrite";
 
@@ -67,7 +68,13 @@ export function useAddAddon() {
 
 export interface SetEventStatusInput {
   eventId: number;
-  status: "Draft" | "Open" | "Closed" | "Completed";
+  /**
+   * `Cancelled` joined the list on 2026-09-27, when the console grew a way to
+   * withdraw a race (STE-71). It was left out deliberately while nothing
+   * offered it, so nobody could reach the one status that cannot be undone by
+   * accident. The guard is now the dialog that asks for the race's name.
+   */
+  status: "Draft" | "Open" | "Closed" | "Completed" | "Cancelled";
 }
 
 /**
@@ -84,6 +91,42 @@ export function useSetEventStatus() {
 export interface ScannerInput {
   eventId: number;
   scanner: string;
+}
+
+export interface RecordResultsInput {
+  eventId: number;
+  /** At most `RECORD_RESULTS_MAX_BATCH`; split a longer list first. */
+  results: SterunResult[];
+}
+
+/**
+ * One batch of finish results, one signature (STE-60). Atomic on chain: the
+ * whole batch records or none of it does, which is what lets the run screen say
+ * exactly what landed when a later batch fails.
+ */
+export function useRecordResults() {
+  return useChainWrite<RecordResultsInput, void>((input, actor) =>
+    readClient.recordResults(input.eventId, input.results, actor),
+  );
+}
+
+export interface RegistrationClosesInput {
+  eventId: number;
+  /** Unix seconds. The contract takes a date either way, past included. */
+  closesAt: bigint;
+}
+
+/**
+ * When entries stop by themselves (STE-46, live since 2026-09-24).
+ *
+ * The contract checks this date after the status, so a race can be `Open` and
+ * still refuse entries. There is deliberately no way to remove a date once set;
+ * a date can only move.
+ */
+export function useSetRegistrationCloses() {
+  return useChainWrite<RegistrationClosesInput, void>((input, actor) =>
+    readClient.setRegistrationCloses(input.eventId, input.closesAt, actor),
+  );
 }
 
 export function useAddScanner() {

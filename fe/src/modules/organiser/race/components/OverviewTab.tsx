@@ -14,8 +14,10 @@ import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { useRaceRecords, useRaceRecordsFailed } from "@/modules/organiser/shared/hooks/useRaceRecords";
 import type { EventSummary } from "@/lib/event/events";
 import { entriesPerDay } from "@/modules/organiser/shared/lib/records";
-import { formatAmount } from "@/utils/format";
+import { formatAmount, formatEventDateTimeLong } from "@/utils/format";
 
+import { datePassed } from "../lib/close-date";
+import { useRegistrationCloses } from "@/hooks/useRegistrationCloses";
 import { packsCollected, raceTotals, recentActivity } from "../lib/race";
 import { ActivityFeed } from "./ActivityFeed";
 import { AddOnsPanel } from "./AddOnsPanel";
@@ -30,6 +32,8 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
   const { eventId } = summary.event;
   const nowS = useNowSeconds();
   const addOns = useEventAddOns(eventId);
+  const closes = useRegistrationCloses(eventId);
+  const closesAt = closes.data ?? null;
   const records = useRaceRecords([eventId]).get(eventId);
   const recordsFailed = useRaceRecordsFailed(eventId);
   const recordsLoading = records === undefined && !recordsFailed;
@@ -41,7 +45,7 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Entries"
           value={totals.entered.toLocaleString("en-US")}
@@ -56,6 +60,23 @@ export function OverviewTab({ summary }: { summary: EventSummary }) {
           label="Race packs collected"
           value={collectedValue}
           unit={collected === null ? undefined : `of ${totals.entered.toLocaleString("en-US")}`}
+        />
+        {/*
+          From the chain, not from the event document (STE-69). The document's
+          registration window is what runners were promised; this is the date
+          that actually refuses an entry, and where the two disagree an
+          organiser needs the one that decides.
+        */}
+        <StatCard
+          label={closesAt !== null && datePassed(closesAt, nowS) ? "Entries closed on" : "Entries close on their own"}
+          value={
+            closes.isPending
+              ? "..."
+              : closesAt === null
+                ? "Anytime"
+                : formatEventDateTimeLong(closesAt)
+          }
+          unit={closesAt === null ? "until you close them" : undefined}
         />
       </div>
 

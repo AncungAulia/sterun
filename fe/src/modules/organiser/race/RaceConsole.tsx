@@ -16,15 +16,17 @@ import { EventStatusBadge } from "@/components/feedback/EventStatusBadge";
 import { useEvent } from "@/hooks/useEvents";
 import { useWallet } from "@/hooks/useWallet";
 
-import { AddPlaces } from "./components/AddPlaces";
+import { RaceActions } from "./components/RaceActions";
 import { ConsoleHeader } from "@/modules/organiser/shared/components/ConsoleHeader";
 import { EntriesTab } from "./components/EntriesTab";
 import { useNeedsContext } from "@/modules/organiser/shared/components/NeedsContext";
 import { NotYourRace } from "./components/NotYourRace";
 import { OverviewTab } from "./components/OverviewTab";
 import { RaceTabs } from "./components/RaceTabs";
+import { RecordResults } from "./components/RecordResults";
+import { ResultsProvider } from "./components/ResultsContext";
+import { ResultsTab } from "./components/ResultsTab";
 import { ScannersTab } from "./components/ScannersTab";
-import { StatusAction } from "./components/StatusAction";
 import { UrgentBanner } from "@/modules/organiser/shared/components/UrgentBanner";
 import type { RaceTab } from "./lib/race-tab";
 
@@ -76,7 +78,10 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
   const urgent = needs.find((need) => need.urgent && need.eventId === eventId);
 
   return (
-    <>
+    /* The provider wraps both the header and the tab, because the file being
+       reviewed lives in the tab and the button that signs it lives in the
+       header (`ResultsContext`). */
+    <ResultsProvider>
       {/* Pinned, so a long entries table scrolls under the race's name, its
           status, its one action and the way to the other tabs rather than
           taking them off screen. */}
@@ -85,14 +90,10 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
           title={data.event.name}
           badge={<EventStatusBadge status={data.event.status} />}
           action={
-            // Two buttons on a race that can still take entries (STE-57):
-            // closing stays, because until entries close on their own at the
-            // registration end date (STE-46) it is the only thing that stops
-            // them, and adding places is the main one.
-            <>
-              <StatusAction summary={data} />
-              <AddPlaces summary={data} />
-            </>
+            // One action per tab. On Results that action is signing the file
+            // the tab below is showing; everywhere else it is what can be done
+            // to the race, which is one button and a menu (STE-69).
+            tab === "results" ? <RecordResults eventId={eventId} /> : <RaceActions summary={data} />
           }
         />
         <RaceTabs eventId={eventId} current={tab} />
@@ -102,7 +103,8 @@ export function RaceConsole({ eventId, tab }: { eventId: number; tab: RaceTab })
         {tab === "overview" ? <OverviewTab summary={data} /> : null}
         {tab === "entries" ? <EntriesTab summary={data} /> : null}
         {tab === "scanners" ? <ScannersTab summary={data} /> : null}
+        {tab === "results" ? <ResultsTab summary={data} /> : null}
       </div>
-    </>
+    </ResultsProvider>
   );
 }

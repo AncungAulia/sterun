@@ -26,7 +26,7 @@
 import { addOnUnits, type PlannedAddOn } from "./addons";
 import type { PlannedCategory } from "../components/StepCategoryPlan";
 
-export type RunStepKind = "document" | "event" | "category" | "addon" | "open";
+export type RunStepKind = "document" | "event" | "closeDate" | "category" | "addon" | "open";
 
 export interface RunStep {
   /** Stable across a re-plan, so what is already done stays done. */
@@ -42,9 +42,15 @@ export interface RunPlan {
   name: string;
   categories: PlannedCategory[];
   addOns: PlannedAddOn[];
+  /**
+   * When entries stop by themselves, in unix seconds, from the same field the
+   * document's registration window took it from. `null` only when the wizard
+   * was given no window at all.
+   */
+  registrationClosesAt?: bigint | null;
 }
 
-export function planRun({ name, categories, addOns }: RunPlan): RunStep[] {
+export function planRun({ name, categories, addOns, registrationClosesAt = null }: RunPlan): RunStep[] {
   const steps: RunStep[] = [];
 
   /**
@@ -63,6 +69,19 @@ export function planRun({ name, categories, addOns }: RunPlan): RunStep[] {
     // be corrected, and this is the last screen before it is fixed forever.
     label: name.trim() ? `Create "${name.trim()}"` : "Create the event",
   });
+
+  /**
+   * Straight after the race exists, and before anything else (STE-69).
+   *
+   * The document already carries this date and runners read it there, but until
+   * it is on chain the contract enforces nothing: a race page would promise a
+   * date and the contract would take entries the day after. It goes here rather
+   * than at the end so that a run which stops half way has the date in force on
+   * a race that is not open yet, which is the harmless order.
+   */
+  if (registrationClosesAt !== null) {
+    steps.push({ id: "closeDate", kind: "closeDate", label: "Set when entries close" });
+  }
 
   for (const category of categories) {
     const code = category.code.trim();

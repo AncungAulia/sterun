@@ -7,6 +7,12 @@
  * signature and a button that raises a wallet with no warning has already
  * surprised somebody. The dialog cannot be dismissed while the signature is in
  * flight: closing it would hide the only place the outcome is reported.
+ *
+ * **Two triggers, one dialog** (STE-69). The header now leads with whichever
+ * action that race most needs and folds the rest into a menu, so this renders
+ * either a button or a menu item. Splitting the dialog into a component of its
+ * own instead would leave the wallet write, its phases and its error in one
+ * file and the words that explain them in another.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -20,6 +26,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LockIcon, LockOpenIcon } from "lucide-react";
+
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { eventKeys } from "@/hooks/useEvents";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
 import { useSetEventStatus } from "@/modules/organiser/shared/hooks/useOrganiser";
@@ -28,7 +37,13 @@ import { friendlyError } from "@/lib/api/errors";
 
 import { statusAction } from "../lib/status-action";
 
-export function StatusAction({ summary }: { summary: EventSummary }) {
+export function StatusAction({
+  summary,
+  variant = "primary",
+}: {
+  summary: EventSummary;
+  variant?: "primary" | "menu";
+}) {
   const nowS = useNowSeconds();
   const queryClient = useQueryClient();
   const { write, phase, isBusy, error, reset } = useSetEventStatus();
@@ -61,9 +76,28 @@ export function StatusAction({ summary }: { summary: EventSummary }) {
         if (!next) reset();
       }}
     >
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        {move.label}
-      </Button>
+      {variant === "menu" ? (
+        <DropdownMenuItem
+          // Radix closes the menu on select and moves focus back to its
+          // trigger, which would fight the dialog for it. Opening on the next
+          // frame lets the menu finish first.
+          onSelect={(event) => {
+            event.preventDefault();
+            setTimeout(() => setOpen(true), 0);
+          }}
+        >
+          {move.to === "Open" ? (
+            <LockOpenIcon aria-hidden="true" />
+          ) : (
+            <LockIcon aria-hidden="true" />
+          )}
+          {move.label}
+        </DropdownMenuItem>
+      ) : (
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          {move.label}
+        </Button>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{move.title}</DialogTitle>

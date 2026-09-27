@@ -17,6 +17,7 @@ import type { SterunRecord } from "@sterunxyz/sdk";
 
 export type Gate =
   | { kind: "closed" }
+  | { kind: "registration-over"; closesAt: bigint }
   | { kind: "already-entered"; record: SterunRecord; distanceCode: string }
   | { kind: "sold-out"; categoryId: number }
   | { kind: "no-distance" }
@@ -31,6 +32,12 @@ export function entryGate(
   summary: EventSummary,
   records: SterunRecord[],
   requested: number | null,
+  /**
+   * When entries stop by themselves, from the chain (STE-69), and the clock to
+   * measure it against. Both optional: a race published before the contract
+   * could hold a date has none, and the first render has no clock.
+   */
+  closes?: { closesAt: bigint | null; nowS: bigint | undefined },
 ): Gate {
   const { event, categories } = summary;
 
@@ -41,6 +48,16 @@ export function entryGate(
   }
 
   if (event.status !== "Open") return { kind: "closed" };
+
+  /*
+    After the status, exactly as the contract checks it, and told apart from it
+    on purpose: a race an organiser closed may open again, and a date that
+    passed will not undo itself. `enter` refuses this one with
+    `RegistrationClosed(20)` while the status still says Open.
+  */
+  if (closes?.closesAt != null && closes.nowS !== undefined && closes.closesAt <= closes.nowS) {
+    return { kind: "registration-over", closesAt: closes.closesAt };
+  }
 
   const chosen = categories.find((c) => c.categoryId === requested);
   if (chosen) {

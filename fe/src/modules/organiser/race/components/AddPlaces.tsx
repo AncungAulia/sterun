@@ -12,7 +12,7 @@
  * Offered on every distance, not only a full one (Ancung, 2026-09-17): a
  * second batch is often opened before the first quite runs out.
  */
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, UserPlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNowSeconds } from "@/hooks/useNowSeconds";
@@ -30,7 +33,13 @@ import type { EventSummary } from "@/lib/event/events";
 import { offersAddPlaces } from "../lib/add-places";
 import { AddPlacesDialog } from "./AddPlacesDialog";
 
-export function AddPlaces({ summary }: { summary: EventSummary }) {
+export function AddPlaces({
+  summary,
+  variant = "primary",
+}: {
+  summary: EventSummary;
+  variant?: "primary" | "menu";
+}) {
   const nowS = useNowSeconds();
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
@@ -41,6 +50,63 @@ export function AddPlaces({ summary }: { summary: EventSummary }) {
   // now holds it rather than as it was when the menu was opened.
   const chosen = categories.find((category) => category.categoryId === categoryId) ?? null;
   const only = categories.length === 1 ? categories[0] : null;
+
+  const distances = categories.map((category) => (
+    <DropdownMenuItem
+      key={category.categoryId}
+      onSelect={(event) => {
+        event.preventDefault();
+        setTimeout(() => setCategoryId(category.categoryId), 0);
+      }}
+      className="flex items-center justify-between gap-3 py-2"
+    >
+      <span className="flex flex-col">
+        <span className="font-medium text-ink">{category.code}</span>
+        <span className="numeric text-sm text-n-500">
+          {category.enteredCount.toLocaleString("en-US")} of {category.quota.toLocaleString("en-US")}
+        </span>
+      </span>
+      {category.slotsLeft <= 0 ? <Badge variant="warning">Full</Badge> : null}
+    </DropdownMenuItem>
+  ));
+
+  if (variant === "menu") {
+    return (
+      <>
+        {only ? (
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              setTimeout(() => setCategoryId(only.categoryId), 0);
+            }}
+          >
+            <UserPlusIcon aria-hidden="true" />
+            Add entries
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <UserPlusIcon aria-hidden="true" />
+              Add entries
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-72">
+              <DropdownMenuLabel className="font-normal text-n-500">Which distance?</DropdownMenuLabel>
+              {distances}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+        {chosen ? (
+          <AddPlacesDialog
+            key={chosen.categoryId}
+            category={chosen}
+            organiser={event.organiser}
+            status={event.status}
+            onClose={() => setCategoryId(null)}
+          />
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <>

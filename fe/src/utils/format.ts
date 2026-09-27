@@ -214,6 +214,25 @@ export function formatClaimedAt(claimedAt: bigint, timeZone?: string): string {
  * count. For plain integers only; money goes through `formatAmount`, which
  * keeps the 7-decimal rule.
  */
+/**
+ * `1:52:09` for a run over an hour, `48:03` under one.
+ *
+ * Seconds are always two digits, and so are minutes once there is an hour in
+ * front of them. Anything else reads as a different time.
+ *
+ * **Moved up from `modules/profile/lib/record-meaning.ts` on 2026-09-24**, when
+ * the console's results review became its second reader: a finish time printed
+ * two different ways in one product is a bug nobody notices until a runner
+ * compares the two screens.
+ */
+export function formatFinishTime(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const secs = String(whole % 60).padStart(2, "0");
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${secs}` : `${minutes}:${secs}`;
+}
+
 export function formatLedger(ledger: number): string {
   return GROUPED.format(ledger);
 }

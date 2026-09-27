@@ -17,6 +17,7 @@
  * the event, and it wins over an `Entered` record, because otherwise the page
  * shows an entry that looks abandoned for a race someone else called off.
  */
+import { formatFinishTime } from "@/utils/format";
 import type { EventStatus, SterunRecord } from "@sterunxyz/sdk";
 
 export type Meaning =
@@ -60,23 +61,11 @@ export const CHIP_WORD: Record<MeaningKind, string> = {
 };
 
 /**
- * `1:52:09` for a run over an hour, `48:03` under one.
- *
- * Seconds are always two digits, and so are minutes once there is an hour in
- * front of them. Anything else reads as a different time.
- */
-export function formatFinishTime(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(whole / 3600);
-  const minutes = Math.floor((whole % 3600) / 60);
-  const secs = String(whole % 60).padStart(2, "0");
-  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${secs}` : `${minutes}:${secs}`;
-}
-
-/**
  * What sits in the finish time slot. An absent time is a sentence in the same
  * position, so a reader scanning down the column still lands on it.
  */
+export { formatFinishTime };
+
 export function finishSlot(meaning: Meaning): { value: string; absent: boolean } {
   switch (meaning.kind) {
     case "finished":
