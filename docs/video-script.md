@@ -161,9 +161,25 @@ device rather than by key; two wallets is simply closer to two volunteers with t
 
 ### Before the camera is on
 
-1. Render a poster so the race does not look bare: `docs/rehearsal/demo/posters/render.sh`.
-2. Create the race from `/org/new`, dated **today**, entry price low (5 sUSD covers it), two
-   distances. The wizard asks the wallet 5 times.
+1. Create the race from `/org/new`:
+
+   | Field | Value | Why this value |
+   | --- | --- | --- |
+   | Race day | **today** | results published on race day read correctly; a future date does not |
+   | Entries close | **leave empty** | see the trap below |
+   | Distances | 10K and 5K | two, so the race page has something to show |
+   | Quota | 6 on the 10K | five runners and one spare, all in one distance |
+   | Price | 5 sUSD | the faucet pays 50 per address, once |
+   | Poster | optional | any 16:9 image. `docs/rehearsal/demo/posters/render.sh` is macOS-only and hardcodes the four seeded races, so it is no help here |
+
+   **The trap: do not set a close date of today or earlier.** From that moment `reserve_slot` refuses
+   with `RegistrationClosed(20)` **whatever the event's status**
+   (`sc/contracts/event_registry/src/lib.rs:713`), so a race dated today with entries closed today
+   cannot be entered — not even by its own organiser. Leaving it empty skips the step altogether
+   (`create/lib/run.ts:82`) and the wallet asks once less.
+
+   Everything else the shoot needs is unaffected by dates: `claim_racepack` checks only the operator
+   and the record's state, and `record_finish` only asks the caller to be the organiser.
 3. Add both desk wallets as scanners from the race page.
 4. On the phone, for each of **five** runner accounts: connect, press **Get test sUSD** (this funds
    the account from friendbot if it is new, opens the trustline, and pays 50 sUSD — one button), then
