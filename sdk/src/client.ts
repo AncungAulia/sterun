@@ -164,6 +164,64 @@ export interface EnterArgs {
 }
 
 /**
+ * The most results one `recordResults` call can hold (contracts v2.6, STE-60).
+ *
+ * Measured, not computed: every row a timed finish (the largest event, 136
+ * bytes), against the per-transaction limits live on testnet and mainnet alike
+ * on 2026-09-17. The 16,384 bytes of contract events bind at 120; 121 is
+ * refused by the network's own simulation. If the network's limits change,
+ * this has to be measured again, not scaled.
+ */
+export const RECORD_RESULTS_MAX_BATCH = 120;
+
+/**
+ * The most race packs one `claimRacepackMany` call can hand over (contracts
+ * v2.7, STE-66). The contract refuses more with `TooManyClaims(109)`.
+ *
+ * Measured: a `racepack_claimed` event carries the operator address, so a row
+ * costs 160 contract-event bytes and the network's 16,384-byte limit ceilings at
+ * 102. The cap keeps two rows of headroom — being short costs one more
+ * transaction, being over costs a desk's queue at the counter.
+ */
+export const CLAIM_MAX_BATCH = 100;
+
+/**
+ * One race pack a batch did NOT hand over, and why (contracts v2.7).
+ *
+ * `not-entered` is the two-desk case: another desk claimed this runner first,
+ * or the record is already finished or DNF. `not-found` is a token id no record
+ * exists for — a roster from another race, or a typo.
+ */
+export interface SkippedClaim {
+  tokenId: number;
+  reason: "not-found" | "not-entered";
+}
+
+/**
+ * One result for {@link SterunClient.recordResults}. `kind` uses the same words
+ * as the backend's results preview (`publishable[].kind`), so a reviewed row
+ * maps across without translation.
+ */
+export type SterunResult =
+  | { tokenId: number; kind: "timed"; finishTimeS: number }
+  | { tokenId: number; kind: "untimed" }
+  | { tokenId: number; kind: "dnf" };
+
+/**
+ * Split `results` into batches for {@link SterunClient.recordResults}, in
+ * order. Each batch is atomic on chain, so a failure leaves the batches before
+ * it recorded and the ones after it untouched.
+ */
+export function chunkResults<T>(results: readonly T[], size = RECORD_RESULTS_MAX_BATCH): T[][] {
+  if (!Number.isInteger(size) || size < 1 || size > RECORD_RESULTS_MAX_BATCH) {
+    throw new RangeError(`size must be a whole number from 1 to ${RECORD_RESULTS_MAX_BATCH}, got ${size}`);
+  }
+  const batches: T[][] = [];
+  for (let i = 0; i < results.length; i += size) batches.push(results.slice(i, i + size));
+  return batches;
+}
+
+/**
  * Who a single call acts as.
  *
  * One Sterun flow involves several different signers, often within seconds of
@@ -363,6 +421,30 @@ export class SterunClient {
   }
 
   /**
+   * Set when entries to an event stop on their own (contracts v2.5, STE-46).
+   * Organiser-only. `closesAt` is unix seconds, compared with the ledger's close
+   * time: from that second on, `enter` reverts `RegistrationClosed(20)` even
+   * though the event is still `Open`.
+   *
+   * The date moves either way. Earlier closes early, and a past date closes at
+   * once. Later is an extension, and also the only way to reopen after the date:
+   * `setEventStatus(…, "Open")` alone does not. An extension changes what runners
+   * were promised, so pair it with a signed announcement (`announcementMessage`);
+   * the contract does not check that you did. Setting the date the event
+   * already has changes nothing.
+   */
+  async setRegistrationCloses(
+    eventId: number,
+    closesAt: bigint | number,
+    options?: CallOptions,
+  ): Promise<SentResult<void>> {
+    const closes_at = toU64(closesAt, "closesAt");
+    return runWrite("setRegistrationCloses", () =>
+      this.registry.set_registration_closes({ event_id: eventId, closes_at }, this.callOptions(options)),
+    );
+  }
+
+  /**
    * Move the event through its lifecycle. Illegal transitions — including one
    * to the status it already has — revert `InvalidStatus(11)`.
    */
@@ -488,6 +570,19 @@ export class SterunClient {
     return addOns;
   }
 
+  /**
+   * The event's registration close date in unix seconds, or `null` when it has
+   * none and entries stop only when the organiser closes them (contracts v2.5).
+   * Every event created before v2.5 answers `null`. Reverts `EventNotFound(2)`
+   * for an unknown event rather than answering `null`.
+   */
+  async getRegistrationCloses(eventId: number): Promise<bigint | null> {
+    const closesAt = await runRead("getRegistrationCloses", () =>
+      this.registry.get_registration_closes({ event_id: eventId }),
+    );
+    return closesAt ?? null;
+  }
+
   async getOrganiser(eventId: number): Promise<string> {
     return runRead("getOrganiser", () => this.registry.get_organiser({ event_id: eventId }));
   }
@@ -579,6 +674,44 @@ export class SterunClient {
   }
 
   /**
+   * Hand over many race packs in one signature (contracts v2.7, STE-66), for a
+   * scanner sending the queue it collected offline.
+   *
+   * **Not atomic, and deliberately so.** A pack another desk already handed
+   * over, or a token id with no record, is skipped and comes back in the return
+   * value; the rest of the queue lands. That is the two-desk case, and at a busy
+   * desk it is the ordinary outcome rather than an error.
+   *
+   * What does fail the whole call: an `operator` who is neither the organiser
+   * nor an allowlisted scanner of an event in the batch (`NotAuthorized(104)`),
+   * and more than {@link CLAIM_MAX_BATCH} ids — refused here, before signing,
+   * and by the contract as `TooManyClaims(109)`. Split a longer queue with
+   * {@link chunkResults}.
+   */
+  async claimRacepackMany(
+    tokenIds: readonly number[],
+    operator: string,
+    options?: CallOptions,
+  ): Promise<SentResult<SkippedClaim[]>> {
+    if (tokenIds.length === 0) throw new RangeError("claimRacepackMany needs at least one token id");
+    if (tokenIds.length > CLAIM_MAX_BATCH) {
+      throw new RangeError(
+        `claimRacepackMany takes at most ${CLAIM_MAX_BATCH} race packs per call, got ${tokenIds.length}; split the queue with chunkResults`,
+      );
+    }
+    const sent = await runWrite("claimRacepackMany", () =>
+      this.record.claim_racepack_many({ token_ids: [...tokenIds], operator }, this.callOptions(options)),
+    );
+    return {
+      ...sent,
+      value: sent.value.map((skipped) => ({
+        tokenId: skipped.token_id,
+        reason: skipped.reason.tag === "NotFound" ? ("not-found" as const) : ("not-entered" as const),
+      })),
+    };
+  }
+
+  /**
    * Publish a finish time. Organiser only, and only from `RacepackClaimed`: a
    * runner who never collected a race pack cannot receive a result
    * (`InvalidState(103)`). `Finished` is terminal, so a published time can
@@ -624,6 +757,51 @@ export class SterunClient {
     return runWrite(
       "recordDnf",
       () => this.record.record_dnf({ token_id: tokenId }, this.callOptions(options)),
+    );
+  }
+
+  /**
+   * Record many results for one event in one organiser signature (contracts
+   * v2.6, STE-60). **Atomic**: one invalid row reverts the whole batch — a
+   * record not checked in for a finish, a terminal record, a zero time, or a
+   * record from another event (`ResultForAnotherEvent(108)`). Each row obeys
+   * exactly the rules of `recordFinish` / `recordFinishUntimed` / `recordDnf`
+   * and emits the same event.
+   *
+   * At most {@link RECORD_RESULTS_MAX_BATCH} rows; split a longer list with
+   * {@link chunkResults}. Refused here, before anything is signed: an empty
+   * list, too many rows, a token listed twice, and a time that is not a whole
+   * number of seconds from 1 to u32.
+   */
+  async recordResults(
+    eventId: number,
+    results: readonly SterunResult[],
+    options?: CallOptions,
+  ): Promise<SentResult<void>> {
+    if (results.length === 0) throw new RangeError("recordResults needs at least one result");
+    if (results.length > RECORD_RESULTS_MAX_BATCH) {
+      throw new RangeError(
+        `recordResults takes at most ${RECORD_RESULTS_MAX_BATCH} results per call, got ${results.length}; split them with chunkResults`,
+      );
+    }
+    const seen = new Set<number>();
+    const rows = results.map((r) => {
+      if (seen.has(r.tokenId)) throw new RangeError(`token ${r.tokenId} is listed twice`);
+      seen.add(r.tokenId);
+      switch (r.kind) {
+        case "timed":
+          if (!Number.isInteger(r.finishTimeS) || r.finishTimeS < 1 || r.finishTimeS > 0xffff_ffff) {
+            throw new RangeError(`token ${r.tokenId}: finishTimeS must be whole seconds from 1 to 4294967295, got ${r.finishTimeS}`);
+          }
+          return { token_id: r.tokenId, outcome: { tag: "Timed" as const, values: [r.finishTimeS] as const } };
+        case "untimed":
+          return { token_id: r.tokenId, outcome: { tag: "Untimed" as const, values: undefined } };
+        case "dnf":
+          return { token_id: r.tokenId, outcome: { tag: "Dnf" as const, values: undefined } };
+      }
+    });
+    return runWrite("recordResults", () =>
+      this.record.record_results({ event_id: eventId, results: rows }, this.callOptions(options)),
     );
   }
 
@@ -750,4 +928,19 @@ export class SterunClient {
     for (const id of ids) documents.push(await this.raceRecordDocument(id));
     return documents;
   }
+}
+
+const U64_MAX = 2n ** 64n - 1n;
+
+/**
+ * A `u64` argument, refused here with its name rather than as an XDR encoding
+ * error from somewhere inside the bindings.
+ */
+function toU64(value: bigint | number, name: string): bigint {
+  if (typeof value === "number" && !Number.isSafeInteger(value)) {
+    throw new RangeError(`${name} must be a whole number of seconds, got ${value}`);
+  }
+  const n = BigInt(value);
+  if (n < 0n || n > U64_MAX) throw new RangeError(`${name} must fit in a u64, got ${n}`);
+  return n;
 }

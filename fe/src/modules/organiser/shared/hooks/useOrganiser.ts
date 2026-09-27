@@ -1,0 +1,172 @@
+"use client";
+
+/**
+ * STE-17 — the four things an organiser can do to an event, as hooks.
+ *
+ * Thin on purpose. Every one is `useChainWrite` over one SDK call, and the
+ * interesting behaviour (which wallet acts, waiting-for-you versus
+ * waiting-for-chain, refusing without a wallet) lives there once instead of
+ * four times.
+ *
+ * They are separate hooks rather than one with a switch because each is a
+ * separate transaction with its own signature, its own failure and its own
+ * button. The wizard's whole shape follows from that.
+ */
+import { useQuery } from "@tanstack/react-query";
+
+import { readClient } from "@/lib/chain/sterun";
+import type { SterunResult } from "@sterunxyz/sdk";
+
+import { useChainWrite, type Actor } from "@/hooks/useChainWrite";
+
+export interface CreateEventInput {
+  name: string;
+  /** sha256 of the published document, 64 hex characters. */
+  metadataHash: string;
+  uri: string;
+  startsAt: bigint;
+}
+
+/** Returns the new `event_id`. Events are born `Draft`: nobody can enter yet. */
+export function useCreateEvent() {
+  return useChainWrite<CreateEventInput, number>((input, actor: Actor) =>
+    readClient.createEvent({ organiser: actor.publicKey, ...input }, actor),
+  );
+}
+
+export interface AddCategoryInput {
+  eventId: number;
+  /** Soroban Symbol: letters, digits and underscore, e.g. `10K`. */
+  code: string;
+  distanceM: number;
+  quota: number;
+  /** Entry fee in stroops, 7 decimals. `0n` is a free category. */
+  priceStroops: bigint;
+}
+
+export function useAddCategory() {
+  return useChainWrite<AddCategoryInput, number>((input, actor) =>
+    readClient.addCategory(input, actor),
+  );
+}
+
+export interface AddAddonInput {
+  eventId: number;
+  /** Soroban `Symbol`, derived from the item and its size (`EVENT_JERSEY_M`). */
+  code: string;
+  /** Price in stroops. `0n` for something the entry fee already covers. */
+  priceStroops: bigint;
+  /** Units. The contract refuses zero (`InvalidQuota`). */
+  quota: number;
+}
+
+export function useAddAddon() {
+  return useChainWrite<AddAddonInput, number>((input, actor) =>
+    readClient.addAddon(input, actor),
+  );
+}
+
+export interface SetEventStatusInput {
+  eventId: number;
+  /**
+   * `Cancelled` joined the list on 2026-09-27, when the console grew a way to
+   * withdraw a race (STE-71). It was left out deliberately while nothing
+   * offered it, so nobody could reach the one status that cannot be undone by
+   * accident. The guard is now the dialog that asks for the race's name.
+   */
+  status: "Draft" | "Open" | "Closed" | "Completed" | "Cancelled";
+}
+
+/**
+ * Legal transitions are enforced on chain (INTERFACE.md §1.2), including the
+ * one that surprises people: setting the status it already has reverts
+ * `InvalidStatus(11)`.
+ */
+export function useSetEventStatus() {
+  return useChainWrite<SetEventStatusInput, void>(({ eventId, status }, actor) =>
+    readClient.setEventStatus(eventId, status, actor),
+  );
+}
+
+export interface ScannerInput {
+  eventId: number;
+  scanner: string;
+}
+
+export interface RecordResultsInput {
+  eventId: number;
+  /** At most `RECORD_RESULTS_MAX_BATCH`; split a longer list first. */
+  results: SterunResult[];
+}
+
+/**
+ * One batch of finish results, one signature (STE-60). Atomic on chain: the
+ * whole batch records or none of it does, which is what lets the run screen say
+ * exactly what landed when a later batch fails.
+ */
+export function useRecordResults() {
+  return useChainWrite<RecordResultsInput, void>((input, actor) =>
+    readClient.recordResults(input.eventId, input.results, actor),
+  );
+}
+
+export interface RegistrationClosesInput {
+  eventId: number;
+  /** Unix seconds. The contract takes a date either way, past included. */
+  closesAt: bigint;
+}
+
+/**
+ * When entries stop by themselves (STE-46, live since 2026-09-24).
+ *
+ * The contract checks this date after the status, so a race can be `Open` and
+ * still refuse entries. There is deliberately no way to remove a date once set;
+ * a date can only move.
+ */
+export function useSetRegistrationCloses() {
+  return useChainWrite<RegistrationClosesInput, void>((input, actor) =>
+    readClient.setRegistrationCloses(input.eventId, input.closesAt, actor),
+  );
+}
+
+export function useAddScanner() {
+  return useChainWrite<ScannerInput, void>(({ eventId, scanner }, actor) =>
+    readClient.addScanner(eventId, scanner, actor),
+  );
+}
+
+export function useRemoveScanner() {
+  return useChainWrite<ScannerInput, void>(({ eventId, scanner }, actor) =>
+    readClient.removeScanner(eventId, scanner, actor),
+  );
+}
+
+/**
+ * Whether this wallet is on the registry's organiser allowlist (STE-36).
+ *
+ * Asked here rather than discovered from a failed `create_event`, because the
+ * refusal lands at the end of the wizard and the run's first step has already
+ * uploaded the details file by then: a wallet that was never allowed to
+ * publish would still have spent storage and six forms to find out.
+ *
+ * Three states, and the third is the one worth being careful about:
+ * `true` allowed, `false` refused, `undefined` not answered yet or not
+ * answerable. Being unable to reach a node is not the same as being turned
+ * away, so a failure here must not read as one; the contract still refuses on
+ * its own, and simulation refuses before anything is signed or paid.
+ */
+export function useCanCreateEvents(address: string | null) {
+  const query = useQuery({
+    queryKey: ["organiser-allowlist", address],
+    enabled: address !== null,
+    queryFn: () => readClient.isOrganiser(address!),
+    staleTime: 60_000,
+    // No retry at all, which is not laziness. The answer gates a screen, so
+    // the wait is in front of somebody's eyes, and the fallback when it does
+    // not arrive is to let them through anyway. Retrying only delays a form
+    // that is going to be shown either way.
+    retry: false,
+  });
+
+  return { allowed: query.data, isChecking: query.isPending && address !== null };
+}

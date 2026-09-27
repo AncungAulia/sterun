@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sterun — entry flow mockup, final</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f8f8f8; --ink:#1e232b; --teal:#016985; --white:#ffffff;
+  --n100:#eef0f2; --n200:#dfe2e6; --n300:#c7ccd3; --n400:#9ba3ad; --n500:#6f7883; --n600:#515a66; --n700:#3a424c;
+  --teal50:#e8f4f8; --teal100:#cbe8f0; --teal200:#97d0e1; --teal300:#59b1cb; --teal600:#015872;
+  --success:#067a38; --success-surface:#e6f6ec; --success-border:#a8dcbc;
+  --danger:#a31c11; --danger-surface:#fceae8; --danger-border:#f0b3aa;
+  --warning:#8f5200; --warning-surface:#fdf3e2; --warning-border:#edc07a;
+  --r-sm:4px; --r-md:8px; --r-lg:16px; --r-xl:24px;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
+  --hero:'Big Shoulders Display','Arial Narrow',sans-serif;
+  --shadow-card:0 1px 2px rgb(30 35 43 / .06),0 4px 12px rgb(30 35 43 / .06);
+  --shadow-lifted:0 2px 4px rgb(30 35 43 / .08),0 12px 28px rgb(30 35 43 / .1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding:40px 24px 80px}
+.intro h1{font-style:italic;font-weight:600;font-size:28px;margin:0 0 8px}
+.intro p{margin:0 0 10px;color:var(--n600);font-size:15px;max-width:80ch;line-height:1.6}
+.intro p b{color:var(--ink);font-weight:600}
+.opt{margin-top:52px}
+.opt-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+.opt-tag{background:var(--ink);color:#fff;font-weight:600;font-size:12px;padding:3px 9px;border-radius:var(--r-sm);letter-spacing:.04em}
+.opt-head h2{font-style:italic;font-weight:600;font-size:20px;margin:0}
+.opt-note{margin:0 0 16px;color:var(--n600);font-size:14px;line-height:1.6;max-width:84ch}
+.opt-note b{color:var(--ink);font-weight:600}
+
+/* browser frame */
+.screen{background:var(--paper);border:1px solid var(--n300);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 8px 28px rgba(30,35,43,.10);position:relative}
+.phones{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+.phone{width:390px;flex:0 0 390px}
+
+/* site header */
+.hdr{display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 28px;border-bottom:1px solid var(--n200);background:var(--paper)}
+.hdr img{height:26px;display:block}
+.chip{border:0;background:var(--n100);border-radius:var(--r-md);padding:9px 14px;font-family:var(--sans);font-size:14px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.phone .hdr{padding:0 16px}
+.phone .hdr img{height:22px}
+
+/* page */
+.page{max-width:1080px;margin:0 auto;padding:26px 28px 40px}
+.phone .page{padding:18px 16px 28px}
+.back{font-size:14px;color:var(--teal);text-decoration:none;display:inline-flex;gap:6px;align-items:center}
+.ptitle{font-style:italic;font-weight:600;font-size:28px;margin:10px 0 4px;line-height:1.25}
+.phone .ptitle{font-size:22px}
+.psub{color:var(--n500);font-size:14px;margin:0}
+
+/* stepper (mirrors components/elements/Stepper.tsx) */
+.stepper{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0 22px}
+.st{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--n500)}
+.st .c{width:28px;height:28px;border-radius:50%;border:1px solid var(--n300);display:grid;place-items:center;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+.st.on{color:var(--ink);font-weight:500}
+.st.on .c{border-color:var(--teal);color:var(--teal)}
+.st.done .c{background:var(--teal);border-color:var(--teal);color:#fff}
+.st .ln{width:24px;height:1px;background:var(--n300)}
+.st.done .ln{background:var(--teal)}
+.phone .stepper .lbl{display:none}
+.phone .stepper .st.on .lbl{display:inline}
+
+/* layout */
+.cols{display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start}
+.phone .cols{grid-template-columns:1fr}
+.card{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:20px 22px}
+.card + .card{margin-top:14px}
+.card h3{font-style:italic;font-weight:600;font-size:17px;margin:0 0 4px}
+.card .hint{font-size:13px;color:var(--n500);margin:0 0 14px}
+.sec{font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--n500);margin:18px 0 10px}
+
+/* distance options */
+.dist{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.phone .dist{grid-template-columns:1fr}
+.dopt{border:1px solid var(--n300);border-radius:var(--r-md);padding:12px 14px;background:#fff;position:relative}
+.dopt .k{font-style:italic;font-weight:600;font-size:18px;font-variant-numeric:tabular-nums}
+.dopt .m{font-size:12.5px;color:var(--n500);margin-top:2px}
+.dopt .p{font-size:15px;font-weight:500;margin-top:8px;font-variant-numeric:tabular-nums}
+.dopt.on{border:2px solid var(--teal);padding:11px 13px;background:var(--teal50)}
+.dopt.off{background:var(--n100);color:var(--n400)}
+.dopt.off .m,.dopt.off .p{color:var(--n400)}
+.dot{position:absolute;top:12px;right:12px;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--n300);background:#fff}
+.dopt.on .dot{border:5px solid var(--teal)}
+.pill{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:999px;border:1px solid}
+.pill.muted{background:#dfe2e6;color:var(--n600);border-color:var(--n300)}
+.pill.ok{background:var(--success-surface);color:var(--success);border-color:var(--success-border)}
+.pill.warn{background:var(--warning-surface);color:var(--warning);border-color:var(--warning-border)}
+.pill.teal{background:var(--teal50);color:var(--teal);border-color:var(--teal200)}
+
+/* add-ons */
+.ao{display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--n100)}
+.ao:first-of-type{border-top:0;padding-top:4px}
+.ao .ph{width:64px;height:64px;border-radius:var(--r-md);background:linear-gradient(135deg,var(--teal100),var(--teal50));flex:0 0 64px;display:grid;place-items:center;color:var(--teal);font-size:11px;font-weight:500}
+.ao .bd{flex:1;min-width:0}
+.ao .nm{font-weight:500;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ao .sub{font-size:13px;color:var(--n500);margin-top:2px}
+.sizes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sz{min-width:44px;padding:7px 10px;border:1px solid var(--n300);border-radius:var(--r-md);font-size:13.5px;text-align:center;background:#fff;font-weight:500}
+.sz.on{border:2px solid var(--teal);padding:6px 9px;background:var(--teal50);color:var(--teal)}
+.sz.off{background:var(--n100);color:var(--n400);text-decoration:line-through}
+.chk{display:flex;align-items:center;gap:10px}
+.box{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--n300);background:#fff;flex:0 0 20px;display:grid;place-items:center}
+.box.on{background:var(--teal);border-color:var(--teal);color:#fff;font-size:13px}
+.price{margin-left:auto;font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* summary */
+.sum h4{font-style:italic;font-weight:600;font-size:15px;margin:0 0 12px}
+.sum .rw{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:6px 0;color:var(--n600)}
+.sum .rw b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.sum .tot{border-top:1px solid var(--n200);margin-top:8px;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline}
+.sum .tot span{font-size:14px;color:var(--n600)}
+.sum .tot b{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.race{display:flex;gap:12px;align-items:center;padding-bottom:14px;margin-bottom:10px;border-bottom:1px solid var(--n200)}
+.race .pst{width:56px;height:56px;border-radius:var(--r-md);background:linear-gradient(135deg,#0d3b4c,#016985 60%,#59b1cb);flex:0 0 56px}
+.race .t{font-weight:500;font-size:14.5px;line-height:1.35}
+.race .d{font-size:12.5px;color:var(--n500)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:42px;padding:0 18px;border:0;border-radius:var(--r-md);background:var(--teal);color:#fff;font-family:var(--sans);font-size:15px;font-weight:500;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--n300)}
+.btn.sm{height:34px;padding:0 12px;font-size:13.5px}
+.btn.full{width:100%}
+.btn.dis{background:var(--n300);color:#fff}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px}
+.lnk{color:var(--teal);font-size:14px;font-weight:500;text-decoration:none}
+
+/* form */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.phone .grid2{grid-template-columns:1fr}
+.fld label{display:block;font-size:13.5px;font-weight:500;margin-bottom:6px}
+.fld .in{height:42px;border:1px solid var(--n300);border-radius:var(--r-md);background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14.5px;color:var(--ink)}
+.fld .in.ph{color:var(--n400)}
+.fld .in.err{border-color:var(--danger)}
+.fld .h{font-size:12.5px;color:var(--n500);margin-top:5px}
+.fld .e{font-size:12.5px;color:var(--danger);margin-top:5px}
+.fld.span{grid-column:1 / -1}
+.tel{display:flex;height:42px;border:1px solid var(--n300);border-radius:var(--r-md);background:#fff;overflow:hidden}
+.tel .cc{display:flex;align-items:center;gap:8px;padding:0 10px 0 12px;border-right:1px solid var(--n200);font-size:14.5px;font-variant-numeric:tabular-nums}
+.tel .cc svg{border-radius:2px;box-shadow:0 0 0 1px var(--n200)}
+.tel .num{display:flex;align-items:center;padding:0 12px;font-size:14.5px;flex:1;font-variant-numeric:tabular-nums}
+.seg{display:flex;border:1px solid var(--n300);border-radius:var(--r-md);overflow:hidden;height:42px;background:#fff}
+.seg span{flex:1;display:grid;place-items:center;font-size:14px;border-left:1px solid var(--n300)}
+.seg span:first-child{border-left:0}
+.seg span.on{background:var(--teal50);color:var(--teal);font-weight:500;box-shadow:inset 0 0 0 2px var(--teal)}
+.chev{margin-left:auto;color:var(--n400);font-size:12px}
+
+/* review */
+.rev .rh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.rev .rh h3{margin:0}
+.dl{display:grid;grid-template-columns:170px 1fr;gap:8px 16px;font-size:14px}
+.phone .dl{grid-template-columns:1fr;gap:2px}
+.dl dt{color:var(--n500)}
+.dl dd{margin:0;font-weight:500}
+.phone .dl dd{margin-bottom:10px}
+.note{border:1px solid var(--warning-border);background:var(--warning-surface);color:var(--warning);border-radius:var(--r-lg);padding:12px 16px;font-size:14px;line-height:1.55}
+.note b{font-weight:500}
+.need{border:1px solid var(--warning-border);background:var(--warning-surface);border-radius:var(--r-lg);padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.need .tx{flex:1;min-width:200px;font-size:14px;color:var(--warning)}
+.need .tx b{font-weight:500;display:block;font-size:15px}
+
+/* dialog */
+.scrim{position:absolute;inset:0;background:rgba(20,24,30,.45);display:grid;place-items:center;padding:24px}
+.dlg{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lifted);width:440px;max-width:100%;padding:22px 24px}
+.dlg h4{margin:0 0 4px;font-style:italic;font-weight:600;font-size:19px}
+.dlg p{margin:0;font-size:14px;color:var(--n600);line-height:1.55}
+.steps{list-style:none;margin:18px 0 4px;padding:0;display:flex;flex-direction:column;gap:12px}
+.steps li{display:flex;gap:12px;align-items:flex-start;font-size:14.5px}
+.steps .ic{width:24px;height:24px;border-radius:50%;flex:0 0 24px;display:grid;place-items:center;font-size:12px;font-weight:600}
+.ic.done{background:var(--success);color:#fff}
+.ic.run{border:2.5px solid var(--teal100);border-top-color:var(--teal)}
+.ic.wait{border:1.5px solid var(--n300);color:var(--n400)}
+.ic.fail{background:var(--danger);color:#fff}
+.steps .s{font-size:12.5px;color:var(--n500);margin-top:1px}
+.dlg .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.spin{width:40px;height:40px;border-radius:50%;border:4px solid var(--teal100);border-top-color:var(--teal);margin:6px auto 16px}
+.center{text-align:center}
+.big-ic{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;margin:4px auto 14px;font-size:20px;font-weight:600}
+.big-ic.warn{background:var(--warning-surface);color:var(--warning)}
+.big-ic.n{background:var(--n100);color:var(--n600)}
+.dlgrow{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.dlgrow .screen{height:330px}
+
+/* success */
+.okhead{text-align:center;padding:10px 0 4px}
+.okmark{width:52px;height:52px;border-radius:50%;background:var(--success-surface);color:var(--success);display:grid;place-items:center;margin:0 auto 12px;font-size:24px;font-weight:600;border:1px solid var(--success-border)}
+.okhead h2{font-style:italic;font-weight:600;font-size:30px;margin:0 0 4px}
+.okhead p{margin:0;color:var(--n500);font-size:14.5px}
+.bibcard{margin:22px auto 0;max-width:420px;border-radius:var(--r-lg);background:var(--ink);color:#fff;padding:20px 22px;display:flex;align-items:center;gap:18px;box-shadow:var(--shadow-lifted)}
+.bibcard .lb{font-size:12px;color:var(--n300);letter-spacing:.06em;text-transform:uppercase}
+.bibcard .no{font-family:var(--hero);font-size:64px;line-height:1;font-variant-numeric:tabular-nums}
+.bibcard .nm{font-size:15px;font-weight:500;margin-top:4px}
+.bibcard .ds{margin-left:auto;text-align:right}
+.bibcard .ds .k{font-style:italic;font-weight:600;font-size:22px}
+.bibcard .ds .m{font-size:12.5px;color:var(--n300)}
+/* the bib, drawn as a bib */
+.bib2{position:relative;margin:24px auto 0;max-width:520px;aspect-ratio:3 / 2;background:#fff;border-radius:10px;
+  box-shadow:var(--shadow-lifted);overflow:hidden;display:flex;flex-direction:column;border:1px solid var(--n200)}
+.bib2 .pin{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 2px var(--n300);z-index:2}
+.bib2 .pin.tl{top:10px;left:10px}.bib2 .pin.tr{top:10px;right:10px}
+.bib2 .pin.bl{bottom:10px;left:10px}.bib2 .pin.br{bottom:10px;right:10px}
+.bib2 .band{background:var(--ink);color:#fff;padding:14px 34px 12px;display:flex;align-items:center;justify-content:center;gap:12px;text-align:center}
+.bib2 .band .rn{font-style:italic;font-weight:600;font-size:19px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bib2 .band .rd{font-size:12px;color:var(--n300);white-space:nowrap}
+.bib2 .mid{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:repeating-linear-gradient(135deg,#fff 0 18px,#fbfbfc 18px 36px)}
+.bib2 .tab{position:absolute;top:50%;transform:translateY(-50%);background:var(--teal);color:#fff;font-style:italic;font-weight:600;
+  font-size:15px;padding:8px 10px;letter-spacing:.02em}
+.bib2 .tab.l{left:0;border-radius:0 6px 6px 0}.bib2 .tab.r{right:0;border-radius:6px 0 0 6px}
+.bib2 .no{font-family:var(--hero);font-size:132px;line-height:.9;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.bib2 .nm{font-style:italic;font-weight:600;font-size:24px;color:var(--ink);margin-top:6px;letter-spacing:.04em}
+.bib2 .foot2{background:var(--teal50);border-top:1px solid var(--teal100);padding:10px 34px;display:flex;align-items:center;justify-content:center;gap:12px}
+.bib2 .foot2 span{font-size:12.5px;color:var(--teal);font-weight:500}
+.bib2 .foot2 img{height:16px;display:block}
+.phone .bib2 .band{padding:11px 34px 10px}
+.phone .bib2 .band .rn{font-size:16px}
+.phone .bib2 .no{font-size:92px}
+.phone .bib2 .nm{font-size:19px}
+.phone .bib2 .tab{font-size:12.5px;padding:6px 7px}
+.phone .bib2 .foot2{padding:8px 34px}
+.rcpt{margin:22px auto 0;max-width:560px}
+.rcpt .card{padding:20px 22px}
+.code{margin-top:12px;border:1px dashed var(--n300);border-radius:var(--r-md);background:var(--paper);padding:11px 12px;display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums slashed-zero;font-size:13.5px;letter-spacing:.02em;color:var(--n700);word-break:break-all}
+.code .rv{margin-left:auto;color:var(--teal);font-size:13px;font-weight:500;white-space:nowrap}
+.racts{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.gate{margin:18px auto 0;max-width:560px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.gate .chk{font-size:14.5px}
+
+/* receipt file */
+.sheet{background:#fff;width:560px;max-width:100%;margin:0 auto;border-radius:6px;box-shadow:var(--shadow-lifted);padding:34px 38px;font-size:13px}
+.sheet .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:14px}
+.sheet .top img{height:22px}
+.sheet .top .ttl{text-align:right}
+.sheet .top .ttl b{display:block;font-style:italic;font-weight:600;font-size:18px}
+.sheet .top .ttl span{color:var(--n500);font-size:12px}
+.sheet .bib{display:flex;align-items:center;gap:18px;margin:18px 0;padding:14px 16px;background:var(--paper);border-radius:var(--r-md)}
+.sheet .bib .no{font-family:var(--hero);font-size:46px;line-height:1}
+.sheet table{width:100%;border-collapse:collapse}
+.sheet td{padding:7px 0;border-bottom:1px solid var(--n100);vertical-align:top}
+.sheet td:first-child{color:var(--n500);width:42%}
+.sheet td:last-child{font-weight:500;word-break:break-all;font-variant-numeric:tabular-nums slashed-zero}
+.sheet .salt{background:var(--teal50);border:1px solid var(--teal200);border-radius:var(--r-md);padding:10px 12px;margin-top:14px}
+.sheet .salt .l{font-size:11.5px;color:var(--teal);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.sheet .salt .v{font-variant-numeric:tabular-nums slashed-zero;word-break:break-all;margin-top:4px;font-size:13px}
+.sheet .fine{color:var(--n500);font-size:11.5px;line-height:1.55;margin-top:14px}
+
+/* wallet menu */
+.menu{position:absolute;top:58px;right:28px;width:300px;background:var(--paper);border:1px solid var(--n200);border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:14px}
+.menu .l{font-size:12px;color:var(--n500)}
+.menu .a{font-size:13px;color:var(--n700);word-break:break-all;margin-top:3px;font-variant-numeric:tabular-nums}
+.menu .bal{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1px solid var(--n200)}
+.menu .bal b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.menu .tn{font-size:12px;color:var(--n500);margin-top:8px;line-height:1.5}
+.gate-page{max-width:560px;margin:40px auto;text-align:center}
+.gate-page h2{font-style:italic;font-weight:600;font-size:26px;margin:0 0 6px}
+.gate-page p{color:var(--n500);margin:0 0 20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>Entry flow — round 1 of STE-21</h1>
+  <p>Built from <b>docs/superpowers/specs/2026-09-15-entry-flow-design.md</b> with the real tokens.
+  Example race: <b>Fun Run Sleman</b>, 10K at 150 sUSD, an event jersey included with the ticket and a
+  tumbler sold on top. Revision 1: everything is up for change.</p>
+</div>
+
+<!-- ============ 1. STEP 1 ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">1</span><h2>Step 1 · Distance &amp; race pack</h2></div>
+  <p class="opt-note">The distance comes preselected from the button pressed on the race page. The race
+  pack is what every runner gets, so it is its own card; add-ons are the optional paid extras, in a
+  card of their own. A sold-out distance and a sold-out size stay visible but cannot be picked.
+  The summary on the right follows every page.</p>
+  <div class="screen">
+    <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+    <div class="page">
+      <a class="back" href="#">‹ Fun Run Sleman</a>
+      <h1 class="ptitle">Enter Fun Run Sleman</h1>
+      <p class="psub">Sun, Nov 8, 2026 · Lapangan Denggung, Sleman</p>
+      <div class="stepper">
+        <div class="st on"><span class="c">1</span><span class="lbl">Distance &amp; race pack</span><span class="ln"></span></div>
+        <div class="st"><span class="c">2</span><span class="lbl">Your details</span><span class="ln"></span></div>
+        <div class="st"><span class="c">3</span><span class="lbl">Review &amp; pay</span></div>
+      </div>
+      <div class="cols">
+        <div>
+          <div class="card">
+            <h3>Distance</h3>
+            <p class="hint">You can enter one distance in this race.</p>
+            <div class="dist">
+              <div class="dopt on"><span class="dot"></span><div class="k">10K</div><div class="m">10 km · 98 of 200 left</div><div class="p">150 sUSD</div></div>
+              <div class="dopt"><span class="dot"></span><div class="k">5K</div><div class="m">5 km · 12 of 200 left</div><div class="p">100 sUSD</div></div>
+              <div class="dopt off"><span class="dot"></span><div class="k">21K</div><div class="m">21.1 km</div><div class="p"><span class="pill muted">Sold out</span></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Race pack</h3>
+            <p class="hint">Comes with every entry.</p>
+            <div class="ao">
+              <div class="ph">photo</div>
+              <div class="bd">
+                <div class="nm">Event jersey</div>
+                <div class="sub">Pick your size. Size chart on the race page.</div>
+                <div class="sizes"><span class="sz">S</span><span class="sz on">M</span><span class="sz">L</span><span class="sz off">XL</span></div>
+              </div>
+            </div>
+            <div class="ao">
+              <div class="ph">photo</div>
+              <div class="bd"><div class="nm">Finisher medal</div><div class="sub">Handed out at the finish line.</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Add-ons</h3>
+            <p class="hint">Optional extras, paid with your entry.</p>
+            <div class="ao">
+              <div class="ph">photo</div>
+              <div class="bd"><div class="chk"><span class="box on">✓</span><span class="nm">Tumbler</span><span class="price">+ 50 sUSD</span></div><div class="sub" style="margin-left:30px">34 left</div></div>
+            </div>
+          </div>
+          <div class="foot"><a class="lnk" href="#">Back to the race</a><span class="btn">Continue</span></div>
+        </div>
+        <div class="card sum">
+          <div class="race"><span class="pst"></span><div><div class="t">Fun Run Sleman</div><div class="d">Sun, Nov 8, 2026</div></div></div>
+          <h4>Your entry</h4>
+          <div class="rw"><span>10K entry</span><b>150 sUSD</b></div>
+          <div class="rw"><span>Event jersey, M</span><b>Included</b></div>
+          <div class="rw"><span>Finisher medal</span><b>Included</b></div>
+          <div class="rw"><span>Tumbler</span><b>50 sUSD</b></div>
+          <div class="tot"><span>Total</span><b>200 sUSD</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2. STEP 2 ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">2</span><h2>Step 2 · Your details</h2></div>
+  <p class="opt-note">Every field STE-47 stores. Both phone numbers use a country picker and always
+  produce the international form, because the emergency phone is part of the identity hash. The
+  hint under a field only says what to type (<b>fe/CLAUDE.md</b>). One error is shown as it would
+  appear after Continue.</p>
+  <div class="screen">
+    <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+    <div class="page">
+      <a class="back" href="#">‹ Fun Run Sleman</a>
+      <h1 class="ptitle">Enter Fun Run Sleman</h1>
+      <div class="stepper">
+        <div class="st done"><span class="c">✓</span><span class="lbl">Distance &amp; race pack</span><span class="ln"></span></div>
+        <div class="st on"><span class="c">2</span><span class="lbl">Your details</span><span class="ln"></span></div>
+        <div class="st"><span class="c">3</span><span class="lbl">Review &amp; pay</span></div>
+      </div>
+      <div class="cols">
+        <div>
+          <div class="card">
+            <h3>About you</h3>
+            <p class="hint">Use the name and document you will show when you collect your race pack.</p>
+            <div class="grid2">
+              <div class="fld span"><label>Full name</label><div class="in">Budi Santoso</div></div>
+              <div class="fld"><label>Identity document</label><div class="in">National ID card (KTP)<span class="chev">▾</span></div></div>
+              <div class="fld"><label>Document number</label><div class="in">3404 0125 0990 0001</div></div>
+              <div class="fld"><label>Gender</label><div class="seg"><span>Female</span><span class="on">Male</span></div></div>
+              <div class="fld"><label>Date of birth</label><div class="in">Sep 25, 1990<span class="chev">▾</span></div></div>
+              <div class="fld span"><label>Name on your bib</label><div class="in">BUDI</div><div class="h">Up to 16 characters.</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Contact</h3>
+            <p class="hint">Where the organiser reaches you if the race changes.</p>
+            <div class="grid2">
+              <div class="fld"><label>Email</label><div class="in">budi@example.com</div></div>
+              <div class="fld"><label>Phone</label>
+                <div class="tel"><span class="cc"><svg width="22" height="15" viewBox="0 0 22 15"><rect width="22" height="7.5" fill="#e70011"/><rect y="7.5" width="22" height="7.5" fill="#fff"/></svg>+62<span class="chev" style="margin-left:2px">▾</span></span><span class="num">812 3456 7890</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Emergency contact</h3>
+            <p class="hint">Somebody we can call on race day who is not running with you.</p>
+            <div class="grid2">
+              <div class="fld"><label>Their name</label><div class="in">Siti Aminah</div></div>
+              <div class="fld"><label>Their phone</label>
+                <div class="tel" style="border-color:var(--danger)"><span class="cc"><svg width="22" height="15" viewBox="0 0 22 15"><rect width="22" height="7.5" fill="#e70011"/><rect y="7.5" width="22" height="7.5" fill="#fff"/></svg>+62<span class="chev" style="margin-left:2px">▾</span></span><span class="num" style="color:var(--n400)">Phone number</span></div>
+                <div class="e">Add a phone number someone can answer on race day.</div>
+              </div>
+            </div>
+          </div>
+          <div class="foot"><a class="lnk" href="#">Back</a><span class="btn">Continue</span></div>
+        </div>
+        <div class="card sum">
+          <div class="race"><span class="pst"></span><div><div class="t">Fun Run Sleman</div><div class="d">Sun, Nov 8, 2026</div></div></div>
+          <h4>Your entry</h4>
+          <div class="rw"><span>10K entry</span><b>150 sUSD</b></div>
+          <div class="rw"><span>Event jersey, M</span><b>Included</b></div>
+          <div class="rw"><span>Finisher medal</span><b>Included</b></div>
+          <div class="rw"><span>Tumbler</span><b>50 sUSD</b></div>
+          <div class="tot"><span>Total</span><b>200 sUSD</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. STEP 3 ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">3</span><h2>Step 3 · Review &amp; pay</h2></div>
+  <p class="opt-note">Everything on one page with an Edit link per block. The non-refundable notice
+  sits <b>directly above</b> the button that takes money. The identity number is shown partly
+  hidden. Nothing has been sent anywhere yet.</p>
+  <div class="screen">
+    <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+    <div class="page">
+      <a class="back" href="#">‹ Fun Run Sleman</a>
+      <h1 class="ptitle">Enter Fun Run Sleman</h1>
+      <div class="stepper">
+        <div class="st done"><span class="c">✓</span><span class="lbl">Distance &amp; race pack</span><span class="ln"></span></div>
+        <div class="st done"><span class="c">✓</span><span class="lbl">Your details</span><span class="ln"></span></div>
+        <div class="st on"><span class="c">3</span><span class="lbl">Review &amp; pay</span></div>
+      </div>
+      <div class="cols">
+        <div>
+          <div class="card rev">
+            <div class="rh"><h3>Distance &amp; race pack</h3><a class="lnk" href="#">Edit</a></div>
+            <dl class="dl"><dt>Distance</dt><dd>10K</dd><dt>Event jersey</dt><dd>M</dd><dt>Finisher medal</dt><dd>Included</dd><dt>Tumbler</dt><dd>Added</dd></dl>
+          </div>
+          <div class="card rev">
+            <div class="rh"><h3>Your details</h3><a class="lnk" href="#">Edit</a></div>
+            <dl class="dl"><dt>Full name</dt><dd>Budi Santoso</dd><dt>National ID card</dt><dd>•••• •••• •••• 0001</dd><dt>Gender, date of birth</dt><dd>Male, Sep 25, 1990</dd><dt>Name on bib</dt><dd>BUDI</dd><dt>Email</dt><dd>budi@example.com</dd><dt>Phone</dt><dd>+62 812 3456 7890</dd><dt>Emergency contact</dt><dd>Siti Aminah, +62 813 2222 1111</dd></dl>
+          </div>
+        </div>
+        <div>
+          <div class="card sum">
+            <div class="race"><span class="pst"></span><div><div class="t">Fun Run Sleman</div><div class="d">Sun, Nov 8, 2026</div></div></div>
+            <div class="rw"><span>10K entry</span><b>150 sUSD</b></div>
+            <div class="rw"><span>Tumbler</span><b>50 sUSD</b></div>
+            <div class="tot"><span>Total</span><b>200 sUSD</b></div>
+          </div>
+          <div class="note" style="margin-top:14px"><b>Entry is non-refundable.</b> If this race is postponed or moved, the organiser will announce it, and the details published here stay as they were. Any refund is up to the organiser, and Sterun cannot require one.</div>
+          <div style="margin-top:14px"><span class="btn full">Sign and pay 200 sUSD</span></div>
+          <p style="font-size:12.5px;color:var(--n500);text-align:center;margin:8px 0 0">Your wallet will ask you twice.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="opt-note" style="margin-top:22px"><b>When the wallet is short.</b> Checked before the button
+  is enabled, so nobody signs a payment that is certain to fail. The same Get test sUSD component as
+  the header menu (block 7).</p>
+  <div class="screen" style="max-width:420px">
+    <div class="page" style="padding:20px">
+      <div class="need"><div class="tx"><b>You need 200 sUSD to enter</b>This wallet has 20 sUSD.</div><span class="btn sm">Get test sUSD</span></div>
+      <div style="margin-top:14px"><span class="btn full dis">Sign and pay 200 sUSD</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. DIALOG ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">4</span><h2>Sign and pay · the dialog</h2></div>
+  <p class="opt-note">It cannot be closed while it runs. Four states from the spec: running, checking
+  on its own when no answer came back, the entry did not go through, and the check itself could not
+  run. The sentence "this may have gone through" does not exist anywhere.</p>
+  <div class="dlgrow">
+    <div class="screen"><div class="scrim"><div class="dlg">
+      <h4>Entering Fun Run Sleman</h4><p>Your wallet will ask you twice.</p>
+      <ul class="steps">
+        <li><span class="ic done">✓</span><div>Confirm it's you<div class="s">Signed. Your details are saved securely.</div></div></li>
+        <li><span class="ic run"></span><div>Pay 200 sUSD and enter<div class="s">Check your wallet.</div></div></li>
+      </ul>
+    </div></div></div>
+
+    <div class="screen"><div class="scrim"><div class="dlg center">
+      <div class="spin"></div>
+      <h4>Checking whether your entry went through</h4>
+      <p>This can take up to half a minute. Please keep this page open.</p>
+    </div></div></div>
+
+    <div class="screen"><div class="scrim"><div class="dlg center">
+      <div class="big-ic n">!</div>
+      <h4>Your entry didn't go through</h4>
+      <p>Nothing was charged. Your details are still here, so you can try again.</p>
+      <div class="acts" style="justify-content:center"><span class="btn ghost">Close</span><span class="btn">Try again</span></div>
+    </div></div></div>
+
+    <div class="screen"><div class="scrim"><div class="dlg center">
+      <div class="big-ic warn">!</div>
+      <h4>We couldn't check your entry</h4>
+      <p>Your internet connection dropped. Before paying again, reconnect and tap Check again, so you are not charged twice.</p>
+      <div class="acts" style="justify-content:center"><span class="btn">Check again</span></div>
+    </div></div></div>
+  </div>
+</section>
+
+<!-- ============ 5. SUCCESS ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">5</span><h2>The success page and the receipt</h2></div>
+  <p class="opt-note">A page of its own. The bib is the one thing a runner reads twice, so it gets the
+  hero face. The receipt code is partly hidden with a reveal, and the way on stays off until
+  <b>I've saved my receipt</b> is ticked. In round 1 the button goes back to the race; in round 2 it
+  becomes <b>Open my pass</b>.</p>
+  <div class="screen">
+    <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+    <div class="page" style="padding-bottom:48px">
+      <div class="okhead">
+        <div class="okmark">✓</div>
+        <h2>You're in!</h2>
+        <p>Fun Run Sleman · Sun, Nov 8, 2026</p>
+      </div>
+      <div class="bib2">
+        <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+        <div class="band"><span class="rn">Fun Run Sleman</span></div>
+        <div class="mid">
+          <span class="tab l">10K</span><span class="tab r">10K</span>
+          <div class="no">98</div>
+          <div class="nm">BUDI</div>
+        </div>
+        <div class="foot2"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"></div>
+      </div>
+      <div class="rcpt"><div class="card">
+        <h3>Your receipt</h3>
+        <p class="hint" style="margin-bottom:0">Keep this receipt. Together with your ID details, it proves this race record is yours.</p>
+        <div class="code">a3f1c0d5e7b24916 •••• •••• •••• •••• •••• •••• b2f3d40e<span class="rv">Show</span></div>
+        <div class="racts"><span class="btn">Download receipt</span><span class="btn ghost">Copy code</span></div>
+      </div></div>
+      <div class="gate">
+        <div class="chk"><span class="box"></span>I've saved my receipt</div>
+        <span class="btn dis">Back to the race</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. RECEIPT FILE ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">6</span><h2>The receipt file</h2></div>
+  <p class="opt-note">What Download receipt saves, drawn as a PDF page. It carries <b>no name, identity
+  number, email or phone</b>, so a leaked receipt leaks no personal data. Format still to be chosen:
+  a PDF like this, or an image.</p>
+  <div class="sheet">
+    <div class="top"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><div class="ttl"><b>Entry receipt</b><span>Issued Sep 15, 2026</span></div></div>
+    <div class="bib"><div class="no">98</div><div><div style="font-weight:600;font-size:15px">Fun Run Sleman · 10K</div><div style="color:var(--n500)">Sun, Nov 8, 2026 · Bib name BUDI</div></div></div>
+    <table>
+      <tr><td>Race record number</td><td>#42</td></tr>
+      <tr><td>Race pack</td><td>Event jersey M, Finisher medal, Tumbler</td></tr>
+      <tr><td>Paid</td><td>200 sUSD</td></tr>
+      <tr><td>Wallet</td><td>GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7</td></tr>
+      <tr><td>Identity fingerprint</td><td>feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29</td></tr>
+      <tr><td>Transaction</td><td style="color:var(--teal)">stellar.expert/explorer/testnet/tx/9c1e…a07b</td></tr>
+    </table>
+    <div class="salt"><div class="l">Receipt code · keep private</div><div class="v">a3f1c0d5e7b249168a0c4f2d9e6b8135c7a2049fbe31d68075c4e9a1b2f3d40e</div></div>
+    <p class="fine">This receipt, together with the name, identity document number and emergency contact
+    phone you entered, lets anyone recompute the identity fingerprint above and confirm race record #42
+    belongs to you. It does not contain those details.</p>
+  </div>
+</section>
+
+<!-- ============ 7. GATES + WALLET MENU ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">7</span><h2>Already entered, and the wallet menu</h2></div>
+  <p class="opt-note">Left: what a wallet that already has a record in this race sees instead of the
+  form. Right: the site header's wallet menu with the balance and <b>Get test sUSD</b>, testnet only.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+    <div class="screen">
+      <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+      <div class="gate-page">
+        <div class="okmark">✓</div>
+        <h2>You're already entered</h2>
+        <p>This wallet entered the 10K with bib 98. One entry per race.</p>
+        <span class="btn">Back to the race</span>
+      </div>
+    </div>
+    <div class="screen" style="height:340px">
+      <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+      <div class="menu">
+        <div class="l">Connected account</div>
+        <div class="a">GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7</div>
+        <div class="bal"><span class="l">sUSD balance</span><b>20</b></div>
+        <div style="margin-top:10px"><span class="btn sm full">Get test sUSD</span></div>
+        <div class="tn">Test money for trying Sterun. It has no value.</div>
+        <div style="margin-top:10px;text-align:center"><span class="lnk" style="color:var(--ink)">Disconnect</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 8. PHONE ============ -->
+<section class="opt">
+  <div class="opt-head"><span class="opt-tag">8</span><h2>On a phone</h2></div>
+  <p class="opt-note">390px. The stepper keeps its numbers and shows only the current label, the
+  summary drops under the form, and the Continue button spans the width.</p>
+  <div class="phones">
+    <div class="screen phone">
+      <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+      <div class="page">
+        <a class="back" href="#">‹ Fun Run Sleman</a>
+        <h1 class="ptitle">Enter Fun Run Sleman</h1>
+        <div class="stepper">
+          <div class="st on"><span class="c">1</span><span class="lbl">Distance &amp; race pack</span><span class="ln"></span></div>
+          <div class="st"><span class="c">2</span><span class="ln"></span></div>
+          <div class="st"><span class="c">3</span></div>
+        </div>
+        <div class="card">
+          <h3>Distance</h3>
+          <div class="dist" style="margin-top:12px">
+            <div class="dopt on"><span class="dot"></span><div class="k">10K</div><div class="m">98 of 200 left</div><div class="p">150 sUSD</div></div>
+            <div class="dopt"><span class="dot"></span><div class="k">5K</div><div class="m">12 of 200 left</div><div class="p">100 sUSD</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Race pack</h3>
+          <p class="hint" style="margin-bottom:10px">Comes with every entry.</p>
+          <div class="ao"><div class="ph">photo</div><div class="bd"><div class="nm">Event jersey</div><div class="sizes"><span class="sz">S</span><span class="sz on">M</span><span class="sz">L</span><span class="sz off">XL</span></div></div></div>
+        </div>
+        <div class="card sum" style="margin-top:14px"><div class="tot" style="border:0;margin:0;padding:0"><span>Total</span><b>200 sUSD</b></div></div>
+        <div style="margin-top:14px"><span class="btn full">Continue</span></div>
+      </div>
+    </div>
+    <div class="screen phone">
+      <div class="hdr"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"><span class="chip">GA5V…HZS7</span></div>
+      <div class="page">
+        <div class="okhead"><div class="okmark">✓</div><h2 style="font-size:26px">You're in!</h2><p>Fun Run Sleman · Nov 8</p></div>
+        <div class="bib2" style="margin-top:16px">
+          <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+          <div class="band"><span class="rn">Fun Run Sleman</span></div>
+          <div class="mid"><span class="tab l">10K</span><span class="tab r">10K</span><div class="no">98</div><div class="nm">BUDI</div></div>
+          <div class="foot2"><img src="../../../fe/public/brand/logo/sterun-lockup-black.svg" alt="Sterun"></div>
+        </div>
+        <div class="rcpt" style="margin-top:16px"><div class="card">
+          <h3>Your receipt</h3>
+          <p class="hint" style="margin-bottom:0">Keep this receipt. Together with your ID details, it proves this race record is yours.</p>
+          <div class="code">a3f1c0d5 •••• •••• b2f3d40e<span class="rv">Show</span></div>
+          <div class="racts"><span class="btn full">Download receipt</span><span class="btn ghost full">Copy code</span></div>
+        </div></div>
+        <div class="gate" style="margin-top:16px"><div class="chk"><span class="box on">✓</span>I've saved my receipt</div><span class="btn full">Back to the race</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

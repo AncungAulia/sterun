@@ -157,3 +157,231 @@ button:not(:disabled),
   --sidebar-border: var(--color-n-800);
   --sidebar-ring: var(--color-teal-400);
 }
+
+/* The pass has exactly two movements (docs/design/race-day/README.md 6.2).
+   Nothing else on that screen moves, and the QR never does: a camera can read
+   a half-drawn code, and reading it wrong is worse than reading nothing. */
+@keyframes pass-roll {
+  from {
+    transform: translateY(-0.45em);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pass-character {
+  display: inline-block;
+  animation: pass-roll var(--motion-base) var(--ease-inout) both;
+}
+
+@keyframes pass-check {
+  from {
+    stroke-dashoffset: 32;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.pass-check path {
+  stroke-dasharray: 32;
+  animation: pass-check var(--motion-slow) var(--ease-out) both;
+}
+
+/* Reduced motion cuts to the state the animation would have ended on. The
+   countdown on the same screen is untouched by this: it is a value read off
+   the clock, and turning motion down must not turn information off (6.4). */
+@media (prefers-reduced-motion: reduce) {
+  .pass-character,
+  .pass-check path {
+    animation-duration: 0s;
+  }
+}
+
+/* The countdown on the pass. Transform rather than width, so the compositor
+   does the work on a mid-range phone, and one second of linear glide rather
+   than a jump per tick: the duration is the length of a tick, not a style
+   choice, which is why it is not one of the --motion-* tokens.
+
+   Reduced motion drops the glide, and the bar then steps once a second. The
+   information is still there, which is the rule for this bar (6.4). */
+.pass-countdown {
+  transform-origin: left;
+  transition: transform 1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pass-countdown {
+    transition: none;
+  }
+}
+
+/* The scanner's verdict (docs/design/race-day/README.md 3 and 6.2, M1).
+
+   Every refusal is striped and HAND OVER is flat, so the two differ by more
+   than colour: success-strong and danger-strong are 1.26:1 apart in
+   brightness, which a volunteer in the sun, or one who cannot tell red from
+   green, cannot rely on. The stripes are the two danger tokens, and paper text
+   over them is never below text-2xl (4.05:1 on the lighter stripe). */
+.verdict-refused {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-danger-strong) 0 1.75rem,
+    var(--color-danger) 1.75rem 3.5rem
+  );
+}
+
+/* M1: the panel rises over the camera; the word follows, then the bib, 40 ms
+   apart, and the icon settles from 0.92. The word leads so the eye lands on
+   the instruction before the number. Every step starts visible enough to read,
+   because movement may make a change legible and never delay one (6). */
+@keyframes verdict-rise {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes verdict-settle {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.verdict-panel {
+  animation: verdict-rise var(--motion-base) var(--ease-out) both;
+}
+
+.verdict-icon {
+  animation: verdict-settle var(--motion-base) var(--ease-out) both;
+}
+
+.verdict-word {
+  animation: verdict-rise var(--motion-base) var(--ease-out) 40ms both;
+}
+
+.verdict-bib {
+  animation: verdict-rise var(--motion-base) var(--ease-out) 80ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict-panel,
+  .verdict-icon,
+  .verdict-word,
+  .verdict-bib {
+    animation-duration: 0s;
+    animation-delay: 0s;
+  }
+}
+
+/*
+  The skeleton, for every screen that has one (Ancung, 2026-09-17).
+
+  It replaces `animate-pulse`, which fades a whole block in and out: the block
+  reads as content that is there and dimming, and at the size of a poster frame
+  it makes the page breathe. A shimmer moves a highlight across a block that
+  never changes opacity, so the shape stays put and only the light travels,
+  which is why it reads as "being filled in" rather than "flickering".
+
+  One class rather than a set of utilities per shape: what varies between the
+  twenty-odd skeletons in this app is size and corner radius, both of which the
+  element already carries. What must NOT vary is the colour and the timing, or
+  two skeletons on one page shimmer out of step.
+
+  The highlight is `paper` over `n-100`, the same pair the cards already use, so
+  no new value enters the palette. 1.6s is slow enough to read as a sweep rather
+  than a strobe on the largest block on the page, the directory's poster frame.
+*/
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.skeleton {
+  background-color: var(--color-n-100);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--color-paper) 75%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.6s var(--ease-inout) infinite;
+}
+
+/* Still a block in the right place and the right shape, with nothing moving. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/*
+  The search box's placeholder, rolling through what can be searched (Ancung,
+  2026-09-23, from a search bar she liked in another project of hers).
+
+  That one animates a stack with GSAP. This does the same with keyframes and no
+  dependency: a library loaded on every page for a placeholder is a strange
+  trade, and three words on a loop is not what a timeline is for.
+
+  **One move per word, and nothing in between.** The first version tipped each
+  word away on its way past, which meant three segments per step, each with its
+  own easing, and it read as a stutter rather than a wheel. A single eased
+  translate per step is what the original does too.
+
+  **The first word is repeated at the end of the list**, and the track stops on
+  that copy rather than past it. Four items means each step is a quarter and the
+  last one sits at -75%; the first version ended at -100%, which is one line
+  below the last word, so the wheel showed an empty slot before snapping back.
+  Landing on the copy and restarting at 0 shows the same word twice in a row,
+  which is to say no change at all.
+
+  Each word holds about 2.3s and each turn takes about 0.65s. Nothing on the
+  page depends on it: the overlay is gone the moment somebody types, and it is
+  never read aloud, because the field's own label says what it is for.
+*/
+.roll-track {
+  animation: roll-words 9s ease-in-out infinite;
+}
+
+@keyframes roll-words {
+  0%,
+  26% {
+    transform: translateY(0);
+  }
+  33.33%,
+  59.33% {
+    transform: translateY(-25%);
+  }
+  66.66%,
+  92.66% {
+    transform: translateY(-50%);
+  }
+  /* The copy of the first word. Restarting from here changes nothing on screen. */
+  100% {
+    transform: translateY(-75%);
+  }
+}
+
+/* One word, standing still. The field still says what it is for. */
+@media (prefers-reduced-motion: reduce) {
+  .roll-track {
+    animation: none;
+  }
+}

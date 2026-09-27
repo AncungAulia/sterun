@@ -11,9 +11,17 @@ import {
   DayPicker,
   getDefaultClassNames,
   type DayButton,
+  type DropdownProps,
 } from "react-day-picker"
 
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 function Calendar({
   className,
@@ -51,18 +59,22 @@ function Calendar({
           defaultClassNames.months
         ),
         month: cn("flex w-full flex-col gap-4", defaultClassNames.month),
+        // The nav spans the whole caption row to place its two arrows, so it
+        // sat on top of the month and year Selects and took every click meant
+        // for them (found in the browser; jsdom has no layout to show it). It
+        // lets clicks through; only its arrows take them.
         nav: cn(
-          "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
+          "pointer-events-none absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
           defaultClassNames.nav
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_next
         ),
         month_caption: cn(
@@ -73,10 +85,9 @@ function Calendar({
           "flex h-(--cell-size) w-full items-center justify-center gap-1.5 text-sm font-medium",
           defaultClassNames.dropdowns
         ),
-        dropdown_root: cn(
-          "relative rounded-md border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50",
-          defaultClassNames.dropdown_root
-        ),
+        // The border and focus ring belong to the shadcn Select trigger now
+        // (CalendarDropdown), not to a wrapper around a hidden native select.
+        dropdown_root: cn("relative", defaultClassNames.dropdown_root),
         dropdown: cn(
           "absolute inset-0 bg-popover opacity-0",
           defaultClassNames.dropdown
@@ -163,6 +174,7 @@ function Calendar({
           )
         },
         DayButton: CalendarDayButton,
+        Dropdown: CalendarDropdown,
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>
@@ -214,6 +226,50 @@ function CalendarDayButton({
       )}
       {...props}
     />
+  )
+}
+
+/**
+ * The month and year pickers of `captionLayout="dropdown"`, as shadcn Selects.
+ *
+ * Ours, not the generator's: the stock calendar lays a transparent native
+ * `<select>` over a label, so the list that opens is the browser's own and
+ * looks like no other control in the app (Ancung, 2026-09-15, from the date
+ * of birth field). react-day-picker only reads `event.target.value` from the
+ * change it is handed, so the chosen value is passed back in that shape.
+ */
+function CalendarDropdown({
+  options = [],
+  value,
+  onChange,
+  disabled,
+  "aria-label": ariaLabel,
+}: DropdownProps) {
+  return (
+    <Select
+      value={value === undefined ? undefined : String(value)}
+      disabled={disabled}
+      onValueChange={(next) =>
+        onChange?.({
+          target: { value: next },
+        } as unknown as React.ChangeEvent<HTMLSelectElement>)
+      }
+    >
+      <SelectTrigger size="sm" aria-label={ariaLabel} className="gap-1 px-2 font-medium">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" className="max-h-72">
+        {options.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={String(option.value)}
+            disabled={option.disabled}
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 

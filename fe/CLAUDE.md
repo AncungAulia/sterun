@@ -44,8 +44,11 @@ built fails with `TS2304: Cannot find name 'LayoutProps'` — that is an ungener
 
 ```
 src/components/ui/        <- shadcn. Generated, but ours: editing is allowed.
-src/components/elements/  <- our product components, built ON TOP OF ui/
-src/components/layouts/   <- page structure
+src/components/form/      <- fields and form parts, built ON TOP OF ui/
+src/components/feedback/  <- notices, badges, empty and error states
+src/components/layout/    <- the site's chrome
+src/components/wallet/    <- connecting, gating and topping up a wallet
+src/modules/<feature>/components/  <- what only that feature uses
 ```
 
 **`app/tokens.css` is NOT touched.** It belongs to Nabil (STE-7) and remains the only source of
@@ -81,7 +84,7 @@ Three things that confuse people who do not know:
   dark. Nothing in this app ever writes a `.dark` class, which is the point.
 - **Some generated files do not pass this repo's lint**, and the fix goes in the file rather than in
   the config. `sidebar.tsx` calls `Math.random()` inside a `useMemo` (`react-hooks/purity`), which
-  is deliberate in a skeleton and carries a one-line disable. `hooks/use-mobile.ts` set state from
+  is deliberate in a skeleton and carries a one-line disable. `hooks/useMediaQuery.ts` set state from
   an effect (`react-hooks/set-state-in-effect`) and was rewritten onto `useSyncExternalStore`; that
   one is not only a lint fix, since the generated version answers "not a phone" on the first client
   render and then swaps.
@@ -99,7 +102,7 @@ time. See the header of `elements/EventStatusBadge.tsx`.
 
 `ui/tabs.tsx` is also ours (the event page is built on it).
 
-`ui/sidebar.tsx` (plus `separator`, `skeleton` and `hooks/use-mobile.ts`, which come with it) is the
+`ui/sidebar.tsx` (plus `separator`, `skeleton` and `hooks/useMediaQuery.ts`, which come with it) is the
 console rail, added 2026-09-14. Its eight colour names are resolved in `globals.css` like every
 other shadcn name: `--sidebar` is `--color-ink`, `--sidebar-foreground` is `--color-n-300`,
 `--sidebar-accent` is `--color-n-800`, `--sidebar-ring` is `--color-teal-400`. They are declared in
@@ -143,12 +146,12 @@ generator output, and a hand edit disappears without trace at the next regenerat
 
 ### Reading the chain (what STE-13 already built)
 
-- `src/lib/sterun.ts` — `readClient`, **read-only**. Every SDK view is a simulation, so public pages
+- `src/lib/chain/sterun.ts` — `readClient`, **read-only**. Every SDK view is a simulation, so public pages
   work without a wallet. A test fails if this file ever imports a wallet.
-- `src/lib/events.ts` — `listEvents` / `getEventSummary`. The registry has no "list events" (a view
+- `src/lib/event/events.ts` — `listEvents` / `getEventSummary`. The registry has no "list events" (a view
   returning an unbounded vector kills itself the moment the protocol succeeds), so the list is
   assembled from `event_count` + `get_event` per id, in parallel.
-- `src/lib/metadata.ts` — download the document at `uri`, hash its bytes with sha256, compare against
+- `src/lib/event/metadata.ts` — download the document at `uri`, hash its bytes with sha256, compare against
   `metadata_hash`. **The convention: `metadata_hash` = the sha256 of exactly the bytes served**, with
   no canonicalisation. STE-17 writes its documents under the same rule.
 - `src/hooks/useEvents.ts` + `useEventMetadata.ts` — React Query on top of both.
@@ -157,7 +160,7 @@ generator output, and a hand edit disappears without trace at the next regenerat
 
 `/org/new` is **6 steps**: Details → Distances → Terms → Add-ons → Review → Done. The rule is
 unchanged and has not softened: **do not add a step that merely maps one transaction** (the reasoning
-is in `docs/WEB_APP_IA.md` §5.1 and in the header of `modules/organiser/CreateEvent.tsx`). The three
+is in `docs/WEB_APP_IA.md` §5.1 and in the header of `modules/organiser/create/CreateEvent.tsx`). The three
 that were added are not that:
 
 - **Terms** — one text field, zero transactions. Its contents go into the event document, so they
@@ -168,16 +171,16 @@ that were added are not that:
   **derived** from `run.isComplete` rather than `setStep`: the run owns the fact that it finished,
   and storing that fact again as a second piece of state is two sources of truth for one thing.
 
-- `modules/organiser/run.ts` — the list of signatures (pure, no React). Its order is forced: the
+- `modules/organiser/create/lib/run.ts` — the list of signatures (pure, no React). Its order is forced: the
   document is hashed by `create_event`, so it has to be online first; `add_category` needs an
   `event_id`.
-- `hooks/useEventRun.ts` — what executes that list. It stops at the step that failed, what has landed
+- `modules/organiser/create/hooks/useEventRun.ts` — what executes that list. It stops at the step that failed, what has landed
   stays recorded, and calling `start()` again resumes from what has not. **The loop holds a local copy
   of `landed`**, because `setState` only takes effect on the next render and the loop finishes within
   one.
-- `component/StepReview.tsx` — **a preview of the real event page**: it draws
+- `create/components/StepReview.tsx` — **a preview of the real event page**: it draws
   `modules/event-detail/EventView.tsx`, the same component as `/events/[id]`, filled by
-  `modules/organiser/preview.ts` from what the run is about to sign. Its document is read through
+  `modules/organiser/create/lib/preview.ts` from what the run is about to sign. Its document is read through
   `readEventDocument` (the same parser the public page uses), so what the page does not read does not
   appear in the preview either. **Do not write another bespoke review summary**: the old version did,
   and it drifted silently (the description lost its line breaks while the public page kept them).
@@ -196,27 +199,38 @@ that were added are not that:
   or schedule, forever — the hash is committed by `create_event` and there is no `update_event`),
   offered exactly when someone was already frustrated. If publishing fails there is one way out,
   **Put the details online yourself** (`DocumentFallback`), which still produces a whole event.
-- `component/StepAddOns.tsx` — the race pack's contents, in **two lists**: what is included with the
+- `create/components/StepAddOns.tsx` — the race pack's contents, in **two lists**: what is included with the
   ticket, and what is sold on top. Both are written to the chain; the only difference is the price,
   because a free add-on is legitimate (`price_usdc == 0`) so a race can give something away **and**
-  still bound how many. Item names use `elements/CreatableSelect.tsx`: suggestions are fine, but
+  still bound how many. Item names use `create/components/CreatableSelect.tsx`: suggestions are fine, but
   anything typed can be added through the "Add …" row at the bottom of the list.
-- `addons.ts` — the add-on model, **pure**, outside the components. `run.ts` needs `addOnUnits` to
+- `create/lib/addons.ts` — the add-on model, **pure**, outside the components. `run.ts` needs `addOnUnits` to
   plan its signatures, and importing that from a step would drag client components, a file picker and
   the wallet SDK into a module that only counts jerseys. **Stock is per size**: the contract holds one
   quota per add-on, so `EVENT_JERSEY_M` is its own row, and that is the only way "size M is sold out"
   can be true. Its `Symbol` code is **derived** from the name plus the size rather than typed, but it
   is still **displayed** on the item's row, under "Saved as": nobody types it and the result is
   permanent.
-- `component/DocumentFallback.tsx` — rendered only after a publish fails.
-- `component/FileField.tsx` (in `components/elements/`) — the poster and waiver. Uploads when a file
+- `create/components/DocumentFallback.tsx` — rendered only after a publish fails.
+- `create/components/FileField.tsx` — the poster and waiver. Uploads when a file
   is chosen. Its `ACCEPTED` mirrors `be/src/files/content-type.ts`; **SVG is deliberately absent and
   must not be added** (that is script in our own origin, not an image).
 
-Form validation has two classes that appear at different times (`modules/organiser/missing.ts`):
+Form validation has two classes that appear at different times (`modules/organiser/create/lib/missing.ts`):
 `missingDetails` (empty fields) waits for Continue, `incoherentDates` (two dates that contradict each
 other) appears immediately. An empty field is not necessarily wrong; contradictory dates certainly
 are.
+
+### Venue maps links (2026-09-17)
+
+**The wizard keeps the Google Maps link as pasted (`location.maps_url`, `racepack.venue_maps_url`)
+as well as the pin.** Before, only `lat`/`lng` were kept and "Open in Maps" built `?q=lat,lng`, which
+opens a nameless point: Ancung pasted Fakultas Teknik UGM and got a pin with no name. A short share
+link from the phone app (`maps.app.goo.gl`) has no pin but is now accepted, and `PinHint` says it will
+not be sorted by distance. `googleMapsUrl` (`utils/geo.ts`) is the one gate, run when the document is
+written and again in `lib/event/metadata.ts` when it is read: https only, Google map hosts only, no
+credentials or port. `openInMapsHref` prefers the link and falls back to the pin for older documents.
+Shape and reasoning: `docs/WEB_APP_IA.md` §6.
 
 ### `/` — the poster-first directory (2026-09-11)
 
@@ -234,7 +248,7 @@ What is settled:
   has answered, so the row does not reshuffle.
 - **The browser asks where the visitor is, once, on the first client render** (Revision 4,
   2026-09-12, which reverses the "no geolocation" line in Revisions 2 and 3). There is no button and
-  no prompt of our own: `hooks/useNearbyPrompt.ts` calls `navigator.geolocation.getCurrentPosition`
+  no prompt of our own: `modules/directory/hooks/useNearbyPrompt.ts` calls `navigator.geolocation.getCurrentPosition`
   from an effect when, and only when, no place is saved **and** the stored `asked` flag is false.
   The flag is written **before** the answer, because a dismissed prompt calls neither callback, and
   a browser blocks an origin that keeps asking. Allowed, the coordinates are stored and the list is
@@ -245,7 +259,7 @@ What is settled:
   timeout so a device that never answers does not leave it pending. There is no per-card distance
   yet. The effect writes only to the store, never `setState`, which is what keeps the React Compiler
   lint quiet.
-- **`lib/area.ts` holds one key for two modes.** `sterun.area` stores `{ place, asked }`, where
+- **`lib/place/area.ts` holds one key for two modes.** `sterun.area` stores `{ place, asked }`, where
   `place` is a discriminated union: `{ mode: "area", countryCode, country, province? }` or
   `{ mode: "nearby", lat, lng }`. A union rather than optional fields, because a record carrying
   both a province and a pin has no single answer to "what does the button say". The shape stored
@@ -253,15 +267,27 @@ What is settled:
   picked a province does not lose it; coordinates out of range are not read back, since a swapped
   pair would order the list from Antarctica. Clearing the place keeps the flag, or the prompt would
   reappear for somebody who has just chosen "All locations".
-- **The coordinates are named, not shown as numbers** (`nearestProvince` in `lib/places.ts`). The
+- **The coordinates are named, not shown as numbers** (`nearestProvince` in `lib/place/places.ts`). The
   places data keeps one point per province, so the browser's answer is matched to the nearest and
   stored as an ordinary chosen place: the header reads "DI Yogyakarta, Indonesia" and the ordering
   code needs no special case. The list is imported inside the success callback, so a visitor who
   refuses never downloads it. "Near you" is left for a point with no province near it. Matching one
   point per province is not a geocoder: it answers a province, never a street.
+- **What can be entered comes first** (Ancung, 2026-09-17, `entryRank` in
+  `lib/event/events.ts`). The order was by date alone, so a cancelled rehearsal
+  from this week sat above every race a runner could actually enter. Three
+  groups, never mixed: open with places left, then anything still ahead (not
+  open yet, entries closed, sold out), then what is over (already run,
+  **`Completed`**, or cancelled, whatever the date says). `Completed` was added
+  on 2026-09-27 after a rehearsal race starting later the same day sat among
+  races people could enter, wearing a Finished badge: an organiser marks a race
+  completed when it has been run, and a start time still ahead does not make it
+  enterable. Date orders within a group, and the place and
+  the distance sort inside that again. A race whose categories could not be read
+  is not in the first group: it may be enterable, and nothing can say so.
 - **The location control sorts the page, it does not filter it** (Revision 3, which overrides
   Revision 2): "All locations" by default, or a country with an optional province, picked by the
-  visitor and stored in `localStorage` under `sterun.area` (`lib/area.ts`). Every race stays on the
+  visitor and stored in `localStorage` under `sterun.area` (`lib/place/area.ts`). Every race stays on the
   page; the ones in the chosen place come first (`sortByPlace(entries, place, order, nowS)`, which is
   `sortByDate` with the in-place races moved to the front **of each half**, upcoming and already run,
   each group keeping its date order), and the featured row prefers them. Coordinates take the same
@@ -276,13 +302,24 @@ What is settled:
   rather than city, and compares country codes case-insensitively. A country-only place also matches
   a race whose document names that country but gives no province. The form is `React.lazy`: the
   places dataset is 176 KB and the directory must not load it up front, so the button's label comes
-  from `placeLabel` in `lib/area.ts`, which imports nothing.
+  from `placeLabel` in `lib/place/area.ts`, which imports nothing.
 - **One list, no separate area row.** Its heading is "All races", and "{n} races match" once a
   search or filter narrows it. There is no "No races in {place} yet" state and no **See all
   locations** button: a place hides nothing, so a place with no races of its own simply lists
   everywhere else. For the same reason the list never waits on documents (it used to, so a filtered
   list would not grow as they arrived): only the order changes as they land. Grid: 2 columns from `sm`, 3 from `lg`, 4 from `xl`, for the
   list and the skeleton alike.
+- **Races that have run are off the list by default** (Ancung, 2026-09-23), with
+  "Show races that have finished" in the drawer to bring them back. Checked against what
+  organisers here actually use: loket.com, artatix.co.id and eventbrite.com all list upcoming
+  events only, all three keep a sold-out event listed with a label rather than hiding it (Loket
+  writes "HABIS TERJUAL"), Eventbrite moves what has happened to the organiser's own profile under
+  "Past Events", and none of the three uses a timer. Ours is a verification product, so what has
+  run is evidence: it stays one checkbox away, a **search reaches it whatever the checkbox says**
+  (somebody typing last year's race name is checking a result), and its page stays at its own URL
+  forever. `includePast` is not counted by `activeFilterCount`, since a badge on an untouched
+  drawer reads as a filter somebody forgot to clear. Draft races were already invisible here
+  (`publicEvents`).
 - **Filters** live in a staged drawer: Sort by ("Nearest date first" / "Furthest date first"),
   Price, Distance, and Availability ("Hide full and closed races", which hides races that are not
   `Open` or have no places left). There is no location group: the place is chosen in the header,
@@ -305,9 +342,21 @@ What is settled:
   title's first line lands at about 85% ink (10:1 against `paper`) and its caps at about 60% (4.3:1),
   even over a pure white poster. It used to be two layers with the whole block floored at 70% ink,
   which read as a grey sheet over most of the card. `EventCard` is the
-  list card only and keeps its white body; the two share the lines from `browse.ts`, not a variant.
+  list card only; the two share the lines from `browse.ts`, not a variant.
   Lead: hero title, venue, date, entries left, price. **Side cards are compact**: title, date and
   entries left.
+- **Each featured card says why it is there** (Ancung, 2026-09-23, `featureReason`): **Almost full**
+  (a tenth of the places or fewer left), **Closing soon** (race day inside a fortnight) or **Just
+  added** (the largest event id, since the registry hands them out in order and there is no
+  created-at on chain). One reason per card, strongest first, and none at all rather than a filler
+  word. The row then **picks three that differ**: the lead is still whatever the ordering put first,
+  the other two cover reasons the row lacks, and any slot left over falls back to the existing
+  order. Eventbrite labels the same way ("Going fast", "Just added").
+  **An auto-rotating carousel was considered and refused**: NN/g finds auto-forwarding carousels
+  annoy people and reduce visibility, and Loket's own rotating hero is promoted inventory rather
+  than a browsing aid. "Trending" is refused for a different reason: the chain holds a total, not a
+  history, so it would need the index to answer for every race on the page, which is a backend
+  ticket rather than a label.
 - **The featured row's shape follows how many races it has.** Stacked below `lg`, 4:3 on phones and
   16:9 from `sm`. From `lg`, three races make a 3 by 2 grid — the lead spans two columns and both
   rows at 16:9, and each side card takes one row, dropping its own ratio to fill it. **Two races are
@@ -326,12 +375,66 @@ What is settled:
   makes the text block taller than the card, `min-h-min` grows the card to fit it, and the poster
   vanishes under the fade. A layout fact the card cannot see has to be told to it, and `className`
   cannot carry this one, because the size is a class on the heading rather than on the card.
+- **An empty state is a column, not a box** (`components/feedback/EmptyState.tsx`, Ancung
+  2026-09-23, from loket.com's own empty search): a mark, the sentence, then what to do, centred
+  where the list would have been. The dashed rectangle is gone, because a frame around an absence
+  emphasises the one thing on the page that needs no emphasis and read as a placeholder nobody had
+  filled. The icon is a prop: "no races match" and "no distances yet" are different absences, and
+  the glyph is what says which without being read.
+- **A list card has no frame** (Ancung, 2026-09-23, from loket.com and eventbrite.com): the poster
+  carries the only shape, and the text sits under it on the page's own background, with no border,
+  no white body and no shadow. What the frame used to do is done otherwise: the grid's gap and the
+  poster's edges separate one card from the next, and the **picture grows a little inside its own
+  frame** under the pointer (the frame crops, so neighbours do not move) to say it is pressable.
+  The lines lost their icons, so the price is the one bold thing on the card, held to the bottom
+  with **no rule above it**: on a card with no frame a divider is the only line there is and draws
+  more attention than the price. The title is **one line, truncated**, because a row mixing one and
+  two line titles reads as a broken grid. The skeleton copies the same shape.
 - **The card `<Link>` is the card surface**, so `globals.css` restores `--radius-lg` on
   `[data-slot="event-card"]:focus-visible`; otherwise the global focus rule in `tokens.css` squares
   its corners.
 - **A `SearchableSelect` inside a Dialog must be `modal`** (the area picker does this), or the
   Dialog's scroll lock stops its list from scrolling by wheel or touch.
 - All decisions are pure functions in `browse.ts` and `filters.ts`. Test those, not the page.
+
+### What the site header carries (2026-09-23)
+
+The lockup, the place, the search, **For organisers** and the wallet. Loket and Eventbrite both keep
+search in the bar, and the reason it belongs there rather than on the directory is that it is the
+visitor's rather than the page's: from a race page there was no way to look for another race without
+going back first.
+
+- **The query lives in the address** (`HeaderSearch` writes `/?q=…`, `Directory` reads it). State
+  inside the directory could not move up: a box that sets state on a page you are not looking at
+  does nothing. It also makes a search shareable and Back meaningful. It is **submitted, not typed**:
+  a push per keystroke fills the history with half-typed words.
+- **`useSearchParams` needs a Suspense boundary.** It is around `HeaderSearch` in the header and
+  around `Directory` in `app/(browse)/page.tsx`, so the lockup and the wallet still render while the
+  query is read. A test that renders either must mock `next/navigation`.
+- **Filters stayed with the list**, on its heading row. The drawer counts what would be left while
+  you choose ("Show 12 races"), which needs the list itself, and a filter button in a bar that is on
+  every page would do nothing on most of them.
+- **The placeholder rolls through what can be searched** (`roll-words` in `globals.css`): "race",
+  "venue", "city", one at a time, which says the same as "Search by race, venue or city" in a
+  quarter of the width. Keyframes rather than a library, one eased move per word (three segments
+  per step read as a stutter), and the first word repeated at the end of the list so the loop lands
+  on a copy of where it started instead of snapping back. It is a layer over the field, not the
+  `placeholder` attribute, and `aria-hidden`: the field's label already says what it is for.
+- **The search box takes a row of its own below `sm`.** The bar wraps rather than shrinking
+  anything: at 390 the lockup, the box and the wallet side by side left the box about ninety pixels,
+  the rolling words wrapped onto two lines and the wallet chip landed on top of them. It is
+  `basis-full`, not `w-full`: `flex-1` is `flex: 1 1 0%`, so a width beside it is measured against a
+  base size of zero and the box never wraps. One box, not two, because two would mean two fields
+  with the same label and two subtrees reading the query. The `sr-only` submit button is pinned
+  `left-0` for the same class of reason: `sr-only` is `position: absolute` and the button keeps its
+  padding, so laid out after the input it sat past the right edge and gave the page seven pixels of
+  sideways scroll.
+- **The place shows the province alone** ("DI Yogyakarta", not "DI Yogyakarta, Indonesia"): the
+  country adds nothing to somebody standing in it, and the pair was most of a header. It is in the
+  bar from `lg` and in the directory's own header below that. `AreaPicker` and `AreaForm` moved to
+  `components/place/` on this second reader.
+- **For organisers is an outlined button with an icon**, not a plain link (Ancung): a door rather
+  than a footer link, and still not competing with the wallet, the one filled control here.
 
 ### Who renders the site header (2026-09-13)
 
@@ -355,7 +458,7 @@ no header, no `<main>`, no link back, on the one page somebody reaches entirely 
 `(browse)/layout.tsx`, which has already drawn the header, and the root page there printed the
 lockup and the `<main>` twice. Measured in a browser at `/events/banana`, not guessed. So
 `(browse)` has its own, with no `SiteFrame`, and both render
-`components/layouts/NotFoundMessage.tsx` so the sentence is written once. The rule for anything
+`components/layout/NotFoundMessage.tsx` so the sentence is written once. The rule for anything
 added later, including `error.tsx`: **a boundary file supplies the chrome only if its own layouts
 do not.** A console route that ever calls `notFound()` will need one in the `(console)` group under
 the same rule.
@@ -365,7 +468,7 @@ wallet chip, so with a global header above it a person on `/org` read "STERUN" t
 sixty pixels and their own address twice. A root layout can only say "every page", so the decision
 moved to where the pages can disagree.
 
-`components/layouts/SiteFrame.tsx` is the header plus the `<main className="flex flex-1 flex-col">`,
+`components/layout/SiteFrame.tsx` is the header plus the `<main className="flex flex-1 flex-col">`,
 shared rather than copied because the two go together: that `<main>` is what lets a page fill the
 space the header leaves, and the pair has to stay one thing. A third group wanting site chrome
 renders `SiteFrame` too.
@@ -383,7 +486,7 @@ the wizard, no rail beside the wizard.
 ### The console shell (STE-17)
 
 Everything under `/org` except the wizard sits in `app/(organiser)/org/(console)/layout.tsx`, which
-renders `modules/organiser/component/ConsoleFrame.tsx` and nothing else. Six consequences worth
+renders `modules/organiser/shared/components/ConsoleFrame.tsx` and nothing else. Six consequences worth
 knowing before adding a page there:
 
 - **`ConsoleFrame` draws two frames, and the gate is inside it.** Connected, the rail beside the
@@ -466,7 +569,7 @@ knowing before adding a page there:
 
 ### `/org` — the events this wallet organises
 
-`modules/organiser/OrganiserHome.tsx`. Three things are settled:
+`modules/organiser/home/OrganiserHome.tsx`. Three things are settled:
 
 - **The data is the directory's own `useEvents()`**, filtered by `event.organiser === address`. The
   registry has no events-by-organiser view (for the same reason it has no list-events view), and
@@ -482,7 +585,7 @@ knowing before adding a page there:
   for. The reason is the question the page is opened with: *which of my races is behind* is
   comparative, and a grid of cards makes a comparison into a scroll.
 - **What is waiting on the organiser lives in the bell, and one case also interrupts.**
-  `ConsoleFrame` builds the list once (`hooks/useNeeds.ts`) and puts it on `NeedsContext`;
+  `ConsoleFrame` builds the list once (`modules/organiser/shared/hooks/useNeeds.ts`) and puts it on `NeedsContext`;
   `ConsoleHeader` fills its own `bell` slot from that context, so a console page cannot forget the
   bell. Exactly one need may also reach `UrgentBanner`: a race days away with nobody able to check
   runners in. **If a second kind of thing can reach the banner the rule is already broken** - narrow
@@ -497,7 +600,7 @@ knowing before adding a page there:
   sentence alone does not say what the panel would have held, so the first entry a race takes
   changes the shape of the page instead of filling in a chart somebody was already reading. What
   must never appear is invented data, a zero line or a list of plausible names. Every division that
-  could be by zero is guarded in `modules/organiser/chart.ts`, where a test can see it, rather than
+  could be by zero is guarded in `modules/organiser/shared/lib/chart.ts`, where a test can see it, rather than
   in a component: **an SVG path containing `NaN` does not throw**, the browser silently drops it,
   and the panel renders empty with nothing in the console.
 - **The comparison chart is titled "Entries comparison", never "Pace".** In a running product *pace*
@@ -519,23 +622,61 @@ knowing before adding a page there:
 
 ### `/org/events/[id]` — one race (STE-17)
 
-`modules/organiser/RaceConsole.tsx`. Plan:
+`modules/organiser/race/RaceConsole.tsx`. Plan:
 `docs/superpowers/plans/2026-09-13-org-event-console-tabs.md`. What is settled:
 
-- **Three tabs, Overview, Entries, Scanners, and the tab is in the address** (`?tab=`, parsed by
-  `race-tab.ts`, which has no `"use client"` because the route imports it). The bell already links to
-  `?tab=scanners`, and the rail lives in a layout that must not remount. **Results is deferred**
-  until the backend accepts untimed finishes and DNF rows and there is a way to record many results
-  without one signature per runner (STE-44); `?tab=results` opens Overview until then.
+- **Four tabs, Overview, Entries, Scanners, Results, and the tab is in the address** (`?tab=`,
+  parsed by `race-tab.ts`, which has no `"use client"` because the route imports it). The bell
+  already links to `?tab=scanners`, and the rail lives in a layout that must not remount. Results
+  was deferred until 2026-09-24 and is now built (STE-58, below).
 - **The race is read fresh with `useEvent`**, not picked out of the dashboard's list, because this is
   the page it is changed from. A race whose organiser is another wallet gets one sentence and a way
   back, never tabs of buttons that would each fail at the wallet prompt.
-- **The header's one action is the status move** (`status-action.ts`): open, close or reopen
-  entries, always behind a dialog. The dialog for opening states that a race which has opened never
-  returns to not open. Completing and cancelling are not offered here.
+- **The header holds a labelled menu, and at most one button** (`components/RaceActions.tsx`,
+  STE-69, reshaped by Ancung on 2026-09-27). `headerPlan` in `lib/close-date.ts` is the pure
+  function that decides, and it takes the status and nothing else:
+
+  | Status | Button | In **Manage race** |
+  | --- | --- | --- |
+  | Draft | Open entries | Set closing date, Cancel |
+  | Open | none | Add entries, Change closing date, Close entries, Cancel |
+  | Closed | none | Add entries, Change closing date, Reopen entries, Cancel |
+  | Completed, Cancelled | none | nothing at all |
+
+  **Nothing leads on a live race.** None of these is what somebody opens the page to do, and the one
+  that would have led, Close entries, is a button whose accidental press stops a race selling. A
+  draft keeps its button because a draft exists in order to be opened, and burying that leaves a
+  first race looking like a page nothing can be done to. Terminal races get no menu: a list of items
+  that all revert is worse than none.
+
+  **The trigger is labelled, not a bare kebab.** On a live race it is the only control on the page,
+  and three dots say nothing about what is behind them; the person most likely to need it is the one
+  opening the console for the first time.
+
+  **Each row is one line with a lucide mark and no sentence under it** (`CalendarClock`, `Lock`,
+  `LockOpen`, `UserPlus`, `CircleX`). A menu whose every item carries a paragraph turns choosing
+  into reading, and the mark does what the sentence was doing: two rows here both stop entries, and
+  the shape tells them apart before the words are read.
+
+  `StatusAction` and `AddPlaces` each render either a button or a menu item (`variant`) and keep
+  their own dialog: splitting the dialog out would leave the wallet write in one file and the words
+  that explain it in another. A menu item opens its dialog on the **next frame**
+  (`setTimeout(…, 0)`), or Radix's focus return fights the dialog for it.
+- **Cancelling a race** (`components/CancelRaceDialog.tsx`, 2026-09-27). Mockup:
+  `docs/superpowers/specs/2026-09-27-cancel-race-mockup.html`. The contract has taken `Cancelled`
+  since v2 and the console never offered it, which left an organiser who published a race by mistake
+  with no way to withdraw it. No contract work was needed; `SetEventStatusInput` simply had the
+  status left out of its type on purpose while nothing offered it.
+  Everything about the dialog follows from **terminal on chain**: it opens with what cancelling
+  costs other people, read from the chain (`raceTotals`), because there is **no escrow** and the
+  fee already moved to the organiser, so a cancelled race leaves a refund owed off chain. The
+  **race name has to be typed**, the guard that scales with a cost nothing can undo. The way out is
+  **Keep the race**, never a second button reading Cancel. And it never promises a delete: the page
+  keeps its URL, a search still reaches it, and what changes is that entries stop for good and the
+  directory drops it.
 - **Nothing in the design is cut because the backend does not send it yet.** Per-entry add-ons
   (`addon_ids`, STE-42) and a scanner's `added_at` and `scans` (STE-43) are parsed as optional in
-  `lib/records.ts` and `lib/scanners.ts`. The column or card that needs one is drawn once the data
+  `modules/organiser/shared/lib/records.ts` and `modules/organiser/shared/lib/scanners.ts`. The column or card that needs one is drawn once the data
   carries it, and not before; nothing is estimated in the meantime.
 - **Anything read from the index tells "not answered" from "failed" from "empty"**
   (`useRaceRecordsFailed`). Zero race packs collected on race morning is a finding; a timeout is not.
@@ -549,12 +690,442 @@ knowing before adding a page there:
   mock, vitest runs a returned function as teardown, and the mock's rejection then fails the test
   with an error that points at the mock rather than at the cause.
 
+### Recording a finish list (STE-58)
+
+`modules/organiser/race/` (`components/ResultsTab.tsx`, `ResultsDrop.tsx`, `ResultsReviewPanel.tsx`,
+`RecordResults.tsx`, `ResultsContext.tsx`, `hooks/useResultsRun.ts`, `lib/results-preview.ts`,
+`lib/publish-results.ts`). Mockup:
+`docs/superpowers/specs/2026-09-24-results-upload-mockup.html`, which reproduces block 5 of the
+2026-09-13 console mockup rather than redesigning it. What is settled:
+
+- **One fact shapes every screen: a result is terminal on chain.** Nobody, including the organiser,
+  can correct or remove a published result. So the file is reviewed before a signature is spent, and
+  **nothing the review held can be sent at all**: there is no "send it anyway" on a flagged row. A
+  corrected file costs nothing; a published wrong time costs forever.
+- **The empty tab is the drop card and nothing else**, and a loaded file is shaped like Entries:
+  three counts, a search, the table, with the signing button in the **header**, where every tab
+  keeps its one action. That is why `ResultsContext` exists: the file lives in the tab, the button
+  lives above it, and `RaceConsole` wraps both. On the Results tab the status action steps aside;
+  it is on the other three.
+- **The two severities are said in words, never as codes.** `wrong` (the chain accepts it and the
+  record is false: an ambiguous bib, the same bib twice, an impossible time, a malformed row) and
+  `reverts` (the chain refuses it and nothing changes: an unknown bib, a runner who never collected
+  a race pack, a result already recorded). Both are held; the severity only decides how loudly the
+  strip talks. The backend's own sentence is shown as it is, because an organiser can act on "bib 88
+  exists in both 10K and 5K" and can do nothing with `ambiguous_bib`.
+- **The button counts what will be published**, never the rows in the file.
+- **Batches are the contract's, and the atomicity is the whole design.** `publish-results.ts` plans
+  them with `chunkResults` at `RECORD_RESULTS_MAX_BATCH` (120, measured against the live network in
+  STE-60), labelled by **runner** rather than by transaction ("Runners 1 to 120"): a line number
+  means nothing once rows have been held. A batch records every row in it or none, so a failure
+  leaves the batches before it recorded and the ones after it untouched, and the dialog says exactly
+  that. The button is **Continue**, never "try again".
+- **A failed batch is checked against the chain, and one read settles it** (`useResultsRun`).
+  Because the batch is atomic, reading **one** of its runners answers for all 120. If that runner
+  now carries a result the batch landed, the run marks it done and clears the error: telling
+  somebody to send again what already landed is how a race gets a second result it can never
+  remove. This is the scanner's rule (STE-62) at a hundredth of the cost.
+- **Once results exist the tab shows them**, with the drop card underneath for the runners who have
+  none. "No official time" is a result, never a zero.
+- **`lib/api/signed.ts`** is the challenge, signature and three headers, moved up from `upload.ts`
+  on this second reader. Copying those header names into a second file is how one gets spelled
+  differently, which arrives as a 401 with nothing pointing at the cause.
+- **`formatFinishTime` moved to `utils/format.ts`** for the same reason: a finish time printed two
+  ways in one product is a bug nobody notices until a runner compares two screens.
+
+### Adding places to a distance (STE-57)
+
+`modules/organiser/race/` (`components/AddPlaces.tsx`, `AddPlacesDialog.tsx`, `lib/add-places.ts`,
+`lib/add-places-run.ts`), with the runner's side in `modules/event-detail/`. Mockup:
+`docs/superpowers/specs/2026-09-17-quota-increase-mockup.html`. What is settled:
+
+- **Add entries is a menu of distances in the race header**, beside Close/Reopen entries, on an
+  `Open` or `Closed` race that has not run. One distance opens the dialog directly. Every distance
+  is offered, not only a full one (Ancung, 2026-09-17).
+- **A raise is never sent without its announcement.** The contract cannot enforce the pairing, so
+  the dialog is one form: the new number, a sentence the page writes from the numbers ("Entries for
+  10K raised from 500 to 800."), which cannot be edited, and an optional note.
+- **Three steps, in this order:** sign the announcement (SEP-53), `increaseQuota`, then
+  `POST /events/:id/announcements`. Signing first means a decline moves nothing. A raise that fails
+  without a decline is checked on the ledger, and counts as landed only if the quota is **exactly**
+  the new number. If only publishing fails, the dialog cannot be closed and its one button is
+  **Publish the announcement**. A signature older than nine minutes is signed again, because the
+  server refuses a `published_at` more than ten minutes off.
+- **The plan is frozen at the press.** The race is refetched once the places land, and a plan
+  still built from the live quota would rewrite the sentence as "800 to 800".
+- **Runners see two things**: a dated "Entries raised from … to … on …" line per raise on the
+  distance card (`lib/event/quota-history.ts`, from `GET /events/:id`), and **Updates** above
+  General information in Details. Both come from the backend and disappear, never error, when it
+  is down.
+- **An announcement is verified on the page** (`isSignedByOrganiser`, `lib/event/announcements.ts`)
+  against the organiser the chain names and this app's network and registry. One that fails is
+  still listed, marked "Could not confirm the organiser signed this". Checked in a browser against
+  the real signed announcement on testnet event 23.
+- **stellar-sdk's crypto fails under jsdom** (see Tests): the announcement tests run with
+  `// @vitest-environment node`, and component tests mock `lib/event/announcements`.
+
+### The registration close date (STE-69)
+
+`lib/close-date.ts`, `components/CloseDateDialog.tsx`, `hooks/useCloseDate.ts`, and the card on
+Overview. Mockup: `docs/superpowers/specs/2026-09-24-registration-close-date-mockup.html`.
+
+**Two dates are in play and they are not the same thing.** The event **document** carries the
+registration window, hashed when the race was published, and that is what runners were promised.
+The **chain** carries `registration_closes` (STE-46, live 2026-09-24), and that is what refuses an
+entry. Until this ticket the app set only the first, so a race page could promise a date the
+contract ignored. Everything here is about the second one, and where the two disagree a screen
+shows the enforced one.
+
+- **The wizard sets what it publishes**, as one more signature straight after `create_event`
+  (`create/lib/run.ts`, step `closeDate`), from the same field the document took it from. The
+  wizard requires a registration window, so every race created from now on has one on chain.
+- **Moving it is the same shape as raising a quota**: one form holding the new date, the sentence
+  the page writes from the two dates, and an optional note; sign the announcement, move the date,
+  publish. That runner is `lib/announced-change.ts`, shared with STE-57 rather than copied, and
+  `add-places-run.ts` is now a thin wrapper over it. The chain cannot check that anybody was told,
+  so the console is the only thing that can.
+- **The date moves either way.** A date already past stops entries the moment it is signed, and the
+  field says so in a hint rather than a panel: it is information, not an alarm. Moving it earlier
+  is allowed because `Close entries` already stops entries instantly, so it adds no power to harm;
+  it does take away days a runner was promised, which is why the announcement is not optional for
+  it either. The sentence never says "extended": it names both dates.
+- **The bound is race pack collection**, from the document, falling back to race day
+  (`closeDateBound`). Handing packs out while entries are still open means somebody paying for a
+  race whose pack has already gone out.
+- **A runner is told which refusal they met.** `entryGate` answers `registration-over` with the
+  date, separately from `closed`: one is a decision that may be undone, the other a date that will
+  not come back. The gate checks the status first, exactly as the contract does, and waits for a
+  clock rather than guessing on the first render.
+- **`useRegistrationCloses` lives in `src/hooks/`**, not in this module: the entry flow is its
+  second reader.
+- **Overview shows the date only when there is one** (Ancung, 2026-09-27). The card used to read
+  "Anytime, until you close them" on a race without one, which is not a fact about that race: it is
+  the absence of one dressed as a number. Every race published before this ticket has no date, so
+  the card was noise on most of the board.
+
+### `/organisers` — the way in for somebody who runs races (2026-09-23)
+
+`modules/organiser/intro/ForOrganisers.tsx`, a public page under `(browse)`, linked from the header
+as **For organisers** (loket.com puts its "Partner with Us" in the same place).
+
+The gap it closes was a dead end, not a missing brochure: the console is behind a wallet, and a
+wallet that is not on the allowlist met a refusal saying "send this address to the Sterun team"
+that **named no way of doing it**. The page answers what Sterun does for a race, what publishing
+one involves, and how to be allowed to; it shows the connected wallet's address with a copy button,
+since that address is the thing the team needs and copying it out of an extension is the step people
+get wrong. `NotAllowedNotice` and `NotAllowedScreen` now point here and name the account too.
+
+**The contact channel lives in `lib/contact.ts`** (X, `@sterunxyz`, from `docs/social`), so the page
+and the two refusals can never name different ones.
+
+### `/events/[id]/enter` — a runner enters (STE-21, round 1)
+
+`modules/entry/`. Design: `docs/superpowers/specs/2026-09-15-entry-flow-design.md` and its mockup;
+plan: `docs/superpowers/plans/2026-09-15-entry-flow.md`. What is settled:
+
+- **Three steps, then a page of its own.** Distance & race pack → Your details → Review & pay, then
+  `/events/[id]/entered/[tokenId]`. `EntryForm` reads and gates; `EntryReady` is the form, mounted
+  only once everything has answered, so `useEntryAttempt` runs with a real plan below no early
+  return.
+- **Before the form, this wallet's records are read from chain** (`gate.ts`), never the index:
+  `enter` does not stop one wallet entering one race twice, and each entry charges again. An
+  existing entry wins over "closed".
+- **The race pack and the add-ons are split by price only** (`basket.ts`). Every pack unit is still
+  reserved by `enter`, so a sold-out size cannot be picked. Ids are built by walking the basket,
+  never the selection. A choice restored from sessionStorage is `sanitizeSelection`ed first.
+- **Personal details are never stored.** The distance and pack choice live in sessionStorage; the
+  details live in memory. Phones are `react-phone-number-input` in **national** mode, which turns
+  `0812…` into `+62812…`; the international mode keeps the zero, a well-formed wrong number, and
+  the emergency phone is hashed.
+- **Sign and pay is details first, payment second** (`attempt.ts`, a reducer). The vault's answer is
+  kept for the attempt, so a retry never resends details; changing the distance, pack or details
+  forgets it. No answer is never "it may have gone through": it is a check for a record, and
+  `enter` being atomic makes "not found" mean nothing was charged. A failed check can only be
+  checked again. The dialog cannot be closed while either runs. **Two approvals, nothing after
+  `enter`:** the backend links the vault row to the record from the chain (STE-59), so the web app
+  never calls `POST /participants/:id/confirm`. That call needed a third signed message, which
+  surfaced as wallet popups over the success page; do not bring it back. **The gates (already entered,
+  closed, sold out) decide once, before the form** (`EntryForm`): the landed entry refreshes the
+  records while the dialog is still linking, and re-deciding then unmounted the dialog and stranded
+  the runner on "You're already entered" instead of their bib.
+- **A refused `enter` is explained from the ledger afterwards** (`enter-failure.ts`): closed, no
+  places, an item out of units, a short balance. Never from the error code, which the sUSD token
+  shares with EventRegistry. A decline or no answer is read from the error and costs no chain read.
+- **`PayPanel` checks the sUSD balance before the button is usable**, and shows neither the notice
+  nor the balance for a free entry, where no money moves. **Get test sUSD** (testnet only) opens a
+  trustline when needed and calls `POST /faucet` (STE-49, `be/src/routes/faucet.ts`, live since
+  2026-09-15; every refusal it documents is mapped in `lib/wallet/susd.ts`). As of that day the live API
+  reports `faucet.payoutConfigured: false` in `/config`, so the route answers `faucet-unavailable`
+  and the button says test sUSD is not available yet, until a faucet key is set on the server. It imports
+  `lib/wallet` on press: statically it put Stellar Wallets Kit in every page's header graph.
+- **The success page reads the bib, race and distance from chain; the bib name and receipt code from
+  this device** (`lib/entry-store.ts`, IndexedDB), which is also what round 2's pass reads offline.
+  It sits in the shared `lib/` rather than in the entry module because the pass became its second
+  reader (`guides/ARCHITECTURE.md` §4.2).
+  Another device gets the bib and a sentence saying where the receipt is. "Back to the race" waits
+  for "I've saved my receipt", once: the tick is remembered on the device (`receiptSaved`), so a
+  return visit through View my entry shows no box and no confetti, and confetti never fires on a
+  device that did not enter. The stored entry is read fresh on every visit and the tick updates the
+  page's copy at once; flags are written with idb-keyval `update`, never read-then-save, so two
+  landing together cannot undo each other. **The success page never asks the wallet to sign.** An
+  entry found by the no-answer check has no transaction hash to link with; STE-59 covers it.
+- **The receipt carries no personal details and never the check-in secret** (`receipt.ts`, tested;
+  `receipt-pdf.ts` only lays it out, with jspdf loaded on press).
+- **Bib numbers are shown exactly as the contract holds them.** Since STE-54 a bib is unique within
+  its race and counts from 1; a race created before that upgrade keeps its per-distance numbers from
+  0. The distance is never part of the number: it is the label beside it (the bib's tabs).
+- **On `/events/[id]`, a connected wallet that already entered gets no way in** (`EventDetail`
+  reads its records from chain, `myEntry` on `EventView`). The entry card shows two buttons, **View
+  my entry** (the success page) and **Open my pass**, off until round 2 builds `/pass/[tokenId]`
+  rather than a link to nothing; Ancung wanted both, as two forms of proof. The Distances tab marks
+  the entered distance **Entered** and drops every Enter link and the refund notice; the timeline's
+  Enter goes too. No wallet, or a preview, changes nothing.
+- **The calendar's month and year dropdowns are shadcn Selects** (`ui/calendar.tsx`, the
+  react-day-picker `Dropdown` slot), and **its nav is `pointer-events-none`**: the nav spans the
+  caption row and swallowed every click meant for them. jsdom has no layout, so only a browser
+  showed it. `DateTimeField` takes `startMonth`/`endMonth` to switch them on.
+- Blood type and medical history are not asked for: STE-48 is Axel's decision.
+
+### `/pass/[tokenId]` — the runner's pass (STE-21, round 2)
+
+Four states, from `docs/design/race-day/README.md` §2: valid, about to roll over, offline, and race
+pack collected. **The code is computed on the phone** (`lib/totp.ts`, shared with the scanner since
+STE-22) against the
+frozen definition in `docs/specs/HASH_AND_TOTP.md` §4, and tested against
+`docs/specs/vectors/totp.json` rather than against itself, because the backend and the scanner must
+produce the same six characters with no network between them. It is a **6-character string** with
+its leading zero, never a number, and the QR carries `{"t":…,"s":…,"c":"…"}` exactly, with the
+secret in neither. A code is held with the step it belongs to and shown only while both still
+match: plain state let a rollover pair this step's number with the previous step's digits, which a
+scanner refuses and a runner gets blamed for.
+
+**The pass shows the bib name large and the bib number as the first fact in the row** beside the
+category and whether the race pack has been collected (Ancung, 2026-09-16). That last column is
+**Race pack: Not collected / Collected**, not "Status: Entered", which told a runner at the desk
+nothing about whether the pass had been used. Not collected wears the outline chip Draft wears (not
+yet, nothing wrong); Collected is green. The column is labelled **Category**, not Distance: a code
+like `3K_FUN_WALK` names what the runner entered rather than a length. The number has to be there: the frozen manual fallback
+is the code **plus the bib number** (`docs/specs/HASH_AND_TOTP.md` §5), the scanner's typing sheet
+asks for exactly that, and a runner at a pickup desk has no printed bib yet. For a few hours the pass
+showed the name alone, and a volunteer would have been asking for a number the runner could not
+read. Three facts sit in one row; four, once the city is known, wrap into two rows of two, because a
+quarter of a phone is too narrow for "Not collected". On a phone that holds no name the number
+is already the large thing and is not repeated.
+
+**The secret never leaves the device.** A phone that did not enter fetches it once with the wallet
+that owns the record (`GET /records/:tokenId/pass`, STE-52) and stores it; the desk then needs no
+network. The stored entry moved up to `lib/entry-store.ts` when the pass became its second reader,
+and `rememberPassFacts` writes back what the chain said, so the next visit is right with no signal.
+
+**The service worker is scoped to `/pass` on the pass and to `/scan` on the desk, and nothing else**
+(`public/offline-sw.js`, registered once per screen by `components/layout/OfflineReady.tsx` from
+the `(offline)` layout; it was `pass-sw.js` until STE-22, and `OfflineReady` unregisters that one).
+A worker over the origin would cache the directory and the race pages, and a cached quota is the one
+claim this product cannot break. `test/offline-sw.test.ts` runs the worker file itself and holds the
+line. It precaches nothing, so the first visit needs signal once, and the page says so. No
+`Service-Worker-Allowed` header: a worker at the origin root may already claim any scope below it,
+and the header an earlier version sent did nothing.
+
+Once the race pack is collected the pass **stops making codes**: a second scan can only be refused.
+The panel names the time from chain and no desk, because the chain carries a scanner address and no
+name for it.
+
+### `/scan` — the volunteer's desk (STE-22)
+
+`modules/scanner/`. Design: `docs/superpowers/specs/2026-09-16-scanner-design.md`; plan:
+`docs/superpowers/plans/2026-09-16-scanner.md`; screens S1 to S8 from `docs/design/race-day/`.
+What is settled:
+
+- **The decision is one pure function** (`lib/verdict.ts`) over what was presented, the roster and
+  this phone's claims. **Already claimed is checked before the code**: a valid code changes nothing
+  about a pack already handed over, and a stale code on a claimed record must still say claimed.
+  Claimed has two sources and both count, the roster's snapshot state and this phone's own claims.
+- **Codes are checked against the `verification` vectors** in `docs/specs/vectors/totp.json`
+  (`lib/verify.ts`), the set the backend answers too. A QR carries its step and the pair is checked as
+  a pair; a typed code has none and the whole window is tried. The tolerance comes from the roster
+  response, never a constant.
+- **A typed bib can match two runners** on an event created before STE-54. The code picks the runner
+  in that one case; everywhere else the order above holds.
+- **The QR is read by `BarcodeDetector` where it reads QR, and `jsQR` otherwise** (`lib/decoder.ts`).
+  Test support with `getSupportedFormats()`, not the constructor: desktop Chrome on Windows has the
+  constructor and no formats. `jsQR` is plain JavaScript, loaded only when needed, and its test reads
+  a real QR drawn by `qrcode` from a frozen payload.
+- **The camera stays mounted under the verdict and the typing sheet**, since its `<video>` holds the
+  stream, and it is `inert` while covered. A refused or missing camera opens straight on typing.
+- **A HAND OVER writes its claim before the verdict renders** (`lib/scanner-store.ts`, IndexedDB,
+  keyed by token, first write wins). What is queued is intent, not a signed transaction; round 2
+  sends it.
+- **The clock banner fires past one step (30 s), not the handoff's 90 s.** The ±1 step window is 90
+  seconds for a code, not for a clock: with the scanner d seconds off, scans start failing past 30
+  and all fail from 60 (`lib/roster-facts.ts`, `driftLimitSeconds`). Measured against this app's own
+  `Date` header with signal, against a true time learned earlier in the visit plus
+  `performance.now()` without, and otherwise from the drift stored at download. When nothing can
+  measure, "check again" takes the volunteer's word.
+- **`/scan` lists a race for its organiser or an allowlisted scanner**, the same two the contract and
+  the roster route accept, and lists every roster already on the phone with no signal and no wallet.
+- **A verdict vibrates, once for HAND OVER and twice for a refusal. No sound** (Ancung, 2026-09-16).
+- **No ledger numbers on any scanner screen** (Ancung, 2026-09-16): nobody at a desk can read one.
+  The runner list shows when it was downloaded, a sent claim says "Sent". The ledger is still kept in
+  storage (`snapshotLedger`, `QueuedClaim.ledger`) for anyone reconciling later.
+- **Claims go one transaction, one approval each** (`lib/send-claims.ts`, round 2). A Soroban
+  transaction holds exactly one contract call and the contract has no batch claim, so a desk that
+  handed over 300 packs asks its wallet 300 times. That is the chain, not this screen; a batch claim
+  would be a contract change.
+- **Sending starts on a tap** (`/scan/[id]/claims`), not on its own when signal returns as the
+  handoff says: every claim opens a wallet prompt, and one appearing over the desk mid-check is worse
+  than a button. Rows are sent in the order packs were handed over.
+- **Only `AlreadyClaimed` and `RecordNotFound` from `claimRacepack` itself are final**, and move the
+  row to `/scan/[id]/flagged`. `NotAuthorized`, a declined prompt or no answer stops the run with the
+  row still waiting. **No answer is never read as sent**: a retry of a claim that did land shows up as
+  refused, a false alarm, where the opposite reading would hide a real second pack. **Any other
+  failure is told from the ledger** (STE-62): the record is read again, and if it is no longer
+  `Entered` the row is refused and the run carries on; only a record still `Entered` stops the run.
+  The STE-25 rehearsal found why: a claim that lost a two-desk race failed on the ledger with `#102`,
+  the SDK threw an unrelated message (STE-61), and the queue stopped on its first row.
+- **The refused list says a second pack may have gone out**, not the handoff's "the system working",
+  and it copies as plain lines for the organiser's chat.
+- **`markClaim` checks the row exists first.** idb-keyval's `update` stores whatever its updater
+  returns, `undefined` included, and an `undefined` row made every listing of the queue throw.
+- **The runner reads the bib number for typing off their pass**, the first fact in its row.
+
+### `/runner/[address]` — a runner's public race record (STE-24)
+
+`modules/profile/`. Design: `docs/superpowers/specs/2026-09-16-runner-profile-design.md`; screens
+P1 to P12 from `docs/design/profile/`. What is settled:
+
+- **Four chain states, seven meanings** (`lib/record-meaning.ts`). `Finished` with a null time is
+  "No official time", never `0`; `Dnf` with no `claimedAt` is "Did not start"; a `Cancelled` event
+  turns an `Entered` or collected record into "Race cancelled", but never rewrites a result.
+- **The chain is the truth; the index only adds.** Records from `recordsOfDetailed`, races from
+  `getEventSummary` in the same cache entry `/events/[id]` uses, the city from the hash-checked
+  document. A card's footer says **"Last updated"** with the latest of the record's own timestamps,
+  not a ledger number (Ancung, 2026-09-16: a ledger is jargon to a runner). `GET /records/:tokenId`
+  adds a transaction link when it has one;
+  with the index down a card links the RaceRecord contract instead and loses nothing else. The
+  handoff's "no transaction link" (§9) predates the index storing `tx_hash` per transition.
+- **A failed read is never "No races yet".** P9 (the chain answered with none), P10 (not an
+  address, checked with `StrKey` before any call), P11 (could not load, with Try again) and P12
+  (loading) are four different screens and a test holds each apart.
+- **Each card's model goes through `buildRaceRecordDocument`**, which validates against JSON Schema
+  v1.0 and throws otherwise; the contract link is read out of that document.
+- **Newest first by `enteredAt`, never by bib; twenty a page, client side.**
+- **Labels in ordinary case**, like the pass, not the handoff's uppercase.
+- **Three ways in:** "My race record" in the wallet menu, "See your race record" on the success page
+  (only where this device holds the entry, so the runner address is known), and `/runner` to paste
+  any address.
+- **`formatLedger` lives in `utils/format.ts`**, moved up from the scanner on this second user.
+- **Proving a record is yours** (`components/ProveRecord.tsx`, round 2). Closed by default on each
+  card. `lib/participant-hash.ts` computes `participant_hash` on Web Crypto, tested against every hash
+  and refusal in `docs/specs/vectors/participant_hash.json` (removing NFC was tried and fails ph-03);
+  only the 32-byte result reaches `verify`. Copy is filtered for a runner, not taken from the
+  handoff as written: **fingerprint**, not hash; **receipt code**, not salt; **Check this record**, not
+  "Check against the contract"; no contract address; the 64-character fingerprint folded behind "See
+  what is checked". The fields live in component state only, clear after every answer (and on
+  Close), and stay put only when the check could not be asked. "Use the receipt code saved on this
+  device" appears when `lib/entry-store.ts` holds the entry, and fills on a press.
+
+### `/profile` — the connected wallet's own page (2026-09-23)
+
+`modules/profile/MyProfilePage.tsx`. The wallet button in the header **links here** and no longer
+opens a menu.
+
+The popover it replaces held five unrelated things (the address, the public record, the sUSD
+balance, the faucet, Disconnect), none of which could be linked to, all of which closed at the next
+click, and it still did not hold the one thing a runner comes back for: their pass. Eventbrite's bar
+does the same thing this now does, linking to `/mytickets/` and `/account-settings/` rather than
+unfolding them; both are real routes that redirect to sign-in when logged out.
+
+- **Three tabs, and the tab is in the address** (`lib/profile-tab.ts`, parsed by the route, which
+  stays a server component and needs no Suspense): **Your entries**, **Race record**, **Faucet**.
+  Three sections answering three different questions, and nobody needs two at once, so the scroll
+  that used to put the faucet below eleven record cards is gone. What tabs cost on a page whose
+  parts are compared, like the directory, is the comparison; here there is none to lose.
+- **Entries first, the faucet last**, reversing the order the redesign was asked for. The faucet
+  only exists on testnet, and a tab that disappears with the network cannot be the one the page
+  opens on; a runner opens this page for their pass, at a desk, on race morning. Off testnet the
+  strip is **two** tabs rather than three with one greyed out, and `?tab=faucet` written down back
+  then lands on Entries.
+- **The strip is the race console's, divided into equal parts** across the full width
+  (`components/ProfileTabs.tsx`): links with `aria-current` rather than a tablist, an icon each, the
+  same inset-shadow marker, scrolling sideways at phone width. A count is drawn only where there is
+  something to count. Give the count an **explicit space** after the label: JSX drops the whitespace
+  between two expressions, and the badge touching the label made a screen reader say "Your entries7".
+- **Races you are in** is the part that did not exist anywhere. A record is "an entry" while its
+  state is `Entered` or `RacepackClaimed`, because the race can still be run and the pass still
+  matters; each row offers **Open my pass** and **View my entry**. Before this, opening a pass meant
+  remembering which race it belonged to.
+- **Your race record** is the history, drawn with the same `RecordCard` as the public page, above
+  **one** link to that page. `/runner/[address]` stays exactly as it was: public, no wallet, nothing
+  that writes. This page is that history plus what only its owner may do, and it links rather than
+  copying, because two pages claiming to be the record is how they drift. There is deliberately no
+  second link to it in the header (Ancung): the one on the record tab sits beside the history it
+  opens.
+- **The faucet tab is a centred column, not a card.** One number, one button and one sentence inside
+  a panel pinned to the left of a page this wide read as the first of several cards that never
+  arrived. It takes the shape an empty state takes, and for the same reason: there is nothing here
+  to compare it with.
+- **A wallet avatar was tried and removed.** `blobatar` draws a creature from any string, so an
+  address would have had a face on this page and on `/runner/[address]`, deterministic and rendered
+  on the device (never `blobatar.dev/avatar/<address>`, which would hand the wallet to a third party
+  on every page view). Ancung looked at it on the real page and it added nothing to a screen whose
+  subject is one address. Do not reopen it without a screenshot.
+- **Not connected asks for a wallet** through `WalletGate` with its own words, and the header button
+  still connects rather than navigating: a page that says "connect first" where one press could have
+  connected you is a step charged for nothing.
+
+### Loading, back, titles and installing (2026-09-17)
+
+Four conventions that apply to every screen, all from Ancung looking at the app:
+
+- **A skeleton is the `.skeleton` class** (`app/globals.css`), never
+  `animate-pulse`. It shimmers a highlight across a block whose opacity does not
+  change; the element keeps its own size and radius, and reduced motion leaves
+  it still. One class rather than utilities per shape, so two skeletons on one
+  page can never drift out of step. The directory's skeleton draws the featured
+  row too, in the three-race shape, so the page settles upward when the races
+  land instead of growing a block on top of what is being read.
+- **One-crumb breadcrumbs are back buttons** (`components/layout/BackLink.tsx`).
+  A link rather than `history.back()`: a page opened from a shared message has
+  no history, the destination is always known, and middle-click still works.
+- **Every route sets its own `title`.** The root layout holds the
+  `%s · Sterun` template; a route exports `metadata` with a plain title.
+  `/events/[eventId]` is the one exception: `generateMetadata` reads the race's
+  name from the chain, with a 2.5s timeout and "Race" as the fallback, because
+  it is the page people send each other. Nothing else reads the chain to render
+  a title.
+- **Installing is offered on the two offline screens only**
+  (`components/layout/InstallApp.tsx`, on the pass and the scanner's list). The
+  button appears only where `beforeinstallprompt` fired, iOS gets the sentence
+  about Safari's Share sheet, and an installed copy gets nothing. Manifest icons
+  are 192 and 512, `any` and `maskable`, rendered from the logo SVG: a maskable
+  icon is a full bleed of paper with the mark at 62%, so a launcher's crop eats
+  only background.
+- **The installed app starts at `/pass`** (`manifest.ts` `start_url`,
+  `modules/pass/OpenPass.tsx`), which looks the newest entry up in IndexedDB
+  (`latestEntry`) and redirects to it. **Holding none, its first button is
+  `/profile`** (Ancung, 2026-09-23, from her own iPhone): she added the app to
+  her home screen, opened it and got "No pass on this phone", which was true
+  and useless. A runner who entered on a laptop, and an iOS home screen copy
+  that keeps storage separate from Safari's, both have an entry and no pass,
+  and the profile lists that entry and opens it. The two links under it,
+  Browse races and Race pack desk, are unchanged. A manifest cannot carry a token id, and
+  `/pass` is inside the offline worker's scope, so the doorway itself is cached
+  and works at a venue; the directory is not cached and never can be. A phone
+  holding no entry gets both offline screens as links rather than a redirect to
+  a page it may not be able to load.
+
 ## Tests
 
 ```bash
 pnpm --filter fe test                      # unit + component, no network
 STERUN_E2E=1 pnpm --filter fe test test/e2e  # e2e against live testnet, run by hand
 ```
+
+**`testTimeout` is 15s, not vitest's 5s.** A component test here drives a real
+dialog or dropdown through user-event; alone each takes well under a second, and
+run together on a laptop the slowest cross five seconds and fail with a timeout
+that says nothing about the code. It is not a licence to write slow tests:
+anything approaching that number is waiting on something it should stub.
 
 The e2e is opt-in so `typescript.yml` still never touches the network. The e2e files run in a **node**
 environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as the global, so a
@@ -582,11 +1153,11 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
 - **WalletConnect only exists when `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` is set** (a Reown project
   id; put it in `.env.local` and in Vercel's environment). Empty means the option **does not appear**,
   rather than a button that is certain to fail: the relay refuses pairing from an unregistered app.
-  There are two shapes, both in `src/lib/wallet.ts`:
+  There are two shapes, both in `src/lib/wallet/kit.ts`:
   - **An ordinary browser** (desktop or phone) → a `WalletConnect` entry in the kit's picker, pairing
     by QR or a deep link to a wallet on the phone (Freighter mobile, LOBSTR).
   - **Inside the Freighter mobile browser** (`window.stellar` = `{ provider: "freighter", platform:
-    "mobile" }`) → the kit is bypassed and `src/lib/freighter-mobile.ts` pairs directly through
+    "mobile" }`) → the kit is bypassed and `src/lib/wallet/freighter-mobile.ts` pairs directly through
     `UniversalProvider`. The kit's module is subclassed so `isPlatformWrapper()` answers `false`;
     without that, the kit's picker skips itself in that browser and pairs through its own path. The
     pattern is taken from SoroSense, which is proven to work on a phone.
@@ -604,7 +1175,7 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   outside the team), and code comments always were, so this is now one rule rather than three.
 - **A hint under a field says only what has to be typed.** Accepted formats, size limits, valid
   shapes. Background and "why this matters" move into a **Tooltip** through
-  `components/elements/Help.tsx` (the `help` prop on `Field`, `TextAreaField`, `FileField`,
+  `components/form/Help.tsx` (the `help` prop on `Field`, `TextAreaField`, `FileField`,
   `DateTimeField`, `DateRangeField`, and `Section` in `StepDetails`). The reason: when every field
   carries a paragraph, reading becomes a decision, and a decision under every field makes people stop
   reading all of them.
@@ -634,7 +1205,7 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   and the receipts on the Done step are headed **Receipts**. What stayed, verbatim, is every warning
   that costs something: the name and the start cannot be changed, a distance cannot be removed, the
   terms cannot be edited, stock cannot be added later.
-- **No error reaches the screen as it was thrown** (`src/lib/errors.ts`). `friendlyError` is the one
+- **No error reaches the screen as it was thrown** (`src/lib/api/errors.ts`). `friendlyError` is the one
   mapping, pure and unit-tested: a contract revert is matched by band **and** variant (both contracts
   own a `NotInitialized`), a declined prompt reads as a cancellation, and everything else becomes
   "Something went wrong. Please try again." A variant with no sentence of its own falls to that
@@ -647,7 +1218,9 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   revert. `enter` hands control to the sUSD token contract, whose own errors are numbered in the same
   `1..=99` range, so a refusal to move money would otherwise print "This distance is full." The
   entry-time sentences (`QuotaFull`, `EventNotOpen`, `AddOnQuotaFull`) were removed for the same
-  reason and come back in STE-21, together with a way of telling a token revert from ours.
+  reason. STE-21 did not bring them back here: the entry flow says them from the chain's state
+  after a refusal (`modules/entry/lib/enter-failure.ts`), which needs no way of telling a token revert
+  from ours.
   **A step that stopped without an answer gets its own sentence**, never the generic one: the SDK
   throws distinctly when a transaction went out with no result coming back, and the button under that
   message repeats the step, which for the first step would publish a second race that can never be
@@ -655,13 +1228,13 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   again, so you do not create the same one twice." The same guard softens the decline: "Nothing was
   sent" is never printed over text saying something was already submitted.
   **The original error is logged with `console.error` in development only**, at the two catch sites
-  that map one (`hooks/useEventRun.ts`, `components/elements/FileField.tsx`). Mapping destroys it
+  that map one (`modules/organiser/create/hooks/useEventRun.ts`, `modules/organiser/create/components/FileField.tsx`). Mapping destroys it
   otherwise, and an organiser who is stuck then has nothing to report but the sentence everybody else
   sees. The guard is `=== "development"` rather than `!== "production"` so test output stays clean.
   What this app writes for the reader itself is thrown as a **`PlainError`**
-  (`src/lib/plain-error.ts`) and passes through untouched, as does an `ApiError`, whose message
-  `lib/api.ts` already writes for the screen. `PlainError` lives in a file of its own, with no
-  imports, because `lib/wallet.ts` throws one and pulling the whole Stellar SDK into that module
+  (`src/lib/api/plain-error.ts`) and passes through untouched, as does an `ApiError`, whose message
+  `lib/api/client.ts` already writes for the screen. `PlainError` lives in a file of its own, with no
+  imports, because `lib/wallet/kit.ts` throws one and pulling the whole Stellar SDK into that module
   graph put nearly two seconds on the wallet tests.
   **A wallet error is not always an `Error`.** Stellar Wallets Kit rejects with the wallet's own
   object, `{ error: { code, message } }`, which is why its `parseError` reads `e?.error?.message`
@@ -671,7 +1244,7 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   STE-34). `enter` transfers the fee straight from runner to organiser with no escrow, so the
   contract never holds the money and no refund can be forced by anyone. The text stands directly
   above the button or link that takes money, not in a footer and not in a modal that can be dismissed
-  unread. Its current home is `TabCategories`; **the `/events/[id]/enter` page in STE-21 must place
+  unread. Its current home is `TabCategories`; **`PayPanel` on `/events/[id]/enter` (STE-21) places
   it again** near the signing button. It is shown only when there genuinely is a way in (`Open` and
   slots remaining) — a warning that appears where it does not apply is how warnings stop being read.
 - **Event descriptions and Terms are plain text**, rendered with `whitespace-pre-line`. Decided by
@@ -687,7 +1260,8 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
   hypothetical, and the history says where to look: `f824cbd` wrote three em dashes into the
   size chart as escapes, `40edea3` took them out, and `cf907ce` taught the sweep to see that
   spelling at all. Check the removal with
-  `git show 40edea3 -- fe/src/modules/event-detail/component/TabAddOns.tsx`.
+  `git show 40edea3 -- fe/src/modules/event-detail/component/TabAddOns.tsx` (the path the file
+  had at that commit).
 - **No hex values, font names or raw px in a component** — everything comes from the tokens in
   `app/tokens.css` (Nabil's, STE-7). Those tokens have two copies (`fe/` and `landing-page/`); if you
   change them, change both in one commit.
@@ -696,5 +1270,11 @@ environment rather than jsdom: jsdom installs its own realm's `Uint8Array` as th
 - Testnet RPC `https://soroban-testnet.stellar.org`, passphrase `Test SDF Network ; September 2015`.
 - Tests: e2e + edge + positive + negative (the root `CLAUDE.md`). For the payment and scanning flows,
   the negative cases matter most: a full quota, a closed event, a second scan, being offline.
+- **Files are grouped by feature** (2026-09-15, `guides/ARCHITECTURE.md` §4.2). Used by one
+  feature: it lives in `src/modules/<feature>/` (`components/`, `hooks/`, `lib/`). Used by two or
+  more: it moves up to `src/components/`, `src/hooks/` or `src/lib/`, into the folder named for what
+  it is for, in the same commit that adds the second user. A module never imports another module's
+  `components/`, `hooks/` or `lib/`. Tests sit in `__tests__/` beside the file they test; `test/`
+  keeps only setup, e2e and the checks no feature owns.
 - Update this file as soon as a decision about the app's structure is made (routing, state, shared
   components).

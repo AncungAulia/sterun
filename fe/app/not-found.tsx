@@ -11,8 +11,8 @@
  * the same time. A group whose layout already draws the header needs its own
  * `not-found.tsx` WITHOUT it, which is why `(browse)` has one.
  */
-import { NotFoundMessage } from "@/components/layouts/NotFoundMessage";
-import { SiteFrame } from "@/components/layouts/SiteFrame";
+import { NotFoundMessage } from "@/components/layout/NotFoundMessage";
+import { SiteFrame } from "@/components/layout/SiteFrame";
 
 export default function NotFound() {
   return (

@@ -396,6 +396,22 @@ export class Indexer {
         return 0;
       }
 
+      case "registration_closes_set": {
+        // No hydration and no cross-check against get_registration_closes: the
+        // date may legitimately have moved again since this page, and a later
+        // registration_closes_set in the stream carries that. The contract
+        // emits nothing for a no-op, so every one of these is a real move.
+        const updated = await store.setRegistrationCloses(db, event.eventId, event.current, at);
+        if (!updated) {
+          this.log("warn", "close date for an event that is not indexed", {
+            eventId: event.eventId,
+            eventRef: envelope.id,
+          });
+          return 1;
+        }
+        return 0;
+      }
+
       // `mint` is redundant with `record_entered` — same token, same owner, one
       // ledger apart at most (INTERFACE.md §2.3 fixes the order). It is kept in
       // chain_events for the audit trail and materialises nothing.
@@ -439,6 +455,9 @@ export class Indexer {
         });
         // One record per slot, so the category's count is its records.
         await store.recountCategory(db, hydrated.eventId, hydrated.categoryId);
+        // STE-59: link the vault row this record was entered for, so the runner
+        // does not have to sign a third time to say what the chain already says.
+        await this.linkVaultRow(db, event.tokenId, envelope.txHash);
         return 0;
       }
 
@@ -461,6 +480,25 @@ export class Indexer {
 
       case "record_dnf":
         return this.advance(db, envelope, event.tokenId, "Dnf", { resultAt: occurredAt });
+    }
+  }
+
+  /**
+   * Link one record's vault row inside the page's transaction, under a savepoint.
+   *
+   * The confirm route can link the same row at the same moment. Whichever
+   * commits first wins, and the loser trips the unique index on token_id; that
+   * must not roll back the whole page and stall the poller over a row that is,
+   * in the end, linked exactly as intended.
+   */
+  private async linkVaultRow(db: PoolClient, tokenId: number, enterTxHash: string): Promise<void> {
+    await db.query("SAVEPOINT link_vault_row");
+    try {
+      await store.linkParticipantsFromChain(db, { tokenId, enterTxHash });
+      await db.query("RELEASE SAVEPOINT link_vault_row");
+    } catch (e) {
+      await db.query("ROLLBACK TO SAVEPOINT link_vault_row");
+      if ((e as { code?: string }).code !== "23505") throw e;
     }
   }
 
@@ -583,8 +621,13 @@ export class Indexer {
     const eventCount = await this.reader.eventCount();
     const events: ChainEvent[] = [];
     const categories: ChainCategory[] = [];
+    // v2.5 (STE-46). Read from state like everything else here; only a date
+    // that exists is kept, so a pre-v2.5 contract costs one failed read per event.
+    const closeDates = new Map<number, bigint>();
     for (let eventId = 0; eventId < eventCount; eventId += 1) {
       events.push(await this.reader.getEvent(eventId));
+      const closesAt = await this.reader.registrationCloses(eventId);
+      if (closesAt !== null) closeDates.set(eventId, closesAt);
       const categoryCount = await this.reader.categoryCount(eventId);
       for (let categoryId = 0; categoryId < categoryCount; categoryId += 1) {
         categories.push(await this.reader.getCategory(eventId, categoryId));
@@ -622,6 +665,9 @@ export class Indexer {
       await store.clearMaterialisedTables(client);
       const at = { source: "state" as const, ledger: fromLedger };
       for (const event of events) await store.upsertEvent(client, event, at);
+      for (const [eventId, closesAt] of closeDates) {
+        await store.setRegistrationCloses(client, eventId, closesAt, at);
+      }
       for (const category of categories) await store.upsertCategory(client, category, at);
       // After the events, because event_scanners references them.
       for (const scanner of stillAllowed) {
@@ -634,6 +680,13 @@ export class Indexer {
           transitions += 1;
         }
       }
+      // STE-59: the same links the poller makes, from state. The vault is not
+      // truncated by a rebuild, so this only ever adds links that were missing.
+      await store.linkParticipantsFromChain(client);
+      // STE-64: state has no transaction hashes, but the event log a rebuild
+      // keeps does. Without this every rebuilt transition lost the link a
+      // runner's profile shows for it.
+      await store.restoreTransitionProvenance(client, this.contracts.raceRecord);
       // The cursor is cleared and last_ledger pinned to where the walk started:
       // the next poll asks for `fromLedger + 1` onwards. Anything before that is
       // already in the state we just wrote.
@@ -704,6 +757,12 @@ export class Indexer {
         row.name !== onChain.name ? `name ${JSON.stringify(row.name)} != ${JSON.stringify(onChain.name)}` : "",
         row.startsAt !== onChain.startsAt ? `starts_at ${row.startsAt} != ${onChain.startsAt}` : "",
       ].filter(Boolean);
+      const closesAt = await this.reader.registrationCloses(eventId);
+      if (row.registrationClosesAt !== closesAt) {
+        differences.push(
+          `registration_closes_at ${row.registrationClosesAt ?? "none"} != ${closesAt ?? "none"}`,
+        );
+      }
       if (differences.length > 0) {
         findings.push({ kind: "event-differs", detail: `event ${eventId}: ${differences.join("; ")}` });
       }

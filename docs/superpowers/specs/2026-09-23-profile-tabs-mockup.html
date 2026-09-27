@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sterun, /profile with a blobatar and tabs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=Poppins:ital,wght@0,400;0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f8f8f8; --ink:#1e232b; --teal:#016985; --white:#ffffff;
+  --n100:#eef0f2; --n200:#dfe2e6; --n300:#c7ccd3; --n400:#9ba3ad; --n500:#6f7883; --n600:#515a66; --n700:#3a424c;
+  --teal50:#e8f4f8; --teal100:#cbe8f0; --teal200:#97d0e1; --teal300:#59b1cb; --teal600:#015872;
+  --success:#067a38; --success-surface:#e6f6ec; --success-border:#a8dcbc;
+  --danger:#a31c11; --danger-surface:#fceae8; --danger-border:#f0b3aa;
+  --warning:#8f5200; --warning-surface:#fdf3e2; --warning-border:#edc07a;
+  --r-sm:4px; --r-md:8px; --r-lg:16px;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
+  --display:'Big Shoulders Display',var(--sans);
+  --shadow-card:0 1px 2px rgb(30 35 43 / .06),0 4px 12px rgb(30 35 43 / .06);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e3e6ea;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+.intro h1{font-style:italic;font-weight:600;font-size:28px;margin:0 0 8px}
+.intro p{margin:0 0 10px;color:var(--n600);font-size:15px;max-width:82ch;line-height:1.6}
+.intro p b{color:var(--ink);font-weight:500}
+.block{margin-top:44px}
+.block > h2{font-size:13px;font-weight:600;color:var(--teal);margin:0 0 4px}
+.block > h3{font-style:italic;font-weight:600;font-size:21px;margin:0 0 6px}
+.block > p{margin:0 0 16px;color:var(--n600);font-size:14px;max-width:82ch;line-height:1.6}
+.screen{background:var(--paper);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden}
+.cap{font-size:12.5px;color:var(--n500);margin:8px 2px 0}
+.pair{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+
+/* site chrome */
+.site{display:flex;align-items:center;gap:14px;padding:12px 24px;background:#fff;border-bottom:1px solid var(--n200)}
+.logo{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.5px}
+.sbox{flex:1;max-width:320px;height:36px;border:1px solid var(--n300);border-radius:var(--r-md);display:flex;align-items:center;padding:0 10px;gap:8px;color:var(--n400);font-size:13px;background:#fff}
+.chip{height:36px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;border-radius:var(--r-md);font-size:13.5px}
+.chip.out{border:1px solid var(--n300);background:#fff}
+.chip.sec{background:var(--n100);border:1px solid var(--n200);font-variant-numeric:tabular-nums}
+
+.page{padding:28px 28px 34px}
+
+/* identity */
+.who{display:flex;align-items:center;gap:18px}
+.who img{border-radius:999px;background:#fff;border:1px solid var(--n200)}
+.who .l{font-size:13px;color:var(--n500);margin:0 0 2px}
+.who .addr{font-size:16px;font-variant-numeric:tabular-nums;word-break:break-all;margin:0 0 10px;line-height:1.35}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 15px;border:0;border-radius:var(--r-md);background:var(--teal);color:#fff;font-family:var(--sans);font-size:14px;font-weight:500;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--n300)}
+.btn.plain{background:transparent;color:var(--n600)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn svg{width:15px;height:15px}
+
+/* tabs */
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--n200);margin:26px 0 20px}
+.tab{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;font-size:14px;color:var(--n500);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab svg{width:16px;height:16px}
+.tab.on{color:var(--ink);font-weight:500;border-bottom-color:var(--teal)}
+.count{font-size:11.5px;font-weight:500;padding:1px 7px;border-radius:999px;background:var(--n100);color:var(--n600);font-variant-numeric:tabular-nums}
+.tab.on .count{background:var(--teal50);color:var(--teal600)}
+
+/* entries */
+.entry{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-card)}
+.entry + .entry{margin-top:12px}
+.entry .nm{font-weight:600;font-size:17px;margin:0 0 3px}
+.entry .fx{font-size:13.5px;color:var(--n600);font-variant-numeric:tabular-nums;margin:0 0 2px}
+.entry .wh{font-size:13px;color:var(--n500);font-variant-numeric:tabular-nums;margin:0}
+.entry .go{display:flex;gap:8px;flex-wrap:wrap}
+
+/* record cards */
+.rec{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-card)}
+.rec + .rec{margin-top:12px}
+.rec .top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.rec .nm{font-weight:600;font-size:17px;margin:0 0 3px}
+.rec .sub{font-size:13.5px;color:var(--n600);font-variant-numeric:tabular-nums;margin:0}
+.rec .time{font-family:var(--display);font-weight:700;font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
+.rec .foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--n100);font-size:12.5px;color:var(--n500)}
+.pill{display:inline-flex;align-items:center;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;border:1px solid}
+.pill.ok{background:var(--success-surface);color:var(--success);border-color:var(--success-border)}
+.pill.mut{background:var(--n100);color:var(--n600);border-color:var(--n200)}
+.pill.warn{background:var(--warning-surface);color:var(--warning);border-color:var(--warning-border)}
+
+/* money */
+.money{background:#fff;border:1px solid var(--n200);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow-card);max-width:520px}
+.money .l{font-size:13px;color:var(--n500);margin:0 0 2px}
+.money .v{font-family:var(--display);font-weight:700;font-size:44px;line-height:1;font-variant-numeric:tabular-nums;margin:0 0 16px}
+.money p.note{font-size:13px;color:var(--n500);margin:12px 0 0;line-height:1.55}
+
+/* empty */
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:46px 20px;text-align:center}
+.empty .ic{width:48px;height:48px;border-radius:999px;background:var(--n100);color:var(--n500);display:grid;place-items:center}
+.empty .ic svg{width:22px;height:22px}
+.empty b{font-weight:600;font-size:18px}
+.empty span{font-size:14px;color:var(--n600);max-width:44ch}
+
+/* phone */
+.phone{width:340px;background:var(--paper);border-radius:22px;box-shadow:var(--shadow-card);overflow:hidden;border:1px solid var(--n200)}
+.phone .page{padding:18px 16px 24px}
+.phone .who{flex-direction:column;align-items:flex-start;gap:12px}
+.phone .addr{font-size:13px}
+.phone .tabs{overflow:auto;margin:18px 0 16px}
+.phone .tab{padding:9px 10px;font-size:13px}
+.phone .entry{flex-direction:column;align-items:stretch}
+.phone .entry .go{display:grid;grid-template-columns:1fr 1fr}
+.phone .btn{height:36px;font-size:13.5px}
+
+.side{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:18px 20px}
+.side h4{margin:0 0 8px;font-size:14px;font-weight:600}
+.side p{margin:0 0 10px;font-size:13.5px;color:var(--n600);line-height:1.6}
+.side ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--n600);line-height:1.7}
+.side b{color:var(--ink);font-weight:500}
+.faces{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.faces figure{margin:0;text-align:center;width:72px}
+.faces img{border-radius:999px;background:#fff;border:1px solid var(--n200)}
+.faces figcaption{font-size:10.5px;color:var(--n500);font-variant-numeric:tabular-nums;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h1>/profile, with a face and three tabs</h1>
+  <p>What the page holds does not change: the wallet, the test money, the races this wallet is in, and the race record. What changes is that the three sections stop being one long scroll, and that the wallet gets a <b>picture</b> instead of only 56 characters.</p>
+  <p>The blobatar is <b>drawn from the address</b>, so it is a fact rather than a decoration: the same wallet is the same creature on every device, and on <b>/runner/[address]</b> too. It is the quickest way to see you are looking at the right wallet, which is the thing 56 base32 characters are worst at.</p>
+  <p><b>What was built and what was not.</b> The tabs were built, with the faucet last and the tab in the address, and the strip ended up divided evenly across the full width with a history icon on the record and the word <b>Faucet</b> rather than "Test money". <b>The blobatar was built and then removed</b>: on the real page, beside one address, it added nothing, and "See what others see" went with it because the record tab already carries "Open the public page". This file is kept as the record of that, not as a picture of the page.</p>
+  <p><b>One change to the order asked for.</b> Test money is last, not first. It only exists on testnet, so on mainnet that tab is not there at all and a page whose first tab disappears opens somewhere else depending on the network. And a runner opens this page for their pass, at a desk, on race morning. Entries first.</p>
+</div>
+
+<div class="block">
+  <h2>SCREEN 1</h2>
+  <h3>Your entries (the tab the page opens on)</h3>
+  <p>The wallet, its picture and what only its owner may do sit above the tabs, because they are true on all three.</p>
+  <div class="pair">
+    <div>
+      <div class="screen">
+        <div class="site">
+          <span class="logo">STERUN</span>
+          <span class="chip out">DI Yogyakarta</span>
+          <span class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> Search by race</span>
+          <span style="flex:1"></span>
+          <span class="chip out">For organisers</span>
+          <span class="chip sec">GA5V...HZS7</span>
+        </div>
+        <div class="page">
+          <div class="who">
+            <img src="https://blobatar.dev/avatar/GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7?size=96" width="96" height="96" alt="">
+            <div>
+              <p class="l">Your wallet</p>
+              <p class="addr">GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7</p>
+              <div class="acts">
+                <button class="btn ghost sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg> Copy address</button>
+                <button class="btn ghost sm">See what others see</button>
+                <button class="btn plain sm">Disconnect</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v14"/></svg> Your entries <span class="count">2</span></span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg> Race record <span class="count">5</span></span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/></svg> Test money</span>
+          </div>
+
+          <div class="entry">
+            <div>
+              <p class="nm">Merdeka Run 2026</p>
+              <p class="fx">10K &middot; Bib 412 &middot; DI Yogyakarta</p>
+              <p class="wh">Entered 14 Sep 2026</p>
+            </div>
+            <div class="go">
+              <button class="btn">Open my pass</button>
+              <button class="btn ghost">View my entry</button>
+            </div>
+          </div>
+          <div class="entry">
+            <div>
+              <p class="nm">Borobudur Night Trail</p>
+              <p class="fx">5K &middot; Bib 88 &middot; Jawa Tengah &middot; <span class="pill ok">Race pack collected</span></p>
+              <p class="wh">Entered 2 Sep 2026</p>
+            </div>
+            <div class="go">
+              <button class="btn">Open my pass</button>
+              <button class="btn ghost">View my entry</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 1. The count on a tab is drawn only when there is something to count, like the console's bell.</p>
+    </div>
+
+    <div class="side">
+      <h4>Why the picture earns its place</h4>
+      <p>A wallet address is the one thing on this page a person cannot read back to themselves. Two addresses that differ in the middle look identical at a glance, and the shortened form in the header hides exactly the part that differs.</p>
+      <p>A blobatar is <b>a pure function of the address</b>: same wallet, same creature, on this laptop, on the phone at the start line, and on the public record somebody else opens. Nothing is stored and nothing is asked for.</p>
+      <p>Four different wallets, four different creatures:</p>
+      <div class="faces">
+        <figure><img src="https://blobatar.dev/avatar/GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7?size=56" width="56" height="56" alt=""><figcaption>GA5V...HZS7</figcaption></figure>
+        <figure><img src="https://blobatar.dev/avatar/GBQ3XK6YV2LZ7WJ4TQ5N6RPMC2HD4YAFUZK7XSLQW3JHTMN5PQ2VDRAE?size=56" width="56" height="56" alt=""><figcaption>GBQ3...DRAE</figcaption></figure>
+        <figure><img src="https://blobatar.dev/avatar/GCJ7R2WP4NMLXK3TQVB6YFZD5HUAS2COERGN7XJ4MDPQK6VTL3WYBNXA?size=56" width="56" height="56" alt=""><figcaption>GCJ7...BNXA</figcaption></figure>
+        <figure><img src="https://blobatar.dev/avatar/GDT4MZ2XQK7VPLN3RJ6WYFHB5CUAE2SOGRXM7TJ4KDQPV6NYL3WZBMTC?size=56" width="56" height="56" alt=""><figcaption>GDT4...BMTC</figcaption></figure>
+      </div>
+      <p style="margin-top:12px">In the app it is <b>rendered on the device</b>, never fetched from blobatar.dev: a URL carrying the address would hand every runner's wallet to somebody else's server on every page view. Only this mockup uses the endpoint.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 2</h2>
+  <h3>Race record</h3>
+  <p>The same cards as the public page draws, because two pages claiming to be the record is how they drift. The link out sits at the top right of the tab rather than above the tabs, where it would look like it belonged to all three.</p>
+  <div class="pair">
+    <div>
+      <div class="screen">
+        <div class="site">
+          <span class="logo">STERUN</span>
+          <span class="chip out">DI Yogyakarta</span>
+          <span class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> Search by venue</span>
+          <span style="flex:1"></span>
+          <span class="chip out">For organisers</span>
+          <span class="chip sec">GA5V...HZS7</span>
+        </div>
+        <div class="page">
+          <div class="who">
+            <img src="https://blobatar.dev/avatar/GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7?size=96" width="96" height="96" alt="">
+            <div>
+              <p class="l">Your wallet</p>
+              <p class="addr">GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7</p>
+              <div class="acts">
+                <button class="btn ghost sm">Copy address</button>
+                <button class="btn ghost sm">See what others see</button>
+                <button class="btn plain sm">Disconnect</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v14"/></svg> Your entries <span class="count">2</span></span>
+            <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg> Race record <span class="count">5</span></span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/></svg> Test money</span>
+            <span style="flex:1"></span>
+            <button class="btn ghost sm" style="align-self:center;margin-bottom:8px">Open the public page</button>
+          </div>
+
+          <div class="rec">
+            <div class="top">
+              <div>
+                <p class="nm">Jogja Heritage Run 2026</p>
+                <p class="sub">21K &middot; Bib 1204 &middot; DI Yogyakarta &middot; 17 Aug 2026</p>
+              </div>
+              <div style="text-align:right">
+                <div class="time">1:58:24</div>
+                <span class="pill ok" style="margin-top:6px">Finished</span>
+              </div>
+            </div>
+            <div class="foot"><span>Last updated 17 Aug 2026</span><span>Prove this is yours</span></div>
+          </div>
+          <div class="rec">
+            <div class="top">
+              <div>
+                <p class="nm">Sleman Fun Walk</p>
+                <p class="sub">3K &middot; Bib 77 &middot; DI Yogyakarta &middot; 3 Aug 2026</p>
+              </div>
+              <div style="text-align:right">
+                <div class="time" style="font-size:20px;color:var(--n600);font-family:var(--sans);font-weight:600">No official time</div>
+                <span class="pill ok" style="margin-top:6px">Finished</span>
+              </div>
+            </div>
+            <div class="foot"><span>Last updated 3 Aug 2026</span><span>Prove this is yours</span></div>
+          </div>
+          <div class="rec">
+            <div class="top">
+              <div>
+                <p class="nm">Kaliurang Uphill 2026</p>
+                <p class="sub">8K &middot; Bib 31 &middot; DI Yogyakarta &middot; 20 Jul 2026</p>
+              </div>
+              <div style="text-align:right">
+                <span class="pill warn">Race cancelled</span>
+              </div>
+            </div>
+            <div class="foot"><span>Last updated 18 Jul 2026</span><span>Prove this is yours</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 2. Nothing about a record card changes; it moves.</p>
+    </div>
+
+    <div class="side">
+      <h4>Why tabs are right here and wrong on the directory</h4>
+      <p>Three sections, each of which answers a different question, and <b>nobody needs two of them at once</b>: the pass is for a desk, the record is for showing somebody, the faucet is for the first five minutes of a testnet account.</p>
+      <p>A scroll made the page's length depend on how many races you have run, so on a phone the faucet sat below eleven record cards.</p>
+      <p>What tabs would cost on a page where the parts <b>are</b> compared, like the directory, is the comparison itself. Here there is none to lose.</p>
+      <h4 style="margin-top:16px">The tab is in the address</h4>
+      <p><b>/profile?tab=entries</b>, the same rule the race console already follows, so a pass is one link away from a chat message and Back does what it says.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 3</h2>
+  <h3>Test money, and the phone</h3>
+  <p>The thinnest of the three, and the one that does not exist on mainnet: there the tab strip is two tabs, not three greyed out.</p>
+  <div class="pair">
+    <div>
+      <div class="screen">
+        <div class="page" style="padding-top:22px">
+          <div class="who">
+            <img src="https://blobatar.dev/avatar/GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7?size=96" width="96" height="96" alt="">
+            <div>
+              <p class="l">Your wallet</p>
+              <p class="addr">GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7</p>
+              <div class="acts">
+                <button class="btn ghost sm">Copy address</button>
+                <button class="btn ghost sm">See what others see</button>
+                <button class="btn plain sm">Disconnect</button>
+              </div>
+            </div>
+          </div>
+          <div class="tabs">
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v14"/></svg> Your entries <span class="count">2</span></span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg> Race record <span class="count">5</span></span>
+            <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/></svg> Test money</span>
+          </div>
+          <div class="money">
+            <p class="l">In this wallet</p>
+            <p class="v">sUSD 20</p>
+            <button class="btn">Get test sUSD</button>
+            <p class="note">Test money for trying Sterun. It has no value, and it only works while Sterun runs on the test network.</p>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Screen 3. On mainnet this tab is absent, and the strip is two tabs.</p>
+    </div>
+
+    <div class="phone">
+      <div class="page">
+        <div class="who">
+          <img src="https://blobatar.dev/avatar/GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7?size=64" width="64" height="64" alt="">
+          <div>
+            <p class="l">Your wallet</p>
+            <p class="addr">GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7</p>
+            <div class="acts">
+              <button class="btn ghost sm">Copy address</button>
+              <button class="btn plain sm">Disconnect</button>
+            </div>
+          </div>
+        </div>
+        <div class="tabs">
+          <span class="tab on">Your entries <span class="count">2</span></span>
+          <span class="tab">Race record <span class="count">5</span></span>
+          <span class="tab">Test money</span>
+        </div>
+        <div class="entry">
+          <div>
+            <p class="nm">Merdeka Run 2026</p>
+            <p class="fx">10K &middot; Bib 412 &middot; DI Yogyakarta</p>
+            <p class="wh">Entered 14 Sep 2026</p>
+          </div>
+          <div class="go">
+            <button class="btn">Open my pass</button>
+            <button class="btn ghost">View my entry</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="padding:0 16px 14px">Phone. The face shrinks, the strip scrolls sideways, and Open my pass is still the first thing under the tabs.</p>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <h2>SCREEN 4</h2>
+  <h3>An empty tab still has a face</h3>
+  <p>A wallet that has entered nothing sees the same head, so the page never looks broken or unloaded.</p>
+  <div class="screen" style="max-width:720px">
+    <div class="page" style="padding-top:22px">
+      <div class="who">
+        <img src="https://blobatar.dev/avatar/GCJ7R2WP4NMLXK3TQVB6YFZD5HUAS2COERGN7XJ4MDPQK6VTL3WYBNXA?size=96" width="96" height="96" alt="">
+        <div>
+          <p class="l">Your wallet</p>
+          <p class="addr">GCJ7R2WP4NMLXK3TQVB6YFZD5HUAS2COERGN7XJ4MDPQK6VTL3WYBNXA</p>
+          <div class="acts">
+            <button class="btn ghost sm">Copy address</button>
+            <button class="btn ghost sm">See what others see</button>
+            <button class="btn plain sm">Disconnect</button>
+          </div>
+        </div>
+      </div>
+      <div class="tabs">
+        <span class="tab on">Your entries</span>
+        <span class="tab">Race record</span>
+        <span class="tab">Test money</span>
+      </div>
+      <div class="empty">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v14"/></svg></span>
+        <b>No races yet</b>
+        <span>Races you enter appear here, with the pass you show at the race pack desk.</span>
+        <button class="btn" style="margin-top:6px">Find a race</button>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Screen 4. No count on a tab with nothing in it.</p>
+</div>
+
+</div>
+</body>
+</html>

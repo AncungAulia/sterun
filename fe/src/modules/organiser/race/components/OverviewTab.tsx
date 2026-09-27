@@ -1,0 +1,104 @@
+"use client";
+
+/**
+ * A race at a glance: how full, how much taken, how many packs out, and what
+ * is moving.
+ *
+ * Money and places come from the chain; the race's activity comes from the
+ * index. When the index does not answer, the cards that depend on it say "Not
+ * loaded" rather than 0, because zero race packs collected on race morning is
+ * a finding and a timeout is not.
+ */
+import { useEventAddOns } from "@/hooks/useEvents";
+import { useNowSeconds } from "@/hooks/useNowSeconds";
+import { useRaceRecords, useRaceRecordsFailed } from "@/modules/organiser/shared/hooks/useRaceRecords";
+import type { EventSummary } from "@/lib/event/events";
+import { entriesPerDay } from "@/modules/organiser/shared/lib/records";
+import { formatAmount, formatEventDateTimeLong } from "@/utils/format";
+
+import { datePassed } from "../lib/close-date";
+import { useRegistrationCloses } from "@/hooks/useRegistrationCloses";
+import { packsCollected, raceTotals, recentActivity } from "../lib/race";
+import { ActivityFeed } from "./ActivityFeed";
+import { AddOnsPanel } from "./AddOnsPanel";
+import { DistanceRings } from "./DistanceRings";
+import { EntriesPerDay } from "./EntriesPerDay";
+import { StatCard } from "@/modules/organiser/shared/components/StatCard";
+
+const DAYS = 14;
+const ACTIVITY_ROWS = 5;
+
+export function OverviewTab({ summary }: { summary: EventSummary }) {
+  const { eventId } = summary.event;
+  const nowS = useNowSeconds();
+  const addOns = useEventAddOns(eventId);
+  const closes = useRegistrationCloses(eventId);
+  const closesAt = closes.data ?? null;
+  const records = useRaceRecords([eventId]).get(eventId);
+  const recordsFailed = useRaceRecordsFailed(eventId);
+  const recordsLoading = records === undefined && !recordsFailed;
+
+  const totals = raceTotals(summary.categories, addOns.data ?? []);
+  const collected = records === undefined ? null : packsCollected(records);
+  const collectedValue =
+    collected !== null ? collected.toLocaleString("en-US") : recordsFailed ? "Not loaded" : "...";
+
+  return (
+    <>
+      <div className={closesAt === null ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"}>
+        <StatCard
+          label="Entries"
+          value={totals.entered.toLocaleString("en-US")}
+          unit={`of ${totals.quota.toLocaleString("en-US")}`}
+        />
+        <StatCard
+          label="Payments received"
+          value={formatAmount(totals.received)}
+          unit={`of ${formatAmount(totals.potential)} sUSD`}
+        />
+        <StatCard
+          label="Race packs collected"
+          value={collectedValue}
+          unit={collected === null ? undefined : `of ${totals.entered.toLocaleString("en-US")}`}
+        />
+        {/*
+          Only when there is one (Ancung, 2026-09-27). A race with no close
+          date read "Anytime, until you close them", which is not a fact about
+          this race: it is the absence of one, dressed as a number. Every race
+          published before STE-69 has none, so the card would have been noise on
+          most of the board and useful on none of it.
+
+          Where there is a date it stays, because it comes from the chain rather
+          than from the event document: the document's registration window is
+          what runners were promised, this is what actually refuses an entry,
+          and where the two disagree an organiser needs the one that decides.
+        */}
+        {closesAt !== null ? (
+          <StatCard
+            label={datePassed(closesAt, nowS) ? "Entries closed on" : "Entries close on their own"}
+            value={formatEventDateTimeLong(closesAt)}
+          />
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+        {nowS === undefined ? (
+          <div className="h-60 skeleton rounded-lg" />
+        ) : (
+          <EntriesPerDay values={entriesPerDay(records ?? [], nowS, DAYS)} nowS={nowS} />
+        )}
+        <DistanceRings categories={summary.categories} />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+        <ActivityFeed
+          items={recentActivity(records ?? [], summary.categories, ACTIVITY_ROWS)}
+          nowS={nowS}
+          loading={recordsLoading}
+          failed={recordsFailed}
+        />
+        <AddOnsPanel addOns={addOns.data} failed={addOns.isError} />
+      </div>
+    </>
+  );
+}

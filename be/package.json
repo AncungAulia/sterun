@@ -21,7 +21,13 @@
     "e2e:addons": "tsx scripts/e2e-addons.ts",
     "e2e:faucet": "tsx scripts/e2e-faucet.ts",
     "e2e:entry-rules": "tsx scripts/e2e-entry-rules.ts",
-    "e2e:quota": "tsx scripts/e2e-quota.ts"
+    "e2e:quota": "tsx scripts/e2e-quota.ts",
+    "e2e:chain-link": "tsx scripts/e2e-chain-link.ts",
+    "e2e:announcements": "tsx scripts/e2e-announcements.ts",
+    "e2e:claim-race": "tsx scripts/e2e-claim-race.ts",
+    "e2e:registration-closes": "tsx scripts/e2e-registration-closes.ts",
+    "e2e:record-results": "tsx scripts/e2e-record-results.ts",
+    "e2e:claim-many": "tsx scripts/e2e-claim-many.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

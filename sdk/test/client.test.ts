@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 import type { Client as EventRegistryClient } from "../vendor-dist/event-registry.js";
 import type { Client as RaceRecordClient } from "../vendor-dist/race-record.js";
-import { SterunClient } from "../src/client.js";
+import { CLAIM_MAX_BATCH, RECORD_RESULTS_MAX_BATCH, SterunClient, chunkResults } from "../src/client.js";
 import { SterunContractError } from "../src/errors.js";
 
 const HASH = "feb3cea959e59a1f5a42e9bac1f36e0fccc266de05960e173226fcadfd63fe29";
@@ -152,6 +152,164 @@ describe("organiser flow maps onto EventRegistry", () => {
 
     expect(registry.calls[0]?.method).toBe("increase_quota");
     expect(registry.calls[0]?.args).toEqual({ event_id: 3, category_id: 1, new_quota: 3_000 });
+  });
+
+  it("setRegistrationCloses sends the event and the close date as u64 (v2.5)", async () => {
+    const { client, registry } = clientWith({ set_registration_closes: good(ok(undefined)) });
+
+    await client.setRegistrationCloses(3, 1_790_000_000);
+
+    expect(registry.calls[0]?.method).toBe("set_registration_closes");
+    expect(registry.calls[0]?.args).toEqual({ event_id: 3, closes_at: 1_790_000_000n });
+  });
+
+  it("setRegistrationCloses refuses a date that is not a u64 before it reaches the network", async () => {
+    const { client, registry } = clientWith({ set_registration_closes: good(ok(undefined)) });
+
+    await expect(client.setRegistrationCloses(3, -1)).rejects.toThrow(/closesAt must fit in a u64/);
+    await expect(client.setRegistrationCloses(3, 2n ** 64n)).rejects.toThrow(/closesAt must fit in a u64/);
+    await expect(client.setRegistrationCloses(3, 1.5)).rejects.toThrow(/closesAt must be a whole number/);
+    expect(registry.calls).toHaveLength(0);
+    // The boundaries themselves are legal: 0 closes at once, u64::MAX never closes.
+    await client.setRegistrationCloses(3, 0);
+    await client.setRegistrationCloses(3, 2n ** 64n - 1n);
+    expect(registry.calls.map((c) => c.args)).toEqual([
+      { event_id: 3, closes_at: 0n },
+      { event_id: 3, closes_at: 2n ** 64n - 1n },
+    ]);
+  });
+
+  it("getRegistrationCloses answers null for an event with no date and the date otherwise (v2.5)", async () => {
+    const none = clientWith({ get_registration_closes: good(ok(undefined)) });
+    await expect(none.client.getRegistrationCloses(0)).resolves.toBeNull();
+    expect(none.registry.calls[0]?.args).toEqual({ event_id: 0 });
+
+    const set = clientWith({ get_registration_closes: good(ok(1_790_000_000n)) });
+    await expect(set.client.getRegistrationCloses(4)).resolves.toBe(1_790_000_000n);
+  });
+
+  it("names RegistrationClosed(20) from enter as an EventRegistry error (v2.5)", async () => {
+    // enter propagates reserve_slot's revert unchanged. The entry flow shows
+    // "registration has closed" for this and "this race is not open" for #4, so
+    // the name has to arrive, not just the number.
+    const { client } = clientWith({}, { enter: reverting(20) });
+    await expect(
+      client.enter({ runner: RUNNER, eventId: 0, categoryId: 0, participantHash: HASH }),
+    ).rejects.toMatchObject({
+      variant: "RegistrationClosed",
+      code: 20,
+      source: "event-registry",
+      method: "enter",
+    });
+  });
+
+  it("claimRacepackMany sends the queue and maps what came back skipped (v2.7)", async () => {
+    const skipped = [
+      { token_id: 7, reason: { tag: "NotEntered", values: undefined } },
+      { token_id: 9, reason: { tag: "NotFound", values: undefined } },
+    ];
+    const { client, record } = clientWith({}, { claim_racepack_many: good(ok(skipped)) });
+
+    const sent = await client.claimRacepackMany([7, 8, 9], SCANNER);
+
+    expect(record.calls[0]?.method).toBe("claim_racepack_many");
+    expect(record.calls[0]?.args).toEqual({ token_ids: [7, 8, 9], operator: SCANNER });
+    expect(sent.value).toEqual([
+      { tokenId: 7, reason: "not-entered" },
+      { tokenId: 9, reason: "not-found" },
+    ]);
+  });
+
+  it("claimRacepackMany refuses an empty queue and one over the cap, before signing", async () => {
+    const { client, record } = clientWith({}, { claim_racepack_many: good(ok([])) });
+
+    await expect(client.claimRacepackMany([], SCANNER)).rejects.toThrow(/at least one token id/);
+    await expect(
+      client.claimRacepackMany(Array.from({ length: CLAIM_MAX_BATCH + 1 }, (_, i) => i), SCANNER),
+    ).rejects.toThrow(/at most 100 race packs per call, got 101/);
+    expect(record.calls).toHaveLength(0);
+
+    // The cap itself is legal, and a full queue comes back with nothing skipped.
+    const full = await client.claimRacepackMany(
+      Array.from({ length: CLAIM_MAX_BATCH }, (_, i) => i),
+      SCANNER,
+    );
+    expect(full.value).toEqual([]);
+    expect(record.calls).toHaveLength(1);
+  });
+
+  it("names NotAuthorized(104) from claimRacepackMany as a RaceRecord error", async () => {
+    const { client } = clientWith({}, { claim_racepack_many: reverting(104) });
+    await expect(client.claimRacepackMany([1], SCANNER)).rejects.toMatchObject({
+      variant: "NotAuthorized",
+      code: 104,
+      source: "race-record",
+      method: "claimRacepackMany",
+    });
+  });
+
+  it("recordResults sends each row as the tagged outcome the bindings expect (v2.6)", async () => {
+    const { client, registry, record } = clientWith({}, { record_results: good(ok(undefined)) });
+
+    await client.recordResults(3, [
+      { tokenId: 10, kind: "timed", finishTimeS: 3_161 },
+      { tokenId: 11, kind: "untimed" },
+      { tokenId: 12, kind: "dnf" },
+    ]);
+
+    expect(registry.calls).toHaveLength(0);
+    expect(record.calls[0]?.method).toBe("record_results");
+    expect(record.calls[0]?.args).toEqual({
+      event_id: 3,
+      results: [
+        { token_id: 10, outcome: { tag: "Timed", values: [3_161] } },
+        { token_id: 11, outcome: { tag: "Untimed", values: undefined } },
+        { token_id: 12, outcome: { tag: "Dnf", values: undefined } },
+      ],
+    });
+  });
+
+  it("recordResults refuses what the chain would refuse, before anything is signed", async () => {
+    const { client, record } = clientWith({}, { record_results: good(ok(undefined)) });
+    const timed = (tokenId: number) => ({ tokenId, kind: "timed" as const, finishTimeS: 3_000 });
+
+    await expect(client.recordResults(3, [])).rejects.toThrow(/at least one result/);
+    await expect(
+      client.recordResults(3, Array.from({ length: RECORD_RESULTS_MAX_BATCH + 1 }, (_, i) => timed(i))),
+    ).rejects.toThrow(/at most 120 results per call, got 121/);
+    await expect(client.recordResults(3, [timed(1), { tokenId: 1, kind: "dnf" }])).rejects.toThrow(/listed twice/);
+    for (const finishTimeS of [0, -1, 1.5, 2 ** 32]) {
+      await expect(
+        client.recordResults(3, [{ tokenId: 1, kind: "timed", finishTimeS }]),
+      ).rejects.toThrow(/finishTimeS must be whole seconds/);
+    }
+    expect(record.calls).toHaveLength(0);
+
+    // The boundaries themselves are legal.
+    await client.recordResults(3, Array.from({ length: RECORD_RESULTS_MAX_BATCH }, (_, i) => timed(i)));
+    await client.recordResults(3, [{ tokenId: 1, kind: "timed", finishTimeS: 2 ** 32 - 1 }]);
+    expect(record.calls).toHaveLength(2);
+  });
+
+  it("names ResultForAnotherEvent(108) from recordResults as a RaceRecord error", async () => {
+    const { client } = clientWith({}, { record_results: reverting(108) });
+    await expect(client.recordResults(3, [{ tokenId: 1, kind: "dnf" }])).rejects.toMatchObject({
+      variant: "ResultForAnotherEvent",
+      code: 108,
+      source: "race-record",
+      method: "recordResults",
+    });
+  });
+
+  it("chunkResults splits a finish list into ordered batches of at most 120", () => {
+    const list = Array.from({ length: 312 }, (_, i) => i);
+    const batches = chunkResults(list);
+    expect(batches.map((b) => b.length)).toEqual([120, 120, 72]);
+    expect(batches.flat()).toEqual(list);
+    expect(chunkResults([], 10)).toEqual([]);
+    expect(chunkResults(list.slice(0, 100), 30).map((b) => b.length)).toEqual([30, 30, 30, 10]);
+    expect(() => chunkResults(list, 121)).toThrow(/from 1 to 120/);
+    expect(() => chunkResults(list, 0)).toThrow(/from 1 to 120/);
   });
 
   it("setEventStatus sends the tagged enum the bindings expect", async () => {

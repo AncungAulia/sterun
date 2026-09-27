@@ -22,7 +22,7 @@
  */
 import type { ReactNode } from "react";
 
-import { ConsoleFrame } from "@/modules/organiser/component/ConsoleFrame";
+import { ConsoleFrame } from "@/modules/organiser/shared/components/ConsoleFrame";
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   return <ConsoleFrame>{children}</ConsoleFrame>;

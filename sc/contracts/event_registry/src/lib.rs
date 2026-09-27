@@ -173,6 +173,18 @@ pub enum DataKey {
     /// at 0 the first time it takes an entry under the new code. Its existing
     /// records keep the per-distance numbers they were issued.
     EventEntryCount(u32),
+    /// persistent -> `u64`, keyed by `event_id` (v2.5): the moment entries stop,
+    /// as a ledger timestamp in unix seconds.
+    ///
+    /// A key rather than a field on [`EventData`], for the same reason as
+    /// [`DataKey::EventEntryCount`]: a required field on a stored struct is the
+    /// one change an in-place upgrade cannot survive.
+    ///
+    /// **Absent means no automatic close**, which is how every event created
+    /// before v2.5 reads, and how any event reads whose organiser never set a
+    /// date. Those behave exactly as before: entries stop when the organiser
+    /// moves the event out of `Open`, and at no other time.
+    RegistrationCloses(u32),
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +231,15 @@ pub enum Error {
     /// splitting it into two codes would make every client distinguish a
     /// no-op from a shrink, and neither is allowed.
     QuotaNotIncreased = 19,
+    /// `reserve_slot` or `reserve_addon` at or after the event's registration
+    /// close date (v2.5).
+    ///
+    /// Its own code rather than [`Error::EventNotOpen`], because the two send a
+    /// runner to different places: "this race is not open" is a state the
+    /// organiser chose, "registration has closed" is a date that passed, and
+    /// an app that could not tell them apart would have to guess which sentence
+    /// to show. The event's status is still `Open` when this fires.
+    RegistrationClosed = 20,
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +282,24 @@ pub struct QuotaIncreased {
     pub category_id: u32,
     pub previous: u32,
     pub current: u32,
+}
+
+/// Emitted when an organiser sets or moves an event's registration close date
+/// (v2.5).
+///
+/// `previous` is `None` the first time a date is set. Both values are carried
+/// for the same reason as [`QuotaIncreased`]: "entries were extended from the
+/// 20th to the 27th" is a dated fact, and a consumer should not have to diff
+/// against its own last read to state it. Whether `current` is later than
+/// `previous` — the extension case that the console pairs with a signed
+/// announcement — is visible from the event alone.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistrationClosesSet {
+    #[topic]
+    pub event_id: u32,
+    pub previous: Option<u64>,
+    pub current: u64,
 }
 
 #[contractevent]
@@ -667,6 +706,61 @@ impl EventRegistry {
         Ok(())
     }
 
+    /// Sets when entries to an event stop on their own (v2.5, STE-46).
+    ///
+    /// From `closes_at` on — compared with the ledger's close time, in unix
+    /// seconds — [`Self::reserve_slot`] and [`Self::reserve_addon`] refuse with
+    /// [`Error::RegistrationClosed`], whatever the event's status. Before it,
+    /// nothing changes: an event still has to be `Open` to take an entry.
+    ///
+    /// **Why the chain enforces a date at all.** The organiser writes a close
+    /// date into the event document, and runners read it on the race page.
+    /// Until v2.5 that date enforced nothing: registration stayed open until
+    /// somebody remembered to press Close entries, so one missed click turned
+    /// the race page into a false statement. What is printed should be what
+    /// happens.
+    ///
+    /// **The date can move either way, and can be set in the past.** Earlier is
+    /// closing early, which needs no ceremony; a date already passed closes
+    /// entries at once. Later is an extension, and that is also how an event
+    /// is reopened after its date: moving the status back to `Open` alone
+    /// would reopen nothing, because the date still refuses.
+    ///
+    /// **What the contract cannot check**: that anyone was told. The document's
+    /// date is frozen by its hash and stays what runners were promised when
+    /// they paid; this is what is enforced now. An extension is a real change to
+    /// that promise, so the console pairs a later date with a signed
+    /// announcement (STE-40). That pairing is an application-level rule, and
+    /// nothing on chain enforces it.
+    ///
+    /// Setting the date the event already has changes nothing and emits
+    /// nothing, so the ledger never records a move that did not happen. There
+    /// is no status gate, like [`Self::increase_quota`]: on a terminal event
+    /// the date sells nothing either way. There is no way to remove a date
+    /// once set; a date far in the future has the same effect.
+    pub fn set_registration_closes(env: Env, event_id: u32, closes_at: u64) -> Result<(), Error> {
+        bump_instance(&env);
+        auth_organiser(&env, event_id)?;
+
+        let key = DataKey::RegistrationCloses(event_id);
+        let previous: Option<u64> = env.storage().persistent().get(&key);
+        if previous == Some(closes_at) {
+            bump_persistent(&env, &key);
+            return Ok(());
+        }
+
+        env.storage().persistent().set(&key, &closes_at);
+        bump_persistent(&env, &key);
+
+        RegistrationClosesSet {
+            event_id,
+            previous,
+            current: closes_at,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     /// Adds a paid add-on to an event (STE-35). Add-on ids restart at 0 for
     /// every event, exactly like category ids.
     ///
@@ -826,6 +920,7 @@ impl EventRegistry {
         if event.status != EventStatus::Open {
             return Err(Error::EventNotOpen);
         }
+        ensure_registration_open(&env, event_id)?;
 
         let mut category = read_category(&env, event_id, category_id)?;
         if category.entered_count >= category.quota {
@@ -884,6 +979,7 @@ impl EventRegistry {
         if event.status != EventStatus::Open {
             return Err(Error::EventNotOpen);
         }
+        ensure_registration_open(&env, event_id)?;
 
         let mut addon = read_addon(&env, event_id, addon_id)?;
         if addon.reserved_count >= addon.quota {
@@ -969,6 +1065,19 @@ impl EventRegistry {
         read_addon(&env, event_id, addon_id)
     }
 
+    /// The event's registration close date in unix seconds, or `None` when it
+    /// has none and entries stop only when the organiser closes them (v2.5).
+    ///
+    /// Reverts [`Error::EventNotFound`] for an unknown event rather than
+    /// answering `None`, which would read as "this race closes manually".
+    pub fn get_registration_closes(env: Env, event_id: u32) -> Result<Option<u64>, Error> {
+        read_event(&env, event_id)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RegistrationCloses(event_id)))
+    }
+
     /// How many add-ons this event has. Also the exclusive upper bound on a
     /// valid `addon_id`, which is what bounds the loop in `RaceRecord.enter`.
     pub fn addon_count(env: Env, event_id: u32) -> u32 {
@@ -996,6 +1105,24 @@ fn bump_persistent(env: &Env, key: &DataKey) {
     env.storage()
         .persistent()
         .extend_ttl(key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+/// Refuses an entry at or after the event's registration close date (v2.5).
+/// An event with no date is never refused here.
+///
+/// The key's TTL is refreshed on every entry that reads it, like the event
+/// entry itself: a close date that archived would stop being enforced by
+/// nothing more than time passing, which is exactly the failure it exists to
+/// prevent.
+fn ensure_registration_open(env: &Env, event_id: u32) -> Result<(), Error> {
+    let key = DataKey::RegistrationCloses(event_id);
+    if let Some(closes_at) = env.storage().persistent().get::<_, u64>(&key) {
+        bump_persistent(env, &key);
+        if env.ledger().timestamp() >= closes_at {
+            return Err(Error::RegistrationClosed);
+        }
+    }
+    Ok(())
 }
 
 fn read_admin(env: &Env) -> Result<Address, Error> {

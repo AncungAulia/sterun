@@ -42,6 +42,7 @@ export const EVENT_REGISTRY_ERRORS: Readonly<Record<number, string>> = {
   17: "OrganiserNotFound",
   18: "NotAllowlistedOrganiser",
   19: "QuotaNotIncreased",
+  20: "RegistrationClosed",
 };
 
 /** INTERFACE.md §2.4 — RaceRecord (C2). */
@@ -54,6 +55,8 @@ export const RACE_RECORD_ERRORS: Readonly<Record<number, string>> = {
   105: "InvalidFinishTime",
   106: "TooManyAddOns",
   107: "DuplicateAddOn",
+  108: "ResultForAnotherEvent",
+  109: "TooManyClaims",
 };
 
 /** INTERFACE.md §2.4 — OpenZeppelin, embedded in the RaceRecord spec. */

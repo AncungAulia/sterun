@@ -17,7 +17,7 @@ file** last changed, so differing headers between files are deliberate: `INTERFA
 to `HASH_AND_TOTP.md (v1.0.1)` means the interface document genuinely was not touched since the
 freeze. What governs consumers is always the topmost entry in the version list below.
 
-Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.4.0** while `HASH_AND_TOTP.md` is still at
+Since v2.0.0 the two do differ: `INTERFACE.md` is at **v2.7.0** while `HASH_AND_TOTP.md` is still at
 **v1.0.1**, because v2 did not touch the hash or TOTP definitions at all.
 
 ---
@@ -81,6 +81,264 @@ The Unicode escapes in `HASH_AND_TOTP.md` §3.5/§3.6 and in the [1.0.1] entry b
 escapes (`\u00a0`, `\u0009`, `\u000a`, `\u0301`) rather than as the characters themselves. They
 are invisible or, in the NFC pair, identical on screen — writing them literally is what the [1.0.1]
 entry below is a fix for.
+
+---
+
+## [2.7.0] — 2026-09-23
+
+**MINOR — a desk hands over many race packs in one signature (STE-66).** One new function, two new
+types, one new error code at the next free C2 number. No new event, no signature or event layout
+moved, no storage change, nothing renumbered.
+
+### Why
+
+The scanner works offline: the roster is on the phone, the decision is made on the phone, and every
+hand-over is queued locally. Sending that queue was one transaction — and one wallet approval — per
+runner. At the scale this product is for (Merdeka Run 2026 filled 8,100 slots), a desk that handed
+over 300 packs asked its volunteer to approve 300 prompts.
+
+### What was added
+
+| | |
+| --- | --- |
+| `claim_racepack_many(token_ids: Vec<u32>, operator: Address) -> Result<Vec<SkippedClaim>, Error>` | the operator authorises once; authority is checked against the registry per event in the batch |
+| `SkippedClaim { reason: ClaimSkipped, token_id: u32 }` | one pack the batch did not claim |
+| `ClaimSkipped = NotFound \| NotEntered` | why: no such record, or no longer `Entered` |
+| `TooManyClaims = 109` | more than 100 ids, refused before anything is read |
+
+The next free C2 code is now **110**.
+
+### The decision that matters: this batch is NOT atomic
+
+v2.6's `record_results` reverts on the first bad row. This one does the opposite, and the difference
+is not taste:
+
+| | `record_results` (v2.6) | `claim_racepack_many` (v2.7) |
+| --- | --- | --- |
+| a row the chain refuses | reverts the batch | **skipped and reported** |
+| why | a bad row means a bad file, and the preview is where a file is fixed | a bad row means **two desks met the same runner** — the STE-25 case, and the ordinary outcome at a busy desk |
+| what still reverts | — | `NotAuthorized(104)`: a misconfigured desk, not a race |
+
+Skipping an unauthorised operator instead of reverting would hand a volunteer half a drained queue
+with no explanation. Reverting on an already-claimed pack would let one runner block the other 299.
+
+### The cap is 100 — measured
+
+Both contracts from wasm, under the per-transaction limits live on testnet and mainnet (2026-09-23):
+
+| Resource for `n` packs | Measured | Live limit | Binds at |
+| --- | --- | --- | ---: |
+| contract event bytes | `160n` (a `racepack_claimed` carries the operator address) | 16,384 | 102 |
+| written entries | `n + 1` | 200 | 199 |
+| footprint entries | `2n + 8` (testutils; the network reports less) | 400 | 196 |
+| CPU instructions | 38.7 M at 100 | 400 M | — |
+
+The cap is **100**, two rows below the ceiling: being short costs one more transaction, being over
+costs a volunteer's queue at the counter. `a_full_queue_of_race_packs_fits_the_network_limits` pins it
+and computes the headroom from that run rather than from the constant. Note the contrast with v2.6,
+where a row costs 136 bytes and the cap is 120 — the operator address is the whole difference.
+
+### Impact on existing data and running clients
+
+- **Existing records:** unchanged, and `claim_racepack` is untouched — it and every batch row share one
+  code path, and its 85 tests pass unchanged.
+- **Indexers:** no new event. A batch is indistinguishable from the same hand-overs one at a time,
+  except that they share a transaction.
+- **Vectors:** none added, none changed. `HASH_AND_TOTP.md` is untouched.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| `cd sc && cargo test` | RaceRecord 97 (12 new), EventRegistry 107 |
+| mutations | unauthorised skipped instead of fatal, already-claimed fatal instead of skipped, no cap, authority checked once for any event, no operator signature, a missing record fatal, `claimed_at` not written: each fails a test |
+| wasm | `20abebd14dd7d4f4e1f5a07774845bcba2d5b963025cfe10269c966d80b7373a`, 27,055 B |
+
+**Not yet upgraded on testnet.** Stacked on v2.6.0 (STE-60) and approved the same way: Axel and fable,
+then an in-place upgrade of `CCVW7WVC…`.
+
+---
+
+## [2.6.0] — 2026-09-17
+
+**MINOR — an organiser records many results in one signature (STE-60).** One new function, two new
+types, one new error code taking the next free number in the C2 band. No new event, no signature
+moved, no event layout moved, no storage change, nothing renumbered.
+
+### Why
+
+A finish list is recorded one call per runner: 312 finishers are 312 organiser signatures. The
+console's results screen (STE-58) cannot reasonably ask for that, and batching cannot be done from the
+client side because **a Stellar transaction may hold only one `InvokeHostFunctionOp`**. So it is one
+contract function that loops. Split out of STE-44, whose backend half shipped on 2026-09-14.
+
+### What was added
+
+| | |
+| --- | --- |
+| `record_results(event_id: u32, results: Vec<ResultEntry>) -> Result<(), Error>` | organiser of `event_id`, authorised once for the batch |
+| `ResultEntry { outcome: ResultOutcome, token_id: u32 }` | one row |
+| `ResultOutcome = Timed(u32) \| Untimed \| Dnf` | the three single-result functions, one variant each |
+| `ResultForAnotherEvent = 108` | a row names a record of a different event |
+
+The next free C2 code is now **109**.
+
+### Decisions, recorded so they are not reopened by accident
+
+- **Atomic.** The first invalid row reverts the whole batch, rows before it included. Results are
+  terminal, and the preview (STE-20, STE-44) is where a file is fixed before anything is published. A
+  partial batch would leave the organiser reconciling which half landed. Proposed on STE-60 before the
+  spec PR, as the ticket asked.
+- **One code path.** `record_finish`, `record_finish_untimed`, `record_dnf` and every batch row run the
+  same function, so a batch cannot accept what a single call refuses. The single functions' behaviour
+  did not change; their 72 tests pass unchanged on the refactor.
+- **Every row must belong to `event_id`.** The organiser gate is read once, for that event. Without
+  the row check, the organiser of one race could publish results into another race's records.
+- **The same events as the single calls**, one per row, in row order. An indexer needs no new handler.
+- **No cap in the contract**, and an empty batch succeeds with nothing recorded. The network's
+  per-transaction limits are what bound a batch, and they differ by network and move over time.
+
+### The maximum batch is 120 rows — measured
+
+Both contracts deployed from wasm, every row a timed finish (the largest event), against the
+per-transaction limits **live on testnet and mainnet** on 2026-09-17, read with `stellar network
+settings` and identical on both:
+
+| Resource for `n` timed rows | Measured | Live limit | Binds at |
+| --- | --- | --- | ---: |
+| contract event bytes | `136n` | 16,384 | **120** |
+| written entries | `n + 1` (testutils) | 200 | 199 |
+| footprint entries | `2n + 8` (testutils), less on the network | 400 | 196 |
+| CPU instructions | about 41 M at 100 | 400 M | — |
+
+Two tests pin it (120 rows fit; 121 fail with `contract events size bytes: 16456 > 16384`), and the
+testnet e2e confirms both on the real network: 120 rows landed in one transaction, and 121 rows,
+which **simulate cleanly** because simulation does not enforce the event-size limit, failed on the
+ledger on resources and moved no record. The SDK exposes
+`RECORD_RESULTS_MAX_BATCH = 120` and refuses a larger batch before signing.
+
+**A first measurement said 46, and was wrong.** It used soroban-sdk 26's
+`InvocationResourceLimits::mainnet()`, whose 50 written and 100 footprint entries are older than the
+network's settings. The testnet e2e caught it: the network's simulation reported a smaller footprint
+than the testutils count (`5 + n` against `2n + 8`), which sent the measurement back to the live
+limits. If the network's limits
+change, the number is measured again with the new settings, not scaled.
+
+### Also corrected in the wasm
+
+`RecordData.bib_no`'s doc comment said "the category sequence", wrong since v2.3. Doc comments travel
+in the contract spec and the wasm hash, so §0 deferred the fix to C2's next real wasm change. This is
+that change. `RecordData`'s shape did not move.
+
+### Impact on existing data and running clients
+
+- **Existing records:** unchanged. Proven against the live wasm (`0e29026d…`, now committed as
+  `race_record_live_pre_results.wasm`): records it minted and checked in take a batch after the
+  upgrade, and a terminal record it wrote stays terminal.
+- **Running clients:** nothing they call changed. The three single functions keep their signatures,
+  errors and events.
+- **Indexers:** no new event. A batch is indistinguishable from the same results recorded one by one,
+  except that the events share a transaction.
+- **Vectors:** none added, none changed. `HASH_AND_TOTP.md` is untouched.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| `cd sc && cargo test` | RaceRecord 85 (13 new), EventRegistry 107 |
+| mutations | no event check, non-atomic, no batch auth, a zero time allowed, untimed without check-in, DNF out of a terminal state, the wrong event emitted: each fails a test |
+| wasm | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2`, 24,844 B |
+
+**Not yet upgraded on testnet.** Stacked on v2.5.0 (STE-46), and approved the same way: Axel and fable,
+then an in-place upgrade of `CCVW7WVC…`.
+
+---
+
+## [2.5.0] — 2026-09-17
+
+**MINOR — entries close on their own at the registration close date (STE-46).** Two new functions,
+one new event, one new error code taking the next free number in the C1 band, and one storage key
+appended. No signature moved, no event layout moved, nothing was renumbered.
+
+### Why
+
+The event wizard asks an organiser for a registration close date, it goes into the event document,
+and runners read it on the race page. Until v2.5 the contract enforced none of it: `reserve_slot`
+checked the status and the quota and nothing else, so entries stayed open until somebody pressed
+Close entries. An organiser reasonably reads a close date as "set it and the race handles itself";
+one forgotten click turned the race page into a false statement to every runner who looked. That is
+the "what is printed must be what happens" promise from STE-34 and STE-36, broken quietly.
+
+Axel's decision in STE-45 set the shape and all five open questions; Ancung asked on STE-46 to bring
+it into phase 2 once STE-40 (signed announcements) was live, since extensions depend on it.
+
+### What was added
+
+| | |
+| --- | --- |
+| `set_registration_closes(event_id: u32, closes_at: u64) -> Result<(), Error>` | organiser-gated through the same `auth_organiser` route as `increase_quota`; unix seconds; either direction |
+| `get_registration_closes(event_id: u32) -> Result<Option<u64>, Error>` | `None` = no date, closes manually only; `EventNotFound(2)` for an unknown event |
+| `RegistrationClosesSet` | topics: `"registration_closes_set"`, `event_id`; data: `current: u64`, `previous: Option<u64>` (alphabetical, the `ScMap` wire order) |
+| `RegistrationClosed = 20` | `reserve_slot` / `reserve_addon` at or after the date, on an event that is otherwise `Open` |
+| `DataKey::RegistrationCloses(event_id) -> u64` | appended last; not documented as surface, recorded here because it is the storage change |
+
+The next free C1 code is now **21**.
+
+### The rules, each of them a decision from STE-45
+
+- **Enforced by the ledger clock**: refused when `env.ledger().timestamp() >= closes_at`. Ledgers
+  close every few seconds, and second-level granularity is irrelevant to a registration deadline.
+- **A new error code, not `EventNotOpen(4)`.** "This race is not open" and "registration has closed"
+  send a runner to different places. The status is checked **first**, so a `Closed` event still
+  answers `EventNotOpen(4)` whatever its date, and the two stay distinguishable.
+- **A key, not a field on `EventData`.** A required field on a struct that is already stored is the
+  one change an in-place upgrade cannot survive.
+- **Races already on chain are left manual.** No key, no change, no migration. An organiser can opt
+  one in by setting a date.
+- **The date moves either way.** Earlier is closing early and needs no ceremony; a past date closes
+  at once. Later is an extension, and it is also the only way to reopen after the date: moving the
+  status back to `Open` alone reopens nothing, so the console offers "Reopen and extend to <date>" as
+  one action.
+- **An extension is paired with a signed announcement (STE-40), and the chain does not check that.**
+  The document's date is frozen by its hash and stays what runners were promised when they paid; the
+  on-chain date is what is enforced now; the announcement is the dated, signed record connecting the
+  two. That pairing is an application-level rule, and this spec does not claim otherwise.
+
+Two choices made in the implementation, recorded so they are not reopened by accident:
+
+- **Setting the date the event already has changes nothing and emits nothing**, so every
+  `RegistrationClosesSet` in the ledger is a real move.
+- **There is no way to remove a date once set.** A far-future date has the same effect, and a removal
+  function would be one more thing a client has to explain. It can be appended later if a real need
+  appears.
+
+### Impact on existing data and running clients
+
+- **Existing events:** unchanged. None has a date, so none is refused by the new rule. Proven against
+  the live wasm (`33b5e687…`, now committed as `event_registry_live_pre_close_date.wasm`): an event it
+  opened and sold entries in takes a date after the upgrade and stops at it, while the event beside it
+  with no date keeps selling and its bibs continue where the old code left them.
+- **`RaceRecord.enter` can revert `RegistrationClosed(20)`**, propagated from `reserve_slot`. A client
+  that maps error codes to sentences needs one more; a client that does not falls back to its generic
+  message, which is what happens today for any code it does not know. RaceRecord's wasm does not
+  change.
+- **Indexers:** a consumer that does not know `RegistrationClosesSet` simply does not show close
+  dates. No existing event changed layout.
+- **Vectors:** none added, none changed. `HASH_AND_TOTP.md` is untouched.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| `cd sc && cargo test` | EventRegistry 107 (16 new), RaceRecord 72 |
+| mutations | removing either check, `>=` as `>`, the no-op emitting, no TTL refresh on entry, the date checked before the status, the view answering `None` for an unknown event: each fails a test |
+| `node sc/scripts/check-interface.mjs` | OK after the bindings are regenerated |
+| `bash docs/specs/verify.sh` | OK (nothing it covers changed) |
+| wasm | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942`, 35,814 B (doc comments travel in the contract spec, hence most of the growth) |
+
+**Not yet upgraded on testnet.** This entry is the spec PR; the live EventRegistry at `CAPB6NQP…`
+keeps running v2.4 until Axel and fable approve it. The end-to-end run against a throwaway deployment
+of this wasm is recorded in `docs/deployments.md`.
 
 ---
 

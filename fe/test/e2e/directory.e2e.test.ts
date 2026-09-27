@@ -26,8 +26,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { listEvents } from "@/lib/events";
-import { readClient } from "@/lib/sterun";
+import { listEvents } from "@/lib/event/events";
+import { readClient } from "@/lib/chain/sterun";
 import { formatEventDate, formatPrice } from "@/utils/format";
 
 const live = process.env.STERUN_E2E === "1" ? describe : describe.skip;

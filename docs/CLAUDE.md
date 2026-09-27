@@ -4,11 +4,13 @@
 | --- | --- | --- |
 | `SYSTEM_DESIGN.md` | the authoritative C1–C14 design: architecture, storage model, lifecycle, TOTP, user flows, the 30-day plan | yes, but see below |
 | `deployments.md` | deployment **evidence**: contract addresses, stellar.expert links, wasm hashes, dates | append-only |
+| `EVIDENCE.md` | the **one page** the Instawards Chapter Lead reads: SOW §6.1 per deliverable, each row a link they can open, and every gap named with its date | yes; update it the moment a gap closes |
 | `brand.md` | asset, colour and type guidance (C13) — a summary readable without opening code | yes, but see below |
 | `landing-copy.md` | the landing page's text (STE-12) and the decisions behind it | yes; when the copy in the code differs, bring the two level in the same commit |
 | `social/` | drafts of public content before it goes out, plus its URL afterwards | yes |
 | `WEB_APP_IA.md` | information architecture for `fe/`: the page map, the data limits per page, the shape of the event metadata document, the build order | yes, same rules as `SYSTEM_DESIGN.md` |
 | `specs/` | the **FROZEN** handoff contract (C4) | has its own rules → [`specs/CLAUDE.md`](specs/CLAUDE.md) |
+| `rehearsal/` | the STE-25 mock race (`run.sh`) and the STE-68 demo seed (`seed.sh`): their sources, the demo posters, and one directory of evidence per run under `runs/` | the scripts yes; a run directory **never** — it is what the run wrote, failures included. Re-run instead |
 | `superpowers/` | design specs and implementation plans written before the code, one file per piece of work, dated | append a new file; leave the old ones as they were |
 
 ## `superpowers/` — the reasoning behind a piece of work

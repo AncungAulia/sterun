@@ -91,6 +91,12 @@ const eventSchema = {
     status: { type: "string", enum: ["Draft", "Open", "Closed", "Completed", "Cancelled"] },
     source: { type: "string", enum: ["event", "state"] },
     last_ledger: { type: "integer" },
+    /**
+     * Unix seconds, as a string like every u64 here. Entries are refused from
+     * this moment (EventRegistry v2.5, STE-46). `null` = the event has no close
+     * date and entries stop only when the organiser closes them.
+     */
+    registration_closes_at: { type: ["string", "null"], pattern: DIGITS },
   },
 } as const;
 
@@ -264,6 +270,7 @@ const toEventJson = (e: store.EventRow) => ({
   status: e.status,
   source: e.source,
   last_ledger: e.lastLedger,
+  registration_closes_at: e.registrationClosesAt === null ? null : e.registrationClosesAt.toString(),
 });
 
 const toRecordJson = (r: store.RecordRow) => ({

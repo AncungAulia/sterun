@@ -166,6 +166,32 @@ export async function upsertEvent(db: Queryable, ev: ChainEvent, at: Provenance)
 }
 
 /**
+ * The event's registration close date, for `registration_closes_set` and for a
+ * rebuild (v2.5, STE-46). `null` clears it, which only a rebuild does: the
+ * contract has no way to remove a date, but a rebuild writes what state says.
+ *
+ * False when the event is not indexed, the same orphan rule as
+ * {@link setEventStatus}.
+ */
+export async function setRegistrationCloses(
+  db: Queryable,
+  eventId: number,
+  closesAt: bigint | null,
+  at: Provenance,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE events
+        SET registration_closes_at = $2,
+            source = $3,
+            last_ledger = GREATEST(last_ledger, $4),
+            updated_at = now()
+      WHERE event_id = $1`,
+    [eventId, closesAt === null ? null : closesAt.toString(), at.source, at.ledger],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
  * Status-only update, for `event_status_changed`.
  *
  * Separate from {@link upsertEvent} because the event carries the status and
@@ -280,6 +306,47 @@ export async function recountCategory(
       WHERE c.event_id = $1 AND c.category_id = $2`,
     [eventId, categoryId],
   );
+}
+
+/**
+ * Link vault rows to the records they were entered for, from the chain (STE-59).
+ *
+ * A row is linked only when all four agree with the indexed record: the
+ * participant hash (its salt is that row's alone), the runner address as the
+ * record's owner, the event and the category. Only unconfirmed rows, and never a
+ * token another row already holds. Returns how many rows were linked.
+ *
+ * `tokenId` narrows it to one record (the poller); without it every indexed
+ * record is considered (a rebuild). The `enter` hash comes from the caller when
+ * the poller has it, otherwise from the raw event log, otherwise it stays NULL:
+ * contract state carries no transaction hash.
+ */
+export async function linkParticipantsFromChain(
+  db: Queryable,
+  opts: { tokenId?: number; enterTxHash?: string } = {},
+): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE participants p
+        SET token_id = r.token_id,
+            confirmed_at = now(),
+            enter_tx_hash = COALESCE(
+              $2::text,
+              (SELECT e.tx_hash FROM chain_events e
+                WHERE e.name = 'record_entered' AND (e.payload->>'tokenId')::int = r.token_id
+                ORDER BY e.ledger LIMIT 1)
+            ),
+            linked_by = 'chain'
+       FROM records r
+      WHERE p.token_id IS NULL
+        AND ($1::int IS NULL OR r.token_id = $1::int)
+        AND p.participant_hash = r.participant_hash
+        AND p.runner_address = r.runner_address
+        AND p.event_id = r.event_id
+        AND p.category_id = r.category_id
+        AND NOT EXISTS (SELECT 1 FROM participants q WHERE q.token_id = r.token_id)`,
+    [opts.tokenId ?? null, opts.enterTxHash ?? null],
+  );
+  return rowCount ?? 0;
 }
 
 /** v2.4 `quota_increased`: raise, never lower. False when the category is not indexed. */
@@ -450,6 +517,40 @@ export async function applyRecordTransition(
  * encodes "a rebuild never beats an event": an event-sourced row overwrites
  * whatever is there, a state-sourced one only fills a gap.
  */
+/**
+ * Give transitions a rebuild wrote from state back the transaction that made
+ * them, from the raw event log (STE-64).
+ *
+ * A rebuild reconstructs each record's transitions from the timestamps in
+ * `RecordData`, which carry no transaction hash, so those rows have NULL
+ * `tx_hash` and `ledger`. `chain_events` survives a rebuild and still holds the
+ * original event. This joins the two: same token, the event name for that
+ * state, and only events emitted by `raceRecord`, because v1 and v2 token ids
+ * overlap and a hash from the wrong contract would link a runner to someone
+ * else's transaction. A transition with no logged event (the index started
+ * after it) stays NULL. Returns how many transitions got their hash back.
+ */
+export async function restoreTransitionProvenance(db: Queryable, raceRecord: string): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE record_transitions t
+        SET tx_hash = e.tx_hash,
+            ledger = e.ledger,
+            source = 'event'
+       FROM chain_events e
+      WHERE t.tx_hash IS NULL
+        AND e.contract_id = $1
+        AND (e.payload->>'tokenId')::int = t.token_id
+        AND e.name = ANY (CASE t.to_state
+              WHEN 'Entered' THEN ARRAY['record_entered']
+              WHEN 'RacepackClaimed' THEN ARRAY['racepack_claimed']
+              WHEN 'Finished' THEN ARRAY['record_finished', 'record_finished_untimed']
+              WHEN 'Dnf' THEN ARRAY['record_dnf']
+            END)`,
+    [raceRecord],
+  );
+  return rowCount ?? 0;
+}
+
 export async function insertTransition(
   db: Queryable,
   t: {
@@ -551,6 +652,8 @@ export interface EventRow {
   status: string;
   source: RowSource;
   lastLedger: number;
+  /** Unix seconds; entries are refused from here (v2.5). `null` = closes manually only. */
+  registrationClosesAt: bigint | null;
 }
 
 export interface CategoryRow {
@@ -591,6 +694,7 @@ interface RawEventRow {
   status: string;
   source: RowSource;
   last_ledger: number;
+  registration_closes_at: string | null;
 }
 
 interface RawRecordRow {
@@ -611,7 +715,8 @@ interface RawRecordRow {
 }
 
 const EVENT_COLUMNS =
-  "event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger";
+  "event_id, organiser, name, metadata_hash, uri, starts_at, status, source, last_ledger, " +
+  "registration_closes_at";
 const RECORD_COLUMNS =
   "token_id, event_id, category_id, bib_no, runner_address, participant_hash, state, " +
   "entered_at, claimed_at, finish_time_s, result_at, source, last_ledger, addon_ids";
@@ -631,6 +736,7 @@ const toEventRow = (r: RawEventRow): EventRow => ({
   status: r.status,
   source: r.source,
   lastLedger: r.last_ledger,
+  registrationClosesAt: r.registration_closes_at === null ? null : BigInt(r.registration_closes_at),
 });
 
 const toRecordRow = (r: RawRecordRow): RecordRow => ({

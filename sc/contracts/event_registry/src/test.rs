@@ -13,8 +13,8 @@ use soroban_sdk::{
 use crate::{
     AddOnAdded, AddOnData, AddOnReserved, CategoryAdded, CategoryData, DataKey, Error,
     EventCreated, EventData, EventRegistry, EventRegistryClient, EventStatus, EventStatusChanged,
-    QuotaIncreased, ScannerAdded, ScannerRemoved, SlotReserved, BUMP_THRESHOLD, BUMP_TO,
-    DAY_IN_LEDGERS,
+    QuotaIncreased, RegistrationClosesSet, ScannerAdded, ScannerRemoved, SlotReserved,
+    BUMP_THRESHOLD, BUMP_TO, DAY_IN_LEDGERS,
 };
 
 // ---------------------------------------------------------------------------
@@ -2577,6 +2577,384 @@ mod quota {
 }
 
 // ---------------------------------------------------------------------------
+// Registration closes on its own (v2.5, STE-46)
+//
+// The race page shows a close date, and until v2.5 nothing enforced it. The
+// tests that matter are at the boundary (one second before is in, the second
+// itself is out), on the two ways an organiser moves the date (earlier closes,
+// later is the only thing that reopens), and on everything that must stay as it
+// was: an event with no date, another event's date, and the counters a refused
+// entry must not touch.
+// ---------------------------------------------------------------------------
+mod registration_closes {
+    use super::*;
+
+    const CLOSES_AT: u64 = 1_780_000_000;
+
+    fn at(env: &Env, timestamp: u64) {
+        env.ledger().set_timestamp(timestamp);
+    }
+
+    /// An open event with one 10K and a wired RaceRecord double, closing at
+    /// `CLOSES_AT`. Returns `(client, caller, registry, event_id, category_id)`.
+    fn closing_event(
+        env: &Env,
+        quota: u32,
+    ) -> (
+        EventRegistryClient<'_>,
+        MockRaceRecordClient<'_>,
+        Address,
+        u32,
+        u32,
+    ) {
+        let (_admin, registry) = deploy(env);
+        let client = EventRegistryClient::new(env, &registry);
+        let organiser = Address::generate(env);
+        let (event_id, category_id) = open_event(env, &client, &organiser, quota);
+        let caller = MockRaceRecordClient::new(env, &wire_race_record(env, &client));
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &CLOSES_AT);
+        (client, caller, registry, event_id, category_id)
+    }
+
+    /// The ticket in one test: in one second before the date, out at the date
+    /// and after it, with the event still `Open` the whole time.
+    #[test]
+    fn entries_stop_at_the_close_date() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+
+        at(&env, CLOSES_AT - 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+
+        at(&env, CLOSES_AT);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::RegistrationClosed)),
+            "the close date itself is already closed"
+        );
+
+        at(&env, CLOSES_AT + 86_400);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::RegistrationClosed))
+        );
+
+        // Nobody pressed anything: the status is exactly what it was.
+        assert_eq!(client.get_event(&event_id).status, EventStatus::Open);
+    }
+
+    /// The paid add-on path refuses too. `reserve_addon` is its own entry
+    /// point, so its guarantee cannot depend on `reserve_slot` having run
+    /// first.
+    #[test]
+    fn add_ons_stop_at_the_close_date_too() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, _category_id) = closing_event(&env, 10);
+        env.mock_all_auths();
+        let jersey = client.add_addon(&event_id, &symbol_short!("JERSEY"), &JERSEY, &5);
+
+        at(&env, CLOSES_AT - 1);
+        assert_eq!(caller.reserve_addon(&registry, &event_id, &jersey), JERSEY);
+
+        at(&env, CLOSES_AT);
+        assert_eq!(
+            caller.try_reserve_addon(&registry, &event_id, &jersey),
+            Err(Ok(Error::RegistrationClosed))
+        );
+        assert_eq!(client.get_addon(&event_id, &jersey).reserved_count, 1);
+    }
+
+    /// An event with no date behaves exactly as before v2.5, however far the
+    /// clock runs: that is every event already on chain.
+    #[test]
+    fn an_event_without_a_date_never_closes_on_its_own() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+        let (event_id, category_id) = open_event(&env, &client, &organiser, 10);
+        let caller = MockRaceRecordClient::new(&env, &wire_race_record(&env, &client));
+
+        assert_eq!(client.get_registration_closes(&event_id), None);
+        at(&env, u64::MAX);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+    }
+
+    /// A state the organiser chose wins over a date: a `Closed` event says
+    /// `EventNotOpen` whether or not its date has passed, so an app can tell
+    /// "the organiser closed it" from "the date passed".
+    #[test]
+    fn a_closed_event_still_says_event_not_open() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+
+        env.mock_all_auths();
+        client.set_event_status(&event_id, &EventStatus::Closed);
+
+        at(&env, CLOSES_AT - 1);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::EventNotOpen))
+        );
+        at(&env, CLOSES_AT);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::EventNotOpen))
+        );
+    }
+
+    /// Reopening after the date is an extension, not a status change: moving
+    /// the status back to `Open` alone reopens nothing, and a later date does.
+    #[test]
+    fn only_a_later_date_reopens_after_the_close_date() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+
+        at(&env, CLOSES_AT + 60);
+        env.mock_all_auths();
+        client.set_event_status(&event_id, &EventStatus::Closed);
+        client.set_event_status(&event_id, &EventStatus::Open);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::RegistrationClosed)),
+            "Open again, and still refused: the date has not moved"
+        );
+
+        let extended = CLOSES_AT + 7 * 86_400;
+        client.set_registration_closes(&event_id, &extended);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+
+        at(&env, extended);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::RegistrationClosed)),
+            "the extension is a real deadline too"
+        );
+    }
+
+    /// Closing early needs no ceremony, and a date already in the past closes
+    /// entries at once.
+    #[test]
+    fn an_earlier_date_closes_at_once() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+
+        at(&env, CLOSES_AT - 3_600);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &(CLOSES_AT - 7_200));
+        assert_eq!(
+            client.get_registration_closes(&event_id),
+            Some(CLOSES_AT - 7_200)
+        );
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::RegistrationClosed))
+        );
+    }
+
+    /// A refused entry takes nothing: not a place in the distance, not a bib.
+    /// The runner who gets in after an extension wears the next number, not a
+    /// skipped one.
+    #[test]
+    fn a_refused_entry_takes_no_place_and_no_bib() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+
+        at(&env, CLOSES_AT - 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+
+        at(&env, CLOSES_AT);
+        assert!(caller
+            .try_reserve(&registry, &event_id, &category_id)
+            .is_err());
+        assert!(caller
+            .try_reserve(&registry, &event_id, &category_id)
+            .is_err());
+        assert_eq!(
+            client.get_category(&event_id, &category_id).entered_count,
+            1
+        );
+
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &(CLOSES_AT + 60));
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 2);
+    }
+
+    /// The date is per event: one race closing leaves another race open.
+    #[test]
+    fn one_event_closing_leaves_another_open() {
+        let env = Env::default();
+        let (client, caller, registry, closing, closing_10k) = closing_event(&env, 10);
+        let other_organiser = Address::generate(&env);
+        let (open, open_10k) = open_event(&env, &client, &other_organiser, 10);
+
+        at(&env, CLOSES_AT);
+        assert_eq!(
+            caller.try_reserve(&registry, &closing, &closing_10k),
+            Err(Ok(Error::RegistrationClosed))
+        );
+        assert_eq!(caller.reserve(&registry, &open, &open_10k), 1);
+        assert_eq!(client.get_registration_closes(&open), None);
+    }
+
+    /// Organiser-gated by the same route as every other event setting: the
+    /// authority is `EventData.organiser` in storage.
+    #[test]
+    fn set_registration_closes_rejects_a_foreign_signer() {
+        let env = Env::default();
+        let (client, _caller, registry, event_id, _category_id) = closing_event(&env, 10);
+        let impostor = Address::generate(&env);
+
+        env.mock_auths(&[MockAuth {
+            address: &impostor,
+            invoke: &MockAuthInvoke {
+                contract: &registry,
+                fn_name: "set_registration_closes",
+                args: (event_id, u64::MAX).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        assert_eq!(
+            client.try_set_registration_closes(&event_id, &u64::MAX),
+            Err(Err(InvokeError::Abort))
+        );
+        assert_eq!(client.get_registration_closes(&event_id), Some(CLOSES_AT));
+    }
+
+    /// An unknown event is `EventNotFound` for the setter and the view. The
+    /// view does not answer `None`, which would read as "closes manually".
+    #[test]
+    fn unknown_events_revert() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+
+        env.mock_all_auths();
+        assert_eq!(
+            client.try_set_registration_closes(&404, &CLOSES_AT),
+            Err(Ok(Error::EventNotFound))
+        );
+        assert_eq!(
+            client.try_get_registration_closes(&404),
+            Err(Ok(Error::EventNotFound))
+        );
+    }
+
+    /// `RegistrationClosesSet` says what the date was and what it is now, so
+    /// an extension is readable from the event alone.
+    #[test]
+    fn emits_registration_closes_set() {
+        let env = Env::default();
+        let (_admin, registry) = deploy(&env);
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+        let (event_id, _category_id) = open_event(&env, &client, &organiser, 10);
+
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &CLOSES_AT);
+        assert_eq!(
+            env.events().all(),
+            std::vec![RegistrationClosesSet {
+                event_id,
+                previous: None,
+                current: CLOSES_AT,
+            }
+            .to_xdr(&env, &registry)]
+        );
+
+        client.set_registration_closes(&event_id, &(CLOSES_AT + 86_400));
+        assert_eq!(
+            env.events().all(),
+            std::vec![RegistrationClosesSet {
+                event_id,
+                previous: Some(CLOSES_AT),
+                current: CLOSES_AT + 86_400,
+            }
+            .to_xdr(&env, &registry)]
+        );
+    }
+
+    /// Setting the date the event already has is not a move, so the ledger
+    /// does not get one.
+    #[test]
+    fn the_same_date_again_emits_nothing() {
+        let env = Env::default();
+        let (client, _caller, _registry, event_id, _category_id) = closing_event(&env, 10);
+
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &CLOSES_AT);
+        assert_eq!(env.events().all(), std::vec![]);
+        assert_eq!(client.get_registration_closes(&event_id), Some(CLOSES_AT));
+    }
+
+    /// A refused entry emits nothing either: no `SlotReserved` for a slot that
+    /// was not taken.
+    #[test]
+    fn a_refused_entry_emits_nothing() {
+        let env = Env::default();
+        let (_client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+
+        at(&env, CLOSES_AT);
+        assert!(caller
+            .try_reserve(&registry, &event_id, &category_id)
+            .is_err());
+        assert_eq!(env.events().all(), std::vec![]);
+    }
+
+    /// The extremes: `0` is a date long gone, so it closes at once; `u64::MAX`
+    /// is a date the ledger clock cannot reach.
+    #[test]
+    fn extreme_dates_behave() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+        at(&env, CLOSES_AT - 1);
+
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &0);
+        assert_eq!(
+            caller.try_reserve(&registry, &event_id, &category_id),
+            Err(Ok(Error::RegistrationClosed))
+        );
+
+        client.set_registration_closes(&event_id, &u64::MAX);
+        at(&env, u64::MAX - 1);
+        assert_eq!(caller.reserve(&registry, &event_id, &category_id), 1);
+    }
+
+    /// The date is kept alive by being set and by every entry that reads it.
+    /// A close date that archived would stop being enforced by time alone.
+    #[test]
+    fn the_close_date_is_kept_alive() {
+        let env = Env::default();
+        let (client, caller, registry, event_id, category_id) = closing_event(&env, 10);
+        let key = DataKey::RegistrationCloses(event_id);
+        assert_eq!(persistent_ttl(&env, &registry, key.clone()), BUMP_TO);
+
+        let aged_by = (BUMP_TO - BUMP_THRESHOLD) + DAY_IN_LEDGERS;
+        env.ledger()
+            .set_sequence_number(env.ledger().sequence() + aged_by);
+        assert!(persistent_ttl(&env, &registry, key.clone()) < BUMP_THRESHOLD);
+
+        at(&env, CLOSES_AT - 1);
+        caller.reserve(&registry, &event_id, &category_id);
+        assert_eq!(persistent_ttl(&env, &registry, key.clone()), BUMP_TO);
+
+        env.ledger()
+            .set_sequence_number(env.ledger().sequence() + aged_by);
+        env.mock_all_auths();
+        client.set_registration_closes(&event_id, &CLOSES_AT);
+        assert_eq!(
+            persistent_ttl(&env, &registry, key),
+            BUMP_TO,
+            "re-setting the same date still pays its rent"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade (v2)
 //
 // These tests deploy the registry from the BUILT WASM rather than from the
@@ -2656,6 +3034,18 @@ mod upgrade {
     /// for v2.3.0.
     const LIVE_PRE_QUOTA_HASH: &str =
         "c8b5e82a2dde8366949cb6399d5b7eccdcbbc37d86ddd48a2adc61e40c9869cd";
+
+    /// The executable running at the same address when STE-46 was written —
+    /// v2.4, the one STE-55 installed, and so the code that wrote every event
+    /// a close date could now be set on. Provenance: `testdata/README.md`.
+    const LIVE_PRE_CLOSE_DATE_WASM: &[u8] =
+        include_bytes!("../testdata/event_registry_live_pre_close_date.wasm");
+
+    /// sha256 of the artifact above — the hash INTERFACE.md §0 freezes for
+    /// v2.4.0 and what the ledger reports for `CAPB6NQP…` before this branch
+    /// is deployed.
+    const LIVE_PRE_CLOSE_DATE_HASH: &str =
+        "33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890";
 
     /// Lowercase hex, so a mismatch prints the two hashes instead of two byte
     /// arrays.
@@ -3147,6 +3537,103 @@ mod upgrade {
         assert_eq!(client.get_category(&event_id, &ten_k).quota, 4);
 
         // Still upgradeable — losing that would be permanent.
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+    }
+    /// STE-46 against the code that is live: an event the running wasm
+    /// created, already taking entries, gets a close date after the upgrade —
+    /// and the event beside it that is left alone keeps working exactly as the
+    /// old code ran it.
+    #[test]
+    fn a_close_date_can_be_set_on_an_event_the_live_wasm_created() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let registry = env.register(LIVE_PRE_CLOSE_DATE_WASM, (admin.clone(),));
+        let client = EventRegistryClient::new(&env, &registry);
+        let organiser = Address::generate(&env);
+
+        let live_hash = env
+            .deployer()
+            .upload_contract_wasm(Bytes::from_slice(&env, LIVE_PRE_CLOSE_DATE_WASM));
+        assert_eq!(hex32(&live_hash), LIVE_PRE_CLOSE_DATE_HASH);
+
+        // -- written by the OLD code: two open races taking entries ----------
+        env.mock_all_auths();
+        client.add_organiser(&organiser);
+        let closing =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let closing_10k =
+            client.add_category(&closing, &symbol_short!("10K"), &10_000, &100, &50_000_000);
+        let jersey = client.add_addon(&closing, &symbol_short!("JERSEY"), &JERSEY, &50);
+        client.set_event_status(&closing, &EventStatus::Open);
+        let manual =
+            client.create_event(&organiser, &name(&env), &hash(&env), &uri(&env), &STARTS_AT);
+        let manual_5k = client.add_category(&manual, &symbol_short!("5K"), &5_000, &100, &0);
+        client.set_event_status(&manual, &EventStatus::Open);
+        let race_record = wire_race_record(&env, &client);
+        let caller = MockRaceRecordClient::new(&env, &race_record);
+
+        env.ledger().set_timestamp(1_780_000_000);
+        assert_eq!(caller.reserve(&registry, &closing, &closing_10k), 1);
+        assert_eq!(caller.reserve_addon(&registry, &closing, &jersey), JERSEY);
+        assert_eq!(caller.reserve(&registry, &manual, &manual_5k), 1);
+        // The running code has no way to set a date at all.
+        assert!(client
+            .try_set_registration_closes(&closing, &1_780_000_100)
+            .is_err());
+
+        let closing_before = client.get_event(&closing);
+        let category_before = client.get_category(&closing, &closing_10k);
+        let addon_before = client.get_addon(&closing, &jersey);
+
+        // -- the upgrade ----------------------------------------------------
+        env.mock_all_auths();
+        client.upgrade(&upload(&env, "event_registry.wasm"));
+
+        // -- what the old code wrote still decodes --------------------------
+        assert_eq!(client.get_event(&closing), closing_before);
+        assert_eq!(client.get_category(&closing, &closing_10k), category_before);
+        assert_eq!(client.get_addon(&closing, &jersey), addon_before);
+        assert_eq!(client.get_registration_closes(&closing), None);
+        assert_eq!(client.get_registration_closes(&manual), None);
+
+        // -- the new behaviour, on an event the OLD code created ------------
+        env.mock_all_auths();
+        client.set_registration_closes(&closing, &1_780_000_100);
+        env.ledger().set_timestamp(1_780_000_099);
+        assert_eq!(caller.reserve(&registry, &closing, &closing_10k), 2);
+
+        env.ledger().set_timestamp(1_780_000_100);
+        assert_eq!(
+            caller.try_reserve(&registry, &closing, &closing_10k),
+            Err(Ok(Error::RegistrationClosed))
+        );
+        assert_eq!(
+            caller.try_reserve_addon(&registry, &closing, &jersey),
+            Err(Ok(Error::RegistrationClosed))
+        );
+        // The race nobody set a date on runs exactly as the old code ran it,
+        // and its bibs continue where the old code left them.
+        env.ledger().set_timestamp(u64::MAX);
+        assert_eq!(caller.reserve(&registry, &manual, &manual_5k), 2);
+
+        // -- the access control, on state the old code wrote ----------------
+        let impostor = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &impostor,
+            invoke: &MockAuthInvoke {
+                contract: &registry,
+                fn_name: "set_registration_closes",
+                args: (closing, u64::MAX).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        assert_eq!(
+            client.try_set_registration_closes(&closing, &u64::MAX),
+            Err(Err(InvokeError::Abort))
+        );
+
+        // Still upgradeable.
         env.mock_all_auths();
         client.upgrade(&upload(&env, "event_registry.wasm"));
     }

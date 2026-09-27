@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
-import { DonePreview } from "./DonePreview";
+import { DonePreview } from "@/modules/organiser/create/DonePreview";
+
+export const metadata = { title: "Done preview" };
 
 /**
  * A harness for the last step of the create-event wizard.

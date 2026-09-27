@@ -1,4 +1,4 @@
-import { NotFoundMessage } from "@/components/layouts/NotFoundMessage";
+import { NotFoundMessage } from "@/components/layout/NotFoundMessage";
 
 /**
  * The console layout has already drawn the rail and the <main> by the time a

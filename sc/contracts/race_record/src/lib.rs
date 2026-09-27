@@ -48,7 +48,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token::TokenClient,
-    Address, BytesN, Env, MuxedAddress, String, Vec,
+    Address, BytesN, Env, Map, MuxedAddress, String, Vec,
 };
 use stellar_tokens::non_fungible::{enumerable::Enumerable, Base, NFTStorageKey};
 
@@ -83,6 +83,18 @@ const BUMP_TO: u32 = 180 * DAY_IN_LEDGERS;
 /// duplicate scan. Sixteen is far past any real race-day merch table.
 const MAX_ADDONS_PER_ENTRY: u32 = 16;
 
+/// The most race packs one [`RaceRecord::claim_racepack_many`] call may carry
+/// (v2.7, STE-66).
+///
+/// Measured rather than chosen: every row reads and writes one record and emits
+/// one `RacepackClaimed`, and against the per-transaction limits live on testnet
+/// and mainnet (2026-09-23) the 16,384 bytes of contract events bind first. The
+/// constant leaves headroom below that and is enforced here, so a desk that
+/// sends too many gets [`Error::TooManyClaims`] from simulation instead of a
+/// transaction that dies on the network's resource limits. The measurement and
+/// what binds are in `sc/contracts/race_record/CLAUDE.md`.
+pub const MAX_CLAIMS_PER_CALL: u32 = 100;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -106,7 +118,8 @@ pub enum RecordState {
 pub struct RecordData {
     pub event_id: u32,
     pub category_id: u32,
-    /// The category sequence handed out by `EventRegistry::reserve_slot`.
+    /// The bib `EventRegistry::reserve_slot` handed out: unique within the
+    /// event and counting from 1 since registry v2.3.
     pub bib_no: u32,
     /// The add-ons this entry paid for, in the order they were reserved (v2).
     /// Empty for an entry that bought none.
@@ -124,6 +137,50 @@ pub struct RecordData {
     /// v2.2) — never a zero-second race.
     pub finish_time_s: Option<u32>,
     pub result_at: Option<u64>,
+}
+
+/// Why one race pack in a [`RaceRecord::claim_racepack_many`] batch was left
+/// alone (v2.7).
+///
+/// Neither is an error: a desk that hands over 300 packs offline will have rows
+/// the chain already knows about, and the batch's job is to land the other 299.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClaimSkipped {
+    /// No record with that `token_id`. A roster from another race, or a typo.
+    NotFound,
+    /// The record is not `Entered`: another desk got there first, or the runner
+    /// is already finished or DNF. Same condition as [`Error::AlreadyClaimed`].
+    NotEntered,
+}
+
+/// One race pack a batch did not claim, and why (v2.7).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SkippedClaim {
+    pub token_id: u32,
+    pub reason: ClaimSkipped,
+}
+
+/// What one row of a [`RaceRecord::record_results`] batch records (v2.6):
+/// exactly the three single-result functions, one variant each.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResultOutcome {
+    /// `record_finish(token_id, finish_time_s)`.
+    Timed(u32),
+    /// `record_finish_untimed(token_id)`.
+    Untimed,
+    /// `record_dnf(token_id)`.
+    Dnf,
+}
+
+/// One row of a [`RaceRecord::record_results`] batch (v2.6).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResultEntry {
+    pub token_id: u32,
+    pub outcome: ResultOutcome,
 }
 
 /// Storage schema. Wiring lives in instance storage (tiny, global, read on
@@ -190,6 +247,14 @@ pub enum Error {
     /// `enter` listed the same `addon_id` twice (v2). Buying two jerseys is two
     /// add-ons with two quotas, not one id repeated.
     DuplicateAddOn = 107,
+    /// `record_results` named a record that belongs to a different event than
+    /// the one the batch is for (v2.6). The organiser signs for one event; a
+    /// row for another event is never theirs to record.
+    ResultForAnotherEvent = 108,
+    /// `claim_racepack_many` with more than [`MAX_CLAIMS_PER_CALL`] token ids
+    /// (v2.7). Refused before anything is read, so an oversized queue costs a
+    /// simulation rather than a transaction that dies on the network's limits.
+    TooManyClaims = 109,
 }
 
 // ---------------------------------------------------------------------------
@@ -446,7 +511,7 @@ impl RaceRecord {
         operator.require_auth();
         bump_instance(&env);
 
-        let mut record = read_record(&env, token_id)?;
+        let record = read_record(&env, token_id)?;
         let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
         if operator != registry.get_organiser(&record.event_id)
             && !registry.is_scanner(&record.event_id, &operator)
@@ -457,18 +522,90 @@ impl RaceRecord {
             return Err(Error::AlreadyClaimed);
         }
 
-        record.state = RecordState::RacepackClaimed;
-        record.claimed_at = Some(env.ledger().timestamp());
-        let event_id = record.event_id;
-        write_record(&env, token_id, &record);
-
-        RacepackClaimed {
-            token_id,
-            event_id,
-            operator,
-        }
-        .publish(&env);
+        hand_over_racepack(&env, token_id, record, operator);
         Ok(())
+    }
+
+    // STE-66. A race pack desk works offline and queues each hand-over; when
+    // signal returns the queue is sent, and one call per runner means one wallet
+    // prompt per runner. A desk that handed over 300 packs asked its volunteer to
+    // approve 300 times.
+    //
+    // Two rules, and the second is the whole point:
+    //
+    // - **Authorisation is per event, exactly as `claim_racepack` checks it.**
+    //   The operator authorises once, then each record's event is checked
+    //   against the registry. `NotAuthorized` REVERTS the batch: that is a
+    //   misconfigured desk, not a race, and skipping it would hand a volunteer a
+    //   half-done queue with no clue why. Each event is checked once per call —
+    //   a desk sends one event's queue, so this is one pair of cross-contract
+    //   calls, not one per runner.
+    // - **An already-claimed pack does NOT revert the batch.** That is the
+    //   two-desk case from STE-25: the loser of a race would otherwise block the
+    //   other 299 hand-overs. Those tokens come back in the return value with a
+    //   reason, and the scanner shows them on its flagged list.
+    //
+    // It emits one `RacepackClaimed` per pack actually claimed, in row order, so
+    // the indexer needs no new handler.
+
+    /// Hands over many race packs in one signature. Organiser or an allowlisted
+    /// scanner, per event. Returns the ids it did NOT claim, with the reason;
+    /// an unauthorised event reverts the whole batch.
+    pub fn claim_racepack_many(
+        env: Env,
+        token_ids: Vec<u32>,
+        operator: Address,
+    ) -> Result<Vec<SkippedClaim>, Error> {
+        if token_ids.len() > MAX_CLAIMS_PER_CALL {
+            return Err(Error::TooManyClaims);
+        }
+        operator.require_auth();
+        bump_instance(&env);
+
+        let registry = EventRegistryClient::new(&env, &read_registry(&env)?);
+        // Events this operator has already been cleared for in THIS call. A desk
+        // sends one event's queue, so without it the batch would repeat the same
+        // two cross-contract reads for every runner.
+        let mut cleared: Map<u32, ()> = Map::new(&env);
+        let mut skipped: Vec<SkippedClaim> = Vec::new(&env);
+
+        for token_id in token_ids.iter() {
+            let record = match env
+                .storage()
+                .persistent()
+                .get::<_, RecordData>(&DataKey::Record(token_id))
+            {
+                Some(record) => record,
+                None => {
+                    skipped.push_back(SkippedClaim {
+                        token_id,
+                        reason: ClaimSkipped::NotFound,
+                    });
+                    continue;
+                }
+            };
+
+            if !cleared.contains_key(record.event_id) {
+                if operator != registry.get_organiser(&record.event_id)
+                    && !registry.is_scanner(&record.event_id, &operator)
+                {
+                    return Err(Error::NotAuthorized);
+                }
+                cleared.set(record.event_id, ());
+            }
+
+            if record.state != RecordState::Entered {
+                skipped.push_back(SkippedClaim {
+                    token_id,
+                    reason: ClaimSkipped::NotEntered,
+                });
+                continue;
+            }
+
+            hand_over_racepack(&env, token_id, record, operator.clone());
+        }
+
+        Ok(skipped)
     }
 
     /// Publishes a finish time. Organiser only.
@@ -478,29 +615,9 @@ impl RaceRecord {
     /// terminal so a published time can never be rewritten.
     pub fn record_finish(env: Env, token_id: u32, finish_time_s: u32) -> Result<(), Error> {
         bump_instance(&env);
-        let mut record = read_record(&env, token_id)?;
+        let record = read_record(&env, token_id)?;
         auth_organiser(&env, record.event_id)?;
-
-        if finish_time_s == 0 {
-            return Err(Error::InvalidFinishTime);
-        }
-        if record.state != RecordState::RacepackClaimed {
-            return Err(Error::InvalidState);
-        }
-
-        record.state = RecordState::Finished;
-        record.finish_time_s = Some(finish_time_s);
-        record.result_at = Some(env.ledger().timestamp());
-        let event_id = record.event_id;
-        write_record(&env, token_id, &record);
-
-        RecordFinished {
-            token_id,
-            event_id,
-            finish_time_s,
-        }
-        .publish(&env);
-        Ok(())
+        apply_result(&env, token_id, record, ResultOutcome::Timed(finish_time_s))
     }
 
     // STE-41 (option A). Fun runs, colour runs and charity runs often have no
@@ -520,21 +637,9 @@ impl RaceRecord {
     /// only, from `RacepackClaimed`; leaves `finish_time_s` as `None`.
     pub fn record_finish_untimed(env: Env, token_id: u32) -> Result<(), Error> {
         bump_instance(&env);
-        let mut record = read_record(&env, token_id)?;
+        let record = read_record(&env, token_id)?;
         auth_organiser(&env, record.event_id)?;
-
-        if record.state != RecordState::RacepackClaimed {
-            return Err(Error::InvalidState);
-        }
-
-        record.state = RecordState::Finished;
-        record.finish_time_s = None;
-        record.result_at = Some(env.ledger().timestamp());
-        let event_id = record.event_id;
-        write_record(&env, token_id, &record);
-
-        RecordFinishedUntimed { token_id, event_id }.publish(&env);
-        Ok(())
+        apply_result(&env, token_id, record, ResultOutcome::Untimed)
     }
 
     /// Marks a no-show or a did-not-finish. Organiser only.
@@ -544,22 +649,45 @@ impl RaceRecord {
     /// states reject it with [`Error::InvalidState`].
     pub fn record_dnf(env: Env, token_id: u32) -> Result<(), Error> {
         bump_instance(&env);
-        let mut record = read_record(&env, token_id)?;
+        let record = read_record(&env, token_id)?;
         auth_organiser(&env, record.event_id)?;
+        apply_result(&env, token_id, record, ResultOutcome::Dnf)
+    }
 
-        if !matches!(
-            record.state,
-            RecordState::Entered | RecordState::RacepackClaimed
-        ) {
-            return Err(Error::InvalidState);
+    // STE-60. A race of 312 runners was 312 organiser signatures, and a
+    // transaction may hold only ONE InvokeHostFunctionOp, so batching has to be
+    // a contract function that loops.
+    //
+    // - One organiser gate for the whole batch, read from the registry for
+    //   `event_id`, and every row must belong to that event
+    //   (`ResultForAnotherEvent`). Without the second check an organiser of one
+    //   race could publish results into another race's records.
+    // - Each row goes through `apply_result`, the same code the three single
+    //   functions run, so the rules cannot drift apart: `InvalidFinishTime`,
+    //   `InvalidState`, terminal states.
+    // - ATOMIC: the first bad row reverts the whole batch, including rows
+    //   already applied. Results are terminal, and the console's preview is the
+    //   place to fix a file, not the ledger. A token listed twice fails its
+    //   second row on `InvalidState`, so it reverts too.
+    // - Emits exactly the per-record events the single functions emit, in row
+    //   order, so an indexer needs no new handler.
+    // - An empty batch records nothing and succeeds.
+    // - No cap in the contract: the network's per-transaction limits (written
+    //   entries, event bytes) bound a batch, and the measured maximum lives in
+    //   the SDK and sc/CLAUDE.md.
+
+    /// Records many results for one event in one call. Organiser only. Atomic:
+    /// any invalid row reverts the whole batch.
+    pub fn record_results(env: Env, event_id: u32, results: Vec<ResultEntry>) -> Result<(), Error> {
+        bump_instance(&env);
+        auth_organiser(&env, event_id)?;
+        for entry in results.iter() {
+            let record = read_record(&env, entry.token_id)?;
+            if record.event_id != event_id {
+                return Err(Error::ResultForAnotherEvent);
+            }
+            apply_result(&env, entry.token_id, record, entry.outcome)?;
         }
-
-        record.state = RecordState::Dnf;
-        record.result_at = Some(env.ledger().timestamp());
-        let event_id = record.event_id;
-        write_record(&env, token_id, &record);
-
-        RecordDnf { token_id, event_id }.publish(&env);
         Ok(())
     }
 
@@ -701,6 +829,82 @@ fn check_addon_ids(addon_ids: &Vec<u32>, addon_count: u32) -> Result<(), Error> 
                 return Err(Error::DuplicateAddOn);
             }
         }
+    }
+    Ok(())
+}
+
+/// The one place a race pack is handed over — shared by `claim_racepack` and
+/// every row of `claim_racepack_many`, so a batch cannot write a record the
+/// single call would have written differently.
+///
+/// The caller has already authorised the operator for this record's event and
+/// checked that the record is `Entered`.
+fn hand_over_racepack(env: &Env, token_id: u32, mut record: RecordData, operator: Address) {
+    record.state = RecordState::RacepackClaimed;
+    record.claimed_at = Some(env.ledger().timestamp());
+    let event_id = record.event_id;
+    write_record(env, token_id, &record);
+
+    RacepackClaimed {
+        token_id,
+        event_id,
+        operator,
+    }
+    .publish(env);
+}
+
+/// The one place a result is validated, written and announced — shared by
+/// `record_finish`, `record_finish_untimed`, `record_dnf` and every row of
+/// `record_results`, so a batch cannot accept what a single call refuses.
+///
+/// The caller has already authorised the organiser of `record.event_id`.
+fn apply_result(
+    env: &Env,
+    token_id: u32,
+    mut record: RecordData,
+    outcome: ResultOutcome,
+) -> Result<(), Error> {
+    let event_id = record.event_id;
+    match outcome {
+        ResultOutcome::Timed(finish_time_s) => {
+            if finish_time_s == 0 {
+                return Err(Error::InvalidFinishTime);
+            }
+            if record.state != RecordState::RacepackClaimed {
+                return Err(Error::InvalidState);
+            }
+            record.state = RecordState::Finished;
+            record.finish_time_s = Some(finish_time_s);
+        }
+        ResultOutcome::Untimed => {
+            if record.state != RecordState::RacepackClaimed {
+                return Err(Error::InvalidState);
+            }
+            record.state = RecordState::Finished;
+            record.finish_time_s = None;
+        }
+        ResultOutcome::Dnf => {
+            if !matches!(
+                record.state,
+                RecordState::Entered | RecordState::RacepackClaimed
+            ) {
+                return Err(Error::InvalidState);
+            }
+            record.state = RecordState::Dnf;
+        }
+    }
+    record.result_at = Some(env.ledger().timestamp());
+    write_record(env, token_id, &record);
+
+    match outcome {
+        ResultOutcome::Timed(finish_time_s) => RecordFinished {
+            token_id,
+            event_id,
+            finish_time_s,
+        }
+        .publish(env),
+        ResultOutcome::Untimed => RecordFinishedUntimed { token_id, event_id }.publish(env),
+        ResultOutcome::Dnf => RecordDnf { token_id, event_id }.publish(env),
     }
     Ok(())
 }

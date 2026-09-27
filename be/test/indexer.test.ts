@@ -21,6 +21,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ChainReader } from "../src/chain/reader.js";
 import { Indexer, IndexerConsistencyError, reconstructTransitions } from "../src/indexer/indexer.js";
 import * as store from "../src/indexer/store.js";
+import type { Keyring } from "../src/crypto/keyring.js";
+import { Vault } from "../src/vault.js";
 import { FakeChain } from "./helpers/fake-chain.js";
 import {
   FakeEventSource,
@@ -37,6 +39,7 @@ import {
   scannerRemoved,
   slotReserved,
   quotaIncreased,
+  registrationClosesSet,
   toidCursor,
 } from "./helpers/fake-events.js";
 import { DATABASE_URL, SKIP_REASON, freshDatabase } from "./helpers/db.js";
@@ -56,12 +59,14 @@ const raceRecord = { contractId: ADDRESSES.raceRecord };
 describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REASON})`, () => {
   let pool: Pool;
   let close: () => Promise<void>;
+  let keyring: Keyring;
+  let indexKey: Buffer;
   let chain: FakeChain;
   let reader: ChainReader;
   const warnings: string[] = [];
 
   beforeEach(async () => {
-    ({ pool, close } = await freshDatabase());
+    ({ pool, keyring, indexKey, close } = await freshDatabase());
     chain = new FakeChain(ADDRESSES);
     reader = new ChainReader(chain, ADDRESSES);
     warnings.length = 0;
@@ -833,6 +838,346 @@ describe.skipIf(!DATABASE_URL)(`indexer (${DATABASE_URL ? "postgres" : SKIP_REAS
         kind: "category-differs",
         detail: "category 0/0: entered_count 4 != 3",
       });
+    });
+  });
+
+  describe("linking a vault row from the chain (STE-59)", () => {
+    // Entering took three wallet approvals; the third only told this service
+    // what the chain already said. The indexer now links the row itself.
+    let nextId = 0;
+    const entry = (overrides: { eventId?: number; categoryId?: number; runnerAddress?: string } = {}) => ({
+      name: "Budi Santoso",
+      nationalId: `59${String(nextId++).padStart(14, "0")}`,
+      emergencyContact: "+6281234567890",
+      idType: "national_id_card" as const,
+      bibName: "BUDI",
+      email: "budi@example.com",
+      phone: "+6281398765432",
+      gender: "male" as const,
+      dateOfBirth: "1990-05-17",
+      emergencyContactName: "Siti Rahayu",
+      eventId: overrides.eventId ?? 0,
+      categoryId: overrides.categoryId ?? 0,
+      runnerAddress: overrides.runnerAddress ?? RUNNER,
+    });
+    const ENTER_TX = "cd".repeat(32);
+    const row = async (participantId: string) =>
+      (
+        await pool.query<{
+          token_id: number | null;
+          linked_by: string | null;
+          enter_tx_hash: string | null;
+          confirmed_at: Date | null;
+        }>("SELECT token_id, linked_by, enter_tx_hash, confirmed_at FROM participants WHERE id = $1", [
+          participantId,
+        ])
+      ).rows[0];
+
+    /** An event with two distances, and token 0 entered on chain as `record` says. */
+    function seedEntry(record: { participantHash: string; owner?: string; categoryId?: number }) {
+      const owner = record.owner ?? RUNNER;
+      const categoryId = record.categoryId ?? 0;
+      chain.addEvent({ eventId: 0, organiser: ORGANISER });
+      chain.addCategory({ eventId: 0, categoryId: 0 });
+      chain.addCategory({ eventId: 0, categoryId: 1 });
+      chain.addRecord({
+        tokenId: 0,
+        eventId: 0,
+        categoryId,
+        owner,
+        bibNo: 1,
+        participantHash: record.participantHash,
+      });
+      return [
+        eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+        categoryAdded({ ...registry, ledger: 100 }, 0, 0, 100, 50_000_000n),
+        categoryAdded({ ...registry, ledger: 100 }, 0, 1, 100, 50_000_000n),
+        slotReserved({ ...registry, ledger: 110 }, 0, categoryId, 1),
+        mint({ ...raceRecord, ledger: 110 }, owner, 0),
+        recordEntered({ ...raceRecord, ledger: 110, txHash: ENTER_TX }, owner, 0, 0, 1),
+      ];
+    }
+
+    it("links the row from the indexed entry, with no confirm call", async () => {
+      const vault = new Vault(pool, keyring, indexKey);
+      const submitted = await vault.submit(entry());
+
+      await build(new FakeEventSource([seedEntry({ participantHash: submitted.participantHash })])).pollOnce();
+
+      const linked = await row(submitted.participantId);
+      expect(linked).toMatchObject({ token_id: 0, linked_by: "chain", enter_tx_hash: ENTER_TX });
+      expect(linked?.confirmed_at).toBeInstanceOf(Date);
+    });
+
+    it.each([
+      ["the record's owner is another wallet", { owner: RUNNER_B }, {}],
+      ["the record carries another entry's hash", { participantHash: "ee".repeat(32) }, {}],
+      ["the record is in another distance", { categoryId: 1 }, {}],
+      ["the row was submitted for another race", {}, { eventId: 1 }],
+    ])("does not link when %s", async (_what, recordOverride, entryOverride) => {
+      const vault = new Vault(pool, keyring, indexKey);
+      const submitted = await vault.submit(entry(entryOverride));
+
+      await build(
+        new FakeEventSource([seedEntry({ participantHash: submitted.participantHash, ...recordOverride })]),
+      ).pollOnce();
+
+      expect((await row(submitted.participantId))?.token_id).toBeNull();
+    });
+
+    it("leaves a row already confirmed through the route exactly as it was", async () => {
+      const vault = new Vault(pool, keyring, indexKey);
+      const submitted = await vault.submit(entry());
+      await vault.confirm(submitted.participantId, 0, "ab".repeat(32));
+
+      await build(new FakeEventSource([seedEntry({ participantHash: submitted.participantHash })])).pollOnce();
+
+      expect(await row(submitted.participantId)).toMatchObject({
+        token_id: 0,
+        linked_by: "confirm",
+        enter_tx_hash: "ab".repeat(32),
+      });
+    });
+
+    it("keeps a later confirm of the same token a success, and changes nothing", async () => {
+      // An older web app still calls confirm after the indexer got there first.
+      const vault = new Vault(pool, keyring, indexKey);
+      const submitted = await vault.submit(entry());
+      await build(new FakeEventSource([seedEntry({ participantHash: submitted.participantHash })])).pollOnce();
+
+      await expect(vault.confirm(submitted.participantId, 0, "ab".repeat(32))).resolves.toMatchObject({
+        tokenId: 0,
+      });
+      expect(await row(submitted.participantId)).toMatchObject({ linked_by: "chain", enter_tx_hash: ENTER_TX });
+    });
+
+    it("makes the same link from state on a rebuild, without inventing a transaction hash", async () => {
+      const vault = new Vault(pool, keyring, indexKey);
+      const submitted = await vault.submit(entry());
+      seedEntry({ participantHash: submitted.participantHash });
+
+      await build(new FakeEventSource([])).rebuild();
+
+      expect(await row(submitted.participantId)).toMatchObject({
+        token_id: 0,
+        linked_by: "chain",
+        enter_tx_hash: null,
+      });
+    });
+
+    it("gives a rebuild the enter hash when the poller logged the entry", async () => {
+      // A row the poller could not link at the time (it did not exist yet, or
+      // this feature was not deployed), picked up by the next rebuild.
+      const vault = new Vault(pool, keyring, indexKey);
+      const indexer = build(new FakeEventSource([seedEntry({ participantHash: "11".repeat(32) })]));
+      await indexer.pollOnce();
+      const hash = (await store.getRecord(pool, 0))?.participantHash as string;
+      const submitted = await vault.submit(entry());
+      await pool.query("UPDATE participants SET participant_hash = decode($1, 'hex') WHERE id = $2", [
+        hash,
+        submitted.participantId,
+      ]);
+
+      await indexer.rebuild();
+
+      expect(await row(submitted.participantId)).toMatchObject({
+        token_id: 0,
+        linked_by: "chain",
+        enter_tx_hash: ENTER_TX,
+      });
+    });
+
+    it("is not swept as unconfirmed once linked from the chain (STE-50)", async () => {
+      const vault = new Vault(pool, keyring, indexKey);
+      const submitted = await vault.submit(entry());
+      await build(new FakeEventSource([seedEntry({ participantHash: submitted.participantHash })])).pollOnce();
+      await pool.query("UPDATE participants SET created_at = now() - interval '48 hours' WHERE id = $1", [
+        submitted.participantId,
+      ]);
+
+      expect(await vault.sweepUnconfirmed(24)).toBe(0);
+      expect((await row(submitted.participantId))?.token_id).toBe(0);
+    });
+
+    it("does not stall the poller when a confirm takes the same token at the same moment", async () => {
+      // Another row is being confirmed to token 0 in a transaction still open.
+      // The link then trips the unique index; without the savepoint that would
+      // roll back the whole page, and the poller would retry it forever.
+      const vault = new Vault(pool, keyring, indexKey);
+      const mine = await vault.submit(entry());
+      const other = await vault.submit(entry({ runnerAddress: RUNNER_B }));
+      const page = seedEntry({ participantHash: mine.participantHash });
+
+      const holder = await pool.connect();
+      try {
+        await holder.query("BEGIN");
+        await holder.query(
+          `UPDATE participants SET token_id = 0, confirmed_at = now(), enter_tx_hash = $2, linked_by = 'confirm'
+            WHERE id = $1`,
+          [other.participantId, "ab".repeat(32)],
+        );
+        const poll = build(new FakeEventSource([page])).pollOnce();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await holder.query("COMMIT");
+
+        await expect(poll).resolves.toMatchObject({ applied: page.length });
+      } finally {
+        holder.release();
+      }
+      expect((await row(mine.participantId))?.token_id).toBeNull();
+      expect((await row(other.participantId))?.token_id).toBe(0);
+    });
+  });
+
+  describe("registration close dates (STE-46)", () => {
+    const CLOSES = 1_790_000_000n;
+    const U64_MAX = 2n ** 64n - 1n;
+
+    function seedEvent(closesAt: bigint | null = null) {
+      chain.addEvent({ eventId: 0, organiser: ORGANISER, status: "Open", registrationClosesAt: closesAt });
+      return [
+        eventCreated({ ...registry, ledger: 100 }, 0, ORGANISER),
+        eventStatusChanged({ ...registry, ledger: 101 }, 0, "Open"),
+      ];
+    }
+
+    const closesAt = async (eventId = 0) => (await store.getEvent(pool, eventId))?.registrationClosesAt;
+
+    it("stores the date a registration_closes_set carries, and each later move", async () => {
+      const page = seedEvent(CLOSES + 86_400n);
+      const indexer = build(
+        new FakeEventSource([
+          page,
+          [registrationClosesSet({ ...registry, ledger: 200 }, 0, null, CLOSES)],
+          [registrationClosesSet({ ...registry, ledger: 210 }, 0, CLOSES, CLOSES + 86_400n)],
+        ]),
+      );
+      await indexer.pollOnce();
+      expect(await closesAt()).toBeNull();
+
+      await indexer.pollOnce();
+      expect(await closesAt()).toBe(CLOSES);
+
+      await indexer.pollOnce();
+      expect(await closesAt()).toBe(CLOSES + 86_400n);
+      expect((await store.getEvent(pool, 0))?.lastLedger).toBe(210);
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("stores u64::MAX, a legal 'never' that a bigint column would refuse", async () => {
+      const page = seedEvent(U64_MAX);
+      await build(
+        new FakeEventSource([[...page, registrationClosesSet({ ...registry, ledger: 200 }, 0, null, U64_MAX)]]),
+      ).pollOnce();
+      expect(await closesAt()).toBe(U64_MAX);
+    });
+
+    it("counts a close date for an event that is not indexed as an orphan", async () => {
+      const result = await build(
+        new FakeEventSource([[registrationClosesSet({ ...registry, ledger: 200 }, 7, null, CLOSES)]]),
+      ).pollOnce();
+      expect(result.orphans).toBe(1);
+      expect(warnings).toContain("close date for an event that is not indexed");
+    });
+
+    it("rebuilds the date from state, including one the poller never saw", async () => {
+      // The date was set while the index was down: no event, only state.
+      const page = seedEvent(CLOSES);
+      chain.addEvent({ eventId: 1, organiser: ORGANISER });
+      const indexer = build(new FakeEventSource([[...page, eventCreated({ ...registry, ledger: 102 }, 1, ORGANISER)]]));
+      await indexer.pollOnce();
+      expect(await closesAt()).toBeNull();
+
+      await indexer.rebuild();
+
+      expect(await closesAt(0)).toBe(CLOSES);
+      expect(await closesAt(1)).toBeNull();
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+
+    it("has doctor report a date that disagrees with the chain", async () => {
+      const page = seedEvent(CLOSES);
+      const indexer = build(
+        new FakeEventSource([[...page, registrationClosesSet({ ...registry, ledger: 200 }, 0, null, CLOSES)]]),
+      );
+      await indexer.pollOnce();
+      chain.events.get(0)!.registrationClosesAt = CLOSES + 60n;
+
+      const report = await indexer.doctor();
+      expect(report.ok).toBe(false);
+      expect(report.findings).toEqual([
+        {
+          kind: "event-differs",
+          detail: `event 0: registration_closes_at ${CLOSES} != ${CLOSES + 60n}`,
+        },
+      ]);
+    });
+
+    it("rebuilds and doctors against an EventRegistry that predates v2.5", async () => {
+      // The live contract until the upgrade: get_registration_closes does not
+      // exist. A rebuild must not become an outage in that window.
+      const page = seedEvent();
+      chain.preCloseDate = true;
+      const indexer = build(new FakeEventSource([page]));
+      await indexer.pollOnce();
+
+      await expect(indexer.rebuild()).resolves.toMatchObject({ events: 1 });
+      expect(await closesAt()).toBeNull();
+      expect(await indexer.doctor()).toMatchObject({ ok: true, findings: [] });
+    });
+  });
+
+  describe("transaction hashes survive a rebuild (STE-64)", () => {
+    const hashesOf = async (tokenId: number) =>
+      (await store.listTransitions(pool, tokenId)).map((t) => [t.toState, t.txHash, t.ledger, t.source]);
+
+    it("gives every rebuilt transition back the hash the poller had logged", async () => {
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      const before0 = await hashesOf(0);
+      const before1 = await hashesOf(1);
+      expect(before0.every(([, hash]) => typeof hash === "string")).toBe(true);
+
+      await indexer.rebuild();
+
+      expect(await hashesOf(0)).toEqual(before0);
+      expect(await hashesOf(1)).toEqual(before1);
+    });
+
+    it("leaves a transition with no logged event NULL rather than guessing", async () => {
+      seedFullRace();
+      await build(new FakeEventSource([])).rebuild();
+      const rows = await store.listTransitions(pool, 0);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((t) => t.txHash === null && t.ledger === null && t.source === "state")).toBe(true);
+    });
+
+    it("never takes a hash from another contract's event with the same token id", async () => {
+      // v1 and v2 token ids overlap; a v1 hash on a v2 record would link a
+      // runner to someone else's transaction.
+      const { events } = seedFullRace();
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      await pool.query("UPDATE chain_events SET contract_id = $1", [ADDRESSES.eventRegistry]);
+
+      await indexer.rebuild();
+
+      expect((await store.listTransitions(pool, 0)).every((t) => t.txHash === null)).toBe(true);
+    });
+
+    it("takes a Finished hash from record_finished_untimed as well", async () => {
+      const { events } = seedFullRace({ untimed: true });
+      const indexer = build(new FakeEventSource([events]));
+      await indexer.pollOnce();
+      const finishedBefore = (await store.listTransitions(pool, 0)).find((t) => t.toState === "Finished");
+      expect(finishedBefore?.txHash).toMatch(/^[0-9a-f]{64}$/);
+
+      await indexer.rebuild();
+
+      const finishedAfter = (await store.listTransitions(pool, 0)).find((t) => t.toState === "Finished");
+      expect(finishedAfter?.txHash).toBe(finishedBefore?.txHash);
+      expect(finishedAfter?.source).toBe("event");
     });
   });
 

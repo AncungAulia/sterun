@@ -69,7 +69,7 @@ must **never** be edited by hand.
 | STE-15 | `@sterunxyz/sdk` — SterunClient (C5) | done, live testnet e2e |
 | STE-19 | JSON Schema v1.0 + packaging (C6) | **done — published as `@sterunxyz/sdk`** |
 | STE-20 | results CSV + API hardening (C7/j6) | done, live testnet e2e |
-| STE-31 | deploy the backend to a VPS | **done** — live at `https://api-sterun.jameshub.fun` (jameserver / pve02 / ct-sterun), Cloudflare Tunnel |
+| STE-31 | deploy the backend to a VPS | **done** — live at `https://api.sterun.xyz` (and still at `https://api-sterun.jameshub.fun`), jameserver / pve02 / ct-sterun, Cloudflare Tunnel |
 | STE-8 | web app shell + wallet connect (C9) | done |
 | STE-13 | event directory + detail read from chain (C9) | done, live testnet e2e |
 | STE-17 | organiser console | in progress (Ancung) |
@@ -82,6 +82,8 @@ must **never** be edited by hand.
 | STE-41 | **untimed finish** (`record_finish_untimed`) in RaceRecord (C2) + `recordFinishUntimed` in the SDK | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer/CSV + `fe/` profile follow-ups are teammates' tickets |
 | STE-54 | **bibs unique within an event, from 1** in EventRegistry (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` keeps its duplicate-bib guard and `fe/` renders the number as-is (teammates' tickets) |
 | STE-55 | **`increase_quota`** — a sold-out distance can open a second batch (C1) | done, **LIVE via in-place `upgrade` — address UNCHANGED**; `be/` indexer handler for `QuotaIncreased` and the `fe/` console flow are teammates' tickets |
+| STE-25 | **mock race rehearsal** on live testnet (C14) | script + evidence done — `docs/rehearsal/`; run 3: **49 PASS · 0 FAIL · 6 MANUAL REQUIRED**. The two-desk race from run 2 is fixed (STE-61 SDK, STE-62 scanner); the UI steps wait on STE-32 (no deployed web app) and the manual walkthrough |
+| STE-68 | **demo data** on testnet (SOW §3) + the rehearsal cleans up after itself | script done — `docs/rehearsal/seed.sh`: 4 races with poster + document, 25 records, one race run with results, both fraud attempts; sweeps the `sc/` sanity races off the directory. **Not run yet** (waits for the STE-66 upgrade) |
 | — | event metadata files (`POST /events/files`) | done, live e2e |
 | — | **R2** object storage (`sterun-files`, APAC) | done — the API is stateless, the replica blocker is gone |
 | — | migrate `be/` + `fe/` to the v2 addresses | done — index and vault truncated, v2 e2e passed |
@@ -120,9 +122,25 @@ The whole publish chain was verified before upload and again after: `npm pack` p
 that installs into an empty TypeScript project outside the repository, typechecks cleanly, and reads
 the live v2 contracts through the packaged artifact rather than through the source tree.
 
-**M3 (D3 — web + scanner + landing) is under way.** The web app is live: `/` and `/events/[id]` read
-EventRegistry directly over RPC, with no database and no wallet. What remains: STE-17 console →
-STE-21 entry + pass → STE-22 scanner → STE-24 profile → STE-32 Vercel deploy.
+**M3 (D3 — web + scanner + landing) is deployed.** The web app is at
+[`app.sterun.xyz`](https://app.sterun.xyz) and the landing page at
+[`sterun.xyz`](https://sterun.xyz), both on Vercel (STE-32, evidence in `docs/deployments.md`), with
+the API at [`api.sterun.xyz`](https://api.sterun.xyz). The console, the entry flow and pass, the
+scanner and the runner profile are all built and merged (STE-17, STE-21, STE-22, STE-24). What
+remains in `fe/`: the results screen (STE-58, waiting on `record_results` from STE-60).
+
+**STE-25 rehearsed the whole loop on live testnet** (`docs/rehearsal/run.sh`, evidence per run in
+`docs/rehearsal/runs/`): create → 9 paid entries → sold out → second batch → two offline desks →
+results CSV → 9 results → per-runner verification, plus the negative paths. What it found: when two desks claim the same runner in the same ledger, the losing claim **fails on
+the ledger** with `AlreadyClaimed(102)`; the SDK used to lose that code (STE-61) and the scanner
+stopped its whole queue (STE-62). Both are fixed, and run 3 shows the losing desk flagging the runner
+and sending the rest with one press. No contract bug was found. The six `MANUAL REQUIRED` steps were waiting on a deployed web app, and
+since 2026-09-23 they are not: they need a person, two phones and a camera, and nothing else. The
+web faucet **works** — proven against production on 2026-09-23 (`pnpm --filter be e2e:faucet
+https://api.sterun.xyz`): a fresh trustlined wallet was paid 50 sUSD. `faucet.payoutConfigured:
+false` in `GET /config` is **not** that faucet: it reports the **distributor** key, which is
+deliberately absent from a public box (`be/OPERATIONS.md`). The web app's route is
+`faucet.route.available`, and it is `true`.
 
 The backend runs as three processes from one `be/` package: the API (`pnpm dev`), the poller
 (`pnpm indexer follow`) and the TTL keeper (`pnpm keeper run`). The full chain has been run against

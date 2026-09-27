@@ -1,0 +1,145 @@
+<!doctype html>
+<!--
+  STE-68 — the source of the four demo race posters. Rendered once by
+  render.sh into the committed JPEGs next to this file; the seed uploads those
+  JPEGs, so running it needs no browser.
+
+  No dates on purpose: the seed computes race days from the moment it runs,
+  and a poster cannot be re-rendered then. Distances, start time and place are
+  what a poster that outlives its date can safely say.
+-->
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Demo race poster</title>
+<style>
+  :root { --w: 1600px; --h: 900px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--w); height: var(--h); overflow: hidden; }
+  body { font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; }
+  .poster { position: relative; width: var(--w); height: var(--h); overflow: hidden; color: var(--ink); background: var(--bg); }
+  .art { position: absolute; inset: 0; }
+  .copy { position: absolute; left: 96px; top: 88px; bottom: 88px; width: 900px; display: flex; flex-direction: column; }
+  .kicker { font-size: 26px; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 600; color: var(--accent); }
+  h1 { margin-top: 26px; font-family: var(--display, "Futura", "Avenir Next", sans-serif); font-size: 124px; line-height: 0.92; font-weight: 800; letter-spacing: -0.02em; text-transform: uppercase; }
+  .year { color: var(--accent); }
+  .distances { margin-top: auto; display: flex; gap: 18px; }
+  .chip { font-size: 40px; font-weight: 800; padding: 14px 30px 12px; border: 4px solid var(--ink); border-radius: 999px; }
+  .chip.fill { background: var(--ink); color: var(--bg-solid); }
+  .where { margin-top: 30px; font-size: 32px; font-weight: 600; }
+  .where small { display: block; margin-top: 6px; font-size: 24px; font-weight: 500; opacity: 0.8; }
+  .tag { position: absolute; left: 96px; bottom: 52px; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
+</style>
+</head>
+<body>
+<div class="poster" id="poster">
+  <svg class="art" id="art" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true"></svg>
+  <div class="copy">
+    <div class="kicker" id="kicker"></div>
+    <h1 id="title"></h1>
+    <div class="distances" id="distances"></div>
+    <div class="where" id="where"></div>
+  </div>
+  <div class="tag">Stellar testnet demo race</div>
+</div>
+<script>
+const POSTERS = {
+  solo: {
+    kicker: "Minggu pagi · 05.30 WIB",
+    title: 'Solo<br>Heritage<br>Run <span class="year">2026</span>',
+    distances: ["10K", "5K"],
+    where: "Stadion Manahan, Surakarta<small>Jalan Slamet Riyadi · Pura Mangkunegaran</small>",
+    vars: { "--bg": "#3b2415", "--bg-solid": "#3b2415", "--ink": "#f6e7c8", "--accent": "#e0a93b" },
+    art: () => {
+      // A kawung-like repeat: four ellipses around a point, the oldest batik motif from Central Java.
+      let s = '<rect width="1600" height="900" fill="#3b2415"/>';
+      for (let y = 0; y < 900; y += 90) for (let x = 900; x < 1700; x += 90) {
+        const o = ((x + y) / 90) % 2 ? 0.16 : 0.1;
+        s += `<g transform="translate(${x} ${y})" fill="#e0a93b" opacity="${o}">` +
+          '<ellipse cx="0" cy="-22" rx="14" ry="22"/><ellipse cx="0" cy="22" rx="14" ry="22"/>' +
+          '<ellipse cx="-22" cy="0" rx="22" ry="14"/><ellipse cx="22" cy="0" rx="22" ry="14"/></g>';
+      }
+      s += '<rect x="820" y="0" width="160" height="900" fill="url(#fade)"/>';
+      s += '<defs><linearGradient id="fade" x1="0" x2="1"><stop offset="0" stop-color="#3b2415"/><stop offset="1" stop-color="#3b2415" stop-opacity="0"/></linearGradient></defs>';
+      s += '<path d="M1040 780 C 1120 640, 1260 700, 1300 560 S 1480 420, 1440 260 S 1300 120, 1180 170" fill="none" stroke="#f6e7c8" stroke-width="10" stroke-linecap="round" stroke-dasharray="2 26"/>';
+      s += '<circle cx="1040" cy="780" r="18" fill="#e0a93b"/><circle cx="1180" cy="170" r="18" fill="#f6e7c8"/>';
+      return s;
+    },
+  },
+  kotatua: {
+    kicker: "Minggu pagi · 05.00 WIB",
+    title: 'Kota Tua<br>10K <span class="year">2026</span>',
+    distances: ["10K", "5K"],
+    where: "Taman Fatahillah, Jakarta Barat<small>Kali Besar · Sunda Kelapa</small>",
+    vars: { "--bg": "#f3e6d3", "--bg-solid": "#f3e6d3", "--ink": "#5a1f1a", "--accent": "#c2472f" },
+    art: () => {
+      let s = '<rect width="1600" height="900" fill="#f3e6d3"/>';
+      s += '<circle cx="1330" cy="250" r="150" fill="#e8b44c" opacity="0.55"/>';
+      // An old-town facade: a pediment, a clock tower and a row of shuttered windows.
+      s += '<g fill="#c2472f">' +
+        '<rect x="1000" y="470" width="600" height="430"/>' +
+        '<polygon points="1000,470 1300,380 1600,470"/>' +
+        '<rect x="1255" y="250" width="90" height="150"/><polygon points="1245,250 1300,190 1355,250"/></g>';
+      s += '<circle cx="1300" cy="300" r="26" fill="#f3e6d3"/>';
+      for (let i = 0; i < 6; i++) s += `<rect x="${1040 + i * 92}" y="540" width="46" height="96" rx="23" fill="#f3e6d3"/>`;
+      for (let i = 0; i < 6; i++) s += `<rect x="${1040 + i * 92}" y="690" width="46" height="96" rx="4" fill="#5a1f1a" opacity="0.85"/>`;
+      s += '<rect x="0" y="860" width="1600" height="40" fill="#5a1f1a"/>';
+      return s;
+    },
+  },
+  braga: {
+    kicker: "Sabtu malam · 19.00 WIB",
+    title: 'Braga<br>Night Run <span class="year">2026</span>',
+    distances: ["7K", "3K · gratis"],
+    where: "Jalan Braga, Bandung<small>Alun-Alun · Gedung Merdeka</small>",
+    vars: { "--bg": "#0f1633", "--bg-solid": "#0f1633", "--ink": "#fdf6e3", "--accent": "#ffc857" },
+    art: () => {
+      let s = '<defs><radialGradient id="glow"><stop offset="0" stop-color="#ffc857" stop-opacity="0.9"/><stop offset="1" stop-color="#ffc857" stop-opacity="0"/></radialGradient></defs>';
+      s += '<rect width="1600" height="900" fill="#0f1633"/>';
+      // Street lamps receding towards a vanishing point.
+      const vx = 1250, vy = 430;
+      for (let i = 0; i < 7; i++) {
+        const t = 1 - i / 7, x = vx + (1560 - vx) * t, x2 = vx - (vx - 980) * t, y = vy - 330 * t, base = vy + 470 * t;
+        const r = 12 + 34 * t;
+        for (const lx of [x, x2]) {
+          s += `<line x1="${lx}" y1="${y}" x2="${lx}" y2="${base}" stroke="#2c3a6b" stroke-width="${2 + 6 * t}"/>`;
+          s += `<circle cx="${lx}" cy="${y}" r="${r * 3}" fill="url(#glow)" opacity="0.5"/><circle cx="${lx}" cy="${y}" r="${r / 2}" fill="#ffe9b0"/>`;
+        }
+      }
+      s += `<polygon points="${vx},${vy} 1600,900 900,900" fill="#1b2550"/>`;
+      s += `<line x1="${vx}" y1="${vy}" x2="1250" y2="900" stroke="#ffc857" stroke-width="6" stroke-dasharray="30 30" opacity="0.7"/>`;
+      return s;
+    },
+  },
+  sanur: {
+    kicker: "Minggu subuh · 05.00 WITA",
+    title: 'Sanur<br>Sunrise<br>Half <span class="year">2026</span>',
+    distances: ["21K", "10K"],
+    where: "Pantai Sanur, Denpasar, Bali<small>Jalur pantai Sanur</small>",
+    vars: { "--bg": "linear-gradient(180deg,#2b2d6e 0%,#c0567a 48%,#f59e5b 100%)", "--bg-solid": "#2b2d6e", "--ink": "#fff7ec", "--accent": "#ffd18a" },
+    art: () => {
+      let s = '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2d6e"/><stop offset="0.5" stop-color="#c0567a"/><stop offset="1" stop-color="#f59e5b"/></linearGradient></defs>';
+      s += '<rect width="1600" height="900" fill="url(#sky)"/>';
+      s += '<circle cx="1280" cy="600" r="190" fill="#ffd18a"/>';
+      for (let i = 0; i < 7; i++) {
+        const y = 600 + i * 46;
+        s += `<path d="M0 ${y} Q 200 ${y - 18} 400 ${y} T 800 ${y} T 1200 ${y} T 1600 ${y} V 900 H 0 Z" fill="#1f3c6e" opacity="${0.35 + i * 0.09}"/>`;
+      }
+      for (let i = 0; i < 5; i++) s += `<rect x="${1120 + i * 12}" y="${640 + i * 34}" width="${320 - i * 24}" height="6" rx="3" fill="#ffd18a" opacity="${0.8 - i * 0.12}"/>`;
+      return s;
+    },
+  },
+};
+
+const key = location.hash.slice(1) || "solo";
+const p = POSTERS[key];
+const poster = document.getElementById("poster");
+for (const [k, v] of Object.entries(p.vars)) poster.style.setProperty(k, v);
+document.getElementById("art").innerHTML = p.art();
+document.getElementById("kicker").textContent = p.kicker;
+document.getElementById("title").innerHTML = p.title;
+document.getElementById("distances").innerHTML = p.distances.map((d, i) => `<span class="chip${i === 0 ? " fill" : ""}">${d}</span>`).join("");
+document.getElementById("where").innerHTML = p.where;
+</script>
+</body>
+</html>

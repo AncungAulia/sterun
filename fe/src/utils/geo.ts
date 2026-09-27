@@ -121,6 +121,58 @@ export function mapsLink({ lat, lng }: Coordinates): string {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
+/** `google.com`, `www.google.com`, `google.co.id`, `maps.google.com` and their kin. */
+const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.(?:[a-z]{2,3}|co\.[a-z]{2}|com\.[a-z]{2})$/;
+
+/**
+ * The Google Maps link an organiser pasted, as a link it is safe to put on a
+ * public page, or null.
+ *
+ * Kept alongside the pin rather than instead of it (Ancung, 2026-09-17). Two
+ * numbers open a nameless dropped pin: "Fakultas Teknik UGM" pasted as a place
+ * link came back as a point with no name, so a runner saw where but not what.
+ * The link opens the place itself. And a short share link from a phone
+ * (`maps.app.goo.gl/...`) carries no pin at all, so without keeping the link
+ * the most common paste on a phone gave the event nothing to open.
+ *
+ * Checked strictly because it ends up behind an "Open in Maps" button on a page
+ * anyone can read, in a document nobody can change: only https, only Google's
+ * own map hosts, and nothing that can smuggle a login into the URL. The same
+ * check runs again when a document is read, since a document is only as
+ * trustworthy as whoever wrote it.
+ */
+export function googleMapsUrl(input: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(input.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname;
+  const allowed =
+    host === "maps.app.goo.gl" ||
+    (host === "goo.gl" && path.startsWith("/maps")) ||
+    (GOOGLE_HOST.test(host) && (host.startsWith("maps.") || path === "/maps" || path.startsWith("/maps/")));
+
+  return allowed ? url.toString() : null;
+}
+
+/**
+ * Where "Open in Maps" goes: the organiser's own link when there is one, since
+ * it opens the named place, and otherwise a pin built from the coordinates, the
+ * only thing an event published before links were kept has.
+ */
+export function openInMapsHref(place: { mapsUrl?: string; lat?: number; lng?: number }): string | undefined {
+  if (place.mapsUrl) return place.mapsUrl;
+  if (typeof place.lat === "number" && typeof place.lng === "number") {
+    return mapsLink({ lat: place.lat, lng: place.lng });
+  }
+  return undefined;
+}
+
 /** Mean Earth radius, the usual sphere the haversine formula assumes. */
 const EARTH_RADIUS_KM = 6371;
 

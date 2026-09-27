@@ -14,8 +14,8 @@
  */
 import type { ReactNode } from "react";
 
-import { SiteFrame } from "@/components/layouts/SiteFrame";
-import { WalletGate } from "@/components/layouts/WalletGate";
+import { SiteFrame } from "@/components/layout/SiteFrame";
+import { WalletGate } from "@/components/wallet/WalletGate";
 
 export default function NewEventLayout({ children }: { children: ReactNode }) {
   return (

@@ -35,7 +35,13 @@
  * every revert path, which is the hard half — without a network, which is what
  * lets these tests live in `typescript.yml` next to everything else.
  */
-import { SterunNetworkError, SterunSignerError, asContractError } from "./errors.js";
+import {
+  SterunContractError,
+  SterunNetworkError,
+  SterunSignerError,
+  asContractError,
+  classifyContractError,
+} from "./errors.js";
 
 /** The bindings' `Result`, structurally. */
 interface ResultLike<T> {
@@ -52,7 +58,61 @@ const isResultLike = <T>(value: unknown): value is ResultLike<T> =>
 export interface SentLike<T> {
   result: T;
   sendTransactionResponse?: { hash?: string } | undefined;
-  getTransactionResponse?: { txHash?: string; ledger?: number } | undefined;
+  getTransactionResponse?:
+    | {
+        txHash?: string;
+        ledger?: number;
+        /** `"SUCCESS"` or `"FAILED"` once the transaction is in a ledger. */
+        status?: string;
+        /** Parsed diagnostic events; where a ledger failure's contract error is. */
+        diagnosticEventsXdr?: unknown;
+      }
+    | undefined;
+}
+
+/**
+ * The contract error a transaction failed on the ledger with, read from its
+ * diagnostic events, or `null` when none carries one.
+ *
+ * A transaction that simulated cleanly and then failed on the ledger (STE-61:
+ * two scanner desks claiming one race pack in the same ledger) has no
+ * `simulation.error` and no return value. The reason is in the diagnostic
+ * events the RPC returns with it, as
+ *
+ *     topics: [ symbol "host_fn_failed", error { contract: 102 } ]
+ *
+ * preceded by frame-exit events carrying the same error. `host_fn_failed` is the
+ * host's verdict on the whole invocation, so it wins; any other contract error
+ * topic is the fallback.
+ *
+ * The events are read through their JSON form. The XDR objects stellar-sdk 17
+ * parses them into expose fields, not the accessor methods older versions had,
+ * and the JSON form is the one shape both describe the same way.
+ */
+export function ledgerFailureCode(diagnosticEvents: unknown): number | null {
+  if (!Array.isArray(diagnosticEvents)) return null;
+  let fallback: number | null = null;
+  for (const event of diagnosticEvents) {
+    let json: unknown;
+    try {
+      json = JSON.parse(
+        JSON.stringify(event, (_key, value) => (typeof value === "bigint" ? value.toString() : value)),
+      );
+    } catch {
+      continue;
+    }
+    const topics = (json as { event?: { body?: { v0?: { topics?: unknown } } } } | null)?.event?.body
+      ?.v0?.topics;
+    if (!Array.isArray(topics)) continue;
+    const symbol = (topics[0] as { symbol?: unknown } | null)?.symbol;
+    for (const topic of topics) {
+      const code = (topic as { error?: { contract?: unknown } } | null)?.error?.contract;
+      if (typeof code !== "number" || !Number.isSafeInteger(code)) continue;
+      if (symbol === "host_fn_failed") return code;
+      fallback ??= code;
+    }
+  }
+  return fallback;
 }
 
 /**
@@ -189,6 +249,36 @@ export async function runWrite<T>(
       );
     }
     throwSimulationFailure(method, message, e);
+  }
+
+  // A transaction can simulate cleanly and still fail on the ledger — two desks
+  // claiming one race pack, two runners taking the last place, in one ledger.
+  // Checked before `result` is touched: for a FAILED transaction stellar-sdk 17
+  // still sets `returnValue: undefined`, and its `result` getter then crashes
+  // with "Cannot read properties of undefined (reading 'type')". That TypeError
+  // used to be reported here as a *simulation* failure, and the contract error
+  // the ledger recorded was lost (STE-61).
+  const response = sent.getTransactionResponse;
+  if (response?.status === "FAILED") {
+    const txHash = response.txHash ?? sent.sendTransactionResponse?.hash ?? "unknown";
+    const ledger = response.ledger ?? null;
+    const code = ledgerFailureCode(response.diagnosticEventsXdr);
+    if (code !== null) {
+      throw new SterunContractError(
+        classifyContractError(code),
+        method,
+        `HostError: Error(Contract, #${code})`,
+        undefined,
+        { txHash, ledger },
+      );
+    }
+    throw new SterunNetworkError(
+      `${method} failed on the ledger in transaction ${txHash}, and the RPC response does not ` +
+        `say why; look the transaction up to find out`,
+      method,
+      undefined,
+      { txHash },
+    );
   }
 
   let value: T;

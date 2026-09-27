@@ -20,18 +20,24 @@ import NewEventLayout from "../app/(organiser)/org/new/layout";
 import BrowseNotFound from "../app/(browse)/not-found";
 import ConsoleNotFound from "../app/(organiser)/org/(console)/not-found";
 import NotFound from "../app/not-found";
-import { ConsoleHeader } from "@/modules/organiser/component/ConsoleHeader";
+import { ConsoleHeader } from "@/modules/organiser/shared/components/ConsoleHeader";
 import { shortAddress } from "@/utils/format";
 
 const ADDRESS = "GBGUI5MPVOBI37LSQMYXJGMWSVQZ4AKLUUNAZIUWTOEGOYMWP47FC4TN";
 const SHORT = shortAddress(ADDRESS);
 
 const listEvents = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/events", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/events")>()),
+vi.mock("@/lib/event/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/event/events")>()),
   listEvents,
 }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/org" }));
+/* The site header reads the search from the address (2026-09-23), so every
+   layout that draws it needs the router mocked, not only the console's rail. */
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/org",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 let wallet = {
   address: ADDRESS as string | null,

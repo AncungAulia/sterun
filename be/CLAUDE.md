@@ -361,6 +361,37 @@ Errors: 401 (auth), 403 `forbidden` (another wallet), 404 `not-found` (no such t
 `no-pass` (no confirmed entry details for this record). Rate-limited at 20 per minute per client.
 Logged with the token id only.
 
+**A vault row is linked from the chain, not only by confirm (STE-59, migration 012).** Entering took
+three wallet approvals: the signed message for `POST /participants`, the `enter` transaction, and a third
+signature only to call confirm and tell this service what the chain already said. In testing it showed
+up as surprise wallet popups over the success page. Now the indexer links the row itself when it
+indexes `record_entered`, and the web app can go back to two approvals.
+
+A row is linked only when **all four** match the record: `participant_hash`, `runner_address` equal to
+the record's owner, `event_id` and `category_id`. Only an unconfirmed row, and never a token another
+row already holds. One statement (`store.linkParticipantsFromChain`), used two ways:
+
+| | Scope | `enter_tx_hash` |
+| --- | --- | --- |
+| the poller, on `record_entered` | that token | the event's transaction |
+| `rebuild` | every indexed record | from `chain_events` when the poller logged it, otherwise **NULL** |
+
+NULL is honest rather than a gap: contract state carries no transaction hash and `getEvents` keeps about a
+week. Migration 012 therefore lets a linked row lack the hash, while a token id still always arrives
+with a confirmation time. `linked_by` records `confirm` or `chain`; NULL means a row confirmed before 012.
+
+Details that are easy to get wrong:
+
+- **Confirm still works and stays idempotent**, so an older client is not broken: confirming the token
+  the indexer already linked is a success that changes nothing.
+- **The link runs under a savepoint inside the page's transaction.** A confirm can link the same token
+  in the same instant; the loser trips the unique index on `token_id`, and without the savepoint that
+  would roll back the whole page and stall the poller on it.
+- **STE-50's sweep deletes `token_id IS NULL` rows only**, so a row linked from the chain is safe even
+  if the runner closed the dialog before any confirm.
+- The linking reads `records`, so it is exactly as current as the index. A row whose record the index
+  has not reached yet is linked when it does.
+
 Auth is a Stellar wallet signature (challenge → sign → spend). Nonces are single-use, expire after
 two minutes, and are bound to one address.
 
@@ -419,6 +450,16 @@ Five things that confuse people when they are not spelled out:
    breaks `verify` and `records_of`. The keys come from a simulated footprint, not from being
    assembled by hand.
 
+**A rebuild keeps transaction hashes (STE-64).** State has no transaction hashes, so a rebuilt
+transition used to lose its `tx_hash` and `ledger` — and with them the link a runner's profile shows
+for each step (`GET /records/:tokenId` → `transitions[].tx_hash`). Production had 59 of 104 transitions
+without one after the two rebuilds of 2026-09-15. `restoreTransitionProvenance` now refills them from
+`chain_events` at the end of every rebuild: same token, the event name for that state
+(`record_finished` or `record_finished_untimed` for `Finished`), and **only events from the current
+RaceRecord contract**, because v1 and v2 token ids overlap and a hash from the other contract would link
+a runner to someone else's transaction. A refilled row becomes `source = 'event'`. A transition with no
+logged event stays NULL.
+
 The TTL threshold **must match** `BUMP_THRESHOLD` in `sc/contracts/race_record/src/lib.rs` (120
 days). But the extension target is **one ledger below** `BUMP_TO` (3,110,399, not 3,110,400):
 `ExtendFootprintTTLOp` rejects the boundary value as malformed, while the `extend_ttl` host function
@@ -438,7 +479,7 @@ inject an environment rather than inheriting the developer's `.env`.
 
 ## Tests
 
-976 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
+1048 tests (`pnpm --filter be test`; some need Postgres), and most of them are negative cases —
 that is where the damage lives.
 
 No test makes a network call: `/health` deliberately does not touch Horizon (a health check that
@@ -600,6 +641,91 @@ fails to decode. When `docs/specs/CHANGELOG.md` changes, read it against `src/ch
 Guarded by tests, each checked by breaking the fix: removing the recount, restoring the equality
 check, making `quota_increased` a no-op, and dropping the category comparison from `doctor` each fail
 the suite.
+
+## Registration close dates (STE-46, migration 014)
+
+EventRegistry v2.5 refuses entries at or after an event's close date (`RegistrationClosed = 20`, with the
+status still `Open`). The index keeps that date so the race page and the console need no RPC call per
+event: `events.registration_closes_at`, served as `registration_closes_at` (a string like every u64, or
+`null` for an event with no date) on `/events` and `/events/:eventId`.
+
+| | How |
+| --- | --- |
+| poller | `registration_closes_set` writes `current`; an event not indexed is an orphan. No cross-check: the date may have moved again since, and the contract emits nothing for a no-op |
+| rebuild | `get_registration_closes` per event, from state, so a date set while the index was down comes back |
+| doctor | compares the column with `get_registration_closes` |
+
+Three things worth knowing:
+
+- **`numeric(20,0)`, not `bigint`.** `u64::MAX` is a legal "never" on chain. A bigint column would refuse
+  it and stop the poller on a value the contract accepted. `starts_at` is still `bigint` and has the same
+  latent problem; it is left alone here because nothing has sent a huge `starts_at` yet.
+- **This service runs against a pre-v2.5 contract too.** There `get_registration_closes` does not exist,
+  the host answers `Error(WasmVm, MissingValue)`, and `ChainReader.registrationCloses` answers `null`,
+  which is true of every event on such a contract. Without that, deploying this before the contract
+  upgrade would turn every rebuild and every doctor run into an outage. Any other failure still throws.
+- **The API gives the date, not a verdict.** Whether entries are closed right now depends on the ledger
+  clock at the moment of `enter`, and the status. A client compares; the chain decides.
+
+Guarded by tests, each checked by breaking it: the poller ignoring the event, rebuild dropping dates,
+doctor skipping them, the pre-v2.5 fallback removed, the API always sending `null`, and the decoder
+dropping `previous` each fail the suite.
+
+## Signed event announcements (STE-40, migration 013)
+
+A published event document is frozen by its hash (STE-34), so a change after publishing is **announced
+beside it**, never edited in (`docs/WEB_APP_IA.md` §6.1). Three changes must be paired with one: a moved
+schedule or venue, a registration close date moved later (STE-45/STE-46), and a raised quota (STE-55).
+
+| | |
+| --- | --- |
+| `POST /events/:eventId/announcements` | `{ published_at, body, signer, signature }` → 201, or 200 for the same signed announcement again |
+| `GET /events/:eventId/announcements` | public, newest first, each with the exact signed `message` |
+
+**The organiser signs the announcement, not a login nonce.** A nonce proves who is calling right now and
+nothing about what they said; the point here is that **anyone can re-verify an announcement later
+without trusting this service**. So the signature covers this exact text (`src/announcements.ts`):
+
+```
+Sterun announcement v1
+network: <network passphrase>
+event_registry: <EventRegistry contract id>
+event_id: <u32>
+published_at: <YYYY-MM-DDTHH:MM:SS.sssZ>
+body_sha256: <sha256 of the UTF-8 body, lowercase hex>
+```
+
+LF-joined, no trailing newline, ed25519 over the bytes or SEP-53 (`signMessage`), the same two schemes the
+login accepts. Network and registry are inside so a testnet announcement cannot be replayed on mainnet
+or against another registry where the same `event_id` is another race.
+
+The format has **one definition in two places**, like the error tables: here and in `@sterunxyz/sdk`
+(`announcementMessage`, `verifyAnnouncement`). Both are pinned to `sdk/schema/announcement-v1.vectors.json`,
+generated by a third, independent implementation. **Changing the format means a v2 header, never an edit**,
+because every published announcement was signed over v1.
+
+The checks, in order, each proven by removing it (the tests fail without each):
+
+1. **Text:** 1 to 2000 characters, not only whitespace, no control characters except LF and TAB.
+2. **`published_at` within 10 minutes of the server clock.** It is signed, so this is what stops an
+   organiser publishing today an announcement dated last month. It must also be a real time in exactly
+   one spelling (`new Date().toISOString()`), because the string is what was signed.
+3. **Signature** over the rebuilt message; 401 `bad-signature` otherwise.
+4. **`get_organiser(event_id)` read from the chain** must be the signer; 403 otherwise. Never the index.
+5. **Stored append-only.** No edit or delete route, and the table itself refuses UPDATE, DELETE and
+   TRUNCATE with a trigger. A correction is a new announcement. The same signature twice is one row.
+
+Two things worth knowing:
+
+- **It is not an index table.** Nothing here can be rebuilt from the chain, so `rebuild` does not touch it
+  (a test proves it survives `clearMaterialisedTables`), and there is no foreign key to `events`: an event
+  the poller has not reached is still a real event.
+- **The chain enforces none of the pairing.** `increase_quota` does not check that an announcement exists.
+  Pairing a quota rise or an extension with one is a console rule, and the docs must say so rather than
+  imply a protocol guarantee.
+
+Each row keeps the network and registry it was signed for, so it stays verifiable after a registry address
+changes.
 
 ## Results CSV (STE-20, C7)
 

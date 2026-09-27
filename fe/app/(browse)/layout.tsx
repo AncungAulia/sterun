@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from "react";
 
-import { SiteFrame } from "@/components/layouts/SiteFrame";
+import { SiteFrame } from "@/components/layout/SiteFrame";
 
 export default function BrowseLayout({ children }: { children: ReactNode }) {
   return <SiteFrame>{children}</SiteFrame>;

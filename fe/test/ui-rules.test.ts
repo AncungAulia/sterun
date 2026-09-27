@@ -19,7 +19,10 @@ const ROOT = join(import.meta.dirname, "..");
 function walk(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, found);
+    // Tests are not UI: their strings include banned dashes and hex on purpose.
+    if (entry.isDirectory()) {
+      if (entry.name !== "__tests__") walk(full, found);
+    }
     else if (/\.tsx?$/.test(entry.name)) found.push(relative(ROOT, full));
   }
   return found;
@@ -131,7 +134,13 @@ describe("no raw design values in components", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles()) {
-      // tokens.css is the one place hex belongs, and it is not a .ts/.tsx file.
+      /*
+        tokens.css is the one place hex belongs, and it is not a .ts/.tsx file.
+        The web app manifest is the one exception in code: an operating system
+        reads it before any stylesheet exists, so it cannot name a custom
+        property. The test below holds those two values to the tokens instead.
+      */
+      if (file.replace(/\\/g, "/").endsWith("app/manifest.ts")) continue;
       const lines = readFileSync(join(ROOT, file), "utf8").split(/\r?\n/);
       lines.forEach((line, index) => {
         const withoutComment = stripComments(line);
@@ -142,6 +151,72 @@ describe("no raw design values in components", () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the manifest's two hex values", () => {
+  /**
+   * The install screen is the one surface that cannot read a token, so the two
+   * colours are written out. Exempting them from the sweep without this test
+   * would let them drift from the palette they are copies of, and the drift
+   * would only show on somebody's home screen.
+   */
+  it("are still the paper and teal from tokens.css", () => {
+    const manifest = readFileSync(join(ROOT, "app/manifest.ts"), "utf8");
+    const tokens = readFileSync(join(ROOT, "app/tokens.css"), "utf8");
+
+    const valueOf = (source: string, pattern: RegExp) => pattern.exec(source)?.[1]?.toLowerCase();
+
+    expect(valueOf(manifest, /background_color:\s*"(#[0-9a-fA-F]{3,8})"/)).toBe(
+      valueOf(tokens, /--color-paper:\s*(#[0-9a-fA-F]{3,8})/),
+    );
+    expect(valueOf(manifest, /theme_color:\s*"(#[0-9a-fA-F]{3,8})"/)).toBe(
+      valueOf(tokens, /--color-teal:\s*(#[0-9a-fA-F]{3,8})/),
+    );
+  });
+});
+
+describe("no text broken by a wrong encoding", () => {
+  /**
+   * A file rewritten through a tool that read UTF-8 as Windows-1252 turns every
+   * non-ASCII character into two or three Latin ones: the receipt code's mask
+   * showed three Latin letters for each of its four dots, and the success page's separator
+   * showed two. It shipped because the tests were rewritten by the same tool
+   * and asserted the broken text. The same rewrite left a byte-order mark at the
+   * top of each file, which is the second thing checked here.
+   *
+   * The markers are written as escapes so this file cannot trip its own sweep.
+   * The sweep covers tests too, since a test that agrees with a broken string is
+   * how the first one hid.
+   */
+  const MOJIBAKE = /\u00e2\u20ac|\u00c2[\u00a0-\u00bf]|\u00c3[\u0080-\u00bf]/;
+
+  function everyFile(dir: string, found: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) everyFile(full, found);
+      else if (/\.(tsx?|css)$/.test(entry.name)) found.push(relative(ROOT, full));
+    }
+    return found;
+  }
+
+  it("finds no mis-decoded characters and no byte-order mark in app/, src/ or test/", () => {
+    const offenders: string[] = [];
+    for (const file of [...everyFile(join(ROOT, "app")), ...everyFile(join(ROOT, "src")), ...everyFile(join(ROOT, "test"))]) {
+      const text = readFileSync(join(ROOT, file), "utf8");
+      if (text.charCodeAt(0) === 0xfeff) offenders.push(`${file}: starts with a byte-order mark`);
+      text.split(/\r?\n/).forEach((line, index) => {
+        if (MOJIBAKE.test(line)) offenders.push(`${file}:${index + 1} ${line.trim()}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("recognises the two strings that actually shipped, and leaves real characters alone", () => {
+    expect(MOJIBAKE.test("a3f1c0d5 \u00e2\u20ac\u00a2\u00e2\u20ac\u00a2 b2f3d40e")).toBe(true);
+    expect(MOJIBAKE.test("Elektro Dash \u00c2\u00b7 Nov 5, 2026")).toBe(true);
+    expect(MOJIBAKE.test("a3f1c0d5 \u2022\u2022\u2022\u2022 b2f3d40e")).toBe(false);
+    expect(MOJIBAKE.test("Jos\u00e9 Nu\u00f1ez, 10K \u00b7 Bib 128\u2026")).toBe(false);
   });
 });
 

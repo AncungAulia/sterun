@@ -20,27 +20,46 @@
  */
 import Link from "next/link";
 
-import { ErrorNotice } from "@/components/elements/ErrorNotice";
+import { BackLink } from "@/components/layout/BackLink";
+import { ErrorNotice } from "@/components/feedback/ErrorNotice";
 import { useEvent, useEventAddOns } from "@/hooks/useEvents";
 import { useEventMetadata } from "@/hooks/useEventMetadata";
+import { useAnnouncements, useQuotaHistory } from "@/hooks/useRaceUpdates";
+import { isSignedByOrganiser } from "@/lib/event/announcements";
+import { useRunnerRecords } from "@/hooks/useRunnerRecords";
+import { useWallet } from "@/hooks/useWallet";
 
 import { EventView } from "./EventView";
-import { TabProofs } from "./component/TabProofs";
+import { TabProofs } from "./components/TabProofs";
 
 export function EventDetail({ eventId }: { eventId: number }) {
   const { data, isPending, isError, refetch } = useEvent(eventId);
   const metadata = useEventMetadata(data?.event.uri ?? "", data?.event.metadataHash ?? "");
   const addOns = useEventAddOns(eventId);
+  /*
+    STE-21: a runner who already entered is offered their entry instead of a
+    way in. Read from chain, like the enter page's own check, and only for a
+    connected wallet: with none there is nobody to ask about.
+  */
+  const address = useWallet((state) => state.address);
+  const records = useRunnerRecords(address);
+  const mine = records.data?.find((record) => record.eventId === eventId);
+  /*
+    STE-57: what changed since publishing. Both from the backend, so neither
+    holds the page up or replaces it with an error when the index is down.
+  */
+  const announcements = useAnnouncements(eventId);
+  const quotaHistory = useQuotaHistory(eventId);
 
   if (isPending) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-12">
         <div role="status" aria-label="Loading this race">
           <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-            <div className="h-64 animate-pulse rounded-lg bg-n-100" />
-            <div className="h-64 animate-pulse rounded-lg bg-n-100" />
+            <div className="h-64 skeleton rounded-lg" />
+            <div className="h-64 skeleton rounded-lg" />
           </div>
-          <div className="mt-8 h-40 w-full animate-pulse rounded-lg bg-n-100" />
+          <div className="mt-8 h-40 w-full skeleton rounded-lg" />
         </div>
       </div>
     );
@@ -74,15 +93,21 @@ export function EventDetail({ eventId }: { eventId: number }) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-12">
-      <Link href="/" className="text-sm text-teal-500 underline underline-offset-4">
-        All races
-      </Link>
+      <BackLink href="/">All races</BackLink>
 
       <EventView
         event={event}
         categories={categories}
         document={document}
         addOns={addOns.data ?? []}
+        myEntry={mine ? { tokenId: mine.tokenId, categoryId: mine.categoryId } : undefined}
+        // Checked here against the organiser the chain names, not trusted
+        // from the server that stored them.
+        updates={(announcements.data ?? []).map((announcement) => ({
+          announcement,
+          signed: isSignedByOrganiser(announcement, event.organiser, eventId),
+        }))}
+        raises={quotaHistory.data}
         proofs={
           <TabProofs
             result={metadata.data}

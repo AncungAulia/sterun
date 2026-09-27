@@ -36,6 +36,70 @@ already in other people's hands.
 
 ### Added
 
+- **`setRegistrationCloses(eventId, closesAt)` and `getRegistrationCloses(eventId)`** (STE-46,
+  contracts v2.5). An event can close entries on its own at a date: from `closesAt` (unix seconds, the
+  ledger's clock) on, `enter` reverts `RegistrationClosed(20)` while the event is still `Open`.
+  `getRegistrationCloses` answers `null` for an event with no date, which is every event created
+  before v2.5. A `closesAt` that is not a whole number or does not fit in a `u64` is refused before
+  anything is signed. An extension changes what runners were promised: pair a later date with a
+  signed announcement, which the contract does not check.
+- `RegistrationClosed` (20) in the EventRegistry error table.
+- **`recordResults(eventId, results)`** (STE-60, contracts v2.6): many results for one event in one
+  organiser signature. Each result is `{ tokenId, kind: "timed", finishTimeS }`, `{ tokenId, kind:
+  "untimed" }` or `{ tokenId, kind: "dnf" }`, the same `kind` words as the backend's results preview.
+  **Atomic**: one invalid row reverts the batch. An empty list, more than `RECORD_RESULTS_MAX_BATCH`
+  rows, a token listed twice, or a time outside 1..u32 is refused before signing.
+- **`RECORD_RESULTS_MAX_BATCH = 120`** and **`chunkResults(results, size?)`**. 120 is measured against
+  the per-transaction limits live on testnet and mainnet (identical on 2026-09-17): the 16,384 bytes
+  of contract events bind first, and a 121-row transaction fails on the ledger (it simulates cleanly).
+- `ResultForAnotherEvent` (108) in the RaceRecord error table.
+- **`claimRacepackMany(tokenIds, operator)`** (STE-66, contracts v2.7): a scanner sends the queue it
+  collected offline in one signature instead of one per runner. **Not atomic**: a pack another desk
+  already handed over, or a token id with no record, comes back in the resolved value as
+  `{ tokenId, reason: "not-entered" | "not-found" }` while the rest of the queue lands. An operator
+  who may not claim for an event in the batch still fails the whole call with `NotAuthorized(104)`.
+- **`CLAIM_MAX_BATCH = 100`**, enforced before signing as well as by the contract
+  (`TooManyClaims(109)`). It is lower than `RECORD_RESULTS_MAX_BATCH` because a `racepack_claimed`
+  event carries the operator address: 160 bytes a row against a result's 136.
+- `TooManyClaims` (109) in the RaceRecord error table.
+
+**Needs the v2.5 EventRegistry and the v2.7 RaceRecord.** Against older contracts these methods fail
+with a host error, because the functions do not exist yet.
+
+## [0.3.1] — 2026-09-17
+
+### Fixed
+
+- **A write that simulated cleanly and then failed on the ledger now throws the contract error it
+  failed with** (STE-61). Two scanner desks claiming one race pack in the same ledger, or two runners
+  taking the last place, used to throw `SterunNetworkError: ... could not be simulated: Cannot read
+  properties of undefined (reading 'type')`: stellar-sdk 17 leaves `returnValue: undefined` on a
+  FAILED transaction and its `result` getter crashes on it, so the `AlreadyClaimed` / `QuotaFull` the
+  ledger recorded was lost. `runWrite` now checks for `FAILED` before reading the result and decodes
+  the error from the transaction's diagnostic events (`host_fn_failed`).
+
+### Added
+
+- `SterunContractError.phase` (`"simulation"` or `"ledger"`), `.txHash` and `.ledger`. A ledger failure
+  is a real, fee-charged transaction you can link to; a simulation refusal submitted nothing.
+- `SterunNetworkError.txHash`, for a ledger failure whose reason the RPC response does not carry.
+- `ledgerFailureCode(diagnosticEvents)`: the contract error code in a failed transaction's events.
+
+## [0.3.0] — 2026-09-16
+
+### Added
+
+- `announcementMessage(fields)` and `verifyAnnouncement(announcement)` for signed event announcements
+  (STE-40). The first builds the exact text an organiser's wallet signs (`signMessage`); the second
+  checks a signature, ed25519 or SEP-53, without trusting any server. Whether the signer is the
+  organiser is a separate chain read: `getEvent(eventId).organiser`. Browser-safe.
+- `announcementBodySha256(body)` and `ANNOUNCEMENT_HEADER` (`"Sterun announcement v1"`).
+- `schema/announcement-v1.vectors.json`: the test vectors the SDK and the backend are both pinned to.
+
+## [0.2.0] — 2026-09-15
+
+### Added
+
 - `SterunClient.increaseQuota({ eventId, categoryId, newQuota })` — raise a
   sold-out category's quota for a second batch (contracts v2.4, STE-55/STE-56).
   `newQuota` is the new total; equal to or below the current quota reverts
@@ -63,8 +127,6 @@ already in other people's hands.
 - A `Finished` `SterunRecord` may now have `finishTimeS === null`. Code that
   formatted every finished record's time must handle that case and must never
   render it as `0`.
-- Not published yet: needs the live contract upgraded to v2.2 (done at the same
-  address — see `docs/deployments.md`) and a version bump by the package owner.
 
 ---
 

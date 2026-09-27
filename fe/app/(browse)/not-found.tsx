@@ -8,7 +8,7 @@
  * lockups and two `<main>` elements, which is the same defect this whole change
  * exists to remove.
  */
-import { NotFoundMessage } from "@/components/layouts/NotFoundMessage";
+import { NotFoundMessage } from "@/components/layout/NotFoundMessage";
 
 export default function BrowseNotFound() {
   return <NotFoundMessage />;

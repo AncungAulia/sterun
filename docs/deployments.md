@@ -1337,6 +1337,486 @@ node -e "import('@sterunxyz/sdk').then(m => console.log(m.RACE_RECORD_SCHEMA_VER
 > account, and npm does not release a name because somebody else wants it. The package name is
 > therefore `@sterunxyz/sdk` everywhere — in `package.json`, in the imports, and in the README.
 
+
+### 0.2.0 — published 2026-09-15
+
+`@sterunxyz/sdk@0.2.0` is on npm as `latest`, published **2026-09-15 13:29:26 UTC** from the `lin1era`
+account, the only owner of the package (`npm owner ls @sterunxyz/sdk`).
+
+| | |
+| --- | --- |
+| version | `0.2.0` (MINOR: `SterunRecord.addonIds` is a new required field on a returned type) |
+| `dist.shasum` | `b99e1ee6094a66c50310ce3476af296ae97da65a` |
+| files / unpacked | 34 / 265,340 bytes |
+| what is new | `increaseQuota` (contracts v2.4), `SterunRecord.addonIds` (v2 add-ons), `recordFinishUntimed` (v2.2) |
+| release commit | `de7debf` — `sdk/package.json` 0.2.0 and the `[0.2.0]` changelog heading |
+
+Checked against the registry rather than the local build, by downloading the published tarball
+(`npm pack @sterunxyz/sdk@0.2.0`) and reading it:
+
+```
+version in package.json: "version": "0.2.0"
+increaseQuota in dist/client.js: present
+addonIds in dist/types.js: present
+```
+
+**The changelog inside that tarball is the pre-release text.** The upload happened before commit
+`de7debf` renamed `## [Unreleased]` to `## [0.2.0] — 2026-09-15` and removed the "Not published yet"
+note, so the `CHANGELOG.md` shipped in 0.2.0 still carries both. The code is unaffected, the
+repository's `sdk/CHANGELOG.md` is correct, and npm's package page renders the README, not the
+changelog. A published version cannot be replaced and unpublishing is not worth the breakage for a
+text file, so it stays; the next release carries the corrected history.
+
+Two errors met on the way, recorded because both mislead:
+
+- **`E404 Not Found - PUT …/@sterunxyz%2fsdk`** meant *not logged in*. For a scoped package npm
+  answers an unauthenticated publish with 404 rather than 401. `npm whoami` answering `E401` is the
+  real signal; the fix is `npm login` as the owner.
+- **`You cannot publish over the previously published versions: 0.2.0`** on a later run meant the
+  earlier publish had already succeeded. `npm view @sterunxyz/sdk versions time` shows it.
+
+Releasing the next version:
+
+```bash
+# bump sdk/package.json and turn [Unreleased] into the dated version BEFORE publishing
+npm whoami                                  # must print the package owner
+pnpm --filter @sterunxyz/sdk test
+cd sdk && npm publish --access public
+npm view @sterunxyz/sdk version             # confirms what the registry serves
+```
+
+
+### 0.3.0 — published 2026-09-16
+
+`@sterunxyz/sdk@0.3.0` is on npm as `latest`, published **2026-09-16T16:32:13.577Z** from the `lin1era` account.
+
+| | |
+| --- | --- |
+| version | `0.3.0` (MINOR: additive only, nothing a 0.2.0 consumer relies on changed) |
+| `dist.shasum` | `a4d109a4492ad014de159bb2adf5270a5f430b94` |
+| files / unpacked | 38 / 276,316 bytes |
+| what is new | signed event announcements (STE-40): `announcementMessage`, `verifyAnnouncement`, `announcementBodySha256`, `ANNOUNCEMENT_HEADER`, and `schema/announcement-v1.vectors.json` |
+| release commit | `d59989d` — `sdk/package.json` 0.3.0 and the `[0.3.0]` changelog heading |
+
+Checked against the registry by downloading the published tarball (`npm pack @sterunxyz/sdk@0.3.0`):
+
+```
+changelog heading: ## [0.3.0] — 2026-09-16
+verifyAnnouncement exported from dist/index.js: yes
+announcementMessage defined in dist/announcement.js: yes
+schema/announcement-v1.vectors.json: present, 2 cases
+increaseQuota (0.2.0) still present: yes
+```
+
+Unlike 0.2.0, the changelog inside this tarball is right: the release commit dated the heading **before**
+the upload, which is the order the release steps above now require.
+
+One thing worth knowing for next time: `npm view` a minute after the publish still showed `latest`
+as `0.2.0`, while the npm debug log already had the `PUT … 202` and exit 0. The registry had not
+finished propagating. Check again, or read the registry document directly, before concluding a
+publish failed.
+
+### 0.3.1 — published 2026-09-16
+
+`@sterunxyz/sdk@0.3.1` is on npm as `latest`, published **2026-09-16T19:59:31.152Z** from the `lin1era` account.
+
+| | |
+| --- | --- |
+| version | `0.3.1` (PATCH: a fix plus one additive export) |
+| `dist.shasum` | `8b99bf0945c2801b95f4ecc7a0ce42aa462db640` |
+| files / unpacked | 38 / 286,364 bytes |
+| what is new | a write that fails **on the ledger** throws `SterunContractError` with `phase: "ledger"`, `txHash` and `ledger` instead of crashing on `result` (STE-61); `ledgerFailureCode` exported |
+| release commit | `5f6541a` — `sdk/package.json` 0.3.1 and the `[0.3.1]` changelog heading |
+
+Checked against the registry, not against the working tree:
+
+```
+downloaded sdk-0.3.1.tgz: sha1 8b99bf09…, sha512 matches dist.integrity
+contents vs a fresh `npm pack` of main: identical (38 files)
+secret seed pattern in the tarball: none
+changelog heading: ## [0.3.1] — 2026-09-17
+```
+
+Then installed from npm into an empty TypeScript project outside the repository (`strict`,
+`NodeNext`, `skipLibCheck: false`): `tsc` clean, and run against live testnet:
+
+```
+713f63a2cd36… FAILED, ledgerFailureCode = 102      # the STE-61 claim-race e2e
+10e261cf2647… FAILED, ledgerFailureCode = 102      # rehearsal run 3, step 6.1
+recordOf(58): RacepackClaimed, event 29
+getEvent(999999): EventNotFound (#2), phase simulation
+```
+
+The release-day confusion from 0.2.0 happened again, in both directions, so it is worth the two lines:
+the registry showed no 0.3.1 and the tarball URL answered 404 for about two minutes after the upload
+started, and a second `npm publish` then failed with `You cannot publish over the previously published
+versions: 0.3.1`. The first publish had succeeded. `time["0.3.1"]` in the registry document is the
+authority.
+
+---
+
+## The backend moved to a VPS, and got its own domain (2026-09-17 → 2026-09-23)
+
+The homelab LXC (`jameserver` / pve02 / ct-sterun) is retired. The backend runs on a Contabo VPS,
+still behind the **same Cloudflare Tunnel**, so nothing about ingress changed: no inbound port is
+open, Cloudflare terminates TLS, and `cf-connecting-ip` — the header the rate limiter trusts — still
+cannot be forged, because every request arrives through the tunnel.
+
+| | |
+| --- | --- |
+| Host | Ubuntu 26.04, 2 vCPU, 7.7 GiB RAM, 96 GB disk |
+| Firewall | `ufw`, **22/tcp only**. The API publishes no port at all |
+| Ingress | Cloudflare Tunnel `75461846…`, locally-managed config in `deploy/cloudflared-config.yml` |
+| Hostnames | **`https://api.sterun.xyz`** (new, the project's own domain) and `https://api-sterun.jameshub.fun` (kept) |
+| Cutover | 2026-09-17, ~40 s: 13:46:56Z services stopped on the LXC → 13:47:33Z serving from the VPS |
+
+**Both hostnames answer, and that is deliberate.** Event metadata URLs are committed **on-chain** in
+`create_event`'s `uri`, and an on-chain URI cannot be edited. Every event created before this move
+points at `api-sterun.jameshub.fun`, so that hostname has to keep answering for as long as those
+events exist. New uploads use the new domain: `STERUN_PUBLIC_BASE_URL=https://api.sterun.xyz` since
+2026-09-23.
+
+The move itself, with what was checked rather than assumed:
+
+```
+row counts, old box vs VPS after the restore (identical)
+  categories=59 chain_events=559 event_announcements=3 event_scanners=17 events=37
+  faucet_payouts=57 participants=55 record_transitions=155 records=88 schema_migrations=13
+./deploy/verify-deployment.sh https://api-sterun.jameshub.fun   18 passed, 0 failed
+./deploy/verify-deployment.sh https://api.sterun.xyz            18 passed, 0 failed
+indexer doctor                                                  findings: []
+keeper, first run on the VPS                                    SUCCESS 61142d8c… (10 keys)
+```
+
+Secrets (`be/.env.production`, `.env`, the tunnel credentials) were piped box to box over SSH and
+compared by sha256; they were never written to a laptop. The LXC's 14 manual backups were copied to
+the VPS at `backups/from-pve02/` before it was shut down, and its Postgres volume is untouched, so
+the old box is still a rollback for as long as it exists.
+
+> **Never start the Sterun stack on the LXC again.** It holds the same tunnel credentials, so a
+> second connector would put half the traffic on a database that stopped receiving writes on
+> 2026-09-17. Its containers are stopped, and `unless-stopped` keeps them stopped across a reboot.
+
+### Daily backups, on the box and off it (2026-09-23)
+
+Until now every backup was taken by hand before a deploy, and the only off-box copy was the LXC that
+this move retired. The index can be rebuilt from the chain; **the vault cannot be rebuilt from
+anything**.
+
+`deploy/backup-db.sh`, from cron at 03:15 UTC daily: `pg_dump` plain SQL gzipped to
+`backups/daily/`, uploaded to the private R2 bucket `sterun-backups` under `db/`, keeping 14 local
+copies and 60 days remote. It refuses a dump under 10 kB (a `pg_dump` that failed and exited 0) and
+verifies the gzip before uploading.
+
+Proven, not assumed — the first run, and a restore of what it produced:
+
+```
+dumped  backups/daily/sterun-20260923T151708Z.sql.gz (154448 bytes)
+uploaded s3://sterun-backups/db/sterun-20260923T151708Z.sql.gz
+restore into a scratch database, then compared with the live one:
+  restored: event_announcements=3 events=38 participants=56 records=89
+  live:     event_announcements=3 events=38 participants=56 records=89
+```
+
+The dump is not encrypted beyond what is already encrypted inside it: PII columns are AES-GCM
+ciphertext whose keys live only in `be/.env.production`, which is **not** in any bucket. A leaked
+dump is still a leak of hashes, blind indexes and bib numbers, so the bucket stays private.
+
+### The web faucet on production (2026-09-23)
+
+`pnpm --filter be e2e:faucet https://api.sterun.xyz`, the same flow the web app's **Get test sUSD**
+button drives:
+
+```
+route {"available":true,"reason":null,"windowHours":24,"dailyCapStroops":"50000000000"}
+▸ An unauthenticated call is refused                      401
+▸ A fresh wallet with XLM and no trustline                409 no-trustline, with the sentence to fix it
+▸ The wallet opens its sUSD trustline, then asks          200 paid 500000000 stroops, tx de58d7fa…
+  SAC balance 0 -> 500000000: the wallet can now pay an entry
+▸ A second claim inside the window                        429 rate-limited, retry at 2026-09-24T15:18:24Z
+```
+
+So a fresh wallet **can** pay for an entry today. `faucet.payoutConfigured: false` in `GET /config`
+is the **distributor** key, which stays off this box by design (`be/OPERATIONS.md`): the most a
+compromised API can give away is the faucet's small float.
+
+### New web origins allowed (2026-09-17)
+
+`STERUN_WEB_ORIGIN` gained `https://sterun-app.vercel.app`, `https://app.sterun.xyz` and
+`http://app.sterun.xyz`. Checked from outside: a preflight carrying `x-sterun-signature` answers 204
+with the origin echoed for each, `GET /events` from the Vercel origin answers 200 with the header,
+and an origin that is not on the list gets no header at all. The list is an exact match, so a new
+preview domain needs its own entry.
+
+## STE-46 — the close date, end to end on a throwaway deployment (2026-09-17)
+
+**The live EventRegistry (`CAPB6NQP…`) was NOT upgraded.** v2.5 is a spec change that waits for Axel
+and fable to approve the PR. To prove it on the real network before that, `bash
+sc/scripts/registration-closes-testnet.sh` deployed a throwaway pair from this branch's wasm, with a
+throwaway admin funded by Friendbot, wired to the real sUSD SAC, and ran
+`be/scripts/e2e-registration-closes.ts` against it.
+
+| | Address | wasm |
+| --- | --- | --- |
+| EventRegistry v2.5 (throwaway) | [`CBJNSKNNJGY6I56QIOV7DPFQPEDCBNAPTLBE2PIXMNGNYP4OJGJE5DA2`](https://stellar.expert/explorer/testnet/contract/CBJNSKNNJGY6I56QIOV7DPFQPEDCBNAPTLBE2PIXMNGNYP4OJGJE5DA2) | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` (the INTERFACE.md v2.5.0 hash) |
+| RaceRecord (throwaway) | [`CAIV7J6VOUK2Y6CJNJQFK4E27AJLXNZAQ6VGOG55NMI3THACQ3HOBWGY`](https://stellar.expert/explorer/testnet/contract/CAIV7J6VOUK2Y6CJNJQFK4E27AJLXNZAQ6VGOG55NMI3THACQ3HOBWGY) | `a948cd59…` (a local build of unchanged C2 source; Rust builds are not bit-for-bit reproducible) |
+
+```
+▸ An organiser, a free race with one distance, open, no close date
+  event 0, category 0; getRegistrationCloses → null
+  runner 1 entered with no date: token 0, ledger clock 1789621542
+▸ A close date 45 seconds ahead of the ledger clock: before it, entries still get in
+  set_registration_closes 1789621587 (tx f7642236bd74…); runner 2 entered at 1789621552, bib 2
+▸ Past the date: RegistrationClosed(20), and the status is still Open
+  enter → RegistrationClosed (#20, event-registry); status still Open
+▸ Closed says EventNotOpen whatever the date; Open again does not reopen past the date
+  Closed → EventNotOpen (#4); Open again → still RegistrationClosed (#20)
+▸ A later date is the extension that reopens it, and the bibs continue
+  extended to 1790226387 (tx 85bc1f0a6e72…); runner 3 entered, bib 3
+▸ The same date again, a stranger, an unknown event
+  stranger refused: SterunNetworkError
+  same date accepted; date unchanged; getRegistrationCloses(999999) → EventNotFound (#2)
+▸ What the chain emitted, decoded by the indexer's own decoder
+  2 registration_closes_set: null → 1789621587, 1789621587 → 1790226387 (the repeat emitted nothing)
+▸ The indexer's reader: the throwaway registry, and the live v2.4 one
+  throwaway: 1790226387; live CAPB6NQP… (v2.4, no such function): null
+✓ entries stop at the close date, only a later date reopens them, and the indexer reads what the chain emits
+```
+
+Two results that only the real network could give:
+
+- **`previous: None` decodes.** The first `registration_closes_set` came off `getEvents` with
+  `previous` as `ScVal::Void`, and `be/`'s own decoder read it as `null`. The unit tests build that value
+  by hand; this is the chain's own encoding.
+- **The backend is safe to deploy before the upgrade.** Against the live v2.4 registry,
+  `get_registration_closes` does not exist, and `ChainReader.registrationCloses` answered `null` rather
+  than failing, so a rebuild or `doctor` on production keeps working in the window between merging
+  this and upgrading the contract.
+
+The stranger's refusal surfaces as `SterunNetworkError`, not a contract error: an auth failure is a host
+error with no contract code, which is how every organiser-gated function behaves.
+
+**Still to do after approval:** upgrade `CAPB6NQP…` in place to `995d19ea…`, prove it on the live
+address, deploy the backend with migration 014, and record both here.
+
+---
+
+## STE-46 LIVE — EventRegistry v2.5 upgraded in place (2026-09-24)
+
+Approved by Axel on STE-46, merged as [#58](https://github.com/AncungAulia/sterun/pull/58) (`4c20bd7`)
+under the 24 September decision that a PM ACC is enough for a frozen-spec change. **The address did
+not change.**
+
+| | |
+| --- | --- |
+| Contract | `CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU` |
+| wasm before | `33b5e687b6439eff5c9e7d6a3f736d3e5484b2235d1d87c006b33fabe8e1f890` (v2.4) |
+| wasm after | `995d19ea17a4cd6094de05b867cdbdbc636264e739b3386b5367bc4ebeea6942` (v2.5, the INTERFACE.md hash) |
+| upgrade tx | [`5597d50efd9620a4ef11655161239eddc345707a3a7e2bdb9ab3ccb54983f17c`](https://stellar.expert/explorer/testnet/tx/5597d50efd9620a4ef11655161239eddc345707a3a7e2bdb9ab3ccb54983f17c) |
+
+The upgrade was run function by function rather than through `sc/scripts/upgrade-testnet.sh`: that
+script upgrades **both** contracts from the local build, and the local RaceRecord build on that branch
+was already v2.7. Upgrading one contract at a time is also what Axel asked for — one event in this
+file per upgrade.
+
+State written by the old code, read back through the new one:
+
+```
+event_count      38
+event 0          {"metadata_hash":"a4ea685c…","name":"Sterun Testnet Rehearsal","organiser":"GBGUI5MPV…
+category 0/0     {"code":"10K","distance_m":10000,"entered_count":3,"price_usdc":"50000000","quota":5}
+addon_count 0    2
+record 0         {"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":1788925897,…}
+total_supply     89
+get_registration_closes(0)   null      ← the new function, on an event created before it existed
+```
+
+`null` is the whole compatibility story: every event already on chain has no close date, so every one
+of them behaves exactly as it did yesterday.
+
+### The backend, same day
+
+Deployed from `4c20bd7` with **migration 014** (`events.registration_closes_at numeric(20,0)`), after a
+backup that went to R2 as well as the box (`sterun-20260924T105554Z.sql.gz`).
+
+```
+migrations: 013_event_announcements.sql:ad3aac8e 014_registration_closes.sql:6cb1b097
+column:     numeric
+indexer doctor: findings: []
+./deploy/verify-deployment.sh https://api.sterun.xyz   18 passed, 0 failed
+GET /events/0 → registration_closes_at: null, status Open
+```
+
+No rebuild was needed: the column starts empty, and `rebuild` fills it from
+`get_registration_closes` per event the next time it runs.
+
+## STE-60 — many results in one signature, end to end on a throwaway deployment (2026-09-17)
+
+**The live RaceRecord (`CCVW7WVC…`) was NOT upgraded.** v2.6 is a spec change stacked on v2.5, waiting
+for Axel and fable. `bash sc/scripts/throwaway-pair-testnet.sh e2e:record-results` deployed a
+throwaway pair from this branch's wasm with a Friendbot-funded throwaway admin, wired to the real sUSD
+SAC, and ran `be/scripts/e2e-record-results.ts` against it: 125 runners, 124 checked in by five desks.
+
+| | Address | wasm |
+| --- | --- | --- |
+| EventRegistry v2.5 (throwaway) | [`CAF3BDBJPS6KSJWBOWODUU2LF32OGPMKZVY7ET3MVQXQTZGI5ZDBGPRT`](https://stellar.expert/explorer/testnet/contract/CAF3BDBJPS6KSJWBOWODUU2LF32OGPMKZVY7ET3MVQXQTZGI5ZDBGPRT) | `995d19ea…` |
+| RaceRecord v2.6 (throwaway) | [`CDS5WN6ZW5N5Q327ZNZME2LV44P274KFFK4OFXPJEJCBSM7C57AOAXXD`](https://stellar.expert/explorer/testnet/contract/CDS5WN6ZW5N5Q327ZNZME2LV44P274KFFK4OFXPJEJCBSM7C57AOAXXD) | `081d6eee…` (the INTERFACE.md v2.6.0 hash) |
+
+```
+▸ One organiser, two races, five scanner desks, 125 runners
+  125 entered, 124 checked in; timed 0..120, untimed 121, DNF 122, no-show 123, other race 124
+▸ What the network's own simulation reports for 1 and 120 timed rows
+    1 rows simulate: footprint 5 read + 1 written, 1455536 instructions, 448 write bytes
+  120 rows simulate: footprint 5 read + 120 written, 41290463 instructions, 53760 write bytes
+▸ 121 timed rows, submitted anyway: the network refuses them and no record moves
+  FAILED on the ledger in 2ac3ddda058f0e8e43fb868b0dbfbd8df873ac3ec5ef85a99a5e2c6e848a7fc0 (resource); all 121 records still RacepackClaimed
+▸ Refused before signing: 121 rows
+  RangeError: at most 120 results per call
+▸ Refused whole: an unclaimed row, a row from another race, a stranger's signature
+  InvalidState (#103), ResultForAnotherEvent (#108), stranger refused; no record moved
+▸ 120 timed results in one transaction
+  tx 22f9c10d35c87f6d8d59e425dfc31649bb1287a0fc10bec627e02f1294d969e6 in ledger 4720867; all 120 Finished with their times
+▸ The events that transaction emitted, decoded by the indexer's own decoder
+  120 record_finished, in row order, each matching its row
+▸ A mixed batch: the last timed row, an untimed finish, a DNF after check-in, a no-show
+  Finished 5400 s; Finished with no time; Dnf (checked in); Dnf (never checked in)
+▸ A replay of a recorded batch is refused
+  InvalidState (#103): results are terminal
+✓ an organiser records a finish list 120 at a time, atomically, and the indexer reads what the chain emits
+```
+
+| Transaction | Rows | Result | Fee charged (Horizon) |
+| --- | ---: | --- | ---: |
+| [`22f9c10d…`](https://stellar.expert/explorer/testnet/tx/22f9c10d35c87f6d8d59e425dfc31649bb1287a0fc10bec627e02f1294d969e6) | 120 | success, ledger 4720867 | 2,198,128 stroops (0.22 XLM) |
+| [`2ac3ddda…`](https://stellar.expert/explorer/testnet/tx/2ac3ddda058f0e8e43fb868b0dbfbd8df873ac3ec5ef85a99a5e2c6e848a7fc0) | 121 | **failed on resources**, ledger 4720863 | 517,121 stroops |
+
+What only the real network could show:
+
+- **Simulation does not enforce the event-size limit.** 121 rows simulate cleanly; the limit bites when
+  the transaction is applied, where it failed and moved no record. So the maximum cannot be found by
+  simulating alone. It was confirmed by submitting.
+- **The network's footprint is `5 + n`**, smaller than the testutils count (`2n + 8`). A first
+  measurement against soroban-sdk's outdated mainnet constants concluded 46 from that count; this run
+  is what showed it wrong. The binding limit is contract-event bytes, at 120.
+- **One signature for 120 finishers cost 0.22 XLM.** The same list one call at a time is 120 organiser
+  approvals.
+
+**Still to do after approval:** upgrade `CCVW7WVC…` in place to `081d6eee…` (after STE-46's registry
+upgrade), prove it on the live address, and record it here.
+
+---
+
+## STE-60 LIVE — RaceRecord v2.6 upgraded in place (2026-09-24)
+
+Approved by Axel on STE-60, merged as [#60](https://github.com/AncungAulia/sterun/pull/60)
+(`ca81d13`). **The address did not change**, and this is its own upgrade event — the EventRegistry
+upgrade an hour earlier is recorded separately above.
+
+| | |
+| --- | --- |
+| Contract | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` |
+| wasm before | `0e29026d2f87c09dc30c255854a28baaeecaa543ae5e98add61ba35b511e02ba` (v2.2, live since STE-41) |
+| wasm after | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` (v2.6, the INTERFACE.md hash) |
+| upgrade tx | [`e8c51db30bd3ef9f7be8440a609a126d61857a4cb56f92c0e487b164db943781`](https://stellar.expert/explorer/testnet/tx/e8c51db30bd3ef9f7be8440a609a126d61857a4cb56f92c0e487b164db943781) |
+
+Read back on the upgraded contract:
+
+```
+record 0      {"addon_ids":[0,1],"bib_no":0,"category_id":0,"claimed_at":1788925897,
+               "entered_at":1788925832,"event_id":0,"finish_time_s":3161,…}
+owner_of 0    GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR
+total_supply  89
+record_results present in the live interface:  yes
+transfer / transfer_from / approve / approve_for_all / burn / burn_from:  0
+```
+
+The last line is the one that matters beyond this ticket: the non-transferable claim is about the
+**deployed wasm**, so it is re-checked against the live contract after every upgrade, not assumed
+from the source.
+
+**The published `@sterunxyz/sdk` (0.3.1) does not have `recordResults` yet.** The methods are on
+`main`; a release is a separate step, and the console can use the workspace package meanwhile.
+
+---
+
+## STE-66 — a desk's whole queue in one signature, on a throwaway deployment (2026-09-24)
+
+**The live RaceRecord was NOT upgraded for this.** v2.7 waits for its ACC, so
+`bash sc/scripts/throwaway-pair-testnet.sh e2e:claim-many` deployed a throwaway pair from the branch
+(EventRegistry v2.5, RaceRecord v2.7) and ran `be/scripts/e2e-claim-many.ts` against it: one race,
+two allowlisted desks, a second race neither desk may touch, and 101 runners.
+
+| | Address | wasm |
+| --- | --- | --- |
+| RaceRecord v2.7 (throwaway) | [`CCVQAQZVJ44PYTDFGNPDYF5CMFUTH6OEFHQZWXA35CEHOGYCOTBAMQFE`](https://stellar.expert/explorer/testnet/contract/CCVQAQZVJ44PYTDFGNPDYF5CMFUTH6OEFHQZWXA35CEHOGYCOTBAMQFE) | `20abebd1…` (the INTERFACE.md v2.7.0 hash) |
+
+```
+▸ Desk A hands one pack over first, the way a second desk's queue goes stale
+  token 0 is RacepackClaimed before desk B sends anything
+▸ Refused before signing: an empty queue, and one over the cap
+  RangeError for 0 and for 101 ids
+▸ A desk that is not allowlisted for the race reverts the whole batch
+  NotAuthorized (#104); the record did not move
+▸ Desk B sends its whole queue of 100 in one signature
+  tx 58010474e29159ee54edfe9073093b868a05d1039ee8632896bd1f3d77ef1ff8 in ledger 4844695
+  skipped: 0 not-entered, 999999 not-found
+  every one of the 99 real packs is RacepackClaimed, including the ones after the two strays
+▸ The events that transaction emitted, decoded by the indexer's own decoder
+  98 racepack_claimed, in row order, operator desk B, and nothing for the two skipped rows
+✓ a desk drains a 100-pack queue with one signature, and a stale row costs that row alone
+```
+
+The three numbers in that run are the whole design: **100** sent, **2** skipped and reported, **98**
+claimed and announced. A pack another desk had already handed over cost exactly that row — the packs
+listed after it still landed, which is what an atomic batch could not do.
+
+[`58010474…`](https://stellar.expert/explorer/testnet/tx/58010474e29159ee54edfe9073093b868a05d1039ee8632896bd1f3d77ef1ff8)
+is one transaction and one signature for what used to be 100 wallet prompts.
+
+**Still to do after ACC:** upgrade `CCVW7WVC…` from v2.6 to v2.7, its own entry here with its tx hash.
+
+---
+
+## STE-66 LIVE — RaceRecord v2.7 upgraded in place (2026-09-25)
+
+ACC by Axel on STE-66, merged as [#68](https://github.com/AncungAulia/sterun/pull/68) (`809ad95`).
+**Address unchanged**, and the third upgrade event of this release, each with its own entry as asked.
+
+| | |
+| --- | --- |
+| Contract | `CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW` |
+| wasm before | `081d6eeedefcb9296514fd9c99ac1635aabdb214e98d5b7aa04d6bb72657e2a2` (v2.6, live since yesterday) |
+| wasm after | `20abebd14dd7d4f4e1f5a07774845bcba2d5b963025cfe10269c966d80b7373a` (v2.7, the INTERFACE.md hash) |
+| upgrade tx | [`ef3b21cba0422c1e8f4ad39f58bf51fb1395c32074d4665a7836d5ec8ae4fc6f`](https://stellar.expert/explorer/testnet/tx/ef3b21cba0422c1e8f4ad39f58bf51fb1395c32074d4665a7836d5ec8ae4fc6f) |
+
+Read back on the upgraded contract:
+
+```
+record 0        {"addon_ids":[0,1],"bib_no":0,"claimed_at":1788925897,"entered_at":1788925832,…}
+owner_of 0      GAJVXTF5RIXZWXL5MBOFMMF7SUMUKPU6LBG6CAO4U2FUH5HQCYCUPWVR
+total_supply    98
+claim_racepack_many in the live interface:   yes
+record_results still there (v2.6):           yes
+transfer / transfer_from / approve / approve_for_all / burn / burn_from:  0
+./deploy/verify-deployment.sh https://api.sterun.xyz   18 passed, 0 failed
+```
+
+`total_supply` is 98 rather than yesterday's 89 because the rehearsal run between the two upgrades
+entered nine more runners — the index and the chain agree on that number, which is the point of
+checking it here.
+
+### The three upgrades of this release
+
+| Contract | Version | tx |
+| --- | --- | --- |
+| EventRegistry | v2.4 → v2.5 (STE-46) | [`5597d50e…`](https://stellar.expert/explorer/testnet/tx/5597d50efd9620a4ef11655161239eddc345707a3a7e2bdb9ab3ccb54983f17c) |
+| RaceRecord | v2.2 → v2.6 (STE-60) | [`e8c51db3…`](https://stellar.expert/explorer/testnet/tx/e8c51db30bd3ef9f7be8440a609a126d61857a4cb56f92c0e487b164db943781) |
+| RaceRecord | v2.6 → v2.7 (STE-66) | [`ef3b21cb…`](https://stellar.expert/explorer/testnet/tx/ef3b21cba0422c1e8f4ad39f58bf51fb1395c32074d4665a7836d5ec8ae4fc6f) |
+
+Neither address moved, and the rehearsal run between the first two (50 PASS · 0 FAIL · 6 MANUAL,
+`docs/rehearsal/runs/2026-09-24T11-11-08Z`) found nothing disturbed in entries, bibs, quota, claims or
+results.
+
 ---
 ## STE-20 e2e evidence — CSV results review against live testnet
 
@@ -2689,4 +3169,294 @@ status codes: 200 ×30, then 429 429      — 2026-09-15T09:09:18Z
 ```
 
 `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T09:08:47Z.
+
+---
+
+## STE-59 — a vault row linked from the chain, live (2026-09-15)
+
+Entering now needs two wallet approvals, not three: the indexer links a vault row to the record it
+was entered for, so the web app no longer has to ask the runner to sign confirm. Deployed at
+`261a32b`, backup first: `/opt/sterun/backups/pre-chain-link-20260915T122355Z.sql.gz`.
+
+```
+participants before (unconfirmed|confirmed): 3|4
+migrations: 011_identity_index.sql:26c5a650e19b7516 012_chain_linked_participants.sql:6d392f01c0d71870
+rebuilt in 60340ms: 22 events, 39 categories, 37 records, 59 transitions. Following resumes at ledger 4690403.
+doctor: index matches the chain
+participants after (unconfirmed|confirmed|linked by chain|by confirm|no enter hash): 2|5|1|0|0
+sterun-api-1 running restarts=0
+sterun-indexer-1 running restarts=0
+sterun-keeper-1 running restarts=0
+```
+
+The rebuild linked one existing row: token 20 from the entry-rules e2e, which was entered on chain and
+deliberately never confirmed. Its `enter` hash came from the raw event log (`no enter hash: 0`).
+Migration 012's checksum is pinned in `be/test/migrate.test.ts`.
+
+### Two approvals, end to end
+
+`pnpm --filter be e2e:chain-link https://api-sterun.jameshub.fun`:
+
+```
+▸ A throwaway organiser, event and free category on testnet
+  event 22, category 0
+▸ Approval 1: the runner submits their details
+  201, participant 37cb96b7-1f01-4722-b4b9-0e6d7593a2a7
+▸ Approval 2: the runner signs enter — and never calls confirm
+  token 37 entered on chain
+▸ The indexer links the row: the pass route starts answering (waiting for the poller)
+  200, same secret as at submit, bib "BUDI LINK" — linked with no third approval
+▸ The row reads as confirmed to its owner
+  token_id 37, confirmed_at 2026-09-15T12:36:40.603Z
+▸ An older client that still calls confirm gets a success
+  200
+✓ an entry is linked from the chain with two approvals, and confirm stays safe to call
+```
+
+The pass route serves confirmed rows only, so its 200 is the client-visible proof that the indexer
+linked the row. `verify-deployment.sh`: 18 passed, 0 failed — 2026-09-15T12:36:58Z.
+
+---
+
+## STE-40 — signed event announcements, live (2026-09-16)
+
+`POST` and `GET /events/:eventId/announcements` on `https://api-sterun.jameshub.fun`, deployed at `99222a6`.
+Backup first: `/opt/sterun/backups/pre-announcements-20260916T102501Z.sql.gz`.
+
+```
+migrations: 012_chain_linked_participants.sql:6d392f01c0d71870 013_event_announcements.sql:ad3aac8ea8947730
+append-only triggers: event_announcements_no_update_or_delete event_announcements_no_truncate
+sterun-api-1 running restarts=0
+sterun-indexer-1 running restarts=0
+sterun-keeper-1 running restarts=0
+GET /events/0/announcements: {"event_id":0,"announcements":[],"count":0} [200]
+```
+
+Migration 013's checksum is pinned in `be/test/migrate.test.ts`; the local file matched production's
+recorded prefix before it was pinned.
+
+### End to end, against the public URL
+
+`pnpm --filter be e2e:announcements https://api-sterun.jameshub.fun` — a throwaway organiser on testnet,
+the announcement signed with `signMessage` (SEP-53) exactly as a browser wallet signs it, and re-verified
+with `@sterunxyz/sdk`'s `verifyAnnouncement` plus the organiser read from chain:
+
+```
+▸ A throwaway organiser creates a race
+  event 23, organiser GBAQOV7SWFELOMHMG5Y4EF2NSGMYFKQT7OBGLLMZFVYVOOPLAJWEFHXS
+▸ The organiser publishes an announcement, signed like a browser wallet signs
+  201, announcement 1, scheme sep53
+▸ The same signed announcement again is the same announcement
+  200, id 1
+▸ Anyone reads it, and re-verifies it without trusting the API
+  public list: 1; signature valid (sep53); signer is getEvent(23).organiser
+▸ A stranger's announcement is refused
+  403
+▸ A back-dated announcement is refused
+  400 stale-announcement
+▸ A tampered body is refused
+  401 bad-signature
+✓ an organiser's announcement is published once, verifiable by anyone, and nobody else's is
+```
+
+The refused announcements were not stored (the script asserts the count stays 1).
+`verify-deployment.sh`: 18 passed, 0 failed — 2026-09-16T10:35:24Z.
+
+---
+
+## STE-61 — a same-ledger claim race, reproduced on live testnet (2026-09-17)
+
+The SDK fix for a write that simulates cleanly and then fails on the ledger, proven against the real
+network rather than only the fixture. `pnpm --filter be e2e:claim-race`: a throwaway organiser and a
+free race, two allowlisted scanner desks, and one runner claimed by **both desks at the same moment**,
+repeated until the two claims land in the same ledger (it happened on the first runner):
+
+```
+▸ A throwaway organiser, a free race, and two scanner desks
+  event 29, category 0, desks GBVSPN… and GCE3PE…
+▸ Runner 1: enters, then both desks claim the pack at the same moment
+  token 58: one claim won; the other FAILED ON THE LEDGER with AlreadyClaimed (#102)
+  failed tx 713f63a2cd3608f101c22e98953d8a54a7b4a4b5900752b740381eba901d1041, ledger 4711038
+▸ RPC confirms the losing transaction failed on the ledger
+  getTransaction 713f63a2cd36…: FAILED in ledger 4711038
+✓ a desk that loses a same-ledger claim race gets AlreadyClaimed with the failed transaction, not a crash
+```
+
+Failed transaction: [`713f63a2…`](https://stellar.expert/explorer/testnet/tx/713f63a2cd3608f101c22e98953d8a54a7b4a4b5900752b740381eba901d1041).
+The script also asserts exactly one claim won and the record ended `RacepackClaimed`. Before the fix,
+the same losing call threw `SterunNetworkError: claimRacepack could not be simulated: Cannot read
+properties of undefined (reading 'type')` (STE-25 run 2, step 4.3).
+
+
+---
+
+## STE-64 — a rebuild keeps transition transaction hashes, live (`0ccf923`, 2026-09-17)
+
+Deployed with a backup first (`backups/pre-ste64-20260916T172155Z.sql.gz`), then the API rebuilt, the
+poller and keeper stopped, `node dist/cli/indexer.js rebuild` run once, and both started again.
+
+| `record_transitions` | before | after the rebuild |
+| --- | --- | --- |
+| rows | 104 | 104 |
+| without `tx_hash` | 59 | 7 |
+| `source = 'event'` | 45 | 97 |
+| `source = 'event'` missing a ledger or hash | 0 | 0 |
+
+```
+rebuilt in 76158ms: 30 events, 49 categories, 59 records, 104 transitions. Following resumes at ledger 4711163.
+doctor: index matches the chain
+```
+
+**The seven left without a hash are correct, not missed.** Tokens 0, 1 and 2 (five transitions) have
+logged events only from the **v1** RaceRecord (`CDWFNF42…`), whose token ids overlap v2's; linking them
+would point a v2 runner at someone else's transaction, which is exactly what the contract filter
+refuses. `14/Finished` and `17/Finished` have no logged event at all (the raw log for v2 starts at
+ledger 4585194 and those finishes were not polled). An earlier count of "57 recoverable" matched on
+token id alone, and so included those five v1 rows.
+
+A restored hash checked against the network rather than trusted: `GET /records/14` now gives
+`Entered` → [`b79a5912…`](https://stellar.expert/explorer/testnet/tx/b79a59128c3c8e56bb9862600a7446a92378e1b3a9f8225e354d7be8ce88ca0b),
+which RPC `getTransaction` reports `SUCCESS` in ledger 4620655, the ledger the index holds, and
+Horizon shows as an `enter` invocation.
+
+After the restart the poller follows both v2 contracts, all three containers run with 0 restarts, a
+second `doctor` reports `"findings": []`, and `verify-deployment.sh` passes 18 of 18
+(2026-09-16T17:27:24Z).
+
+## STE-32 — the web app and the landing page, live (2026-09-23)
+
+| What | URL | Served by |
+| --- | --- | --- |
+| Web app (`fe/`) | [`https://app.sterun.xyz`](https://app.sterun.xyz) | Vercel (project `sterun-app`) |
+| Landing page (`landing-page/`) | [`https://sterun.xyz`](https://sterun.xyz) | Vercel |
+| API (`be/`) | [`https://api.sterun.xyz`](https://api.sterun.xyz) | the same homelab tunnel as `api-sterun.jameshub.fun`, which still answers |
+
+Checked 2026-09-23, every route a 200 from `app.sterun.xyz`: `/`, `/events/23`, `/runner`, `/scan`,
+`/org` and `/manifest.webmanifest`. The response carries `Server: Vercel` and an `x-vercel-id` from
+`sin1`, the Singapore region.
+
+**The race page proves the server reaches the chain**, not merely that Vercel serves a file:
+`/events/23` comes back titled *Sterun announcements e2e 2026-09-16 · Sterun*, and that name is read
+from EventRegistry in `generateMetadata` rather than from anything in the repository.
+
+**CORS is configured, and this was the one thing that could not be tested before the deploy.** With
+`Origin: https://app.sterun.xyz`, both `api.sterun.xyz` and `api-sterun.jameshub.fun` answer
+`access-control-allow-origin: https://app.sterun.xyz`. Until then `STERUN_WEB_ORIGIN` held
+`http://localhost:3000` alone, so every authenticated route (the roster download, entry details, file
+uploads, the faucet, announcements) would have been refused by the browser.
+
+### The build
+
+Both projects build from the repository root, which is what `fe/vercel.json` and
+`landing-page/vercel.json` are for: the only lockfile is at the root, and `fe` depends on
+`@sterunxyz/sdk` as a workspace package that has to be compiled to `sdk/dist` before Next can resolve
+it. The first attempt failed on exactly that, with seven `Can't resolve '@sterunxyz/sdk'` errors.
+
+`NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` is the one value not in git and is set in the Vercel
+dashboard; every other `NEXT_PUBLIC_*` value is public and committed in `fe/.env`.
+
+### Still open after this deploy
+
+- ~~**The faucet has no payout key.**~~ **Corrected 2026-09-23: the faucet works.**
+  `faucet.payoutConfigured` reports the **distributor** key, which is deliberately absent from a
+  public box; the web app's button reads `faucet.route.available`, which is `true` and is backed by
+  the separate float key. Proven against production with `pnpm --filter be e2e:faucet
+  https://api.sterun.xyz` — see "The web faucet on production" below.
+- The STE-25 rehearsal's `MANUAL REQUIRED` steps can now be run at last: create a race through the
+  console, enter and pay, two phones as two desks with one runner scanned at both, and the public
+  profile.
+
+## STE-68 — the demo a reviewer clicks through, seeded on live testnet (2026-09-25)
+
+One run of `docs/rehearsal/seed.sh` left this behind. **RESULT 22 PASS, 0 FAIL, 1 MANUAL REQUIRED,
+0 BLOCKED of 23**; evidence in `docs/rehearsal/runs/2026-09-25T09-08-01Z-seed/`.
+
+The SOW §3 asks for *"at least 3 events and 20 issued records, including two deliberate fraud
+attempts."* This is **4 races and 25 records**, with both fraud attempts among them rather than
+staged separately.
+
+### What a reviewer opens, with no wallet
+
+| Race | Records | URL |
+| --- | --- | --- |
+| Directory | — | [`https://app.sterun.xyz/`](https://app.sterun.xyz/) |
+| Solo Heritage Run 2026 (run, Completed) | 12 | [`/events/40`](https://app.sterun.xyz/events/40) |
+| Kota Tua 10K 2026 | 6 | [`/events/41`](https://app.sterun.xyz/events/41) |
+| Braga Night Run 2026 | 4 | [`/events/42`](https://app.sterun.xyz/events/42) |
+| Sanur Sunrise Half Marathon 2026 | 3 | [`/events/43`](https://app.sterun.xyz/events/43) |
+
+Solo Heritage Run has been run, so the directory lists it behind **"Show races that have finished"**;
+the other three are on the first screen.
+
+Runner profiles, each a real address with records across more than one race:
+
+- Budi Santoso (solo, kotatua, sanur) — [`/runner/GDLFVS26…PTC5`](https://app.sterun.xyz/runner/GDLFVS26CWYAH5CK6RN7Z23Q7MLOOWIXHD4NNLSEU7GASERIF463PTC5)
+- Siti Rahayu (solo, kotatua) — [`/runner/GD26E6ES…HDLD`](https://app.sterun.xyz/runner/GD26E6ES5XCDTUBCD64JLIKKKGECGVGQD37TNGBK6KLGYGV62HJSHDLD)
+- Andi Wijaya (solo, braga) — [`/runner/GBOHN3BZ…7TYB`](https://app.sterun.xyz/runner/GBOHN3BZNYXY6CA4IFNWTAPLIAAEASGOODTOYOMAZ4IDPOJLDSHR7TYB)
+- Dewi Lestari (solo, braga) — [`/runner/GA7ZJBWM…VKSV`](https://app.sterun.xyz/runner/GA7ZJBWMPCIUZRY6XF3SECDVTDAW7SFEY5PZI4HIKKYAZY57G6EMVKSV)
+- Rizky Pratama (solo, kotatua) — [`/runner/GABYDUKN…CPV3`](https://app.sterun.xyz/runner/GABYDUKNZY6RVH2BEKJ3VRCRDTTTI6IE6KGCVNDJCGHYI5QUGKQDCPV3)
+- Nur Aini (solo, kotatua) — [`/runner/GBHKQY6R…XKJY`](https://app.sterun.xyz/runner/GBHKQY6RBYC6ACO6VG5WGHX3HJI74TV7QZ4KZOISP33RLE2WOO34XKJY)
+
+The demo organiser is `GDNANOE7AO36MCHKDMKRW2MJINJFUS2LZBMQDZCFUWCR7P3AJODIGUFF`; its key is in the
+repo-root `.env` as `STERUN_DEMO_ORGANISER_SECRET` (gitignored, 0600), so the organiser console at
+[`/org`](https://app.sterun.xyz/org) can be opened as it.
+
+### The transactions behind it
+
+| What | Transaction |
+| --- | --- |
+| `create_event` → 40 | [`852bdf33`](https://stellar.expert/explorer/testnet/tx/852bdf33a91a7c9a17ec2f09c4e51aaf96e4c33ffd0690d77c9d831b47d4d00e) |
+| `create_event` → 41 | [`d24a6b03`](https://stellar.expert/explorer/testnet/tx/d24a6b03ab0e24070358eee243838a412bedb0b530c24554ac5ca9acd8f1465d) |
+| `create_event` → 42 | [`58f01bdc`](https://stellar.expert/explorer/testnet/tx/58f01bdc7fa766e8d2670c5bd78c02223850d87ebd7e0e9b4c1c0185756e9620) |
+| `create_event` → 43 | [`c87780c9`](https://stellar.expert/explorer/testnet/tx/c87780c9f8cba81d1d58ae0f0ab04a6396d55346fdd2d5ea4c7f875fcae562f4) |
+| `claim_racepack_many` ×9, one signature | [`70c5e862`](https://stellar.expert/explorer/testnet/tx/70c5e8625fae94b4482725e39310d09c9997964190aac801fe5edea18cb20376) |
+| `record_results` ×12, one signature | [`4b386a72`](https://stellar.expert/explorer/testnet/tx/4b386a72993086692d837efd2837edf15065c564e812ca65f5889689e183d73d) |
+| `set_event_status Completed` | [`d142f6ce`](https://stellar.expert/explorer/testnet/tx/d142f6cef65705dcbba3d7cf0470b214fdfc450e2eb5ad7de90fb740d81d9f93) |
+
+**The two batch calls are the STE-66 upgrades earning their keep.** Nine race packs handed over in
+one signature and twelve results recorded in one, against the live RaceRecord v2.7
+(`CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW`). Before that upgrade this run would
+have needed twenty-one separate transactions.
+
+### The two fraud attempts, and what they actually prove
+
+**F.2, duplicate collection — caught.** R05 collected at both offline desks, which is what an offline
+desk is supposed to allow. When signal returned and both desks pressed Send at the same moment, the
+chain kept one claim (`claimed_at 1790328192`) and desk-B's row came back
+`{"status":"refused","reason":"already-claimed"}`. Desk-B's claim never reached the ledger: it was
+refused at simulation because the winner's transaction had already closed.
+
+**F.1, a forwarded screenshot — refused once stale, and the honest limit.** The step proves a
+screenshot goes stale in under a minute and that even a fresh one can only be used once. It does
+**not** prove that a forwarded QR is rejected: the desk accepts the code's step ±1, a 90-second
+window around its own clock, so a screenshot shown within 30–60 seconds of being taken **does** pass.
+That does not help an attacker — the code turns over every 30 seconds, and a fresh screenshot is
+worth exactly what the runner's own pass is worth, one claim on one record. Used by someone else it
+spends the runner's claim, and the runner is then refused "Already claimed".
+
+Whoever films this must **wait on camera** until the desk would refuse the screenshot. Cutting the
+wait produces a clip showing a fresh screenshot being refused, which the product does not do.
+
+### The untimed finish
+
+Bib 12 is `state Finished` with `finish_time_s: null` on chain — a finish the timing mat missed, not
+a zero. Read back from `GET /events/40/records`: twelve records, nine with times, and three null
+(bib 7 `Dnf`, bib 10 `Dnf`, bib 12 `Finished`). The public profile renders `null` as **"No official
+time"** (`fe/src/modules/profile/lib/record-meaning.ts`), never as `0:00:00`.
+
+### Posters and documents
+
+Each race carries a metadata document and a poster through `POST /events/files`. All four posters
+serve 200 `image/jpeg` from `api.sterun.xyz` (122–170 KB) and render on the directory cards at their
+full 1600×900. Race pages carry venue and city: Stadion Manahan Surakarta, Taman Fatahillah Jakarta
+Barat, Jalan Braga Bandung, Pantai Sanur Denpasar.
+
+### What is still not clean, and is not ours to fix
+
+Seven races created with **Ancung's wallet**
+(`GA5VKC7QHIIC7GBXMHLILU2LMKKXYAHOFNE77CUOGMLO4GB3ZKP5HZS7`) are **still on the directory's first
+screen**, mixed in with the demo: events 3, 4, 12, 13, 28, 36 and 37 — "LARI TEKNIK (TESTING)",
+"TESTING LARI 3", "Elektro Dash 2026 (TESTING)" and the rest. There is no delete, and only the
+organiser wallet can cancel, so the seed deliberately left them and said so rather than failing.
+Until they are cancelled in the console, a reviewer's first screen still reads as a test board.
 

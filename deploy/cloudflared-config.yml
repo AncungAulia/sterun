@@ -36,6 +36,12 @@ ingress:
     # `api` itu nama service di compose network — BUKAN localhost. cloudflared
     # jalan di container-nya sendiri, jadi localhost di sana adalah dirinya.
     service: http://api:3001
+  # The project's own domain, from the move to the VPS (2026-09-17). One level
+  # under sterun.xyz, so Universal SSL covers it. api-sterun.jameshub.fun above
+  # STAYS: file URLs already committed on-chain (event `uri`s) point at it, and
+  # an on-chain URL cannot be edited, so that hostname has to keep answering.
+  - hostname: api.sterun.xyz
+    service: http://api:3001
   - service: http_status:404
 
 # Tanpa ini cloudflared menulis satu baris per request. API-nya sudah punya log

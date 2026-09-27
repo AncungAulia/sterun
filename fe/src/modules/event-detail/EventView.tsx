@@ -33,15 +33,16 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { EventMetadata } from "@/lib/metadata";
+import type { EventMetadata } from "@/lib/event/metadata";
+import type { QuotaRaise } from "@/lib/event/quota-history";
 import type { SterunAddOn, SterunCategory, SterunEvent } from "@sterunxyz/sdk";
 
-import { EntryCard } from "./component/EntryCard";
-import { TabAddOns } from "./component/TabAddOns";
-import { TabCategories } from "./component/TabCategories";
-import { TabDetails } from "./component/TabDetails";
-import { TabTerms } from "./component/TabTerms";
-import { TabTimeline } from "./component/TabTimeline";
+import { EntryCard } from "./components/EntryCard";
+import { TabAddOns } from "./components/TabAddOns";
+import { TabCategories } from "./components/TabCategories";
+import { TabDetails, type RaceUpdate } from "./components/TabDetails";
+import { TabTerms } from "./components/TabTerms";
+import { TabTimeline } from "./components/TabTimeline";
 
 export interface EventViewProps {
   event: SterunEvent;
@@ -62,6 +63,18 @@ export interface EventViewProps {
    * everything typed into it.
    */
   preview?: boolean;
+  /**
+   * The connected wallet's entry in this race, when it has one (STE-21). One
+   * entry per race, so every way in on the page gives way to it.
+   */
+  myEntry?: { tokenId: number; categoryId: number };
+  /**
+   * What changed since the race was published (STE-57): signed announcements
+   * for Details, and when places were raised for Distances. A preview has
+   * neither, since nothing has been published to change.
+   */
+  updates?: RaceUpdate[];
+  raises?: ReadonlyMap<number, QuotaRaise[]>;
 }
 
 export function EventView({
@@ -71,6 +84,9 @@ export function EventView({
   addOns,
   proofs,
   preview = false,
+  myEntry,
+  updates,
+  raises,
 }: EventViewProps) {
   const [tab, setTab] = useState("details");
   /** Absent in a preview, and every Enter button on the page hangs off it. */
@@ -105,7 +121,12 @@ export function EventView({
           </div>
         )}
 
-        <EntryCard event={event} categories={categories} onEnter={onEnter} />
+        <EntryCard
+          event={event}
+          categories={categories}
+          onEnter={onEnter}
+          myEntry={preview ? undefined : myEntry}
+        />
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -147,7 +168,12 @@ export function EventView({
         </div>
 
         <TabsContent value="details">
-          <TabDetails document={document} organiser={event.organiser} startsAt={event.startsAt} />
+          <TabDetails
+            document={document}
+            organiser={event.organiser}
+            startsAt={event.startsAt}
+            updates={preview ? undefined : updates}
+          />
         </TabsContent>
 
         <TabsContent value="terms">
@@ -160,7 +186,9 @@ export function EventView({
             startsAt={event.startsAt}
             categoryCodes={categories.map((category) => category.code)}
             canEnter={
-              event.status === "Open" && categories.some((category) => category.slotsLeft > 0)
+              !myEntry &&
+              event.status === "Open" &&
+              categories.some((category) => category.slotsLeft > 0)
             }
             onEnter={onEnter}
           />
@@ -171,6 +199,8 @@ export function EventView({
             categories={categories}
             openForEntry={event.status === "Open"}
             offerEntry={!preview}
+            enteredCategoryId={preview ? undefined : myEntry?.categoryId}
+            raises={preview ? undefined : raises}
           />
         </TabsContent>
 

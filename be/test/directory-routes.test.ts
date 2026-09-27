@@ -117,6 +117,19 @@ describe.skipIf(!DATABASE_URL)(`directory routes (${DATABASE_URL ? "postgres" : 
       expect(event.starts_at).toBe("1800000000");
     });
 
+    it("sends registration_closes_at as null for an event with no close date (v2.5)", async () => {
+      const [event] = (await app.inject({ method: "GET", url: "/events" })).json().events;
+      expect(event.registration_closes_at).toBeNull();
+    });
+
+    it("sends a close date as a string, in the list and on the detail", async () => {
+      await pool.query("UPDATE events SET registration_closes_at = '18446744073709551615' WHERE event_id = 0");
+      const [listed] = (await app.inject({ method: "GET", url: "/events" })).json().events;
+      expect(listed.registration_closes_at).toBe("18446744073709551615");
+      const detail = (await app.inject({ method: "GET", url: "/events/0" })).json();
+      expect(JSON.stringify(detail)).toContain('"registration_closes_at":"18446744073709551615"');
+    });
+
     it("filters by status", async () => {
       expect((await app.inject({ url: "/events?status=Open" })).json().count).toBe(1);
       expect((await app.inject({ url: "/events?status=Draft" })).json().count).toBe(0);

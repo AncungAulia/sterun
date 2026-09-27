@@ -32,6 +32,11 @@ export {
   type AddCategoryArgs,
   type IncreaseQuotaArgs,
   type EnterArgs,
+  type SterunResult,
+  type SkippedClaim,
+  CLAIM_MAX_BATCH,
+  RECORD_RESULTS_MAX_BATCH,
+  chunkResults,
 } from "./client.js";
 
 export {
@@ -65,7 +70,7 @@ export {
   type ContractErrorVariant,
 } from "./errors.js";
 
-export { type SentResult } from "./tx.js";
+export { ledgerFailureCode, type SentResult } from "./tx.js";
 
 export {
   RACE_RECORD_SCHEMA_VERSION,
@@ -87,3 +92,12 @@ export {
 } from "./document.js";
 
 export { FUTURENET, MAINNET, TESTNET, type SterunNetwork } from "./network.js";
+
+export {
+  ANNOUNCEMENT_HEADER,
+  announcementBodySha256,
+  announcementMessage,
+  verifyAnnouncement,
+  type AnnouncementFields,
+  type AnnouncementSignatureScheme,
+} from "./announcement.js";

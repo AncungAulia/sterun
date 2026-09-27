@@ -164,6 +164,12 @@ describe("migrations already applied in production", () => {
     "010_faucet_payouts.sql": "d4bf5aa0796eea0e3b5acac909efff560046e5371cfcbe17de3488505831ab0f",
     // Applied in production 2026-09-15, deploy of 698f9fa (STE-50/51/52).
     "011_identity_index.sql": "26c5a650e19b7516b1ffe3d1384d6de5ae3e0cf13b0a790121badbf9fd356a53",
+    // Applied in production 2026-09-15, deploy of 261a32b (STE-59).
+    "012_chain_linked_participants.sql": "6d392f01c0d7187099554a8268108e0cc7ddc8d79c04537b35087d034abea8a6",
+    // Applied in production 2026-09-16, deploy of 99222a6 (STE-40).
+    "013_event_announcements.sql": "ad3aac8ea8947730ad4c6610092dc18045b8314176516b58b44bdb6e24fa0784",
+    // Not yet applied in production: waits for the v2.5 spec PR (STE-46).
+    "014_registration_closes.sql": "6cb1b097bf5221e7df6cb5f63280bdea97da68885fc8f42939fe24f1fae68887",
   };
 
   it.each(Object.entries(APPLIED))("%s is byte-for-byte what production ran", (name, sha256) => {

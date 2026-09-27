@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Providers } from "../app/providers";
 
-vi.mock("@/lib/wallet", () => ({
+vi.mock("@/lib/wallet/kit", () => ({
   initWallet: vi.fn(),
   restoreAddress: vi.fn(async () => null),
   onWalletStateChange: vi.fn(() => () => {}),

@@ -101,11 +101,14 @@ describe.skipIf(!DATABASE_URL)(`vault (${DATABASE_URL ? "postgres" : SKIP_REASON
       // identifies nobody. bib_name (STE-47) is the one text column that can
       // hold a name, and holds it on purpose: it is chosen by the runner to be
       // printed on the bib and read by the crowd, so encrypting it protects
-      // nothing. Anything else appearing here is still a failure.
+      // nothing. linked_by (STE-59) is `confirm` or `chain`, enforced by a CHECK,
+      // so it cannot hold anything else. Anything else appearing here is still
+      // a failure.
       expect(rows.map((r) => r.column_name).sort()).toEqual([
         "bib_name",
         "enter_tx_hash",
         "id_type",
+        "linked_by",
         "runner_address",
       ]);
     });

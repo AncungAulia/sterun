@@ -23,7 +23,11 @@ is what decides the service worker's scope:
 - The QR pass and the scanner **must work fully without a signal** (`SYSTEM_DESIGN.md` §7:
   verification at a venue assumes zero connectivity).
 
-Those two demands are opposed, so no single service worker may own the whole origin.
+Those two demands are opposed, so no single service worker may own the whole origin. The worker is
+`fe/public/offline-sw.js`, registered from the `(offline)` layout once per screen: scoped to
+`/pass` on the runner's pass (STE-21 round 2) and to `/scan` on the volunteer's desk (STE-22). Each
+registration caches only its own path and the build's assets, so neither ever keeps a race page,
+and `fe/test/offline-sw.test.ts` holds that line.
 
 ```
 fe/app/
@@ -31,6 +35,7 @@ fe/app/
     page.tsx                         /
     events/[eventId]/                /events/:id
     events/[eventId]/enter/          /events/:id/enter
+    events/[eventId]/entered/[tokenId]/  /events/:id/entered/:token
     runner/[address]/                /runner/G...
     profile/                         /profile
 
@@ -81,13 +86,14 @@ The consequence: no avatars, no name lists, no participant export. What may be s
 | Object | Create | Update | Delete |
 | --- | --- | --- | --- |
 | Event | `create_event` | **status only** (`set_event_status`) | none |
-| Category | `add_category` | **none whatsoever** | none |
+| Category | `add_category` | **quota up only** (`increase_quota`, STE-55) | none |
 | Add-on | `add_addon` | **none whatsoever** | none |
 | Scanner | `add_scanner` | — | `remove_scanner` |
 
-An event's name, date, `metadata_hash` and `uri`, and everything about a category (code, distance,
-quota, price) have **no setter**. A mistyped price is permanent; the only way out is `Closed` and
-then a new event.
+An event's name, date, `metadata_hash` and `uri`, and everything about a category except its quota
+(code, distance, price) have **no setter**. A mistyped price is permanent; the only way out is
+`Closed` and then a new event. The quota is the one exception since STE-55, and it only ever goes
+**up**: the console pairs every raise with a signed announcement (§6.1, STE-57).
 
 `Draft` is **not** a draft in the Google Docs sense: it only means entries are not open yet; the
 contents are frozen from the first second. So an organiser form must not follow a "fill in → Save →
@@ -138,7 +144,8 @@ address as it is, plus how many events they have created and how many reached `C
 | --- | --- | --- | --- |
 | `/` | Poster-first directory (redesigned 2026-09-11, spec `docs/superpowers/specs/2026-09-11-directory-redesign-design.md`, Revision 4): one list of every race, sorted by the place chosen at the top left ("All locations" by default, or a country with an optional province, saved in the visitor's browser). On the first render the browser's own location prompt is raised once, and once only: allowed, the list is ordered by real distance and the control reads "Near you"; refused or ignored, the page is exactly what it would be for somebody never asked. The place sorts, it does not filter: races in it come first, within "still to come" and within "already run" rather than across them, and the featured row of `Open`, upcoming races with a poster prefers them, but nothing is hidden. The list is headed "All races", or "{n} races match" once a search or filter narrows it. Every race is a card with its poster in a 16:9 frame (shown whole, never cropped; "No image" without one), venue, date, entries left and starting price, up to 4 columns wide. Search, plus a filter drawer: one sort, by date, and three filters, by price, by distance, and one that hides full and closed races. Loading + empty + error states. | the chain (RPC) for the races, plus each event's verified metadata document for poster and location | STE-13 |
 | `/events/[id]` | see §3.1 | the chain + the metadata document | STE-13 |
-| `/runner/[address]` | Race history per row: event, category, bib, state, finish time, transaction link. An identity-check block. An empty state. Paginated at 20. | the chain (truth), the indexer (to enrich event metadata) | STE-24 |
+| `/runner/[address]` | Race history per row: event, category, bib, state, finish time, transaction link. An identity-check block. An empty state. Paginated at 20. | the chain (truth), the indexer (a transaction link per record, optional) | STE-24 |
+| `/runner` | Paste any address to open its race record; a connected wallet gets a way to its own | none until submitted | STE-24 |
 
 `/runner/[address]` is the page the SOW calls *"the part no ticketing platform produces"*. It must
 open from a bare link: no login, no wallet, no account.
@@ -290,10 +297,10 @@ statistics and thumbnails are a layer on top — not the foundation, and STE-24 
 
 | URL | Shows | Ticket |
 | --- | --- | --- |
-| `/events/[id]/enter` | A stepper: choose a category → PII form → review → **one signature** (`enter`, with the sUSD fee covered by the auth tree) | STE-21 |
-| ↳ the success screen | Bib, `token_id`, a testnet transaction link, and the **salt receipt** | STE-21 |
-| `/pass/[tokenId]` | A QR regenerating every 30 seconds + a 6-digit code for the manual fallback, the bib, the event name, the state. Installable. Fully functional in airplane mode. | STE-21 |
-| `/profile` | My races + a shortcut to each pass. Thin: its contents are `/runner/[my-address]` (§3.2) | STE-21 |
+| `/events/[id]/enter` | Three steps: distance & race pack → details → review & pay, then **one button with two wallet approvals behind it** (a signed message for the vault, then `enter`). Built in STE-21 round 1; design in `superpowers/specs/2026-09-15-entry-flow-design.md` | STE-21 |
+| `/events/[id]/entered/[tokenId]` | The success page: the bib drawn as a bib, the **receipt code** with a PDF download, and a way on held until the receipt is saved | STE-21 |
+| `/pass/[tokenId]` | A QR and a 6-character code regenerated every 30 seconds on the phone, the bib, the race, the state. Installable, and loadable with the network off. Built in STE-21 round 2; design in `superpowers/specs/2026-09-16-qr-pass-design.md` | STE-21 |
+| `/profile` | My races + a shortcut to each pass. Thin: its contents are `/runner/[my-address]` (§3.2) | STE-24 |
 
 **The success screen is its own page, not a modal.** The salt receipt appears exactly once in its
 life; if it is lost, the identity check at `/runner/[address]` is dead forever for that record. This
@@ -303,11 +310,21 @@ The `totp_secret` is stored in the runner's device IndexedDB and never touches t
 
 **Errors that must have their own presentation**, not a raw alert: `QuotaFull(5)`, `EventNotOpen(4)`,
 insufficient sUSD balance, and the user declining to sign. Plus one slippery case: **the PII was
-submitted but `enter` failed** — the user has to be able to retry without creating a duplicate row
-(an idempotency key per submission, agreed with James).
+submitted but `enter` failed** — the user has to be able to retry without submitting again.
 
-An error code is a `u32` with no contract identity; pick the error map from its band — `1..=99`
-EventRegistry, `100..=199` RaceRecord, `200+` OZ.
+How STE-21 settled both (2026-09-15; `fe/CLAUDE.md`, the entry flow):
+
+- **No idempotency key was needed.** The vault's answer (hash, salt, secret) is kept for the whole
+  attempt, so a retry pays with it and never submits again; only editing the details does. The
+  backend links a row to its record from the chain (STE-59), so entering takes two approvals and
+  no confirm call; rows that never get a record are swept (STE-50).
+- **`enter`'s refusals are explained from the chain, not the code.** An error code is a `u32` with no
+  contract identity, and `enter` calls the sUSD token, whose errors share EventRegistry's `1..=99`
+  band. So after a refusal the page re-reads the race, the distance, the add-on stock and the
+  balance, and says what is now true. For calls that reach only our contracts, pick the map from
+  the band as before: `1..=99` EventRegistry, `100..=199` RaceRecord, `200+` OZ.
+- **No answer is a check, never a guess.** The page looks for a record of this wallet in the race;
+  `enter` is atomic, so none found means nothing was charged.
 
 ---
 
@@ -370,11 +387,13 @@ must produce a readable message, not a crash.
 | --- | --- |
 | `/scan` | Choose an event, download the roster bundle + an on-chain state snapshot. Needs to be online, once |
 | `/scan/[id]` | Camera + a **GREEN/RED verdict in under 2 seconds**, manual input (6-digit code + bib), a banner if the device clock has drifted, a queue indicator |
+| `/scan/[id]/claims` | The race packs this phone handed over: waiting, sending one at a time with one wallet approval each, and done with the ledger it landed in. Sending starts on a tap |
 | `/scan/[id]/flagged` | Claims that reverted with `AlreadyClaimed(102)` — another desk won. For reconciliation, rather than disappearing quietly |
 
-An organiser is **not** automatically a scanner: `claim_racepack` demands an address on the
-`is_scanner` allowlist. An organiser who wants to scan registers their own address through the
-console.
+The organiser can scan their own race: `claim_racepack` accepts the event's organiser **or** an
+address on the `is_scanner` allowlist (`sc/contracts/race_record/src/lib.rs`), and the roster
+route lets the same two in. This section used to say the opposite; the contract was checked on
+2026-09-16. `/scan` therefore lists a race for a wallet that organises it or is allowlisted for it.
 
 TOTP verification happens locally with ±1 step tolerance; claims are queued in IndexedDB and sent
 when connectivity returns.
@@ -390,7 +409,7 @@ hosted at `uri`.
 ```json
 {
   "poster_url": "https://...",
-  "location": { "name": "GBK, Jakarta", "lat": -6.218, "lng": 106.802 },
+  "location": { "name": "GBK, Jakarta", "lat": -6.218, "lng": 106.802, "maps_url": "https://maps.app.goo.gl/..." },
   "route_geojson": { "type": "LineString", "coordinates": [] },
   "schedule": [
     { "phase": "registration", "starts_at": "2026-09-01T00:00+07:00", "ends_at": "2026-09-20T23:59+07:00" },
@@ -432,10 +451,21 @@ hosted at `uri`.
   obligation to a form field. Short links (`maps.app.goo.gl`) do not carry coordinates until
   followed, and following one from a browser is blocked cross-origin — the console says so plainly
   at paste time, rather than after the event is frozen, and it says so a third way when a link
-  yielded only the map view. What is stored is **the two numbers**, not the URL: links go stale,
-  coordinates do not.
-- The `racepack` phase may carry `venue_lat` / `venue_lng` under the same rule. `venue` stays a string
-  so STE-13's reader does not change meaning.
+  yielded only the map view.
+  **Since 2026-09-17 the link is stored as well, as `maps_url`** (Ancung). This paragraph used to end
+  "what is stored is the two numbers, not the URL: links go stale, coordinates do not", and that was
+  the wrong trade. Two numbers open a nameless dropped pin, so "Fakultas Teknik UGM" pasted as a
+  place link reached runners as a point with no name; and a short share link from a phone, the most
+  common paste there, has no numbers to keep at all. So both are kept: `maps_url` is what "Open in
+  Maps" opens, and `lat` / `lng`, when the link carries them, are what sorting by distance uses. A
+  short link is accepted, and the console says it will not be sorted by distance. `maps_url` must be
+  an https Google Maps link (`google.<tld>/maps`, `maps.google.<tld>`, `maps.app.goo.gl`,
+  `goo.gl/maps`) with no credentials or port, checked by `googleMapsUrl` in `fe/src/utils/geo.ts`
+  when the document is written **and again when it is read**, since it becomes a button on a public
+  page. A document with coordinates and no `maps_url` (everything published before this) still opens
+  a pin built from them.
+- The `racepack` phase may carry `venue_lat` / `venue_lng` and `venue_maps_url` under the same rules.
+  `venue` stays a string so STE-13's reader does not change meaning.
 - **`cut_off` is a time**, the last moment a finish still counts — and **the contract does not enforce
   it at all**. `record_finish` accepts whatever time the organiser sends. The page and the form must
   present it as information, not as a rule.
@@ -443,7 +473,7 @@ hosted at `uri`.
   ordering rule, no re-serialisation. Anyone can check it with `curl` + `sha256sum`, and there is no
   "canonical form" two implementations could read differently. The cost is real and deliberate:
   re-uploading the same document with different whitespace breaks the check forever, because events
-  are frozen (§2.2). Established in STE-13 (`fe/src/lib/metadata.ts`) and used by STE-17 when it
+  are frozen (§2.2). Established in STE-13 (`fe/src/lib/event/metadata.ts`) and used by STE-17 when it
   writes the document.
 - A document that fails its hash check is **not displayed at all**, rather than displayed with a
   warning. Content that cannot be proven remains unproven however it is labelled.
@@ -508,7 +538,29 @@ check that the caller is the event's organiser. So the rule lives in the console
 **one flow that includes the announcement**, never two buttons where the second can be skipped. This
 is an app-level promise, and the documentation should not dress it up as a protocol guarantee.
 
-Implementation: `be/` endpoint in STE-40, `fe/` rendering in the same ticket's follow-up.
+Implementation: `be/` endpoint in STE-40. `fe/` in STE-57, for the quota raise: the race console's
+**Add entries** signs the announcement, raises the quota and publishes, as one dialog, and
+`/events/[id]` lists every announcement under **Updates** in Details, above General information (each checked against the
+organiser on chain) and a dated "Entries raised" line on the distance card from `quota_history`.
+The schedule, venue and registration-date changes above have no flow yet.
+
+**As built (STE-40).** `POST /events/:eventId/announcements` takes `{ published_at, body, signer,
+signature }` and `GET` returns them newest first, each with the exact signed `message`. What the wallet
+signs is not the JSON above but this text, so it can be rebuilt byte for byte by anyone:
+
+```
+Sterun announcement v1
+network: <network passphrase>
+event_registry: <EventRegistry contract id>
+event_id: <u32>
+published_at: <YYYY-MM-DDTHH:MM:SS.sssZ>
+body_sha256: <sha256 of the UTF-8 body, lowercase hex>
+```
+
+`published_at` is UTC in exactly that spelling, and the server refuses one more than 10 minutes from its
+own clock. `@sterunxyz/sdk` exports `announcementMessage` to build the text for the wallet and
+`verifyAnnouncement` to check one; the organiser to compare the signer against comes from
+`getEvent(eventId).organiser`, on chain. Full rules: `be/CLAUDE.md`, "Signed event announcements".
 
 **Not in scope, deliberately:** refunds. The contract never holds the entry fee (§3.1), so no
 announcement can move money. An organiser who chooses to refund does it by hand, and the page says so.

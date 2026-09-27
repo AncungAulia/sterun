@@ -87,6 +87,18 @@ export const quotaIncreased = (
 ): RawChainEvent =>
   envelope(ctx, ["quota_increased", eventId, categoryId], { current, previous });
 
+/**
+ * v2.5 (STE-46). `previous` is `Option<u64>`: `ScVal::Void` on the chain, which
+ * `scValToNative` hands over as `null`. Data in ScMap order: `current` first.
+ */
+export const registrationClosesSet = (
+  ctx: EventContext,
+  eventId: number,
+  previous: bigint | null,
+  current: bigint,
+): RawChainEvent =>
+  envelope(ctx, ["registration_closes_set", eventId], { current, previous });
+
 export const mint = (ctx: EventContext, to: string, tokenId: number): RawChainEvent =>
   envelope(ctx, ["mint", to], { token_id: tokenId });
 

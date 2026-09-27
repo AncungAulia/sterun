@@ -9,7 +9,7 @@
  */
 import { queryOptions, useQuery } from "@tanstack/react-query";
 
-import { fetchEventMetadata, type MetadataResult } from "@/lib/metadata";
+import { fetchEventMetadata, type MetadataResult } from "@/lib/event/metadata";
 
 /**
  * Events are frozen once created (WEB_APP_IA.md §2.2), so a document that

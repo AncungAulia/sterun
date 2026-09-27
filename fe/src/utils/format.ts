@@ -173,3 +173,66 @@ export function formatEventDayLong(startsAt: bigint, timeZone?: string): string 
     ...(timeZone ? { timeZone } : {}),
   }).format(date);
 }
+
+/**
+ * When a race pack was collected, for the QR pass: "27 Sep, 09:41".
+ *
+ * No year, because a runner reads this minutes after handing over their bib, at
+ * the desk it happened at. A 24-hour clock, because an afternoon pickup read as
+ * a morning one is confusion a volunteer has to resolve in person.
+ */
+export function formatClaimedAt(claimedAt: bigint, timeZone?: string): string {
+  const date = toDate(claimedAt);
+  if (!date) return "Unknown date";
+
+  /*
+    Assembled from parts rather than formatted whole: en-US orders this as
+    "Sep 27" and en-GB spells the month "Sept", and the design asks for
+    "27 Sep". Taking the two parts and putting them in our own order is the
+    only way that survives a locale data update.
+  */
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    ...(timeZone ? { timeZone } : {}),
+  }).formatToParts(date);
+  const partOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  const day = `${partOf("day")} ${partOf("month")}`;
+  const time = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
+
+  return `${day}, ${time}`;
+}
+
+/**
+ * A whole number grouped for reading: a ledger sequence ("4,469,811") or a
+ * count. For plain integers only; money goes through `formatAmount`, which
+ * keeps the 7-decimal rule.
+ */
+/**
+ * `1:52:09` for a run over an hour, `48:03` under one.
+ *
+ * Seconds are always two digits, and so are minutes once there is an hour in
+ * front of them. Anything else reads as a different time.
+ *
+ * **Moved up from `modules/profile/lib/record-meaning.ts` on 2026-09-24**, when
+ * the console's results review became its second reader: a finish time printed
+ * two different ways in one product is a bug nobody notices until a runner
+ * compares the two screens.
+ */
+export function formatFinishTime(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const secs = String(whole % 60).padStart(2, "0");
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${secs}` : `${minutes}:${secs}`;
+}
+
+export function formatLedger(ledger: number): string {
+  return GROUPED.format(ledger);
+}
