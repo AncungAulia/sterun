@@ -116,14 +116,81 @@ been automated, because the point is precisely that two humans at two desks cann
 
 ---
 
+## Setting up the shoot
+
+### Why not the seeded races
+
+The four demo races on testnet (solo 40, kotatua 41, braga 42, sanur 43) were seeded from another
+machine, so their organiser, desk and runner **secrets are in that machine's `.env.demo` and nowhere
+else** — the seed refuses to write a secret into anything it commits. Without the organiser key there
+is no console for those races and no way to add a scanner desk; without a desk key there is no
+`/scan`. The race that already ran (solo 40) is also spent: its packs are claimed and its results are
+published, and both are one-shot.
+
+So the loop is filmed on **a race of Ancung's own**, created for the video and dated today. That also
+fixes a problem the seeded races have on camera: publishing finish times for a race three weeks in
+the future looks wrong, and the date is on screen.
+
+The directory beat still shows all of them. A new open race appears there next to the seeded three,
+so beat 1 into beat 2 is one continuous shot with nothing cut.
+
+### The two facts that make it a one-person job
+
+- **`claim_racepack` does not care about the event's status or dates.** It checks two things: the
+  caller is the organiser or an allowlisted scanner, and the record is still `Entered`
+  (`sc/contracts/race_record/src/lib.rs:510`). Entries do **not** have to be closed first, so the
+  race can stay open through the whole shoot.
+- **Freighter runs on a phone**, and this app already pairs with it over WalletConnect without the
+  kit (`fe/src/lib/wallet/freighter-mobile.ts`) on `stellar:testnet`. That note says the pairing has
+  been seen working on a phone. So the pass can live on a real phone, held up to the laptop's webcam,
+  which is what race day actually looks like.
+
+### Devices and wallets
+
+| Where | Wallet | Runs |
+| --- | --- | --- |
+| Laptop, Chrome profile 1 | the already-allowlisted organiser wallet | `/org` — create the race, add the desks, upload results |
+| Laptop, Chrome profile 2 | a fresh wallet, added as a scanner | `/scan/<id>` as desk A |
+| Laptop, Chrome profile 3 | a fresh wallet, added as a scanner | `/scan/<id>` as desk B |
+| Phone, Freighter mobile | 5 runner accounts | enter the race, then `/pass` |
+
+Three Chrome profiles because a desk's queue lives in that profile's IndexedDB — that is what makes
+them two separate desks for beat 6, and one Freighter install per profile is the cost of it. Desk B
+could reuse desk A's wallet and the footage would be identical, since the desks are told apart by
+device rather than by key; two wallets is simply closer to two volunteers with two phones.
+
+### Before the camera is on
+
+1. Render a poster so the race does not look bare: `docs/rehearsal/demo/posters/render.sh`.
+2. Create the race from `/org/new`, dated **today**, entry price low (5 sUSD covers it), two
+   distances. The wizard asks the wallet 5 times.
+3. Add both desk wallets as scanners from the race page.
+4. On the phone, for each of **five** runner accounts: connect, press **Get test sUSD** (this funds
+   the account from friendbot if it is new, opens the trustline, and pays 50 sUSD — one button), then
+   enter the race and pay.
+
+Five runners, not three, because **every beat that matters can only be filmed once per runner**: a
+pack is claimed once, and a published result is terminal. Beat 4 spends one runner, beat 5 spends
+one, beat 6 spends one. The spare two are what lets a take be re-shot.
+
+The same rule kills the results beat if it is rushed: re-uploading published results comes back
+`already_final`. **Film beat 7 last**, and record the finish times only for runners who have already
+claimed — a result on an unclaimed record is refused, because `record_finish` requires
+`RacepackClaimed`.
+
+The faucet allows one payout per address, so a runner wallet cannot be topped up twice. Five payouts
+of the day's hundred.
+
 ## Recording checklist
 
 - A clean browser profile: no bookmarks bar, no other tabs, no extensions but the wallet.
 - A wallet funded from the faucet on camera-safe testnet accounts only.
 - Zoom to ~125% so the bib number and the QR read on a phone screen.
 - Record at 1080p or better; the CSV preview and the explorer page both have small type.
-- The races are already seeded on testnet. Do not create a new one for the video — a fresh race has
-  no history behind it, and Solo Heritage Run already carries finished results.
+- If the webcam refuses to read the phone's screen, the desk has a **manual entry** sheet (bib plus
+  the six digits) and opens on it whenever no camera is usable
+  (`fe/src/modules/scanner/ScanDeskPage.tsx`). It is real product behaviour, not a workaround, so it
+  is safe to film. But the SOW asks for a QR being scanned, so at least beat 4 has to be a camera.
 
 ## After it is recorded
 
