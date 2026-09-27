@@ -181,6 +181,94 @@ claimed — a result on an unclaimed record is refused, because `record_finish` 
 The faucet allows one payout per address, so a runner wallet cannot be topped up twice. Five payouts
 of the day's hundred.
 
+## The three beats that look hard
+
+### Uploading the results is not one of them
+
+It is one browser, one file, no camera and no phone: open the race, the Results tab, drop the CSV,
+read what the review held, fix the file, publish. What makes it feel hard is its **precondition**,
+not the screen: a result can only be recorded against a record that is already `RacepackClaimed`, so
+it has to come after the race-day beats. And it is one-shot, because re-uploading published results
+comes back `already_final`.
+
+Two files to have ready before the camera is on. Replace the bib numbers with the real ones; the
+parser accepts `47:12`, `1:02:41` and plain seconds alike, and the header names are generous
+(`bib`, `time`, `chip_time`, `result` all work).
+
+The file that gets held — every anomaly here is deliberate, and each is a different kind:
+
+```csv
+bib_no,finish_time_s,status
+1,47:12,finished
+2,52:05,finished
+2,58:40,finished
+3,,untimed
+4,31:18,finished
+999,44:51,finished
+5,2:10,finished
+```
+
+- bib `2` twice with two different times — `duplicate_bib`, severity **wrong**
+- bib `999` is in no roster — `unknown_bib`, severity **reverts**
+- bib `4` never collected a race pack — `not_claimed`, severity **reverts**
+- `2:10` over 10 km — `impossible_time`, severity **wrong**
+
+That is the screen worth filming: four rows held, each with a sentence saying why, **before a single
+signature is spent**. The corrected file is the same thing with the four bad rows gone:
+
+```csv
+bib_no,finish_time_s,status
+1,47:12,finished
+2,52:05,finished
+3,,untimed
+5,49:57,finished
+```
+
+### Scanning and the two desks are one setup, not two
+
+Once a single scan works, nothing new is needed for either fraud beat:
+
+| Beat | What changes from the beat before it |
+| --- | --- |
+| 4, the ordinary claim | the setup itself: a pass on the phone, a desk on the laptop, GREEN |
+| 5, the forwarded screenshot | screenshot the pass, **wait on camera**, present it → EXPIRED, then the live pass at the other desk → GREEN |
+| 6, the duplicate | profile A scans, **turn the laptop's wifi off**, profile B scans the same pass, wifi back on, both sync |
+
+Beat 6 needs no second network and no second machine. Both desks are offline because the one laptop
+is offline, which is exactly the case the desk was built for: the queue lives in each Chrome
+profile's own IndexedDB, so the two profiles cannot see each other's claims until they sync. The
+webcam is shared because the two scans happen one after the other.
+
+### Enter and pay **on the phone**, not on the laptop
+
+This is the decision that makes the rest work. A pass reaches a runner in the browser they entered
+from. Enter on the laptop and the pass is on the laptop, and getting it onto the phone means opening
+`/pass/<tokenId>` there and signing again to fetch the secret — which works, and is a step that can
+fail on a shoot day. Enter on the phone and the pass is already where beats 4, 5 and 6 need it.
+
+### If Freighter on the phone will not pair
+
+The desk opens on **manual entry** whenever no camera is usable: the volunteer types the bib and the
+six digits (`fe/src/modules/scanner/components/ManualEntry.tsx`). It is real product behaviour, built
+for a desk whose camera fails.
+
+With it, the whole shoot runs on the laptop alone: a third Chrome profile holds the runner and shows
+the pass, and each desk types what it reads. Every mechanism still proves itself on camera — the
+duplicate is still refused, the stale screenshot is still refused, the losing desk still flags its
+runner. The only thing lost is the shot of a camera reading a QR, and that can be filmed on its own
+afterwards with any single runner.
+
+### The order that wastes nothing
+
+A pack is claimed once and a result is terminal, so rehearse on a runner you intend to spend:
+
+1. Enter the race with **all five** runner accounts on the phone.
+2. Take runner 5 and walk the whole desk flow with it, camera off. This is the rehearsal, and
+   runner 5 is spent on purpose.
+3. Only then film beat 4 (runner 1), beat 5 (runner 2), beat 6 (runner 3).
+4. Runner 4 stays unclaimed on purpose: it is the `not_claimed` row in the results file.
+5. Film the results upload last.
+
 ## Recording checklist
 
 - A clean browser profile: no bookmarks bar, no other tabs, no extensions but the wallet.
