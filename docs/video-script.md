@@ -210,18 +210,23 @@ the `prambanan` entry in `docs/rehearsal/demo/posters/poster.html` and rendering
 Race day is today and the race pack is collected on the morning of the race, which is what the
 video films: the desks are working the hours in that cell.
 
-Description:
+Description — three sentences, the same shape the four seeded races use
+(`docs/rehearsal/src/demo-plan.ts`):
 
 ```
-A sunrise run on the lanes around Candi Prambanan, starting in the dark and finishing with the
-temples lit. Two distances, one loop each, flat the whole way.
-
-This race is a demonstration of Sterun on Stellar testnet. It is not a real event and nobody is
-expected at the start line.
+A sunrise loop on the lanes around Candi Prambanan, starting in the dark and finishing with the
+temples lit. Two distances, flat the whole way. A demo race on Stellar testnet, created by Sterun:
+entries are paid in test sUSD.
 ```
 
-That second paragraph stays. A race page that reads as real, on a public directory, with no
-sentence saying otherwise, is the one thing here that could mislead somebody.
+**The last sentence stays, whatever else changes.** Every seeded race carries it as `TESTNET_LINE`,
+for one reason: a race page that reads as real, sitting on a public directory, with nothing on it
+saying otherwise, is the only thing in this whole shoot that could mislead somebody who found it by
+accident. It is also the sentence that keeps the page honest if a frame of it ends up in the video
+without the narration.
+
+Do not fill this field with placeholder text. It is on screen in beat 1, and it is where that
+sentence lives.
 
 ### Distances
 
