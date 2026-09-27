@@ -161,25 +161,7 @@ device rather than by key; two wallets is simply closer to two volunteers with t
 
 ### Before the camera is on
 
-1. Create the race from `/org/new`:
-
-   | Field | Value | Why this value |
-   | --- | --- | --- |
-   | Race day | **today** | results published on race day read correctly; a future date does not |
-   | Entries close | **leave empty** | see the trap below |
-   | Distances | 10K and 5K | two, so the race page has something to show |
-   | Quota | 6 on the 10K | five runners and one spare, all in one distance |
-   | Price | 5 sUSD | the faucet pays 50 per address, once |
-   | Poster | optional | any 16:9 image. `docs/rehearsal/demo/posters/render.sh` is macOS-only and hardcodes the four seeded races, so it is no help here |
-
-   **The trap: do not set a close date of today or earlier.** From that moment `reserve_slot` refuses
-   with `RegistrationClosed(20)` **whatever the event's status**
-   (`sc/contracts/event_registry/src/lib.rs:713`), so a race dated today with entries closed today
-   cannot be entered — not even by its own organiser. Leaving it empty skips the step altogether
-   (`create/lib/run.ts:82`) and the wallet asks once less.
-
-   Everything else the shoot needs is unaffected by dates: `claim_racepack` checks only the operator
-   and the record's state, and `record_finish` only asks the caller to be the organiser.
+1. Create the race from `/org/new`. The whole brief is [below](#the-race-brief).
 3. Add both desk wallets as scanners from the race page.
 4. On the phone, for each of **five** runner accounts: connect, press **Get test sUSD** (this funds
    the account from friendbot if it is new, opens the trustline, and pays 50 sUSD — one button), then
@@ -196,6 +178,108 @@ claimed — a result on an unclaimed record is refused, because `record_finish` 
 
 The faucet allows one payout per address, so a runner wallet cannot be topped up twice. Five payouts
 of the day's hundred.
+
+## The race brief
+
+Every field `/org/new` asks for, in the order it asks. Copy it as it stands; the only cell that
+changes is the race date.
+
+**The name has to match the poster**, which has it printed on it. Renaming the race means editing
+the `prambanan` entry in `docs/rehearsal/demo/posters/poster.html` and rendering again.
+
+### Details
+
+| Field | Value |
+| --- | --- |
+| Event name | `Prambanan Sunrise 10K 2026` |
+| Race date | **today** |
+| Country | Indonesia |
+| Province | DI Yogyakarta |
+| City | Sleman |
+| Venue | `Candi Prambanan` |
+| Google Maps link | `https://www.google.com/maps/search/?api=1&query=Candi+Prambanan` |
+| Description | *(below)* |
+| Registration opens | today |
+| Registration closes | **leave empty — see the trap** |
+| Collection days and hours | race day, `04:00` to `05:15` |
+| Collection venue | `Plaza Candi Prambanan` |
+| Collection venue on Maps | same link as above |
+| Poster | [`docs/rehearsal/demo/posters/prambanan-sunrise.jpg`](rehearsal/demo/posters/prambanan-sunrise.jpg) |
+| Waiver, Instagram, Website | leave empty |
+
+Race day is today and the race pack is collected on the morning of the race, which is what the
+video films: the desks are working the hours in that cell.
+
+Description:
+
+```
+A sunrise run on the lanes around Candi Prambanan, starting in the dark and finishing with the
+temples lit. Two distances, one loop each, flat the whole way.
+
+This race is a demonstration of Sterun on Stellar testnet. It is not a real event and nobody is
+expected at the start line.
+```
+
+That second paragraph stays. A race page that reads as real, on a public directory, with no
+sentence saying otherwise, is the one thing here that could mislead somebody.
+
+### Distances
+
+| Field | 10K | 5K |
+| --- | --- | --- |
+| Short name | `10K` | `5K` |
+| Distance in kilometres | `10` | `5` |
+| Maximum entries | `6` | `5` |
+| Entry fee in sUSD | `5` | `3` |
+| Start time | `05:30` | `05:45` |
+| Cut off | `07:30` | `07:00` |
+
+**All five runners enter the 10K.** One distance keeps every bib in one list, so the results file
+needs no `category_id` column and no row can come back `ambiguous_bib`. The 5K exists to give the
+race page a second distance, and its quota of 6 on the 10K leaves one spare entry.
+
+### One add-on
+
+| Field | Value |
+| --- | --- |
+| Item | `Finisher tumbler` |
+| Price in sUSD | `2` |
+| How many exist | `10` |
+| Photo, sizes | leave empty |
+
+Only runner 1 buys it, on camera. It is here for one sentence in beat 2 that nothing else can
+carry: the entry and the tumbler are **one payment in one transaction**, so neither can be resold
+away from the other.
+
+### The rules of your race
+
+```
+By entering Prambanan Sunrise 10K 2026 you confirm you are fit to run the distance you chose and
+have trained for it.
+
+Your bib is personal. A bib worn by someone else is disqualified, and the race pack is collected
+once, with the pass in your own wallet.
+
+Follow the marshals, keep to the course, and stop when a medic asks you to.
+
+Results are published on chain after the race and cannot be changed afterwards.
+```
+
+The same four rules the seeded races carry, so the demo race reads like its neighbours on the
+directory.
+
+### The trap in this brief
+
+**Do not put a close date of today or earlier in "Registration closes".** From that moment
+`reserve_slot` refuses with `RegistrationClosed(20)` **whatever the event's status**
+(`sc/contracts/event_registry/src/lib.rs:713`), so a race dated today with entries closed today
+cannot be entered by anyone, its own organiser included. You would be stuck at beat 2 with no clue
+why. Leaving it empty skips that step entirely (`create/lib/run.ts:82`) and the wallet asks once
+less.
+
+Nothing else here is date-sensitive: `claim_racepack` checks only the operator and the record's
+state, and `record_finish` only asks the caller to be the organiser. The race can stay open through
+the whole shoot.
 
 ## The three beats that look hard
 
