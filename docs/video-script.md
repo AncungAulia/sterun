@@ -263,20 +263,46 @@ away from the other.
 
 ### The rules of your race
 
+**Type this once and read it back before moving on.** The terms go into the event document, whose
+fingerprint is the `metadata_hash` already on chain, so they are frozen and checkable from the
+moment the race is created. That is the feature; the cost is that a typo cannot be corrected
+afterwards, not by anybody.
+
 ```
-By entering Prambanan Sunrise 10K 2026 you confirm you are fit to run the distance you chose and
-have trained for it.
+General
 
-Your bib is personal. A bib worn by someone else is disqualified, and the race pack is collected
-once, with the pass in your own wallet.
+- Entries are sold only on this page, and only in test sUSD on Stellar testnet.
+- This is a demonstration race. It is not a real event, and nobody is expected at the start line.
+- Your entry is personal. It cannot be transferred, resold, or given to another runner.
+- Entries are not refundable.
 
-Follow the marshals, keep to the course, and stop when a medic asks you to.
+Race pack
 
-Results are published on chain after the race and cannot be changed afterwards.
+- Collected once, on race day between 04:00 and 05:15, at Plaza Candi Prambanan.
+- Bring the pass in your own wallet. The code on it changes every thirty seconds.
+- A pass presented by somebody else is refused, and a pack already collected cannot be collected again.
+
+On the course
+
+- Enter only the distance you are fit to run and have trained for.
+- Follow the marshals, keep to the marked course, and stop when a medic asks you to.
+- Wear your bib on the front, visible the whole way.
+
+Results
+
+- Published on chain after the race, and they cannot be changed afterwards.
+- A finish with no official time is recorded as exactly that, never as a time of zero.
 ```
 
-The same four rules the seeded races carry, so the demo race reads like its neighbours on the
-directory.
+Four headings and thirteen lines, in the shape the field's own placeholder suggests. Every line is
+true of this race and of this product: the transfer line because the contract has no transfer
+function, the collection line because `claim_racepack` refuses a record that is not `Entered`, the
+refund line because Sterun never holds anybody's money and there is no refund path to promise, and
+the last line because a `Finished` record may carry no time at all (STE-41).
+
+The seeded races carry a shorter four-sentence version (`TERMS` in `docs/rehearsal/src/demo-plan.ts`).
+This one is longer on purpose: those races are never scanned or disputed, and this one is filmed
+being both.
 
 ### The trap in this brief
 
