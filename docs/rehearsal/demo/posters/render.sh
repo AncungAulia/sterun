@@ -5,6 +5,11 @@
 #   docs/rehearsal/demo/posters/render.sh
 #
 # Needs Google Chrome (headless) and macOS `sips` for the JPEG conversion.
+#
+# There is no Windows path here. `prambanan-sunrise.jpg` was rendered with
+# headless Chrome driven by puppeteer-core, which writes the JPEG itself:
+# open poster.html#<key> at 1600x900 and screenshot with { type: "jpeg",
+# quality: 84 }. Same pixels, one less tool.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,3 +29,5 @@ render solo solo-heritage-run.jpg
 render kotatua kota-tua-10k.jpg
 render braga braga-night-run.jpg
 render sanur sanur-sunrise-half.jpg
+# Not seeded: the race created by hand for the demo video (STE-28).
+render prambanan prambanan-sunrise.jpg
