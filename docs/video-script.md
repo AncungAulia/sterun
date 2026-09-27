@@ -168,9 +168,8 @@ device rather than by key; two wallets is simply closer to two volunteers with t
    exactly once, so it is filmed while it is really being done rather than staged afterwards. The
    entries are worth recording for the same reason: if a take of beat 2 goes wrong on shoot day,
    this footage is already a usable one.
-4. On the phone, for each of **five** runner accounts: connect, press **Get test sUSD** (this funds
-   the account from friendbot if it is new, opens the trustline, and pays 50 sUSD — one button), then
-   enter the race and pay.
+4. On the phone, enter **your own race**, the **10K**, with each of five runner accounts. What that
+   involves is [below](#what-entering-actually-is).
 
 Five runners, not three, because **every beat that matters can only be filmed once per runner**: a
 pack is claimed once, and a published result is terminal. Beat 4 spends one runner, beat 5 spends
@@ -316,6 +315,47 @@ less.
 Nothing else here is date-sensitive: `claim_racepack` checks only the operator and the record's
 state, and `record_finish` only asks the caller to be the organiser. The race can stay open through
 the whole shoot.
+
+## What entering actually is
+
+It is a purchase. The entry fee moves in **one atomic transfer** with anything bought alongside it,
+so a runner never ends up holding a tumbler and no entry, or the other way round.
+
+For this race: **5 sUSD** for the 10K, and **7 sUSD** for runner 1, who also buys the tumbler.
+The faucet pays 50 sUSD per address, once, so one press covers any of them.
+
+Per runner, on the phone:
+
+1. Connect the runner's account in Freighter.
+2. Press **Get test sUSD**. One button does three things: funds the account from friendbot if it has
+   never existed on testnet, opens the sUSD trustline, and pays out 50 sUSD
+   (`fe/src/lib/wallet/susd.ts`). It sits in the wallet menu and again on the pay step, so it is
+   reachable at the moment it is needed.
+3. Open the race, **Enter this race**, pick the **10K**. Runner 1 also ticks the tumbler.
+4. **About you**: full name, identity document and its number, gender, date of birth, the name to
+   print on the bib, email, phone, and an emergency contact with their phone.
+5. **Sign and pay** asks the wallet **twice**, and they are not the same thing
+   (`modules/entry/lib/attempt.ts`):
+   - the first signs the personal details into the vault, which is off chain. Only their fingerprint
+     goes on chain.
+   - the second is the payment itself: `enter`, one transaction, atomic.
+6. The receipt shows the bib, and **the pass now lives in this browser**, which is why this is done
+   on the phone.
+
+### Do not type your own identity number
+
+These five runners are invented people, so invent them: five different names, five different
+document numbers, five different dates of birth. Three reasons, and the first is the one that
+matters.
+
+You are filming this. A real identity number typed into a form on camera is on the recording for as
+long as the recording exists, and it also reaches the vault, which is a real database holding real
+personal data. Nothing about a demonstration race needs that.
+
+Beyond that: a roster of five people with the same name looks wrong on the desk screen in beats 4
+to 6, and the bib names are what a volunteer reads out loud. The seeded races invent theirs the same
+way (`docs/rehearsal/src/demo-plan.ts`) and those names are what make the screenshots look like a
+race.
 
 ## The three beats that look hard
 
