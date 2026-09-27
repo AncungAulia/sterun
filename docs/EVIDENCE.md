@@ -90,7 +90,7 @@ read the live contracts. The same check was repeated after publishing.
 | Deployment record | [`docs/deployments.md` §STE-32](https://github.com/AncungAulia/sterun/blob/main/docs/deployments.md) | When each of the three went live, and where. |
 | The full loop, rehearsed | [`docs/rehearsal/runs/`](https://github.com/AncungAulia/sterun/tree/main/docs/rehearsal/runs) | Five runs on live testnet. The last one: **51 passed, 0 failed, 6 steps that need a person**. Every step names what it proves and links its transactions. |
 | **Demo video, 3 minutes or less** | **not yet** | The full loop end to end, plus both fraud attempts refused. |
-| Screenshots | partly | The directory is done. A race, a pass, the scanner and a finished record come with the video. |
+| Screenshots | [`docs/shots/`](https://github.com/AncungAulia/sterun/tree/main/docs/shots) | Nine pages of the **deployed** app at a phone width and a laptop width, read live from testnet with no wallet: the race board, a race with its poster and price, and a runner's own record in each of the four outcomes this product tells apart, including a finish with no official time. The pass, the scan desk, the signed-in console and the results review need a key, so they come with the video. |
 
 ### What the rehearsal actually covers
 
