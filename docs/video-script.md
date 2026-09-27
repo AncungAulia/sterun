@@ -342,6 +342,51 @@ Per runner, on the phone:
 6. The receipt shows the bib, and **the pass now lives in this browser**, which is why this is done
    on the phone.
 
+### Entering the other four on the laptop, then pulling the passes to the phone
+
+Entering on the phone puts the pass where it is needed, but nine fields on a phone keyboard, four
+times over, is the slowest part of the whole setup. If the first runner was entered on a laptop,
+there is a better order, because that pass has to be fetched onto the phone anyway:
+
+1. **Enter the remaining four on the laptop**, switching Freighter to a different account each time.
+2. **Import that Freighter's recovery phrase into Freighter on the phone, once.** All five accounts
+   arrive together, so this replaces five separate imports.
+3. On the phone, open **`/pass/<tokenId>`** for each of the five, connect that runner's account, and
+   sign once. The secret comes down and the pass is on the phone
+   (`be/src/routes/pass.ts`).
+
+**Only do step 2 if that wallet holds nothing but testnet demo accounts.** A recovery phrase carries
+every account derived from it, so it is the wrong thing to copy around if it is shared with anything
+real.
+
+The `/pass/<tokenId>` route exists for exactly this: "a runner who entered on a laptop needs the
+pass on their phone". The chain decides ownership on every request, so it only ever hands a secret
+to the wallet that already had it.
+
+### Four runners, ready to type
+
+Runner 1 is whoever was entered first. These four fill the rest, and each has a job:
+
+| | Name | Bib | Gender | Born | Job in the shoot |
+| --- | --- | --- | --- | --- | --- |
+| 2 | Sekar Wulandari | `SEKAR` | Female | 1994-03-22 | beat 5, the forwarded screenshot |
+| 3 | Bagas Prakoso | `BAGAS` | Male | 1991-08-05 | beat 6, the duplicate |
+| 4 | Nadia Kusuma | `NADIA` | Female | 1997-11-14 | **never claims** — the `not_claimed` row |
+| 5 | Rendra Saputra | `RENDRA` | Male | 1989-06-30 | the rehearsal, spent with the camera off |
+
+All four: **National ID card**, and the number is masked on the review step down to its last four
+digits (`maskIdNumber`), so only the typing is on camera.
+
+| | Document number | Email | Phone | Emergency contact |
+| --- | --- | --- | --- | --- |
+| 2 | `3404026203940007` | `sekar.wulandari@example.com` | `081234567012` | Rina Wulandari · `081234567013` |
+| 3 | `3404020508910006` | `bagas.prakoso@example.com` | `081234567014` | Tari Prakoso · `081234567015` |
+| 4 | `3404025411970004` | `nadia.kusuma@example.com` | `081234567016` | Hesti Kusuma · `081234567017` |
+| 5 | `3404023006890003` | `rendra.saputra@example.com` | `081234567018` | Arif Saputra · `081234567019` |
+
+Invented people. `example.com` is the domain reserved for documentation, so none of those addresses
+can reach anybody.
+
 ### Do not type your own identity number
 
 These five runners are invented people, so invent them: five different names, five different
