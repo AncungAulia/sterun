@@ -119,6 +119,14 @@ what was simulated.
   `be/`. This is what runs in `typescript.yml`.
 - **E2E**: `scripts/e2e.ts` against live testnet, plus negative cases that each assert both the
   variant **and** its band. The evidence is committed to `docs/deployments.md`.
+- **The e2e cancels the event it created, as its last step** (2026-09-27). It runs against the
+  **live** registry, so before that a run left a race called `Sterun SDK e2e <date>` on the public
+  directory for ever: its organiser is a throwaway Friendbot account whose key dies with the
+  process, so nobody could take it off again. The rehearsal learned this in STE-68.
+  `Cancelled` rather than `Completed`, because the race did not happen and saying it did is the
+  claim this product exists to prevent. A failed cleanup **does not fail the run**: everything the
+  e2e set out to prove is already proved by then, and a green run turning red over housekeeping
+  would hide that. It prints the event id instead, so it can be finished by hand.
 
 **`typescript.yml` must never touch the network.** That was decided in STE-6 and still holds: CI
 must not go red because testnet is having a bad afternoon. E2E is run by hand and its output becomes

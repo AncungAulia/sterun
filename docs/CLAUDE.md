@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | `SYSTEM_DESIGN.md` | the authoritative C1–C14 design: architecture, storage model, lifecycle, TOTP, user flows, the 30-day plan | yes, but see below |
 | `deployments.md` | deployment **evidence**: contract addresses, stellar.expert links, wasm hashes, dates | append-only |
+| `EVIDENCE.md` | the **one page** the Instawards Chapter Lead reads: SOW §6.1 per deliverable, each row a link they can open, and every gap named with its date | yes; update it the moment a gap closes |
 | `brand.md` | asset, colour and type guidance (C13) — a summary readable without opening code | yes, but see below |
 | `landing-copy.md` | the landing page's text (STE-12) and the decisions behind it | yes; when the copy in the code differs, bring the two level in the same commit |
 | `social/` | drafts of public content before it goes out, plus its URL afterwards | yes |
