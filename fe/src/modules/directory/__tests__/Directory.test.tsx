@@ -212,9 +212,11 @@ describe("Directory", () => {
       expect(screen.getByText("From sUSD 25")).toBeInTheDocument();
     });
 
-    it("shows the status of every event", async () => {
+    it("shows the status of every event on the board", async () => {
+      // Closed rather than Completed: a completed race is over, so it is off
+      // the default board whatever its date says (2026-09-27).
       listEvents.mockResolvedValue({
-        events: [summary(0, { status: "Open" }), summary(1, { status: "Completed" })],
+        events: [summary(0, { status: "Open" }), summary(1, { status: "Closed" })],
         unreadable: [],
       });
 
@@ -222,7 +224,7 @@ describe("Directory", () => {
 
       await screen.findByText("Jakarta Marathon 0");
       expect(container.querySelector('[data-status="Open"]')).not.toBeNull();
-      expect(container.querySelector('[data-status="Completed"]')).not.toBeNull();
+      expect(container.querySelector('[data-status="Closed"]')).not.toBeNull();
     });
 
     it("offers no refresh button", async () => {

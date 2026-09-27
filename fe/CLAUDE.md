@@ -277,8 +277,12 @@ What is settled:
   `lib/event/events.ts`). The order was by date alone, so a cancelled rehearsal
   from this week sat above every race a runner could actually enter. Three
   groups, never mixed: open with places left, then anything still ahead (not
-  open yet, entries closed, sold out), then what is over (already run, or
-  cancelled whatever its date). Date orders within a group, and the place and
+  open yet, entries closed, sold out), then what is over (already run,
+  **`Completed`**, or cancelled, whatever the date says). `Completed` was added
+  on 2026-09-27 after a rehearsal race starting later the same day sat among
+  races people could enter, wearing a Finished badge: an organiser marks a race
+  completed when it has been run, and a start time still ahead does not make it
+  enterable. Date orders within a group, and the place and
   the distance sort inside that again. A race whose categories could not be read
   is not in the first group: it may be enterable, and nothing can say so.
 - **The location control sorts the page, it does not filter it** (Revision 3, which overrides

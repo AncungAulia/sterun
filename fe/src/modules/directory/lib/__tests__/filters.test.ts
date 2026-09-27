@@ -227,10 +227,18 @@ describe("races that have run (Ancung, 2026-09-23)", () => {
     expect(matchesFilters(race("Closed", NOW + 86_400n), NO_FILTERS, NOW)).toBe(true);
   });
 
+  it("hides a race the organiser has completed, whatever its date says", () => {
+    // Found on the live board: a rehearsal race marked Completed, starting
+    // later the same day, sitting among races people could still enter while
+    // wearing a Finished badge.
+    expect(matchesFilters(race("Completed", NOW + 86_400n), NO_FILTERS, NOW)).toBe(false);
+  });
+
   it("brings them back when the checkbox asks for them", () => {
     const withPast = { ...NO_FILTERS, includePast: true };
     expect(matchesFilters(race("Completed", NOW - 86_400n), withPast, NOW)).toBe(true);
     expect(matchesFilters(race("Cancelled", NOW + 86_400n), withPast, NOW)).toBe(true);
+    expect(matchesFilters(race("Completed", NOW + 86_400n), withPast, NOW)).toBe(true);
   });
 
   it("hides nothing before the clock has answered", () => {
