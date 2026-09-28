@@ -8,6 +8,7 @@
 | `brand.md` | asset, colour and type guidance (C13) — a summary readable without opening code | yes, but see below |
 | `landing-copy.md` | the landing page's text (STE-12) and the decisions behind it | yes; when the copy in the code differs, bring the two level in the same commit |
 | `shots/` | screenshots of the **deployed** app for SOW §6.1 D3, and `shoot.cjs` which takes them. Never a mockup, never a dev server — and never `design/polish/exports/console-*.png`, which is the connect-wallet screen | re-run the script; do not retouch a file |
+| `FINAL_REPORT.md` | the **submission** report, in the five sections Instawards asks for: project and team, scope, evidence, the verification checklist, and the coded link list | yes; it restates `EVIDENCE.md` for a different form, so a fact that changes is changed in both |
 | `video-script.md` | the spoken script and shot list for the 3-minute demo (STE-28) and the founder introduction, plus the claims neither one may make | yes; the claim limits are shared with `social/x-intro-post.md` and change together |
 | `social/` | drafts of public content before it goes out, plus its URL afterwards | yes |
 | `WEB_APP_IA.md` | information architecture for `fe/`: the page map, the data limits per page, the shape of the event metadata document, the build order | yes, same rules as `SYSTEM_DESIGN.md` |
