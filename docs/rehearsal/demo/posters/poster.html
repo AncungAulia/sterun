@@ -129,6 +129,44 @@ const POSTERS = {
       return s;
     },
   },
+  // STE-28. Not part of the seed: the race created by hand for the demo video,
+  // so that it does not sit on the directory next to four posters wearing none.
+  prambanan: {
+    kicker: "Minggu subuh · 05.30 WIB",
+    title: 'Prambanan<br>Sunrise<br>10K <span class="year">2026</span>',
+    distances: ["10K", "5K"],
+    where: "Candi Prambanan, Sleman<small>Yogyakarta · jalur candi</small>",
+    vars: { "--bg": "#0d2b2a", "--bg-solid": "#0d2b2a", "--ink": "#eef7ee", "--accent": "#f0b35c" },
+    art: () => {
+      const GROUND = 820;
+      // One temple: a stack of courses narrowing as it rises, then the finial.
+      const tower = (cx, baseW, top) => {
+        const steps = 8, h = GROUND - top;
+        let t = "";
+        for (let i = 0; i < steps; i++) {
+          const w = baseW * (1 - (i / steps) * 0.74);
+          const y = GROUND - (h * (i + 1)) / steps;
+          t += `<rect x="${cx - w / 2}" y="${y}" width="${w}" height="${h / steps + 2}" fill="#07211f"/>`;
+        }
+        t += `<polygon points="${cx},${top - 52} ${cx - 18},${top + 2} ${cx + 18},${top + 2}" fill="#07211f"/>`;
+        t += `<circle cx="${cx}" cy="${top - 62}" r="10" fill="#07211f"/>`;
+        return t;
+      };
+      let s = '<rect width="1600" height="900" fill="#0d2b2a"/>';
+      s += '<defs><radialGradient id="dawn"><stop offset="0" stop-color="#f0b35c" stop-opacity="0.85"/><stop offset="1" stop-color="#f0b35c" stop-opacity="0"/></radialGradient>';
+      s += '</defs>';
+      // The glow stops short of x=996, where the copy column ends. Veiling the
+      // copy instead would mean crossing the ground band, and that seam shows.
+      s += '<circle cx="1340" cy="360" r="300" fill="url(#dawn)"/><circle cx="1340" cy="360" r="132" fill="#f7d9a0"/>';
+      s += tower(1035, 150, 470) + tower(1180, 196, 322) + tower(1348, 232, 214) + tower(1512, 168, 398);
+      // Mist lying in the courtyard, and the ground the temples stand on.
+      for (let i = 0; i < 3; i++) {
+        s += `<ellipse cx="${1240 + i * 70}" cy="${762 + i * 24}" rx="${400 - i * 50}" ry="${11 - i * 2}" fill="#eef7ee" opacity="${0.07 + i * 0.03}"/>`;
+      }
+      s += `<rect x="0" y="${GROUND}" width="1600" height="80" fill="#07211f"/>`;
+      return s;
+    },
+  },
 };
 
 const key = location.hash.slice(1) || "solo";
