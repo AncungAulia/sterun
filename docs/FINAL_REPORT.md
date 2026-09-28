@@ -4,8 +4,8 @@ As of **2026-09-28**. Network: **Stellar testnet** throughout.
 
 Sterun is a non-transferable race record protocol for running events on Stellar. All three 30-day
 deliverables are built and live on Stellar testnet: the two contracts, the published
-`@sterunxyz/sdk`, and the deployed web app, organiser console and race-day scanner. One item remains
-outstanding on Deliverable 3, the three-minute demo video.
+`@sterunxyz/sdk`, and the deployed web app, organiser console and race-day scanner. All three
+deliverables are complete, with the demo video filed under Deliverable 3.
 
 > This is the submission report, in the five sections Instawards asks for. The working evidence
 > index it is drawn from is [`EVIDENCE.md`](EVIDENCE.md), which is organised by SOW §6.1 instead and
@@ -38,7 +38,7 @@ outstanding on Deliverable 3, the three-minute demo video.
 | --- | --- | --- | --- | --- |
 | 1 | The contracts (C1 + C2) | EventRegistry holds races, distances, quota, prices, the organiser allowlist and the scanner list. RaceRecord holds the record itself through entry, race pack and finish, and exports no transfer, approve or burn. | Complete | [EventRegistry](https://stellar.expert/explorer/testnet/contract/CAPB6NQPRPYBQIBRYR2ISXLFPYAXY6U64GKLBBUCE6VFPLIUHOIASHJU) · [RaceRecord](https://stellar.expert/explorer/testnet/contract/CCVW7WVCPHLPQASIDE6DLT7P7YCE3VUNGRCWDVKEA7XAD56LX22HA6NW) · [deployments.md](deployments.md) |
 | 2 | `@sterunxyz/sdk` and the JSON schema | A TypeScript client for both contracts, published to npm, plus the RaceRecord JSON schema v1.0 and the frozen hash and check-in-code definitions. The backend that carries the PII vault, the indexer and the roster runs on it. | Complete | [npm package](https://www.npmjs.com/package/@sterunxyz/sdk) · [schema v1.0](../sdk/schema/race-record-v1.0.json) · [recorded run](https://drive.google.com/file/d/1UFF2HPFzeD4MHnQCcWqo7yumtLIJ1gPI/view?usp=sharing) |
-| 3 | Web app, organiser console and race-day scanner | The public race directory and runner records, the entry and payment flow, the QR pass, the offline scanner desk, and the organiser console that publishes a race and its results. | Partial — built and deployed; the three-minute demo video is outstanding | [app.sterun.xyz](https://app.sterun.xyz) · [sterun.xyz](https://sterun.xyz) · [screenshots](shots/) |
+| 3 | Web app, organiser console and race-day scanner | The public race directory and runner records, the entry and payment flow, the QR pass, the offline scanner desk, and the organiser console that publishes a race and its results. | Complete | [app.sterun.xyz](https://app.sterun.xyz) · [sterun.xyz](https://sterun.xyz) · [screenshots](shots/) · [demo video](https://drive.google.com/drive/folders/1m0ySycpJ5AHrVxLTEMcqSe_4I5bXn5sU?usp=sharing) |
 
 All three run against **Stellar testnet**. Entries are paid in sUSD, a SEP-41 test token issued by
 the team; no real money has moved, and there is no escrow, so a refund is an organiser's promise
@@ -69,7 +69,7 @@ are what the demo video films.
 | --- | --- | --- | --- | --- | --- |
 | 1 | The contracts | ✓ | | | Live on testnet, 99 per cent coverage against an 80 per cent gate. Upgraded in place five times without the address changing, each upgrade recorded with the data read back afterwards. |
 | 2 | SDK and schema | ✓ | | | Published to npm. The tarball was installed into an empty project outside this repository, typechecked there and used to read the live contracts, before publishing and again after. |
-| 3 | Web app, scanner, demo | | ✓ | | Everything is built and deployed, and the loop is proven by five scripted runs on live testnet. What is outstanding is the **three-minute demo video**, which films the six steps a script cannot reach: the React screens, a browser wallet prompt, and a camera reading a QR from a phone. |
+| 3 | Web app, scanner, demo | ✓ | | | Built, deployed, and proven twice over: five scripted runs on live testnet, and the demo video, which films the six steps a script cannot reach — the React screens, a browser wallet prompt, and a camera reading a QR from a phone. |
 
 
 ---

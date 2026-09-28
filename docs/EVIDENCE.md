@@ -7,7 +7,7 @@ It follows §6.1 of the SOW, one section per deliverable, in the order the check
 for them. Where something is **not done yet**, the row says so and names the date it is expected,
 rather than being left out.
 
-Last updated: **2026-09-27**. Network: **Stellar testnet** throughout.
+Last updated: **2026-09-28**. Network: **Stellar testnet** throughout.
 
 ---
 
@@ -89,8 +89,8 @@ read the live contracts. The same check was repeated after publishing.
 | The landing page | [sterun.xyz](https://sterun.xyz) | The product explained for someone who runs races. |
 | Deployment record | [`docs/deployments.md` §STE-32](https://github.com/AncungAulia/sterun/blob/main/docs/deployments.md) | When each of the three went live, and where. |
 | The full loop, rehearsed | [`docs/rehearsal/runs/`](https://github.com/AncungAulia/sterun/tree/main/docs/rehearsal/runs) | Five runs on live testnet. The last one: **51 passed, 0 failed, 6 steps that need a person**. Every step names what it proves and links its transactions. |
-| **Demo video, 3 minutes or less** | **not yet** | The full loop end to end, plus both fraud attempts refused. |
-| Screenshots | [`docs/shots/`](https://github.com/AncungAulia/sterun/tree/main/docs/shots) | Nine pages of the **deployed** app at a phone width and a laptop width, read live from testnet with no wallet: the race board, a race with its poster and price, and a runner's own record in each of the four outcomes this product tells apart, including a finish with no official time. The pass, the scan desk, the signed-in console and the results review need a key, so they come with the video. |
+| **Demo video** | [Sterun Demo Video](https://drive.google.com/drive/folders/1m0ySycpJ5AHrVxLTEMcqSe_4I5bXn5sU?usp=sharing) | The full loop on the deployed app: a race published, an entry paid for, the pass, a race pack claimed at the desk, results recorded, and the record on a runner's public page. Both fraud attempts are in it: a forwarded screenshot after it goes stale, and one pass presented at two offline desks. |
+| Screenshots | [`docs/shots/`](https://github.com/AncungAulia/sterun/tree/main/docs/shots) | Nine pages of the **deployed** app at a phone width and a laptop width, read live from testnet with no wallet: the race board, a race with its poster and price, and a runner's own record in each of the four outcomes this product tells apart, including a finish with no official time. The pass, the scan desk, the signed-in console and the results review need a key, so a script cannot reach them; they are in the demo video. |
 
 ### What the rehearsal actually covers
 
@@ -152,4 +152,4 @@ Stated here so nobody has to find it out later:
 | --- | --- | --- | --- |
 | 1 — contracts | ✅ | | |
 | 2 — SDK and schema | ✅ | | |
-| 3 — app, scanner, demo | | ⚠️ the demo video is outstanding | |
+| 3 — app, scanner, demo | ✅ | | |
