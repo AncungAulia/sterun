@@ -56,10 +56,10 @@ made outside Sterun.
 | 2 | Published npm package, JSON schema, recorded terminal run | [`@sterunxyz/sdk` 0.3.1](https://www.npmjs.com/package/@sterunxyz/sdk) installs from npm with its README, quick start and method reference. [Schema v1.0](../sdk/schema/race-record-v1.0.json) fixes the record's shape; [`HASH_AND_TOTP.md`](specs/HASH_AND_TOTP.md) fixes the identity hash and the check-in code, with vectors two implementations are checked against. The [recorded run](https://drive.google.com/file/d/1UFF2HPFzeD4MHnQCcWqo7yumtLIJ1gPI/view?usp=sharing) drives live testnet through the SDK alone: a race created, a runner entered and paid, checked in, finished, then verified with no wallet. |
 | 3 | Deployed URLs, screenshots, rehearsal evidence | The [app](https://app.sterun.xyz) and [landing page](https://sterun.xyz) are live on Vercel, the API on a VPS behind Cloudflare. [`shots/`](shots/) holds nine pages of the deployed app at phone and laptop widths. [`rehearsal/runs/`](rehearsal/runs/) holds five scripted end-to-end runs against live testnet; the last is **51 passed, 0 failed, 6 steps that need a person**. |
 
-**One honest limit on the rehearsal.** It drives the real contracts, the real API and the web app's
-own scanner code, but not the React screens, a browser wallet prompt or a camera reading a QR from a
-screen. Those six steps are marked `MANUAL REQUIRED` in every run rather than simulated, and they
-are what the demo video films.
+**What the rehearsal does and does not drive.** It drives the real contracts, the real API and the
+web app's own scanner code, but not the React screens, a browser wallet prompt or a camera reading a
+QR from a screen. Those six steps are marked `MANUAL REQUIRED` in every run rather than simulated,
+and the demo video shows all six being done by a person.
 
 ---
 
@@ -69,7 +69,7 @@ are what the demo video films.
 | --- | --- | --- | --- | --- | --- |
 | 1 | The contracts | ✓ | | | Live on testnet, 99 per cent coverage against an 80 per cent gate. Upgraded in place five times without the address changing, each upgrade recorded with the data read back afterwards. |
 | 2 | SDK and schema | ✓ | | | Published to npm. The tarball was installed into an empty project outside this repository, typechecked there and used to read the live contracts, before publishing and again after. |
-| 3 | Web app, scanner, demo | ✓ | | | Built, deployed, and proven twice over: five scripted runs on live testnet, and the demo video, which films the six steps a script cannot reach — the React screens, a browser wallet prompt, and a camera reading a QR from a phone. |
+| 3 | Web app, scanner, demo | ✓ | | | Built, deployed, and proven twice over: five scripted runs on live testnet, and the demo video, which shows the six steps a script cannot reach — the React screens, a browser wallet prompt, and a camera reading a QR from a phone. Screenshots of the deployed app are filed alongside. |
 
 
 ---
