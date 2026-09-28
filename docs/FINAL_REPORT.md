@@ -71,8 +71,6 @@ are what the demo video films.
 | 2 | SDK and schema | ✓ | | | Published to npm. The tarball was installed into an empty project outside this repository, typechecked there and used to read the live contracts, before publishing and again after. |
 | 3 | Web app, scanner, demo | | ✓ | | Everything is built and deployed, and the loop is proven by five scripted runs on live testnet. What is outstanding is the **three-minute demo video**, which films the six steps a script cannot reach: the React screens, a browser wallet prompt, and a camera reading a QR from a phone. |
 
-The single outstanding item is the demo video. Its script, shot list and shooting plan are in
-[`video-script.md`](video-script.md).
 
 ---
 
@@ -99,4 +97,4 @@ The single outstanding item is the demo video. Its script, shot list and shootin
 | L17 | Five scripted runs on live testnet | [`docs/rehearsal/runs/`](rehearsal/runs/) |
 | L18 | The evidence index this report is drawn from | [`docs/EVIDENCE.md`](EVIDENCE.md) |
 | L19 | System design, C1 to C14 | [`docs/SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md) |
-| L20 | Demo video script and shot list | [`docs/video-script.md`](video-script.md) |
+| L20 | Demo video recording | [Sterun Demo Video](https://drive.google.com/drive/folders/1m0ySycpJ5AHrVxLTEMcqSe_4I5bXn5sU?usp=sharing) |
